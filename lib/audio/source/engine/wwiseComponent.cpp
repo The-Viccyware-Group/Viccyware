@@ -323,7 +323,7 @@ bool WwiseComponent::InitSubModules( const SetupConfig&       config,
   // + AudioDefaultIOHookBlocking::Init() sets this as our one-and-only File Location Resolver for the Stream Manager
   {
     if ( !InitFileResolver( config, deviceSettings ) ) {
-      AUDIO_LOG( "WwiseComponent.InitSubModules: File resolver failed to initialize (%d)", result );
+      AUDIO_LOG( "WwiseComponent.InitSubModules: File resolver failed to initialize");
       return false;
     }
   }
@@ -378,7 +378,7 @@ bool WwiseComponent::InitFileResolver( const SetupConfig& config,
     
   if ( AK_Success != _fileLocationResolver->Init( deviceSettings, true ) )
   {
-    AUDIO_LOG( "WwiseComponent.InitFileResolver: File Location Resolver failed to intialize (%d)", result );
+    AUDIO_LOG( "WwiseComponent.InitFileResolver: File Location Resolver failed to intialize");
     return false;
   }
 
@@ -392,7 +392,7 @@ bool WwiseComponent::InitFileResolver( const SetupConfig& config,
   // Set normal file resolver path
   if ( AK_Success != _fileLocationResolver->SetBasePath( config.assetFilePath.c_str() ) )
   {
-    AUDIO_LOG( "WwiseComponent.InitFileResolver: SetBasePath( %s ) failed [error %d]", config.assetFilePath.c_str(), result );
+    AUDIO_LOG( "WwiseComponent.InitFileResolver: SetBasePath( %s ) failed [error ]", config.assetFilePath.c_str());
   }
 
   // Set path resolver function
@@ -423,7 +423,7 @@ bool WwiseComponent::InitSoundBanks( const SetupConfig& config )
   const std::string localeStr = GetLanguageLocaleString( config.audioLocale );
   if ( AK_Success != AK::StreamMgr::SetCurrentLanguage( localeStr.c_str() ) )
   {
-    AUDIO_LOG( "WwiseComponent.InitSoundBanks: Failed to set the current language [error %d]", result );
+    AUDIO_LOG( "WwiseComponent.InitSoundBanks: Failed to set the current language [error ]" );
   }
   
   AUDIO_LOG( "WwiseComponent.InitSoundBanks: Success!" );
@@ -985,8 +985,8 @@ bool WwiseComponent::SetGameObjectOutputBusVolume( AudioGameObject emitterGameOb
   if ( _isInitialized )
   {
     AKRESULT result = AK::SoundEngine::SetGameObjectOutputBusVolume( emitterGameObj, listenerGameObj, controlVolume );
-    AUDIO_LOG( "WwiseComponent.SetGameObjectOutputBusVolume: Set EmitterGameObj %u listenerGameObj %u output bus volume %f, result %d",
-              emiterGameObj, listenerGameObj, controlVolume, result );
+//   AUDIO_LOG( "WwiseComponent.SetGameObjectOutputBusVolume: Set EmitterGameObj %u listenerGameObj %u output bus volume %f, result %d",
+//              emitterGameObj, listenerGameObj, controlVolume, result );
     success = ( AKRESULT::AK_Success == result);
   }
   

@@ -32,6 +32,7 @@
 namespace Anki {
 namespace Vision {
   
+
 struct MarkerDetector::Parameters : public Embedded::FiducialDetectionParameters
 {
   s32         maxMarkers;

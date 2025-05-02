@@ -28,7 +28,7 @@
 #define PROCEDURALFACE_ANIMATED_SATURATION   0 // disable saturation in canned animations
 #define PROCEDURALFACE_PROCEDURAL_SATURATION 1 // only take saturation from the C++ API
 #define PROCEDURALFACE_GLOW_FEATURE          0
-#define PROCEDURALFACE_SCANLINE_FEATURE      0 // feature capable but disabled by default as kProcFace_Scanlines = false
+#define PROCEDURALFACE_SCANLINE_FEATURE      1 // feature capable but disabled by default as kProcFace_Scanlines = false
 
 namespace Json {
   class Value;
@@ -74,6 +74,7 @@ public:
   static const s32 NominalEyeHeight;   //    V2:  57;  V1: 40;
   static const s32 NominalEyeWidth;    //    V2:  43;  V1: 30;
 
+  static const f32 DefaultSizeXY;
   static constexpr f32 DefaultHue = 0.45f;
   static constexpr f32 DefaultSaturation = 1.0f;
 
@@ -327,7 +328,7 @@ inline void ProceduralFace::SetScanlineOpacity(Value opacity)
 
 inline ProceduralFace::Value ProceduralFace::GetScanlineOpacity() const {
 #if PROCEDURALFACE_SCANLINE_FEATURE
-  return _scanlineOpacity;
+  return 0.5f;
 #else
   return 1.0f;
 #endif
