@@ -5,7 +5,7 @@
   "associatedActiveFeature": "RobotShaken",
   "emotionEventOnActivated": "RobotShaken",
 
-  "renderInEyeHue" : false,
+  "renderInEyeHue" : true,
   "getInAnimation" : "ReactToShakeSnowGlobe_GetIn",
   "shakeAnimations" :
   [

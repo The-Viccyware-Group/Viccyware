@@ -41,7 +41,7 @@
   },
   {
     "feature": "KnowledgeGraph",
-    "enabled": true
+    "enabled": false
   },
   {
     "feature": "Dancing",
@@ -113,7 +113,7 @@
   },
   {
     "feature": "StayOnChargerUntilCharged",
-    "enabled": true
+    "enabled": false
   },
   {
     "feature": "EyeColorVC",
@@ -122,6 +122,10 @@
   {
     "feature": "PounceOnMotion",
     "enabled": false
+  },
+  {
+    "feature": "Singing",
+    "enabled": true
   }
 ]
 

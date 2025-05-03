@@ -2,6 +2,8 @@
   "behaviorID" : "Socialize",
   "behaviorClass" : "DispatcherQueue",
 
+  "interruptActiveBehavior": true,
+
   "resetTimers": ["Socializing"],
 
   "behaviors" : [
