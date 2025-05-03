@@ -36,7 +36,6 @@ sudo chmod 660 /var/run/docker.sock
 
 3. Run the build script:
 ```
-<<<<<<< HEAD
 cd ~/Viccyware
 ./wire/build-v.sh
 ```
