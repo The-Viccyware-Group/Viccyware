@@ -68,7 +68,7 @@ bool SpeechRecognizerSnowboy::Init()
     if (stat("/data/data/com.anki.victor/persistent/customWakeWord/wakeword.pmdl", &buffer) == 0) {
       wakewordPath = "/data/data/com.anki.victor/persistent/customWakeWord/wakeword.pmdl";
     } else {
-      wakewordPath = "/anki/data/assets/cozmo_resources/assets/snowboyModels/hey_vector.pmdl";
+      wakewordPath = "/anki/data/assets/cozmo_resources/assets/snowboyModels/hey_cozmo.pmdl";
     }
 
     execl("/anki/bin/sb_server", "sb_server", "/anki/data/assets/cozmo_resources/assets/snowboyModels/common.res", wakewordPath, (char*)nullptr);

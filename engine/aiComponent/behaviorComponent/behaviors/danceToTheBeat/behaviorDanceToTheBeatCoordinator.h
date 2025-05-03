@@ -55,7 +55,7 @@ private:
     
     ICozmoBehaviorPtr driveOffChargerBehavior;
     ICozmoBehaviorPtr goHomeBehavior;
-    ICozmoBehaviorPtr doExploring;
+    ICozmoBehaviorPtr doSocialize;
   };
 
   struct DynamicVariables {
