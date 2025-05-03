@@ -5,9 +5,6 @@ code. Original README: [README-orig.md](/README-orig.md)
 
 Check the [wiki](https://github.com/kercre123/victor/wiki) for more information about the leak, what we can do with this, and general Vector info.
 
-> [!WARNING]
-> **You CANNOT currently deploy this to a regular, non-unlocked bot.**
-
 ## Branch info
 This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
 
@@ -23,10 +20,8 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/Yrekcaz/Viccyware -b Viccyware-tester
+git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
 cd Viccyware
-git lfs install
-git lfs pull
 ```
 
 2. Make sure you can run Docker as a normal user. This will probably involve:
@@ -41,13 +36,16 @@ sudo chmod 660 /var/run/docker.sock
 
 3. Run the build script:
 ```
+<<<<<<< HEAD
 cd ~/Viccyware
-./wire/build-d.sh
+./wire/build-v.sh
 ```
 
 3. It should just work! The output will be in `./_build/vicos/Release/`
 
 ## Building (Intel or ARM64 macOS)
+
+# ***NOT FUNCTIONAL YET***
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
    -  Then: `brew install pyenv git-lfs ccache wget`
@@ -56,7 +54,7 @@ cd ~/Viccyware
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/Yrekcaz/Viccyware -b Viccyware-tester
+git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
 cd Viccyware
 git lfs install
 git lfs pull

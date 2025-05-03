@@ -1,8 +1,8 @@
 [Unit]
 Description=rsync daemon
-SourcePath=/anki-devtools/bin/rsync.bin
+SourcePath=/usr/bin/rsync
 
 [Service]
 Restart=no
 Type=forking
-ExecStart=/anki-devtools/bin/rsync.bin --daemon --config=/run/systemd/system/rsyncd.conf
+ExecStart=/usr/bin/rsync --daemon --config=/run/systemd/system/rsyncd.conf
