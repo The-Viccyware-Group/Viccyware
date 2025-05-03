@@ -1,7 +1,8 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
-cd $DIR/..
+echo $DIR
+cd $DIR
 
 if [[ ! -f robot_ip.txt ]]; then
     echo "You must echo your robot's IP to robot_ip.txt in the root of this repo before running this script."
@@ -25,11 +26,11 @@ docker run -it \
     -v $(pwd)/anki-deps:/home/$USER/.anki \
     -v $(pwd):$(pwd) \
     -v $(pwd)/build/cache:/home/$USER/.ccache \
+    -v /home/$USER/.ssh:/home/$USER/.ssh \
     vic-standalone-builder-2 bash -c \
     "cd $(pwd) && \
-    ./project/victor/scripts/victor_deploy.sh -c Release && \
-    eval $(ssh-agent) && \
+    eval \$(ssh-agent) && \
     ssh-add robot_sshkey && \
-    echo "That appears to have been successful. Starting anki-robot.target..." \
+    ./project/victor/scripts/victor_deploy.sh -c Release -b && \
     ./project/victor/scripts/victor_start.sh"
 
