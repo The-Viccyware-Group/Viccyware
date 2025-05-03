@@ -28,7 +28,7 @@ const int ProceduralFace::NominalEyeHeight = IsXray() ? 50 : 57;
 const int ProceduralFace::NominalEyeWidth = IsXray() ? 38 : 43;
 // const int ProceduralFace::NominalEyeHeight = 57;
 // const int ProceduralFace::NominalEyeWidth = 43;
-const float ProceduralFace::DefaultSizeXY= IsXray() ? 0.90f : 1.05f; //Default size of the eyes (applies both X and Y)
+const float ProceduralFace::DefaultSizeXY= IsXray() ? 0.90f : 1.07f; //Default size of the eyes (applies both X and Y)
 
 ProceduralFace* ProceduralFace::_resetData = nullptr;
 ProceduralFace* ProceduralFace::_blankFaceData = nullptr;
@@ -64,7 +64,7 @@ void ProceduralFace::SaturationConsoleFunction(ConsoleFunctionContextRef context
 namespace {
 # define CONSOLE_GROUP "Face.ParameterizedFace"
 
-  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 89 :87, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
+  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 89 :88, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
 
 # undef CONSOLE_GROUP
 
