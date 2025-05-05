@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <unistd.h>
 #include <termios.h>
@@ -47,7 +46,7 @@ static SpineErr spine_open_internal(spine_ctx_t spine, struct spine_params param
 
     spine_debug("opening serial port\n");
 
-    spine->fd = open(params.devicename, O_RDWR);
+    spine->fd = open(params.devicename, O_RDWR | O_NONBLOCK);
     if (spine->fd == -1) {
         return spine_error(err_CANT_OPEN_FILE, "Can't open %s", params.devicename);
     }
@@ -250,8 +249,6 @@ int spine_get_payload_len(PayloadId payload_type, enum MsgDir dir)
   case PAYLOAD_DATA_FRAME:
     return (dir == dir_SEND) ? sizeof(struct HeadToBody) : sizeof(struct BodyToHead);
     break;
-  case PAYLOAD_LIGHT_STATE:
-    return sizeof(struct LightState);
   case PAYLOAD_VERSION:
     return (dir == dir_SEND) ? 0 : sizeof(struct VersionInfo);
     break;
@@ -269,11 +266,6 @@ int spine_get_payload_len(PayloadId payload_type, enum MsgDir dir)
     break;
   case PAYLOAD_CONT_DATA:
     return sizeof(struct ContactData);
-    break;
-  case PAYLOAD_SHUT_DOWN:
-    return 0;
-  case PAYLOAD_BOOT_FRAME:
-    return sizeof(struct MicroBodyToHead);
     break;
   default:
     break;
@@ -368,7 +360,7 @@ ssize_t spine_parse_frame(spine_ctx_t spine, void *out_buf, size_t out_buf_len, 
     if (expected_payload_len == -1 ||
         header->bytes_to_follow != expected_payload_len) {
         // skip current sync
-        spine_debug("invalid payload: expected=%d | observed=%u\n", expected_payload_len, header->bytes_to_follow);
+        spine_debug("invalid payload: expected=%u | observed=%u\n", expected_payload_len, header->bytes_to_follow);
         spine_set_rx_cursor(spine, sync_index + sizeof(SYNC_BODY_TO_HEAD));
         return -1;
     }
@@ -399,7 +391,8 @@ ssize_t spine_parse_frame(spine_ctx_t spine, void *out_buf, size_t out_buf_len, 
 
         return 0;
     }
-    spine_debug_x("full slug\n");
+            spine_debug_x("full slug\n");
+
 
     const size_t frame_len =
         sizeof(struct SpineMessageHeader) + expected_payload_len + sizeof(struct SpineMessageFooter);
@@ -416,7 +409,7 @@ ssize_t spine_parse_frame(spine_ctx_t spine, void *out_buf, size_t out_buf_len, 
     // Invalid CRC
     if (true_crc != expected_crc) {
         // throw away header
-        LOGW("invalid crc: expected=%08x | observed=%08x [type %x]", expected_crc, true_crc, header->payload_type);
+        LOGW("invalid crc: expected=%x | observed=%x %02x %02x %02x %02x\n", expected_crc, true_crc, crc_bytes[0], crc_bytes[1], crc_bytes[2], crc_bytes[3]);
         spine_set_rx_cursor(spine, sync_index + sizeof(SYNC_BODY_TO_HEAD));
         return -1;
     }
@@ -499,7 +492,7 @@ ssize_t spine_write_frame(spine_ctx_t spine, PayloadId type, const void* data, i
   const ssize_t outBufferLen = sizeof(spine->buf_tx);
   ssize_t remaining = outBufferLen;
 
-  struct SpineMessageHeader* outHeader = (struct SpineMessageHeader*)outBytes;
+  struct SpineMessageHeader* outHeader = (struct SpineMessageHeader*)spine->buf_tx;
   ssize_t r = spine_construct_header(type, len, outHeader);
   if (r < 0) {
     return r;
@@ -560,12 +553,6 @@ ssize_t spine_write_ccc_frame(spine_ctx_t spine, const struct ContactData* ccc_p
                        sizeof(struct SpineMessageHeader) + sizeof(struct ContactData) + sizeof(struct SpineMessageFooter));
 }
 
-ssize_t spine_set_lights(spine_ctx_t spine, const struct LightState* light_state)
-{
-  ssize_t r = spine_write_frame(spine, PAYLOAD_LIGHT_STATE, light_state, sizeof(struct LightState));
-  return r;    
-}
-
 ssize_t spine_set_mode(spine_ctx_t spine, int new_mode)
 {
   printf("Sending Mode Change %x\n", PAYLOAD_MODE_CHANGE);
@@ -574,12 +561,6 @@ ssize_t spine_set_mode(spine_ctx_t spine, int new_mode)
   return r;
 }
 
-ssize_t spine_shutdown(spine_ctx_t spine)
-{
-  ssize_t r = spine_write_frame(spine, PAYLOAD_SHUT_DOWN, NULL, 0);
-  spine_debug_x("spine_shutdown return %d\n", r);
-  return r;
-}
 
 #ifdef DEBUG_SPINE_TEST
 //

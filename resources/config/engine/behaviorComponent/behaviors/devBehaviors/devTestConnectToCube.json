@@ -1,7 +1,0 @@
-{
-  "behaviorID" : "DevTestConnectToCube",
-  "behaviorClass" : "ConnectToCube",
-
-  "delegateBehaviorID" : "Wait"
-}
-

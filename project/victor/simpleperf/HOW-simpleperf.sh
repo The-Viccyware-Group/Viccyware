@@ -26,20 +26,12 @@ mkdir -p ${SCRIPTDIR}/${ANKI_PROFILE_PROCNAME}
 # Where is simpleperf?
 : ${SIMPLEPERF:="${TOPLEVEL}/lib/util/tools/simpleperf"}
 
-# Where is adb?
-: ${ADB:="adb"}
-
 #
 # Create symbol cache
 #
 if [ ! -d ${ANKI_PROFILE_SYMBOLCACHE} ] ; then
   bash ${SCRIPTDIR}/make_symbol_cache.sh ${ANKI_PROFILE_SYMBOLCACHE}
 fi
-
-#
-# Remount /data to allow execution
-#
-${ADB} shell "mount /data -o remount,exec"
 
 #
 # Run app_profiler.py to start profiling.
@@ -59,11 +51,6 @@ python ${PROFILER} -nc -nb \
   -o ${ANKI_PROFILE_PERFDATA}
 
 #
-# Remount /data without execution
-#
-${ADB} shell "mount /data -o remount,noexec"
-
-#
 # To view perf.data, run 
 #  simpleperf report --symfs symbol_cache
 # which will print performance stuff to console. 
@@ -73,5 +60,3 @@ export PATH=${SIMPLEPERF}/bin/darwin/x86_64:${PATH}
 simpleperf report \
   -i ${ANKI_PROFILE_PERFDATA} \
   --symfs ${ANKI_PROFILE_SYMBOLCACHE} $@
-
-

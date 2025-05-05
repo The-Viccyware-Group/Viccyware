@@ -19,20 +19,18 @@
 #include "engine/aiComponent/behaviorComponent/behaviorTimers.h"
 #include "engine/components/carryingComponent.h"
 #include "engine/components/movementComponent.h"
-#include "engine/components/robotStatsTracker.h"
 #include "engine/faceWorld.h"
 #include "engine/moodSystem/moodManager.h"
 
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
 
-#include "clad/types/behaviorComponent/behaviorStats.h"
 #include "clad/types/behaviorComponent/behaviorTimerTypes.h"
 
 #include "util/console/consoleInterface.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace{
 // Json parameter keys
@@ -122,14 +120,10 @@ void BehaviorFistBump::OnBehaviorActivated()
   const auto& robotInfo = GetBEI().GetRobotInfo();
   if (robotInfo.GetCarryingComponent().IsCarryingObject()) {
     _dVars.state = State::PutdownObject;
-  } else if( Util::IsFltGT( _iConfig.maxTimeToLookForFace_s, 0.0f ) ) {
+  } else {
     _dVars.state = State::LookForFace;
   }
-  else {
-    DEV_ASSERT(!_iConfig.abortIfNoFaceFound, "BehaviorFistBump.InvalidConfig.NoTimeToLookButNeedsFace");
-    // skip looking for face
-    _dVars.state = State::RequestInitialFistBump;
-  }
+
   
 }
 
@@ -141,7 +135,7 @@ void BehaviorFistBump::BehaviorUpdate()
     return;
   }
 
-  const f32 now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
+  f32 now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   
   // Check if should exit because of pickup
   if (GetBEI().GetOffTreadsState() != OffTreadsState::OnTreads) {
@@ -212,7 +206,7 @@ void BehaviorFistBump::BehaviorUpdate()
       auto& robotInfo = GetBEI().GetRobotInfo();
       // Check if face observed very recently
       Pose3d facePose;
-      RobotTimeStamp_t lastObservedFaceTime = GetBEI().GetFaceWorld().GetLastObservedFace(facePose);
+      TimeStamp_t lastObservedFaceTime = GetBEI().GetFaceWorld().GetLastObservedFace(facePose);
       if (lastObservedFaceTime > 0 && (robotInfo.GetLastMsgTimestamp() - lastObservedFaceTime < kMaxTimeInPastToHaveObservedFace_ms)) {
         DelegateIfInControl(new TurnTowardsLastFacePoseAction());
         ResetFistBumpTimer();
@@ -236,21 +230,20 @@ void BehaviorFistBump::BehaviorUpdate()
     }
     case State::RequestInitialFistBump:
     {
-      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpRequestOnce), [this]() {
-          GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::AttemptedFistBump);
-        });
+      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpRequestOnce));
       _dVars.state = State::RequestingFistBump;
       break;
     }
     case State::RequestingFistBump:
     {
-      // Play idle anim
-      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpIdle,
-                                                     1,
-                                                     true,
-                                                     (u8)AnimTrackFlag::HEAD_TRACK | (u8)AnimTrackFlag::LIFT_TRACK));
-
+      auto& robotInfo = GetBEI().GetRobotInfo();
       _dVars.waitStartTime_s = now;
+      robotInfo.GetMoveComponent().EnableLiftPower(false);
+      robotInfo.GetMoveComponent().EnableHeadPower(false);
+      
+      // Play idle anim
+      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpIdle));
+      
       _dVars.state = State::WaitingForMotorsToSettle;
       break;
     }
@@ -259,13 +252,11 @@ void BehaviorFistBump::BehaviorUpdate()
       auto& robotInfo = GetBEI().GetRobotInfo();
       if (!robotInfo.GetMoveComponent().IsLiftMoving() &&
           !robotInfo.GetMoveComponent().IsHeadMoving()) {
-        robotInfo.GetMoveComponent().EnableLiftPower(false);
-        robotInfo.GetMoveComponent().EnableHeadPower(false);
         _dVars.liftWaitingAngle_rad = robotInfo.GetLiftAngle();
         _dVars.waitingAccelX_mmps2 = robotInfo.GetHeadAccelData().x;
         _dVars.state = State::WaitingForBump;
         if (now - _dVars.waitStartTime_s > kMaxTimeForMotorSettling_s) {
-          PRINT_NAMED_WARNING("BehaviorFistBump.Update.MotorSettleTimeTooLong", "%f", now - _dVars.waitStartTime_s);
+          PRINT_NAMED_WARNING("BehaviorFistBump.UpdateInternal_Legacy.MotorSettleTimeTooLong", "%f", now - _dVars.waitStartTime_s);
         }
       }
       break;
@@ -298,11 +289,16 @@ void BehaviorFistBump::BehaviorUpdate()
     }
     case State::CompleteSuccess:
     {
-      GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::FistBumpSuccess);
       // Fall through
     }
     case State::CompleteFail:
     {
+      // Should only be sending FistBumpSuccess or FistBumpLeftHanging if this not the sparks Fist bump
+      // since we don't want the sparks fist bumps to reset the cooldown timer in the trigger strategy.
+      BehaviorObjectiveAchieved(_dVars.state == State::CompleteSuccess ?
+                                BehaviorObjective::FistBumpSuccess :
+                                BehaviorObjective::FistBumpLeftHanging);
+
       if(GetBEI().HasMoodManager()){
         auto& moodManager = GetBEI().GetMoodManager();
         moodManager.TriggerEmotionEvent(_dVars.state == State::CompleteSuccess ?
@@ -311,11 +307,13 @@ void BehaviorFistBump::BehaviorUpdate()
                                         MoodManager::GetCurrentTimeInSeconds());
       }
 
+      
       // Fall through
     }
     case State::Complete:
     {
       ResetTrigger(_iConfig.updateLastCompletionTime);
+      BehaviorObjectiveAchieved(BehaviorObjective::FistBumpComplete);
       CancelSelf();
       return;
     }
@@ -368,5 +366,5 @@ void BehaviorFistBump::ResetFistBumpTimer() const
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

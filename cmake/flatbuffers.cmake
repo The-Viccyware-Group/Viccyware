@@ -1,13 +1,14 @@
-set(FLATBUFFERS_INCLUDE_PATH "${ANKI_THIRD_PARTY_DIR}/flatbuffers/include")
+set(FLATBUFFERS_INCLUDE_PATH "${CORETECH_EXTERNAL_DIR}/flatbuffers/include")
 
 set(FLATBUFFERS_LIBS
   flatbuffers
 )
 
-if (VICOS)
-  set(FLATBUFFERS_LIB_PATH "${ANKI_THIRD_PARTY_DIR}/flatbuffers/vicos")
+if (ANDROID)
+  set(FLATBUFFERS_LIB_PATH "${CORETECH_EXTERNAL_DIR}/flatbuffers/android/armeabi-v7a")
+  list(APPEND FLATBUFFERS_LIBS flatbuffers_extra)
 elseif (MACOSX)
-  set(FLATBUFFERS_LIB_PATH "${ANKI_THIRD_PARTY_DIR}/flatbuffers/mac/Release")
+  set(FLATBUFFERS_LIB_PATH "${CORETECH_EXTERNAL_DIR}/flatbuffers/ios/Release")
 endif()
 
 foreach(LIB ${FLATBUFFERS_LIBS})
@@ -17,5 +18,4 @@ foreach(LIB ${FLATBUFFERS_LIBS})
     "${FLATBUFFERS_LIB_PATH}/lib${LIB}.a"
     INTERFACE_INCLUDE_DIRECTORIES
     "${FLATBUFFERS_INCLUDE_PATH}")
-  anki_build_target_license(${LIB} "Apache-2.0,${CMAKE_SOURCE_DIR}/licenses/flatbuffers.license")
 endforeach()

@@ -21,7 +21,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 const char* kBehaviorIDConfigKey = "delegateID";
@@ -35,8 +35,7 @@ const char* kBehaviorIDConfigKey = "delegateID";
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorDispatcherPassThrough::BehaviorDispatcherPassThrough(const Json::Value& config)
-: ICozmoBehavior(config),
-  _hasUpdatedOnce(false)
+: ICozmoBehavior(config)
 {
   auto debugStr = "BehaviorDispatcherPassThrough.Constructor.MissingDelegateID";
   _iConfig.delegateID = JsonTools::ParseString(config, kBehaviorIDConfigKey, debugStr);
@@ -67,7 +66,6 @@ void BehaviorDispatcherPassThrough::GetBehaviorOperationModifiers(BehaviorOperat
 void BehaviorDispatcherPassThrough::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
 {
   expectedKeys.insert( kBehaviorIDConfigKey );
-  GetPassThroughJsonKeys( expectedKeys );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -97,24 +95,13 @@ void BehaviorDispatcherPassThrough::OnBehaviorActivated()
     OnPassThroughActivated();
   }
   
-  DEV_ASSERT(_iConfig.delegate != nullptr, "BehaviorDispatcherPassThrough.OnBehaviorActivated.NullDelegate");
-  if (_iConfig.delegate != nullptr &&
-      _iConfig.delegate->WantsToBeActivated()) {
-    DelegateIfInControl(_iConfig.delegate.get());
-  } else {
-    PRINT_NAMED_ERROR("BehaviorDispatcherPassThrough.OnBehaviorActivated.DelegateDoesNotWantToBeActivated",
-                      "Delegate %s does not want to be activated",
-                      _iConfig.delegate->GetDebugLabel().c_str());
-  }
+  DelegateIfInControl(_iConfig.delegate.get());
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorDispatcherPassThrough::BehaviorUpdate()
 {
-  if ( !_hasUpdatedOnce ) {
-    OnFirstUpdate();
-  }
   if(!IsActivated()){
     return;
   }
@@ -139,12 +126,6 @@ void BehaviorDispatcherPassThrough::OnBehaviorDeactivated()
   CancelDelegates();
 }
   
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorDispatcherPassThrough::OnFirstUpdate()
-{
-  OnFirstPassThroughUpdate();
-  _hasUpdatedOnce = true;
-}
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

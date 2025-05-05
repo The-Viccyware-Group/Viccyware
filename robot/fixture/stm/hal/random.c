@@ -5,16 +5,12 @@
 
 void InitRandom()
 {
-  static bool inited = 0;
-  if( !inited ) {
-    // Turn it on
-    RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
-    RNG->CR |= RNG_CR_RNGEN;
-    inited = 1;
-  }
+  // Turn it on
+  RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
+  RNG->CR |= RNG_CR_RNGEN;
 }
 
-uint32_t GetRandom()
+u32 GetRandom()
 {
   // Get a 32-bit value once ready
   while (!(RNG->SR & RNG_SR_DRDY))

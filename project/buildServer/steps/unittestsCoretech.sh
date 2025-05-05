@@ -26,7 +26,7 @@ function usage() {
 : ${CONFIGURATION:=Debug}
 : ${VERBOSE:=0}
 
-while getopts "hvc:p:" opt; do
+while getopts "hvc:p" opt; do
   case $opt in
     h)
       usage
@@ -68,7 +68,7 @@ echo "Entering directory \`${BUILDPATH}'"
 cd ${BUILDPATH}
 
 # clean
-rm -rf ${LOGZIP} ${LOG} `find * -name ${XML}`
+rm -rf ${LOGZIP} ${LOG} */${XML}
 
 # prepare
 mkdir -p testdata
@@ -84,7 +84,7 @@ EXIT_STATUS=$?
 set -e
 
 #  publish results
-tar czf ${LOGZIP} ${LOG} `find * -name ${XML}`
+tar czf ${LOGZIP} ${LOG} */${XML}
 
 # exit
 exit $EXIT_STATUS

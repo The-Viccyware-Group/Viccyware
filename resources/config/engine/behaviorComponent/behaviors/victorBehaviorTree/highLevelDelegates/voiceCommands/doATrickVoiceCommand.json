@@ -1,6 +1,6 @@
 {
   "behaviorID" : "DoATrickVoiceCommand",
-  "behaviorClass" : "DispatcherRandom",
+  "behaviorClass" : "DispatcherQueue",
 
   "respondToUserIntents": [
     {
@@ -9,19 +9,38 @@
   ],
 
   "behaviors" : [
-    {
-      "behavior" : "FindCubeAndThenDoATrick",
-      "cooldown_s" : 300.0,
-      "weight" : 1.0
-    }
+    "DriveOffCharger",
+    "DoATrickInternal",
+    "PutDownBlock"
   ],
 
-  "anonymousBehaviors" : [
+  "anonymousBehaviors": [
     {
-      "behaviorName" : "FindCubeAndThenDoATrick",
-      "behaviorClass" : "FindCubeAndThen",
+      "behaviorName" : "DoATrickInternal",
+      "behaviorClass" : "DispatcherRandom",
     
-      "followUpBehaviorID" : "CubeTrickDispatcher"
+      "behaviors" : [
+        
+        {
+          "behavior": "PopAWheelie",
+          "cooldown_s": 600.0,
+          "cooldown_random_factor": 0.5,
+          "weight": 1.0
+        },
+        {
+          "behavior": "FistBump",
+          "cooldown_s": 600.0,
+          "cooldown_random_factor": 0.5,
+          "weight": 1.0
+        },
+        {
+          "behavior": "PlayRollBlock",
+          "cooldown_s": 600.0,
+          "cooldown_random_factor": 0.5,
+          "weight": 1.0
+        }
+        
+      ]
     }
   ]
 }

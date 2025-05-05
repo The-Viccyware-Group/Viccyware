@@ -12,19 +12,17 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/meetCozmo/behaviorRespondToRenameFace.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "engine/actions/basicActions.h"
 #include "engine/actions/sayTextAction.h"
 #include "engine/events/ankiEvent.h"
+#include "engine/events/animationTriggerHelpers.h"
 #include "engine/externalInterface/externalInterface.h"
-#include "util/cladHelpers/cladFromJSONHelpers.h"
-
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace JsonKeys {
-  // static const char * const AnimationTriggerKey = "animationTrigger";
+  static const char * const AnimationTriggerKey = "animationTrigger";
 }
   
 
@@ -34,28 +32,28 @@ BehaviorRespondToRenameFace::BehaviorRespondToRenameFace(const Json::Value& conf
 , _name("")
 , _faceID(Vision::UnknownFaceID)
 {
-  SubscribeToTags({EngineToGameTag::RobotRenamedEnrolledFace});
+  SubscribeToTags({GameToEngineTag::UpdateEnrolledFaceByID});
   
-  //  const std::string& animTriggerString = config.get(JsonKeys::AnimationTriggerKey, "MeetCozmoRenameFaceSayName").asString();
-  //  _animTrigger = AnimationTriggerFromString(animTriggerString.c_str());
+  const std::string& animTriggerString = config.get(JsonKeys::AnimationTriggerKey, "MeetCozmoRenameFaceSayName").asString();
+  _animTrigger = AnimationTriggerFromString(animTriggerString.c_str());
   
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorRespondToRenameFace::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
 {
-  //  const char* list[] = {
-  //    JsonKeys::AnimationTriggerKey,
-  //  };
-  //  expectedKeys.insert( std::begin(list), std::end(list) );
+  const char* list[] = {
+    JsonKeys::AnimationTriggerKey,
+  };
+  expectedKeys.insert( std::begin(list), std::end(list) );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorRespondToRenameFace::HandleWhileInScopeButNotActivated(const EngineToGameEvent& event)
+void BehaviorRespondToRenameFace::HandleWhileInScopeButNotActivated(const GameToEngineEvent& event)
 {
+  auto & msg = event.GetData().Get_UpdateEnrolledFaceByID();
   
-  auto & msg = event.GetData().Get_RobotRenamedEnrolledFace();
-  _name   = msg.name;
+  _name   = msg.newName;
   _faceID = msg.faceID;
 }
 
@@ -63,8 +61,6 @@ void BehaviorRespondToRenameFace::HandleWhileInScopeButNotActivated(const Engine
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorRespondToRenameFace::WantsToBeActivatedBehavior() const
 {
-  // todo: this behavior shouldn't respond if the vision system didn't actually handle it, which
-  // can happen if the wrong original name is used (maybe we just get rid of that param?)
   const bool haveValidName = !_name.empty();
   return haveValidName;
 }
@@ -79,10 +75,10 @@ void BehaviorRespondToRenameFace::OnBehaviorActivated()
     return;
   }
   
-  //  PRINT_CH_INFO("Behaviors", "BehaviorRespondToRenameFace.InitInternal",
-  //                "Responding to rename of %s with %s",
-  //                Util::HidePersonallyIdentifiableInfo(_name.c_str()),
-  //                EnumToString(_animTrigger));
+  PRINT_CH_INFO("Behaviors", "BehaviorRespondToRenameFace.InitInternal",
+                "Responding to rename of %s with %s",
+                Util::HidePersonallyIdentifiableInfo(_name.c_str()),
+                EnumToString(_animTrigger));
   
   // TODO: Try to turn towards a/the face first COZMO-7991
   //  For some reason the following didn't work (action immediately completed) and I ran
@@ -98,40 +94,15 @@ void BehaviorRespondToRenameFace::OnBehaviorActivated()
   //  
   //  DelegateIfInControl(turnTowardsFace);
   
-  auto* action = new CompoundActionSequential();
+  SayTextAction* sayName = new SayTextAction(_name, SayTextIntent::Name_Normal);
+  sayName->SetAnimationTrigger(_animTrigger);
   
-  {
-    // 1. Say name once
-    SayTextAction* sayNameAction1 = new SayTextAction(_name);
-    sayNameAction1->SetAnimationTrigger(AnimationTrigger::MeetVictorSayName);
-    action->AddAction(sayNameAction1);
-  }
-  
-  {
-    // 2. Repeat name
-    SayTextAction* sayNameAction2 = new SayTextAction(_name);
-    sayNameAction2->SetAnimationTrigger(AnimationTrigger::MeetVictorSayNameAgain);
-    action->AddAction(sayNameAction2);
-  }
-  
-  DelegateIfInControl(action);
+  DelegateIfInControl(sayName);
   
   _name.clear();
   _faceID = Vision::UnknownFaceID;
 }
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorRespondToRenameFace::SetName(const std::string& name)
-{
-  if( ANKI_VERIFY( _name.empty(),
-                   "BehaviorRespondToRenameFace.SetName.NameExists",
-                   "Attempted to set name with '%s' but already set with '%s'",
-                   name.c_str(), _name.c_str()) )
-  {
-    _name = name;
-  }
-}
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

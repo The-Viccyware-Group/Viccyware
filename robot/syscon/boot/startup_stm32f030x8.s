@@ -77,13 +77,13 @@ __Vectors       DCD     __initial_sp                   ; Top of Stack
                 DCD     Reset_Handler                  ; Reset Handler
                 DCD     NMI_Handler                    ; NMI Handler
                 DCD     HardFault_Handler              ; Hard Fault Handler
-__HW_REVISION   DCD     10                             ; Current Hardware Revision
+__HW_REVISION   DCD     1                              ; Current Hardware Revision
 __HW_MODEL      DCD     1                              ; Current Model
 __EIN           DCD     0xFFFFFFFF                     ; EIN(0)
                 DCD     0xFFFFFFFF                     ; EIN(1)
                 DCD     0xFFFFFFFF                     ; EIN(2)
                 DCD     0xFFFFFFFF                     ; EIN(3)
-                DCD     1                              ; Bootloader Revision
+                DCD     0                              ; Reserved
                 DCD     SVC_Handler                    ; SVCall Handler
                 DCD     0                              ; Reserved
                 DCD     0                              ; Reserved
@@ -111,6 +111,14 @@ __EIN           DCD     0xFFFFFFFF                     ; EIN(0)
                 DCD     0                              ; Reserved
                 DCD     0                              ; Reserved
                 DCD     TIM14_IRQHandler               ; TIM14
+                DCD     TIM15_IRQHandler               ; TIM15
+                DCD     TIM16_IRQHandler               ; TIM16
+                DCD     TIM17_IRQHandler               ; TIM17
+                DCD     I2C1_IRQHandler                ; I2C1
+                DCD     I2C2_IRQHandler                ; I2C2
+                DCD     SPI1_IRQHandler                ; SPI1
+                DCD     SPI2_IRQHandler                ; SPI2
+                DCD     USART1_IRQHandler              ; USART1
 
 __Vectors_End
 
@@ -165,13 +173,30 @@ StartApplication
 
 ; Dummy Exception Handlers (infinite loops which can be modified)
 
+NMI_Handler     PROC
+                EXPORT  NMI_Handler                    [WEAK]
+                B       .
+                ENDP
+HardFault_Handler\
+                PROC
+                EXPORT  HardFault_Handler              [WEAK]
+                B       .
+                ENDP
+SVC_Handler     PROC
+                EXPORT  SVC_Handler                    [WEAK]
+                B       .
+                ENDP
+PendSV_Handler  PROC
+                EXPORT  PendSV_Handler                 [WEAK]
+                B       .
+                ENDP
+SysTick_Handler PROC
+                EXPORT  SysTick_Handler                [WEAK]
+                B       .
+                ENDP
+
 Default_Handler PROC
 
-                EXPORT  NMI_Handler                    [WEAK]
-                EXPORT  HardFault_Handler              [WEAK]
-                EXPORT  SVC_Handler                    [WEAK]
-                EXPORT  PendSV_Handler                 [WEAK]
-                EXPORT  SysTick_Handler                [WEAK]
                 EXPORT  WWDG_IRQHandler                [WEAK]
                 EXPORT  RTC_IRQHandler                 [WEAK]
                 EXPORT  FLASH_IRQHandler               [WEAK]
@@ -187,13 +212,16 @@ Default_Handler PROC
                 EXPORT  TIM1_CC_IRQHandler             [WEAK]
                 EXPORT  TIM3_IRQHandler                [WEAK]
                 EXPORT  TIM14_IRQHandler               [WEAK]
+                EXPORT  TIM15_IRQHandler               [WEAK]
+                EXPORT  TIM16_IRQHandler               [WEAK]
+                EXPORT  TIM17_IRQHandler               [WEAK]
+                EXPORT  I2C1_IRQHandler                [WEAK]
+                EXPORT  I2C2_IRQHandler                [WEAK]
+                EXPORT  SPI1_IRQHandler                [WEAK]
+                EXPORT  SPI2_IRQHandler                [WEAK]
+                EXPORT  USART1_IRQHandler              [WEAK]
 
 
-NMI_Handler
-HardFault_Handler
-SVC_Handler
-PendSV_Handler
-SysTick_Handler
 WWDG_IRQHandler
 RTC_IRQHandler
 FLASH_IRQHandler
@@ -209,6 +237,14 @@ TIM1_BRK_UP_TRG_COM_IRQHandler
 TIM1_CC_IRQHandler
 TIM3_IRQHandler
 TIM14_IRQHandler
+TIM15_IRQHandler
+TIM16_IRQHandler
+TIM17_IRQHandler
+I2C1_IRQHandler
+I2C2_IRQHandler
+SPI1_IRQHandler
+SPI2_IRQHandler
+USART1_IRQHandler
 
                 B       .
 

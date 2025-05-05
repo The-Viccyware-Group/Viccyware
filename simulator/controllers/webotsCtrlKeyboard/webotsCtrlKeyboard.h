@@ -12,7 +12,7 @@
 #include "simulator/game/uiGameController.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class WebotsKeyboardController : public UiGameController {
 public:
@@ -45,25 +45,25 @@ protected:
   void SearchForNearbyObject();
   void ToggleCliffSensorEnable();
   void ToggleTestBackpackLights();
-  void DoCliffAlignToWhite();
   
   void ToggleTrackToFace();
   void ToggleTrackToObject();
   void TrackPet();
   void ExecuteTestPlan();
   
+  void ToggleCubeAccelStreaming();
   void ExecuteBehavior();
   void LogCliffSensorData();
   
   void FakeCloudIntent();
   void FakeUserIntent();
-
+  
+  void NVStorage_EraseTag();
+  void NVStorage_ReadTag();
   void SetEmotion();
-  void TriggerEmotionEvent();
   
   void PickOrPlaceObject();
   void MountSelectedCharger();
-  void TeleportOntoCharger();
   void FlipSelectedBlock();
   
   void PopAWheelie();
@@ -86,8 +86,14 @@ protected:
   void EraseLastObservedFace();
   void ToggleFaceDetection();
   
+  void DenyGameStart();
+  void FillNeedsMeters();
+  void SetUnlock();
+  
+  void ToggleImageStreaming();
   void ToggleEyeRendering();
   
+  void ToggleKeepFaceAliveEnable();
   void SetDefaultKeepFaceAliveParams();
   void SetKeepFaceAliveParams();
   
@@ -101,6 +107,11 @@ protected:
   void TurnInPlaceCW();
   
   void ExecutePlaypenTest();
+  void ToggleSendAvailableObjects();
+  
+  void ReadCameraCalibration();
+  void ReadGameSkills();
+  void ReadMfgTestData();
   
   void SetFaceDisplayHue();
   void SendRandomProceduralFace();
@@ -117,8 +128,6 @@ protected:
   void SayText();
   void PlayCubeAnimation();
   
-  void TogglePowerMode();
-
   void TurnTowardsImagePoint();
   void QuitKeyboardController();
   void ToggleLiftPower();
@@ -126,7 +135,6 @@ protected:
   void MoveLiftToLowDock();
   void MoveLiftToHighDock();
   void MoveLiftToCarryHeight();
-  void MoveLiftToAngle();
   
   void MoveHeadToLowLimit();
   void MoveHeadToHorizontal();
@@ -144,11 +152,6 @@ protected:
   
   void ExecuteRobotTestMode();
   void PressBackButton();
-  void TouchBackSensor();
-
-  void CycleConnectionFlowState();
-
-  void ToggleCameraCaptureFormat();
   
   // ==== End of key press functions ====
   
@@ -171,6 +174,9 @@ protected:
   virtual void HandleRobotObservedObject(const ExternalInterface::RobotObservedObject& msg) override;
   virtual void HandleRobotObservedFace(const ExternalInterface::RobotObservedFace& msg) override;
   virtual void HandleRobotObservedPet(const ExternalInterface::RobotObservedPet& msg) override;
+  virtual void HandleDebugString(const ExternalInterface::DebugString& msg) override;
+  virtual void HandleNVStorageOpResult(const ExternalInterface::NVStorageOpResult& msg) override;
+  virtual void HandleFaceEnrollmentCompleted(const ExternalInterface::FaceEnrollmentCompleted& msg) override;
   virtual void HandleLoadedKnownFace(const Vision::LoadedKnownFace& msg) override;
   virtual void HandleEngineErrorCode(const ExternalInterface::EngineErrorCodeMessage& msg) override;
   virtual void HandleRobotConnected(const ExternalInterface::RobotConnectionResponse& msg) override;
@@ -178,11 +184,9 @@ protected:
 private:
 
   bool _shouldQuit = false;
-
-  webots::Node* _chargerNode = nullptr;
   
 }; // class WebotsKeyboardController
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif  // __webotsCtrlKeyboard_H_

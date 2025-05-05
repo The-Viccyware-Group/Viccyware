@@ -18,7 +18,6 @@ enum uint_32 BankType
   Music = 3991942870,
   Sfx = 393239870,
   Ui = 1551306167,
-  Victor_Alexa = 2239866820,
   Victor_Dev = 3324335988,
   Victor_Global_Data = 550470153,
   Victor_Sfx = 2740517684,

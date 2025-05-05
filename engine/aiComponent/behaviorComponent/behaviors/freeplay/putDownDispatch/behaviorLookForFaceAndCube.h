@@ -14,12 +14,12 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorLookForFaceAndCube_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "util/cladHelpers/cladFromJSONHelpers.h"
+#include "engine/events/animationTriggerHelpers.h"
 #include "coretech/vision/engine/faceIdTypes.h"
 #include <set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declaration
 namespace ExternalInterface {
@@ -66,8 +66,8 @@ protected:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::Standard });
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Markers, EVisionUpdateFrequency::Standard});
+    modifiers.visionModesForActiveScope->insert({ VisionMode::DetectingFaces, EVisionUpdateFrequency::Standard });
+    modifiers.visionModesForActiveScope->insert({ VisionMode::DetectingMarkers, EVisionUpdateFrequency::Standard});
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
 
@@ -172,7 +172,7 @@ private:
 
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif //

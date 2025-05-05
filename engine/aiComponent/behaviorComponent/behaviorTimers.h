@@ -20,7 +20,7 @@
 #include <unordered_map>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorTimer;
 enum class BehaviorTimerTypes : uint8_t;
@@ -32,7 +32,7 @@ class BehaviorTimerManager : public IDependencyManagedComponent<BCComponentID>
 public:
   BehaviorTimerManager();
 
-  virtual void InitDependent( Robot* robot, const BCCompMap& dependentComps ) override { }
+  virtual void InitDependent( Robot* robot, const BCCompMap& dependentComponents ) override { }
   virtual void GetInitDependencies( BCCompIDSet& dependencies ) const override { }
   virtual void GetUpdateDependencies( BCCompIDSet& dependencies ) const override { }
 
@@ -72,7 +72,7 @@ protected:
   bool _hasBeenReset;
 };
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 
 #endif // __Engine_AiComponent_BehaviorComponent_BehaviorTimers_H__

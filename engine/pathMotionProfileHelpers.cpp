@@ -16,7 +16,7 @@
 #include "json/json.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 void LoadPathMotionProfileFromJson(PathMotionProfile& profile, const Json::Value& config)
 {

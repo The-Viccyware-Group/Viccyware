@@ -72,10 +72,8 @@ void Board::init()
   LTN2::mode(MODE_OUTPUT);
 
   //ah, ah, ah, ah, stayin alive, stayin alive
-  Board::pwr_vdd(1);  //Enable MCU power (+VBATs)
-  Board::pwr_vdds(0);
-  Board::pwr_vmain(0);
-  Board::pwr_charge(0);
+  Board::vdd(1);  //Enable MCU power
+  Board::charger(CHRG_OFF);
   
   //The debug pins are in AF pull-up/pull-down after reset:
   //PA14: SWCLK in pull-down [muxed: LED_DAT]
@@ -90,45 +88,131 @@ void Board::init()
 //    Power Control
 //------------------------------------------------
 
-void Board::pwr_vdd(bool en)
+void Board::vdd(bool en)
 {
-  POWER_EN::write( en );
-  POWER_EN::mode(MODE_OUTPUT);
+  if( en ) {
+    POWER_EN::set();
+    POWER_EN::mode(MODE_OUTPUT); //MODE_INPUT);
+    //POWER_EN::pull(PULL_UP);
+  } else {
+    //POWER_EN::reset();
+    //POWER_EN::mode(MODE_OUTPUT);
+    POWER_EN::mode(MODE_INPUT);
+  }
 }
 
-void Board::pwr_vdds(bool en)
+void Board::vdds(bool en)
 {
   if( en ) {
     nVDDs_EN::reset();
     nVDDs_EN::mode(MODE_OUTPUT);
   } else {
-    nVDDs_EN::set();
-    for(volatile int x=0; x<100; x++);
-    nVDDs_EN::mode(MODE_INPUT);
+    //nVDDs_EN::set();
+    nVDDs_EN::mode(MODE_INPUT); //MODE_OUTPUT);
+    //nVDDs_EN::pull(PULL_UP);
   }
 }
 
-void Board::pwr_vmain(bool en)
-{
-  MAIN_EN::write( en );
-  MAIN_EN::mode(MODE_OUTPUT);
-}
-
-void Board::pwr_charge(bool en)
-{
-  CHG_PWR::write( !en );
-  CHG_PWR::mode(MODE_OUTPUT);
-  /*
-  if( en ) {
-    CHG_PWR::mode(MODE_INPUT);
-    //CHG_EN::mode(MODE_INPUT);
+static inline bool is_bat_en_(void) { return BAT_EN::getMode() == MODE_OUTPUT && BAT_EN::read() > 0; }
+static inline void bat_en_(bool on) {
+  if( on ) {
+    BAT_EN::set();
+    BAT_EN::mode(MODE_OUTPUT);
   } else {
-    CHG_PWR::reset();
-    CHG_PWR::mode(MODE_OUTPUT);
-    //CHG_EN::reset();
-    //CHG_EN::mode(MODE_OUTPUT);
+    BAT_EN::reset();
+    BAT_EN::mode(MODE_OUTPUT);
   }
-  */
+}
+
+static inline bool is_vext_en_(void) { return nVEXT_EN::getMode() == MODE_OUTPUT; }
+static inline void vext_en_(bool on) {
+  if( on ) {
+    nVEXT_EN::reset();
+    nVEXT_EN::mode(MODE_OUTPUT);
+  } else {
+    nVEXT_EN::mode(MODE_INPUT);
+  }
+}
+
+void Board::vbats(vbats_src_e src)
+{
+  //make sure only 1 power source is switched into VBATs, or could short circuit
+  //turn-off delays for power fet gates to fully turn off
+  switch(src)
+  {
+    case VBATS_SRC_OFF:
+      if( is_vext_en_() )
+        vext_en_(0), NopLoopDelayMs_(10);
+      if( is_bat_en_() )
+        bat_en_(0), NopLoopDelayMs_(10);
+      break;
+      
+    case VBATS_SRC_VBAT:
+      if( is_vext_en_() )
+        vext_en_(0), NopLoopDelayMs_(10);
+      bat_en_(1);
+      break;
+      
+    case VBATS_SRC_VEXT:
+      if( is_bat_en_() )
+        bat_en_(0), NopLoopDelayMs_(10);
+      vext_en_(1);
+      break;
+  }
+}
+
+#if 0 /*HWVERP3*/
+static inline bool is_chg_en_(void) { return nCHG_EN::getMode() == MODE_OUTPUT && !nCHG_EN::read(); }
+static inline void chg_en_(bool on) {
+  (void)is_chg_en_();
+  if( on ) {
+    nCHG_EN::reset();
+    nCHG_EN::mode(MODE_OUTPUT);
+  } else {
+    nCHG_EN::mode(MODE_INPUT);
+  }
+}
+#else /*HWVER DVT1-A????? still in design*/
+static inline bool is_chg_en_(void) { return CHG_EN::read() > 0; }
+static inline void chg_en_(bool on) {
+  (void)is_chg_en_();
+  if( on ) {
+    CHG_EN::set();
+    CHG_EN::mode(MODE_OUTPUT);
+  } else {
+    CHG_EN::reset();
+    CHG_EN::mode(MODE_OUTPUT);
+  }
+}
+#endif
+
+//static inline bool is_chghc_en_(void) { return nCHG_HC::getMode() == MODE_OUTPUT && !nCHG_HC::read(); }
+static inline void chghc_en_(bool on) {
+  if( on ) {
+    nCHG_HC::reset();
+    nCHG_HC::mode(MODE_OUTPUT);
+  } else {
+    nCHG_HC::mode(MODE_INPUT);
+  }
+}
+
+void Board::charger(chrg_en_e state)
+{
+  switch(state)
+  {
+    case CHRG_OFF:
+      chg_en_(0);
+      chghc_en_(0);
+      break;
+    case CHRG_LOW:
+      chghc_en_(0);
+      chg_en_(1);
+      break;
+    case CHRG_HIGH:
+      chghc_en_(1);
+      chg_en_(1);
+      break;
+  }
 }
 
 //------------------------------------------------  

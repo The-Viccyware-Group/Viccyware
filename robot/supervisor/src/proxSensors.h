@@ -21,10 +21,10 @@
 
 namespace Anki {
   
-  namespace Vector {
+  namespace Cozmo {
     
     namespace ProxSensors {
-      
+
       // Since this re-enables 'cliff detect' and 'stop on cliff'
       // it should only be called when the robot disconnects,
       // otherwise you could desync stopOnCliff state with engine.
@@ -36,33 +36,21 @@ namespace Anki {
       
       void EnableStopOnCliff(bool enable);
 
-      void EnableStopOnWhite(bool enable);
-
-      void SetWhiteDetectThreshold(u32 ind, u16 level);
-
       bool IsAnyCliffDetected();
-
-      bool IsCliffDetected(u32 ind);
       
-      bool IsAnyWhiteDetected();
-
-      bool IsWhiteDetected(u32 ind);
-
       void SetCliffDetectThreshold(u32 ind, u16 level);
       
       void SetAllCliffDetectThresholds(u16 level);
       
       u8 GetCliffDetectedFlags();
       
-      u8 GetWhiteDetectedFlags();
-      
       u16 GetCliffValue(u32 ind);
 
       // Get corrected ToF distance sensor data
-      ProxSensorDataRaw GetProxData();
+      ProxSensorData GetProxData();
 
     } // namespace ProxSensors
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // PROX_SENSORS_H_

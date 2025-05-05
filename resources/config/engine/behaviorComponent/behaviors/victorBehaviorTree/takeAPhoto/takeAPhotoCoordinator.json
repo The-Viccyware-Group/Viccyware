@@ -1,7 +1,0 @@
-{
-  "behaviorClass": "TakeAPhotoCoordinator",
-  "behaviorID": "TakeAPhotoCoordinator",
-
-  "associatedActiveFeature": "TakeAPhoto"
-
-}

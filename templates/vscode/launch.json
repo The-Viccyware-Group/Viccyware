@@ -1,149 +1,270 @@
 {
     "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "victor:dbg:attach",
+            "configurations": [
+                "robot:dbg:attach",
+                "anim:dbg:attach",
+                "engine:dbg:attach"
+            ]
+        },
+        {
+            "name": "victor:rel:attach",
+            "configurations": [
+                "robot:rel:attach",
+                "anim:rel:attach",
+                "engine:rel:attach"
+            ]
+        },
+        {
+            "name": "victor:dbg:launch",
+            "configurations": [
+                "robot:dbg",
+                "anim:dbg",
+                "engine:dbg"
+            ]
+        }
+    ],
     "configurations": [
         {
-            "name": "victor:attach:vic-robot",
-            "type": "lldb",
-            "request": "attach",
-            "program": "vic-robot",
-            "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}"
-            ]
-        },
-        {
-            "name": "victor:attach:vic-anim",
-            "type": "lldb",
-            "request": "attach",
-            "program": "vic-anim",
-            "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}"
-            ]
-        },
-        {
-            "name": "victor:attach:vic-engine",
-            "type": "lldb",
-            "request": "attach",
-            "program": "vic-engine",
-            "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}",
-            ]
-        },
-        {
-            // Note that process launch requires write permission on the filesystem:
-            //   mount -o rw,remount /
-            "name": "victor:launch:vic-robot",
+            "name": "engine:dbg",
             "type": "lldb",
             "request": "launch",
-            "program": "/anki/bin/vic-robot",
-            "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}"
-            ]
-        },
-        {
-            // Note that process launch requires write permission on the filesystem:
-            //   mount -o rw,remount /
-            "name": "victor:launch:vic-anim",
-            "type": "lldb",
-            "request": "launch",
-            "program": "/anki/bin/vic-anim",
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-engine",
             "env": {
-                "VIC_ANIM_CONFIG": "/anki/etc/config/platform_config.json"
-            },
-            "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}"
-            ]
-        },
-        {
-            // Note that process launch requires write permission on the filesystem:
-            //   mount -o rw,remount /
-            "name": "victor:launch:vic-engine",
-            "type": "lldb",
-            "request": "launch",
-            "program": "/anki/bin/vic-engine",
-            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
                 "VIC_ENGINE_CONFIG": "/anki/etc/config/platform_config.json"
             },
+            "stopOnEntry": false,
             "initCommands": [
-                "platform select remote-linux",
-                "platform connect connect://${dbgconfig:host}:55001",
-                "settings set target.exec-search-paths ${dbgconfig:lib} ${dbgconfig:bin}",
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "platform shell systemctl stop vic-engine || true",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib"
             ]
         },
         {
-            "name": "mac:launch:test_engine",
+            "name": "engine:dbg:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-engine",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ENGINE_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib",
+            ]
+        },
+        {
+            "name": "engine:rel",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/_build/mac/Debug/bin/test_engine",
+            "program": "${workspaceRoot}/_build/android/Release/bin/vic-engine",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ENGINE_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "platform shell systemctl stop vic-engine || true",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Release/lib"
+            ]
+        },
+        {
+            "name": "engine:rel:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/_build/android/Release/bin/vic-engine",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ENGINE_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Release/lib",
+            ]
+        },
+        {
+            "name": "lldb test_engine",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/_build/mac/Debug/bin/test_engine",
             "env": {
                 "GTEST_FILTER": "-BlockWorld*:-Localization*",
                 "ANKIWORKROOT": "_build/tmp",
-                "ANKICONFIGROOT": "_build/mac/Debug/test/engine",
+                "ANKICONFIGROOT": "_build/mac/Debug/assets/cozmo_resources",
                 "DYLD_LIBRARY_PATH": "_build/mac/Debug/lib:/Applications/Webots.app/lib"
             },
             "stopOnEntry": false,
             "initCommands": [
-                "settings set target.exec-search-paths ${workspaceFolder}/_build/mac/Debug/lib"
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/mac/Debug/lib"
             ]
         },
         {
-            "name": "webots:attach:webotsCtrlRobot2",
+            "name": "anim:dbg",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-anim",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ANIM_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "platform systemctl stop vic-anim || true",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib"
+            ]
+        },
+        {
+            "name": "anim:dbg:attach",
             "type": "lldb",
             "request": "attach",
-            "waitFor": true,
-            "program": "webotsCtrlRobot2",
-            "stopOnEntry": false
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-anim",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ANIM_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib",
+            ]
         },
         {
-            "name": "webots:attach:webotsCtrlAnim",
+            "name": "anim:rel:attach",
             "type": "lldb",
             "request": "attach",
-            "waitFor": true,
-            "program": "webotsCtrlAnim",
-            "stopOnEntry": false
+            "program": "${workspaceRoot}/_build/android/Release/bin/vic-anim",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+                "VIC_ANIM_CONFIG": "/anki/etc/config/platform_config.json"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Release/lib",
+            ]
         },
         {
-            "name": "webots:attach:webotsCtrlGameEngine2",
+            "name": "robot:dbg",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-robot",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib"
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "platform systemctl stop vic-robot || true",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib"
+            ]
+        },
+        {
+            "name": "robot:dbg:attach",
             "type": "lldb",
             "request": "attach",
-            "waitFor": true,
-            "program": "webotsCtrlGameEngine2",
-            "stopOnEntry": false
-        }
-    ],
-    "compounds": [
-        {
-            "name": "victor:attach:all",
-            "configurations": [
-                "victor:attach:vic-robot",
-                "victor:attach:vic-anim",
-                "victor:attach:vic-engine"
+            "program": "${workspaceRoot}/_build/android/Debug/bin/vic-robot",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Debug/lib",
             ]
         },
         {
-            "name": "victor:launch:all",
-            "configurations": [
-                "victor:launch:vic-robot",
-                "victor:launch:vic-anim",
-                "victor:launch:vic-engine"
+            "name": "robot:rel:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/_build/android/Release/bin/vic-robot",
+            "env": {
+                "LD_LIBRARY_PATH": "/anki/lib",
+            },
+            "stopOnEntry": false,
+            "initCommands": [
+                "platform select remote-android",
+                "platform connect connect://localhost:55001",
+                "settings set target.exec-search-paths ${workspaceRoot}/_build/android/Release/lib",
             ]
         },
+
+        
         {
-            "name": "webots:attach:all",
-            "configurations": [
-                "webots:attach:webotsCtrlRobot2",
-                "webots:attach:webotsCtrlAnim",
-                "webots:attach:webotsCtrlGameEngine2"
-            ]
+            "name": "webotsCtrlAnim:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlAnim/webotsCtrlAnim"
+        },
+        {
+            "name": "webotsCtrlWebServer:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlWebServer/webotsCtrlWebServer"
+        },
+        {
+            "name": "webotsCtrlBuildServerTest:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlBuildServerTest/webotsCtrlBuildServerTest"
+        },
+        {
+            "name": "webotsCtrlDevLog:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlDevLog/webotsCtrlDevLog"
+        },
+        {
+            "name": "webotsCtrlGameEngine2:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlGameEngine2/webotsCtrlGameEngine2"
+        },
+        {
+            "name": "webotsCtrlHandEmitter:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlHandEmitter/webotsCtrlHandEmitter"
+        },
+        {
+            "name": "webotsCtrlKeyboard:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlKeyboard/webotsCtrlKeyboard"
+        },
+        {
+            "name": "webotsCtrlLightCube:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlLightCube/webotsCtrlLightCube"
+        },
+        {
+            "name": "webotsCtrlRobot2:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlRobot2/webotsCtrlRobot2"
+        },
+        {
+            "name": "webotsCtrlViz:attach",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceRoot}/simulator/controllers/webotsCtrlViz/webotsCtrlViz"
         }
     ]
 }

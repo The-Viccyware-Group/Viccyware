@@ -19,18 +19,13 @@
 #include "engine/aiComponent/beiConditions/iBEIConditionEventHandler.h"
 
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 #include "anki/common/constantsAndMacros.h"
-#include "coretech/common/shared/math/radians.h"
+#include "coretech/common/shared/radians.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BEIConditionMessageHelper;
-  
-namespace ExternalInterface {
-struct RobotObservedObject;
-}
 
 class ConditionObjectPositionUpdated : public IBEICondition, private IBEIConditionEventHandler
 {
@@ -44,7 +39,7 @@ protected:
   virtual bool AreConditionsMetInternal(BehaviorExternalInterface& behaviorExternalInterface) const override;
   virtual void HandleEvent(const EngineToGameEvent& event, BehaviorExternalInterface& behaviorExternalInterface) override;
   virtual void GetRequiredVisionModes(std::set<VisionModeRequest>& requiredVisionModes) const override {
-    requiredVisionModes.insert({ VisionMode::Markers, EVisionUpdateFrequency::Low });
+    requiredVisionModes.insert({ VisionMode::DetectingMarkers, EVisionUpdateFrequency::Low });
   }
 private:
   // Default configuration parameters which can be overridden by JSON config
@@ -59,10 +54,10 @@ private:
   
   struct ReactionData
   {
-    Pose3d           lastPose;
-    Pose3d           lastReactionPose;
-    RobotTimeStamp_t lastSeenTime_ms;
-    RobotTimeStamp_t lastReactionTime_ms;
+    Pose3d      lastPose;
+    Pose3d      lastReactionPose;
+    TimeStamp_t lastSeenTime_ms;
+    TimeStamp_t lastReactionTime_ms;
     
     // helper function to fake a reaction (useful for cases where we want to ignore reactions)
     void FakeReaction();
@@ -74,7 +69,7 @@ private:
   // handles observing a new ID. Updates internal reaction data. If reactionEnabled is omitted, it checks
   // IsReactionEnabled(). If reactionEnabled is false, it will add the observation but ignore it for reactions
   // (by faking a reaction)
-  void HandleNewObservation(s32 id, const Pose3d& pose, RobotTimeStamp_t timestamp, bool reactionEnabled = true);
+  void HandleNewObservation(s32 id, const Pose3d& pose, u32 timestamp, bool reactionEnabled = true);
   
   // For the next three functions, the bool `matchAnyPose` defaults to false. If true, then it checks poses
   // against any other pose, regardless of ID. If false, it only checks against it's own ID. Cooldown is still
@@ -99,7 +94,7 @@ private:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_WantsToRunStrategies_ConditionObjectPositionUpdated_H__

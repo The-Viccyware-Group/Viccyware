@@ -22,9 +22,6 @@ static int a = 0;
 
 class Base {
 public:
-
-  virtual ~Base() = default;
-
   virtual void Func() {
     a++;
   }

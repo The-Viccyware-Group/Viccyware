@@ -19,7 +19,7 @@
 #include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
   
@@ -54,7 +54,7 @@ private:
 };
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

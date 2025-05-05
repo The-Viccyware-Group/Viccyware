@@ -13,7 +13,7 @@
 #include <assert.h>
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
 
 
 BaseStationEventDispatcher* BaseStationEventDispatcher::instance_ = NULL;
@@ -127,5 +127,5 @@ void BaseStationEventDispatcher::NotifyEventListeners( IBaseStationEventInterfac
   }
 }
 
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

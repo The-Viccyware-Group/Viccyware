@@ -2,7 +2,7 @@
  */
 
 namespace Anki {
- namespace Vector {
+ namespace Cozmo {
 
     /// These are all hard-coded - in 2017 production, we may start using different values here
     structure BirthCertificate {
@@ -20,5 +20,5 @@ namespace Anki {
       uint_8 second
     }
 
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

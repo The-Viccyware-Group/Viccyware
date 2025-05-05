@@ -20,7 +20,7 @@
 
 
 using namespace Anki;
-using namespace Vector;
+using namespace Cozmo;
 
 
 ProceduralFace GetProcFaceFromVals(boost::python::list& leftEyeList, boost::python::list& rightEyeList,

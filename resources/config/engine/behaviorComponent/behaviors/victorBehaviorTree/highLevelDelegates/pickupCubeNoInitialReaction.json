@@ -1,7 +1,0 @@
-{
-  "behaviorClass": "PickUpCube",
-  "behaviorID": "PickupCubeNoInitialReaction",
-  
-  "alwaysStreamline" : false,
-  "skipInitialReactionAnim" : true
-}

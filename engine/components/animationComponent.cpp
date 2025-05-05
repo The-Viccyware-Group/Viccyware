@@ -14,8 +14,6 @@
 #include "engine/ankiEventUtil.h"
 #include "engine/animations/animationGroup/animationGroupContainer.h"
 #include "engine/components/animationComponent.h"
-#include "engine/components/dataAccessorComponent.h"
-#include "engine/components/movementComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/robot.h"
 #include "engine/robotDataLoader.h"
@@ -24,79 +22,63 @@
 
 #include "clad/types/animationTypes.h"
 
-#include "cannedAnimLib/cannedAnims/animation.h"
-#include "cannedAnimLib/cannedAnims/cannedAnimationContainer.h"
-#include "coretech/common/shared/array2d.h"
+#include "coretech/common/engine/array2d_impl.h"
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "coretech/common/engine/utils/timer.h"
-#include "coretech/vision/shared/rgb565Image/rgb565ImageBuilder.h"
 
 #include "json/json.h"
 
-#include "util/string/stringUtils.h"
-
-#define LOG_CHANNEL "Animations"
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
  
 namespace {
-  
-  static const AnimationComponent::Tag kInvalidAnimationTag = 0;
+  static const char* kLogChannelName = "Animations";
 
-  const u32 kMaxNumAvailableAnimsToReportPerTic = 1000;
+  const u32 kMaxNumAvailableAnimsToReportPerTic = 50;
 
-  // static const u32 kNumImagePixels     = FACE_DISPLAY_HEIGHT * FACE_DISPLAY_WIDTH;
-  // static const u32 kNumHalfImagePixels = kNumImagePixels / 2;
-
-  static const int kMaxAnimGroupRecursionDepth = 100;
+  static const u32 kNumImagePixels     = FACE_DISPLAY_HEIGHT * FACE_DISPLAY_WIDTH;
+  static const u32 kNumHalfImagePixels = kNumImagePixels / 2;
 }
   
-CONSOLE_VAR(f32, kEyeDartFocusValue_pix, "Animation", 1.0f);
   
 AnimationComponent::AnimationComponent()
 : IDependencyManagedComponent(this, RobotComponentID::Animation)
 , _isInitialized(false)
-, _tagCtr(kInvalidAnimationTag)
+, _tagCtr(0)
 , _isDolingAnims(false)
 , _nextAnimToDole("")
 , _currPlayingAnim("")
+, _lockedTracks(0)
 , _isAnimating(false)
 , _currAnimName("")
 , _currAnimTag(0)
-, _oledImageBuilder(new Vision::RGB565ImageBuilder)
-, _tagForTriggerWordGetInCallbacks(GetNextTag())
-, _tagForAlexaListening(GetNextTag())
-, _tagForAlexaThinking(GetNextTag())
-, _tagForAlexaSpeaking(GetNextTag())
-, _tagForAlexaError(GetNextTag())
-, _compositeImageID(0)
 {
 
 }
 
-void AnimationComponent::InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps)
+void AnimationComponent::InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents)
 {
   _robot = robot;
-  _dataAccessor = dependentComps.GetComponentPtr<DataAccessorComponent>();
-  _movementComponent = dependentComps.GetComponentPtr<MovementComponent>();
   const CozmoContext* context = _robot->GetContext();
   _animationGroups = std::make_unique<AnimationGroupWrapper>(*(context->GetDataLoader()->GetAnimationGroups()));
+  if (context) {
+    // Setup game message handlers
+    IExternalInterface *extInterface = context->GetExternalInterface();
+    if (extInterface != nullptr) {
+      
+      auto helper = MakeAnkiEventUtil(*extInterface, *this, GetSignalHandles());
+  
+      using namespace ExternalInterface;
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestAvailableAnimations>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestAvailableAnimationGroups>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::DisplayProceduralFace>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::SetFaceHue>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::DisplayFaceImageBinaryChunk>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::EnableKeepFaceAlive>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::SetKeepFaceAliveParameters>();
+      helper.SubscribeGameToEngine<MessageGameToEngineTag::ReadAnimationFile>();
 
-  // Setup game message handlers
-  IExternalInterface *extInterface = context->GetExternalInterface();
-  if (extInterface != nullptr) {
-    
-    auto helper = MakeAnkiEventUtil(*extInterface, *this, GetSignalHandles());
-
-    using namespace ExternalInterface;
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestAvailableAnimations>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestAvailableAnimationGroups>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::DisplayProceduralFace>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::SetFaceHue>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::DisplayFaceImageBinaryChunk>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::DisplayFaceImageRGBChunk>();
-    helper.SubscribeGameToEngine<MessageGameToEngineTag::ReadAnimationFile>();
+    }
   }
   
   // Setup robot message handlers
@@ -121,18 +103,12 @@ void AnimationComponent::InitDependent(Vector::Robot* robot, const RobotCompMap&
 
 void AnimationComponent::Init()
 {
-  if(_isInitialized)
-  {
-    LOG_INFO("AnimationComponent.Init.AlreadyInited","");
-    return;
-  }
-  
   // Open manifest file
   static const std::string manifestFile = "assets/anim_manifest.json";
   Json::Value jsonManifest;
   const bool success = _robot->GetContext()->GetDataPlatform()->readAsJson(Util::Data::Scope::Resources, manifestFile, jsonManifest);
   if (!success) {
-    LOG_ERROR("AnimationComponent.Init.ManifestNotFound", "");
+    PRINT_NAMED_ERROR("AnimationComponent.Init.ManifestNotFound", "");
     return;
   }
 
@@ -145,41 +121,21 @@ void AnimationComponent::Init()
     static const char* kLengthField = "length_ms";
 
     if (!jsonAnim.isMember(kNameField)) {
-      LOG_ERROR("AnimationComponent.Init.MissingJsonField", "%s", kNameField);
+      PRINT_NAMED_ERROR("AnimationComponent.Init.MissingJsonField", "%s", kNameField);
       continue;
     }
 
     if (!jsonAnim.isMember(kLengthField)) {
-      LOG_ERROR("AnimationComponent.Init.MissingJsonField", "%s", kLengthField);
+      PRINT_NAMED_ERROR("AnimationComponent.Init.MissingJsonField", "%s", kLengthField);
       continue;
     }
 
     _availableAnims[jsonAnim[kNameField].asCString()].length_ms = jsonAnim[kLengthField].asInt();
   }
-  LOG_INFO("AnimationComponent.Init.ManifestRead", "%zu animations loaded", _availableAnims.size());
-
-  if( ANKI_DEVELOPER_CODE ) {
-    // now that we loaded the animations, go check the animation whitelist and make sure everything in there is
-    // a valid animation prefix
-    const auto& whitelistedPrefixes = _robot->GetContext()->GetDataLoader()->GetAllWhitelistedChargerAnimationPrefixes();
-    for( const auto& prefix : whitelistedPrefixes ) {
-      // Ensure that at least one available animation has the given prefix
-      bool hasMatchingAnim = false;
-      for (const auto& availableAnim : _availableAnims) {
-        if (Util::StringStartsWith(availableAnim.first, prefix)) {
-          hasMatchingAnim = true;
-          break;
-        }
-      }
-      if (!hasMatchingAnim) {
-        LOG_WARNING("AnimationComponent.AnimWhitelistInvalid",
-                    "Anim whitelist in RobotDataLoader contains prefix '%s' for which there is no valid clip name",
-                    prefix.c_str());
-      }
-    }
-  }
+  PRINT_CH_INFO(kLogChannelName, "AnimationComponent.Init.ManifestRead", "%zu animations loaded", _availableAnims.size());
 
   _isInitialized = true;
+  
 }
   
 
@@ -194,18 +150,14 @@ void AnimationComponent::UpdateDependent(const RobotCompMap& dependentComps)
   auto it = _callbackMap.begin();
   while(it != _callbackMap.end()) {
     if (it->second.abortTime_sec != 0 && currTime_sec >= it->second.abortTime_sec) {
-      LOG_WARNING("AnimationComponent.Update.AnimTimedOut", "Anim: %s", it->second.animName.c_str());
-      _robot->SendRobotMessage<RobotInterface::AbortAnimation>(it->first);
-      it->second.ExecuteCallback(AnimResult::Timedout, static_cast<u32>(it->second.abortTime_sec));
+      PRINT_NAMED_WARNING("AnimationComponent.Update.AnimTimedOut", "Anim: %s", it->second.animName.c_str());
+      _robot->SendRobotMessage<RobotInterface::AbortAnimation>();
+      it->second.ExecuteCallback(AnimResult::Timedout);
       it = _callbackMap.erase(it);
     }
     else {
       ++it;
     }
-  }
-
-  if( _desiredEnableKeepFaceAlive != _lastSentEnableKeepFaceAlive ) {
-    SendEnableKeepFaceAlive(_desiredEnableKeepFaceAlive);
   }
 }
  
@@ -235,7 +187,7 @@ void AnimationComponent::DoleAvailableAnimations()
       ++numAnimsDoledThisTic;
     }
     if (it == _availableAnims.end()) {
-      LOG_INFO("DoleAvailableAnimations.Done", "");
+      PRINT_CH_INFO(kLogChannelName, "DoleAvailableAnimations.Done", "");
       _isDolingAnims = false;
       _nextAnimToDole = "";
       _robot->Broadcast(ExternalInterface::MessageEngineToGame(
@@ -248,234 +200,73 @@ void AnimationComponent::DoleAvailableAnimations()
 }
 
 
-const std::string& AnimationComponent::GetAnimationNameFromGroup(const std::string& name,
-                                                                 bool strictCooldown,
-                                                                 int recursionCount) const
+const std::string& AnimationComponent::GetAnimationNameFromGroup(const std::string& name, bool strictCooldown) const
 {
-  static const std::string empty("");
-
-  if( !ANKI_VERIFY( recursionCount < kMaxAnimGroupRecursionDepth,
-                    "AnimationComponent.GetAnimationNameFromGroup.ExceededMaxREcursionDepth",
-                    "Recursion loop! Recursed %d times to group name '%s'",
-                    recursionCount,
-                    name.c_str()) ) {
-    // just give up after max recursion depth
-    return empty;
-  }
-
   const AnimationGroup* group = _animationGroups->_container.GetAnimationGroup(name);
   if(group != nullptr && !group->IsEmpty()) {
-    const std::string& selectedAnim = group->GetAnimationName(_robot->GetMoodManager(),
-                                                              _animationGroups->_container,
-                                                              _robot->GetComponent<FullRobotPose>().GetHeadAngle(),
-                                                              strictCooldown);
-    if( _animationGroups->_container.HasGroup( selectedAnim ) ) {
-      LOG_INFO("GetAnimationName.SubGroupSelected",
-               "Group %s returned sub-group %s, going deeper",
-               name.c_str(),
-               selectedAnim.c_str());
-      return GetAnimationNameFromGroup(selectedAnim, strictCooldown, recursionCount+1);
-    }
-    else {
-      return selectedAnim;
-    }
+    return group->GetAnimationName(_robot->GetMoodManager(),  _animationGroups->_container, 
+                                   _robot->GetComponent<FullRobotPose>().GetHeadAngle(), strictCooldown);
   }
+  static const std::string empty("");
   return empty;
 }
 
-bool AnimationComponent::IsAnimationGroup(const std::string& group) const
-{
-  const bool groupExists = _animationGroups->_container.HasGroup(group);
-  return groupExists;
-}
-
+  
 Result AnimationComponent::PlayAnimByName(const std::string& animName,
                                           int numLoops,
                                           bool interruptRunning,
                                           AnimationCompleteCallback callback,
                                           const u32 actionTag,
-                                          float timeout_sec,
-                                          u32 startAt_ms,
-                                          bool renderInEyeHue)
+                                          float timeout_sec)
 {
   if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.PlayAnimByName.Uninitialized", "");
+    PRINT_NAMED_WARNING("AnimationComponent.PlayAnimByName.Uninitialized", "");
     return RESULT_FAIL;
   }
 
   // Check that animName is valid
   auto it = _availableAnims.find(animName);
   if (it == _availableAnims.end()) {
-    LOG_WARNING("AnimationComponent.PlayAnimByName.AnimNotFound", "%s", animName.c_str());
+    PRINT_NAMED_WARNING("AnimationComponent.PlayAnimByName.AnimNotFound", "%s", animName.c_str());
     return RESULT_FAIL;
   }
   
-  LOG_DEBUG("AnimationComponent.PlayAnimByName.PlayingAnim", "%s", it->first.c_str());
+  PRINT_CH_DEBUG(kLogChannelName, "AnimationComponent.PlayAnimByName.PlayingAnim", "%s", it->first.c_str());
 
   // Check that a valid actionTag was specified if there is non-empty callback
   if (callback != nullptr && actionTag == 0) {
-    LOG_WARNING("AnimationComponent.PlayAnimByName.MissingActionTag", "");
+    PRINT_NAMED_WARNING("AnimationComponent.PlayAnimByName.MissingActionTag", "");
     return RESULT_FAIL;
   }
   
   // TODO: Is this what interruptRunning should mean?
   //       Or should it queue on anim process side and optionally interrupt currently executing anim?
   if (IsPlayingAnimation() && !interruptRunning) {
-    LOG_INFO("AnimationComponent.PlayAnimByName.WontInterruptCurrentAnim", "");
+    PRINT_CH_INFO(kLogChannelName, "AnimationComponent.PlayAnimByName.WontInterruptCurrentAnim", "");
     return RESULT_FAIL;
   }
 
   const Tag currTag = GetNextTag();
-  if (_robot->SendRobotMessage<RobotInterface::PlayAnim>(numLoops, startAt_ms, currTag, renderInEyeHue, animName) == RESULT_OK) {
-    SetAnimationCallback(animName, callback, currTag, actionTag, numLoops, timeout_sec);
+  if (_robot->SendRobotMessage<RobotInterface::PlayAnim>(numLoops, currTag, animName) == RESULT_OK) {
+    // Check if tag already exists in callback map.
+    // If so, trigger callback with Stale
+    {
+      auto it = _callbackMap.find(currTag);
+      if (it != _callbackMap.end()) {
+        PRINT_NAMED_WARNING("AnimationComponent.PlayAnimByName.StaleTag", "%d", currTag);
+        it->second.ExecuteCallback(AnimResult::Stale);
+        _callbackMap.erase(it);
+      }
+    }
+    const float abortTime_sec = (numLoops > 0 ? BaseStationTimer::getInstance()->GetCurrentTimeInSeconds() + timeout_sec : 0);
+    _callbackMap.emplace(std::piecewise_construct,
+                         std::forward_as_tuple(currTag),
+                         std::forward_as_tuple(animName, callback, actionTag, abortTime_sec));
   }
   
   return RESULT_OK;
 }
-
-Result AnimationComponent::PlayAnimWithSpriteBoxRemaps(const std::string& animName,
-                                                       const RemapMap& remaps,
-                                                       bool interruptRunning,
-                                                       AnimationCompleteCallback callback,
-                                                       const std::string& lockFaceAtEndOfAnimTag)
-{
-  if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.PlayAnimWithSpriteBoxRemaps.Uninitialized", "");
-    return RESULT_FAIL;
-  }
-
-  // Check that animName is valid
-  auto it = _availableAnims.find(animName);
-  if (it == _availableAnims.end()) {
-    LOG_WARNING("AnimationComponent.PlayAnimWithSpriteBoxRemaps.AnimNotFound", "%s", animName.c_str());
-    return RESULT_FAIL;
-  }
-
-  if (IsPlayingAnimation() && !interruptRunning) {
-    LOG_INFO("AnimationComponent.PlayAnimWithSpriteBoxRemaps.WontInterruptCurrentAnim", "");
-    return RESULT_FAIL;
-  }
-
-  const Tag currTag = GetNextTag();
-  const auto& spritePathMap = *_robot->GetContext()->GetDataLoader()->GetSpritePaths();
-
-  RobotInterface::PlayAnimWithSpriteBoxRemaps msg;
-  msg.tag = currTag;
-  msg.animName = animName;
-  msg.numRemaps = remaps.size();
-  msg.lockFaceAtEndOfAnim = !lockFaceAtEndOfAnimTag.empty();
-
-  if(remaps.size() > msg.spriteBoxRemaps.size()){
-    LOG_ERROR("AnimationComponent.PlayAnimWithSpriteBoxRemaps.MessageOverflow",
-              "Attempted to send %zu remaps, message can only carry %zu",
-              remaps.size(),
-              msg.spriteBoxRemaps.size());
-    return RESULT_FAIL;
-  }
-
-  int i = 0;
-  for(const auto& remap : remaps){
-    msg.spriteBoxRemaps[i].spriteBoxName = remap.first;
-    if(!ANKI_VERIFY(spritePathMap.IsValidAssetID(remap.second),
-                    "AnimationComponent.PlayAnimWithSpriteBoxRemaps.InvalidAsset", 
-                    "Attempted to remap SpriteBox %s with invalid assetID %d",
-                    Vision::SpriteBoxNameToString(remap.first),
-                    remap.second) ){
-      return RESULT_FAIL;
-    }
-    msg.spriteBoxRemaps[i].remappedAssetID = remap.second;
-    ++i;
-  }
-
-  if(callback != nullptr){
-    SetAnimationCallback(animName, callback, currTag, 0, 0, 0);
-  }
-
-  if(!lockFaceAtEndOfAnimTag.empty()){
-    auto lockTrackCallback = 
-      [this, lockFaceAtEndOfAnimTag](const AnimationComponent::AnimResult res, u32 streamTimeAnimEnded){
-        if(res == AnimResult::Completed){
-          _movementComponent->RecordTracksLocked((u8)AnimTrackFlag::FACE_TRACK, lockFaceAtEndOfAnimTag);
-        }
-      };
-    SetAnimationCallback(animName, lockTrackCallback, currTag, 0, 0, 0);
-  }
-
-  return _robot->SendRobotMessage<RobotInterface::PlayAnimWithSpriteBoxRemaps>(msg);
-}
-
-
-Result AnimationComponent::PlayAnimWithSpriteBoxKeyFrames(const std::string& animName,
-                                                          const std::vector<Vision::SpriteBoxKeyFrame>& keyframes,
-                                                          bool interruptRunning,
-                                                          AnimationCompleteCallback callback)
-{
-  if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.PlayAnimWithSpriteBoxRemaps.Uninitialized", "");
-    return RESULT_FAIL;
-  }
-
-  // Empty animName will play a constructed animation containing ONLY the provided SpriteBoxKeyFrames
-  if(!animName.empty()){
-    // Check that animName is valid
-    auto it = _availableAnims.find(animName);
-    if (it == _availableAnims.end()) {
-      LOG_WARNING("AnimationComponent.PlayAnimWithSpriteBoxRemaps.AnimNotFound", "%s", animName.c_str());
-      return RESULT_FAIL;
-    }
-  }
-
-  if (IsPlayingAnimation() && !interruptRunning) {
-    LOG_INFO("AnimationComponent.PlayAnimWithSpriteBoxRemaps.WontInterruptCurrentAnim", "");
-    return RESULT_FAIL;
-  }
-
-  RobotInterface::PlayAnimWithSpriteBoxKeyFrames msg;
-  if(keyframes.size() > msg.spriteBoxKeyFrames.size()){
-    LOG_ERROR("AnimationComponent.PlayAnimWithSpriteBoxKeyFrames.MessageOverflow",
-              "Attempted to send %zu KeyFrames, message can only carry %zu",
-              keyframes.size(),
-              msg.spriteBoxKeyFrames.size());
-    return RESULT_FAIL;
-  }
-
-  const Tag currTag = GetNextTag();
-  msg.tag = currTag;
-  msg.numKeyFrames = keyframes.size();
-  std::memcpy(&msg.spriteBoxKeyFrames, keyframes.data(), keyframes.size() * sizeof(keyframes[0]));
-  msg.animName = animName;
-
-  if(callback != nullptr){
-    SetAnimationCallback(animName, callback, currTag, 0, 0, 0);
-  }
-
-  return _robot->SendRobotMessage<RobotInterface::PlayAnimWithSpriteBoxKeyFrames>(msg);
-}
-
-
-Result AnimationComponent::AddSpriteBoxKeyFramesToRunningAnim(const std::vector<Vision::SpriteBoxKeyFrame>& keyframes)
-{
-  if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.PlayAnimWithSpriteBoxRemaps.Uninitialized", "");
-    return RESULT_FAIL;
-  }
-
-  RobotInterface::AddSpriteBoxKeyFrames msg;
-  if(keyframes.size() > msg.spriteBoxKeyFrames.size()){
-    LOG_ERROR("AnimationComponent.AddSpriteBoxKeyFramesToRunningAnim.MessageOverflow",
-              "Attempted to send %zu KeyFrames, message can only carry %zu",
-              keyframes.size(),
-              msg.spriteBoxKeyFrames.size());
-    return RESULT_FAIL;
-  }
-
-  msg.numKeyFrames = keyframes.size();
-  std::memcpy(&msg.spriteBoxKeyFrames, keyframes.data(), keyframes.size() * sizeof(keyframes[0]));
-
-  return _robot->SendRobotMessage<RobotInterface::AddSpriteBoxKeyFrames>(msg);
-}
-
-
+  
 AnimationComponent::Tag AnimationComponent::IsAnimPlaying(const std::string& animName)
 {
   for (auto it = _callbackMap.begin(); it != _callbackMap.end(); ++it) {
@@ -494,77 +285,60 @@ Result AnimationComponent::StopAnimByName(const std::string& animName)
   if (it != _availableAnims.end()) {
     const Tag tag = IsAnimPlaying(animName);
     if (tag != kNotAnimatingTag) {
-      LOG_DEBUG("AnimationComponent.StopAnimByName.AbortingAnim", "%s (%d)", animName.c_str(), tag);
-      return _robot->SendRobotMessage<RobotInterface::AbortAnimation>(tag);
+      PRINT_CH_DEBUG(kLogChannelName, "AnimationComponent.StopAnimByName.AbortingAnim", "%s", animName.c_str());
+      return _robot->SendRobotMessage<RobotInterface::AbortAnimation>();
     }
     else {
-      LOG_WARNING("AnimationComponent.StopAnimByName.AnimNotPlaying",
-                  "%s", animName.c_str());
+      PRINT_NAMED_WARNING("AnimationComponent.StopAnimByName.AnimNotPlaying",
+                          "%s", animName.c_str());
       return RESULT_OK;
     }
   }
   else {
-    LOG_WARNING("AnimationComponent.StopAnimByName.InvalidName",
-                "%s", animName.c_str());
+    PRINT_NAMED_WARNING("AnimationComponent.StopAnimByName.InvalidName",
+                        "%s", animName.c_str());
     return RESULT_FAIL;
   }
 
 }
 
-
-void AnimationComponent::AlterStreamingAnimationAtTime(RobotInterface::EngineToRobot&& msg, 
-                                                       TimeStamp_t relativeStreamTime_ms,  
-                                                       bool applyBeforeTick,
-                                                       MovementComponent* devSafetyCheck)
-{
-  RobotInterface::AlterStreamingAnimationAtTime alterMsg;
-  alterMsg.relativeStreamTime_ms = relativeStreamTime_ms;
-  alterMsg.applyBeforeTick = applyBeforeTick;
-  alterMsg.internalTag = static_cast<uint8_t>(msg.GetTag());
-  switch(msg.GetTag()){
-    case RobotInterface::EngineToRobotTag::setFullAnimTrackLockState:
-    {
-      DEV_ASSERT(devSafetyCheck == _movementComponent, 
-        "AnimationComponent.AlterStreamingAnimationAtTime.DirectlyQueueingMessageThatMustGoThroughMovementComponent");
-      alterMsg.setFullAnimTrackLockState = std::move(msg.Get_setFullAnimTrackLockState());
-      break;
-    }
-    case RobotInterface::EngineToRobotTag::postAudioEvent:
-    {
-      alterMsg.postAudioEvent = std::move(msg.Get_postAudioEvent());
-      break;
-    }
-    case RobotInterface::EngineToRobotTag::textToSpeechPlay:
-    {
-      alterMsg.textToSpeechPlay = std::move(msg.Get_textToSpeechPlay());
-      break;
-    }
-
-    default:
-    {
-      LOG_ERROR("AnimationComponent.AlterStreamingAnimationAtTime.UnsupportedMessageType",
-                "Message Type %s is not currently implemented - update clad and anim process to support",
-                RobotInterface::EngineToRobotTagToString(msg.GetTag()));
-      break;
-    }
-  }
   
-  RobotInterface::EngineToRobot wrapper(std::move(alterMsg));
-  _robot->SendMessage(wrapper);
+// Enables only the specified tracks. 
+// Status of other tracks remain unchanged.
+void AnimationComponent::UnlockTracks(u8 tracks)
+{
+  _lockedTracks &= ~tracks;
+  _robot->SendRobotMessage<RobotInterface::LockAnimTracks>(_lockedTracks);
+}
+
+void AnimationComponent::UnlockAllTracks()
+{
+  if (_lockedTracks != 0) {
+    _lockedTracks = 0;
+    _robot->SendRobotMessage<RobotInterface::LockAnimTracks>(_lockedTracks);
+  }
+}
+
+// Disables only the specified tracks. 
+// Status of other tracks remain unchanged.
+void AnimationComponent::LockTracks(u8 tracks)
+{
+  _lockedTracks |= tracks;
+  _robot->SendRobotMessage<RobotInterface::LockAnimTracks>(_lockedTracks);
 }
 
 
 Result AnimationComponent::DisplayFaceImageBinary(const Vision::Image& img, u32 duration_ms, bool interruptRunning)
 {
   if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.DisplayFaceImageBinary.Uninitialized", "");
+    PRINT_NAMED_WARNING("AnimationComponent.DisplayFaceImageBinary.Uninitialized", "");
     return RESULT_FAIL;
   }
   
   // TODO: Is this what interruptRunning should mean?
   //       Or should it queue on anim process side and optionally interrupt currently executing anim?
   if (IsPlayingAnimation() && !interruptRunning) {
-    LOG_INFO("AnimationComponent.DisplayFaceImageBinary.WontInterruptCurrentAnim", "");
+    PRINT_CH_INFO(kLogChannelName, "AnimationComponent.DisplayFaceImageBinary.WontInterruptCurrentAnim", "");
     return RESULT_FAIL;
   }
 
@@ -588,7 +362,7 @@ Result AnimationComponent::DisplayFaceImageBinary(const Vision::Image& img, u32 
 
     RobotInterface::DisplayFaceImageBinaryChunk msg;
     static const u32 kFaceArraySize = sizeof(msg.faceData);
-    // static_assert(8 * kFaceArraySize == kNumHalfImagePixels, "AnimationComponent.DisplayFaceImageBinary.WrongFaceDataSize");
+    static_assert(8 * kFaceArraySize == kNumHalfImagePixels, "AnimationComponent.DisplayFaceImageBinary.WrongFaceDataSize");
   
     msg.imageId = 0;
     msg.chunkIndex = halfIdx;
@@ -639,20 +413,20 @@ Result AnimationComponent::DisplayFaceImageHelper(const ImageType& img, u32 dura
                 "invalid types");
   
   if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.DisplayFaceImage.Uninitialized", "");
+    PRINT_NAMED_WARNING("AnimationComponent.DisplayFaceImage.Uninitialized", "");
     return RESULT_FAIL;
   }
   
   // TODO: Is this what interruptRunning should mean?
   //       Or should it queue on anim process side and optionally interrupt currently executing anim?
   if (IsPlayingAnimation() && !interruptRunning) {
-    LOG_INFO("AnimationComponent.DisplayFaceImage.WontInterruptCurrentAnim", "");
+    PRINT_CH_INFO(kLogChannelName, "AnimationComponent.DisplayFaceImage.WontInterruptCurrentAnim", "");
     return RESULT_FAIL;
   }
   
-  // ASSERT_NAMED(img.IsContinuous(), "AnimationComponent.DisplayFaceImage.NotContinuous");
-  // ASSERT_NAMED(img.GetNumRows() == FACE_DISPLAY_HEIGHT, "AnimationComponent.DisplayFaceImage.IncorrectImageHeight");
-  // ASSERT_NAMED(img.GetNumCols() == FACE_DISPLAY_WIDTH,  "AnimationComponent.DisplayFaceImage.IncorrectImageWidth");
+  ASSERT_NAMED(img.IsContinuous(), "AnimationComponent.DisplayFaceImage.NotContinuous");
+  ASSERT_NAMED(img.GetNumRows() == FACE_DISPLAY_HEIGHT, "AnimationComponent.DisplayFaceImage.IncorrectImageHeight");
+  ASSERT_NAMED(img.GetNumCols() == FACE_DISPLAY_WIDTH,  "AnimationComponent.DisplayFaceImage.IncorrectImageWidth");
   
   MessageType msg;
   const int kMaxPixelsPerMsg = msg.faceData.size();
@@ -682,70 +456,24 @@ Result AnimationComponent::DisplayFaceImageHelper(const ImageType& img, u32 dura
   return RESULT_OK;
 }
 
-
-void AnimationComponent::SetAnimationCallback(const std::string& animName,
-                                              AnimationCompleteCallback callback,
-                                              const u32 currTag,
-                                              const u32 actionTag,
-                                              int numLoops,
-                                              float timeout_sec,
-                                              bool callbackStillValidEvenIfTagIsNot)
+Result AnimationComponent::EnableKeepFaceAlive(bool enable, u32 disableTimeout_ms) const
 {
-  const float abortTime_sec = (numLoops > 0 ? BaseStationTimer::getInstance()->GetCurrentTimeInSeconds() + timeout_sec : 0);
-  _callbackMap.emplace(std::piecewise_construct,
-                        std::forward_as_tuple(currTag),
-                        std::forward_as_tuple(animName, callback, actionTag, abortTime_sec, callbackStillValidEvenIfTagIsNot));
+  return _robot->SendRobotMessage<RobotInterface::EnableKeepFaceAlive>(disableTimeout_ms, enable);
 }
 
-void AnimationComponent::AddKeepFaceAliveDisableLock(const std::string& lockName)
+Result AnimationComponent::SetDefaultKeepFaceAliveParameters() const
 {
-  _numKeepFaceAliveDisableLocks++;
-
-  LOG_INFO("AnimationComponent.KeepFaceAlive.DisableLock.Locked",
-           "Adding disable lock for '%s', count is %d locks",
-           lockName.c_str(),
-           _numKeepFaceAliveDisableLocks);
-
-  if( _numKeepFaceAliveDisableLocks == 1 ) {
-    // this is the first lock
-    _desiredEnableKeepFaceAlive = false;
-  }
+  return _robot->SendRobotMessage<RobotInterface::SetDefaultKeepFaceAliveParameters>();
 }
 
-void AnimationComponent::RemoveKeepFaceAliveDisableLock(const std::string& lockName)
+Result AnimationComponent::SetKeepFaceAliveParameter(KeepFaceAliveParameter param, f32 value) const
 {
-  if( ANKI_VERIFY( _numKeepFaceAliveDisableLocks > 0,
-                   "AnimationComponent.RemoveKeepFaceAliveDisableLock.NotLocked",
-                   "Removing lock '%s', but no locks present",
-                   lockName.c_str() ) ) {
-
-    _numKeepFaceAliveDisableLocks--;
-
-    LOG_INFO("AnimationComponent.KeepFaceAlive.DisableLock.Removed",
-             "Removed disable lock for '%s', count is %d locks",
-             lockName.c_str(),
-             _numKeepFaceAliveDisableLocks);
-
-    if( _numKeepFaceAliveDisableLocks == 0 ) {
-      // was locked but not anymore, so enable
-      _desiredEnableKeepFaceAlive = true;
-    }
-  }
+  return _robot->SendRobotMessage<RobotInterface::SetKeepFaceAliveParameter>(value, param, false);
 }
-
-Result AnimationComponent::SendEnableKeepFaceAlive(bool enable, u32 disableTimeout_ms)
-{
-  LOG_DEBUG("AnimationComponent.EnableKeepFaceAlive.SendMessage",
-            "Sending message to %s procedural keep face alive",
-            enable ? "ENABLE" : "DISABLE");
-
-  const Result res = _robot->SendRobotMessage<RobotInterface::EnableKeepFaceAlive>(disableTimeout_ms, enable);
-
-  if( res == RESULT_OK ) {
-    _lastSentEnableKeepFaceAlive = enable;
-  }
   
-  return res;
+Result AnimationComponent::SetKeepFaceAliveParameterToDefault(KeepFaceAliveParameter param) const
+{
+  return _robot->SendRobotMessage<RobotInterface::SetKeepFaceAliveParameter>(0.f, param, true);
 }
 
 Result AnimationComponent::AddOrUpdateEyeShift(const std::string& name, 
@@ -806,31 +534,11 @@ Result AnimationComponent::RemoveSquint(const std::string& name, u32 disableTime
   return RESULT_OK;
 }
 
-Result AnimationComponent::SetFaceSaturation(float level)
-{
-  const Result res = _robot->SendRobotMessage<RobotInterface::SetFaceSaturation>(level);
-  return res;
-}
-
-AnimationTag AnimationComponent::SetTriggerWordGetInCallback(std::function<void(bool)> callbackFunction)
-{
-  _triggerWordGetInCallbackFunction = callbackFunction;
-  return _tagForTriggerWordGetInCallbacks;
-}
-  
-std::array<AnimationTag,4> AnimationComponent::SetAlexaUXResponseCallback(std::function<void(unsigned int, bool)> callback)
-{
-  _alexaResponseCallback = callback;
-  const std::array<AnimationTag,4> tags = {{_tagForAlexaListening, _tagForAlexaThinking, _tagForAlexaSpeaking, _tagForAlexaError}};
-  return tags;
-}
-
-
 // ================ Game message handlers ======================
 template<>
 void AnimationComponent::HandleMessage(const ExternalInterface::RequestAvailableAnimations& msg)
 {
-  LOG_INFO("RequestAvailableAnimations.Recvd", "");
+  PRINT_CH_INFO("AnimationComponent", "RequestAvailableAnimations.Recvd", "");
   _isDolingAnims = true;
 }
   
@@ -852,14 +560,14 @@ void AnimationComponent::HandleMessage(const ExternalInterface::DisplayProcedura
                 "RightEye parameter array is the wrong length");
   
   if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.DisplayProceduralFace.Uninitialized", "");
+    PRINT_NAMED_WARNING("AnimationComponent.DisplayProceduralFace.Uninitialized", "");
     return;
   }
   
   // TODO: Is this what interruptRunning should mean?
   //       Or should it queue on anim process side and optionally interrupt currently executing anim?
   if (IsPlayingAnimation() && !msg.interruptRunning) {
-    LOG_INFO("AnimationComponent.DisplayProceduralFace.WontInterruptCurrentAnim", "");
+    PRINT_CH_INFO(kLogChannelName, "AnimationComponent.DisplayProceduralFace.WontInterruptCurrentAnim", "");
     return;
   }
 
@@ -877,14 +585,14 @@ template<>
 void AnimationComponent::HandleMessage(const ExternalInterface::DisplayFaceImageBinaryChunk& msg)
 {
   if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.HandleDisplayFaceImageBinaryChunk.Uninitialized", "");
+    PRINT_NAMED_WARNING("AnimationComponent.HandleDisplayFaceImageBinaryChunk.Uninitialized", "");
     return;
   }
   
   // TODO: Is this what interruptRunning should mean?
   //       Or should it queue on anim process side and optionally interrupt currently executing anim?
   if (IsPlayingAnimation() && !msg.interruptRunning) {
-    LOG_INFO("AnimationComponent.HandleDisplayFaceImage.WontInterruptCurrentAnim", "");
+    PRINT_CH_INFO(kLogChannelName, "AnimationComponent.HandleDisplayFaceImage.WontInterruptCurrentAnim", "");
     return;
   }
 
@@ -893,28 +601,23 @@ void AnimationComponent::HandleMessage(const ExternalInterface::DisplayFaceImage
 }
 
 template<>
-void AnimationComponent::HandleMessage(const ExternalInterface::DisplayFaceImageRGBChunk& msg)
+void AnimationComponent::HandleMessage(const ExternalInterface::EnableKeepFaceAlive& msg)
 {
-  if (!_isInitialized) {
-    LOG_WARNING("AnimationComponent.DisplayFaceImageRGB.Uninitialized", "");
-    return;
+  EnableKeepFaceAlive(msg.enable, msg.disableTimeout_ms);
+}
+
+template<>
+void AnimationComponent::HandleMessage(const ExternalInterface::SetKeepFaceAliveParameters& msg)
+{
+  if (msg.setUnspecifiedToDefault) {
+    SetDefaultKeepFaceAliveParameters();
   }
-
-  _oledImageBuilder->AddDataChunk(msg.faceData, msg.chunkIndex, msg.numPixels);
-
-  uint32_t fullMask = 0;
-  for( int i=0; i<msg.numChunks; ++i )
+  
+  if(ANKI_VERIFY(msg.paramNames.size() == msg.paramValues.size(), "AnimationComponent.HandleSetKeepFaceAliveParameters.NameValuePairMismatch", ""))
   {
-    fullMask |= (1L << i);
-  }
-
-  // did we recieve every chunk we need?
-  if( (_oledImageBuilder->GetRecievedChunkMask() ^ fullMask) == 0 )
-  {
-    Vision::ImageRGB565 image(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH, _oledImageBuilder->GetAllData());
-    DisplayFaceImage(image, msg.duration_ms, msg.interruptRunning);
-
-    _oledImageBuilder->Clear();
+    for (int i=0; i<msg.paramNames.size(); ++i) {
+      SetKeepFaceAliveParameter( msg.paramNames.at(i), msg.paramValues.at(i) );
+    }
   }
 }
 
@@ -929,41 +632,24 @@ void AnimationComponent::HandleMessage(const ExternalInterface::ReadAnimationFil
 void AnimationComponent::HandleAnimAdded(const AnkiEvent<RobotInterface::RobotToEngine>& message)
 {
   const auto & payload = message.GetData().Get_animAdded();
-  LOG_INFO("HandleAnimAdded", "name=%s length=%d", payload.animName.c_str(), payload.animLength);
+  PRINT_CH_INFO("AnimationComponent", "HandleAnimAdded", "name=%s length=%d", payload.animName.c_str(), payload.animLength);
   _availableAnims[payload.animName].length_ms = payload.animLength;
 }
 
 void AnimationComponent::HandleAnimStarted(const AnkiEvent<RobotInterface::RobotToEngine>& message)
 {
   const auto & payload = message.GetData().Get_animStarted();
-
-  // the trigger word get-in is started in the anim process without our knowledge, so if we see it being started,
-  // let's not complain about it since it's expected
-  // note: we could have a "started" callback for this similar to _triggerWordGetInCallbackFunction
-  //       this way UserIntentComponent knows exactly when the trigger word anim starts instead of just assuming
-  const bool isTriggerWordGetIn = (payload.tag == _tagForTriggerWordGetInCallbacks);
-  // same thing for alexa
-  const bool isAlexa = TagIsAlexa( payload.tag );
-
   auto it = _callbackMap.find(payload.tag);
-  if (it != _callbackMap.end() || isTriggerWordGetIn || isAlexa) {
-    // LOG_INFO("AnimStarted.Tag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
-  } else if (payload.animName != EnumToString(AnimConstants::PROCEDURAL_ANIM)) {
-    LOG_WARNING("AnimationComponent.AnimStarted.UnexpectedTag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
+  if (it != _callbackMap.end()) {
+    PRINT_CH_INFO("AnimationComponent", "AnimStarted.Tag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
+  } else if (payload.animName != EnumToString(AnimConstants::PROCEDURAL_ANIM) ) {
+    PRINT_NAMED_WARNING("AnimationComponent.AnimStarted.UnexpectedTag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
     return;
   }
 
   _isAnimating = true;
   _currAnimName = payload.animName;
   _currAnimTag = payload.tag;
-  
-  if( payload.tag == _tagForTriggerWordGetInCallbacks ){
-    const bool playing = true;
-    _triggerWordGetInCallbackFunction(playing);
-  } else if( TagIsAlexa(payload.tag) ) {
-    const bool playing = true;
-    SendAlexaCallback(payload.tag, playing);
-  }
 
   _robot->GetContext()->GetVizManager()->SendCurrentAnimation(_currAnimName, _currAnimTag);
 }
@@ -971,44 +657,21 @@ void AnimationComponent::HandleAnimStarted(const AnkiEvent<RobotInterface::Robot
 void AnimationComponent::HandleAnimEnded(const AnkiEvent<RobotInterface::RobotToEngine>& message)
 {
   const auto & payload = message.GetData().Get_animEnded();
-
-  _movementComponent->ApplyUpdatesForStreamTime(payload.streamTimeAnimEnded);
   
   // Verify that expected animation completed and execute callback
-  bool atLeastOneCallback = false;
   auto it = _callbackMap.find(payload.tag);
-  while(it != _callbackMap.end()){
-    atLeastOneCallback = true;
-    // LOG_INFO("AnimEnded.Tag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
-    it->second.ExecuteCallback(payload.wasAborted ? AnimResult::Aborted : AnimResult::Completed,
-                               payload.streamTimeAnimEnded);
+  if (it != _callbackMap.end()) {
+    PRINT_CH_INFO("AnimationComponent", "AnimEnded.Tag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
+    it->second.ExecuteCallback(payload.wasAborted ? AnimResult::Aborted : AnimResult::Completed);
     _callbackMap.erase(it);
-    it = _callbackMap.find(payload.tag);
-  }
-
-  // Special callback for the trigger word response that persists
-  if(payload.tag == _tagForTriggerWordGetInCallbacks){
-    // this wont be in our _callbackMap, so for debug's sake let's print this out
-    // LOG_INFO("AnimEnded.Tag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
-    atLeastOneCallback = true;
-    const bool playing = false;
-    _triggerWordGetInCallbackFunction(playing);
-  } else if( TagIsAlexa(payload.tag) ) {
-    atLeastOneCallback = true;
-    const bool playing = false;
-    SendAlexaCallback(payload.tag, playing);
-  }
-    
-  if (!atLeastOneCallback &&
-      (payload.animName != EnumToString(AnimConstants::PROCEDURAL_ANIM))) {
-    LOG_WARNING("AnimationComponent.AnimEnded.UnexpectedTag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
+  } else if (payload.animName != EnumToString(AnimConstants::PROCEDURAL_ANIM) ) {
+    PRINT_NAMED_WARNING("AnimationComponent.AnimEnded.UnexpectedTag", "name=%s, tag=%d", payload.animName.c_str(), payload.tag);
     return;
   }
 
   _isAnimating = false;
-
-  DEV_ASSERT_MSG(_currAnimName.empty() || _currAnimName == payload.animName, "AnimationComponent.AnimEnded.UnexpectedName", "Got %s, expected %s", payload.animName.c_str(), _currAnimName.c_str());
-  DEV_ASSERT_MSG(_currAnimTag == kNotAnimatingTag || _currAnimTag == payload.tag, "AnimationComponent.AnimEnded.UnexpectedTag", "Got %d, expected %d", payload.tag, _currAnimTag);
+  DEV_ASSERT_MSG(_currAnimName == payload.animName, "AnimationComponent.AnimEnded.UnexpectedName", "Got %s, expected %s", payload.animName.c_str(), _currAnimName.c_str());
+  DEV_ASSERT_MSG(_currAnimTag == payload.tag, "AnimationComponent.AnimEnded.UnexpectedTag", "Got %d, expected %d", payload.tag, _currAnimTag);
 
   _currAnimName = "";
   _currAnimTag = kNotAnimatingTag;
@@ -1021,9 +684,9 @@ void AnimationComponent::HandleAnimationEvent(const AnkiEvent<RobotInterface::Ro
   const auto & payload = message.GetData().Get_animEvent();
   auto it = _callbackMap.find(payload.tag);
   if (it != _callbackMap.end()) {
-    LOG_INFO("HandleAnimationEvent", "%s", EnumToString(payload.event_id));
+    PRINT_CH_INFO("AnimationComponent", "HandleAnimationEvent", "%s", EnumToString(payload.event_id));
     ExternalInterface::AnimationEvent msg;
-    msg.timestamp = payload.timestamp; // AnimTimeStamp_t
+    msg.timestamp = payload.timestamp;
     msg.event_id = payload.event_id;
     _robot->GetExternalInterface()->BroadcastToGame<ExternalInterface::AnimationEvent>(std::move(msg));
   }
@@ -1033,84 +696,7 @@ void AnimationComponent::HandleAnimState(const AnkiEvent<RobotInterface::RobotTo
 {
   _animState = message.GetData().Get_animState();
 }
-
-void AnimationComponent::AddKeepFaceAliveFocus(const std::string& name)
-{
-  if (_focusRequests.empty())
-  {
-    _robot->SendRobotMessage<RobotInterface::SetKeepFaceAliveFocus>(true);
-  }
-  _focusRequests.insert(name);
-}
-
-void AnimationComponent::RemoveKeepFaceAliveFocus(const std::string& name)
-{
-  _focusRequests.erase(name);
-  if (_focusRequests.empty())
-  {
-    _robot->SendRobotMessage<RobotInterface::SetKeepFaceAliveFocus>(false);
-  }
-}
-
-void AnimationComponent::AddAdditionalAnimationCallback(const std::string& name,
-                                                        AnimationComponent::AnimationCompleteCallback callback,
-                                                        bool callEvenIfAnimCanceled)
-{
-  // If we should only call the callback while the anim is active we need to look
-  // up the action tag, otherwise just leave it as zero
-  u32 actionTag = 0;
-  u32 currTag = 0;
-  for(const auto& entry: _callbackMap){
-    if(entry.second.animName == name){
-      currTag = entry.first;
-      actionTag = entry.second.actionTag;
-      break;
-    }
-  }
   
-  if(actionTag == 0){
-    LOG_ERROR("AnimationComponent.AddAdditionalAnimationCallback.NoActionTagFound",
-              "Attempting to add an additional callback to animation %s, but it was not found in the callback map",
-              name.c_str());
-    return;
-  }
-
-  // Timeouts will be handled by the existing callback
-  const u32 numLoops = 0;
-  const float timeout_sec = 0;
-  SetAnimationCallback(name, callback, currTag, actionTag, numLoops, timeout_sec, callEvenIfAnimCanceled);
-}
   
-AnimationComponent::Tag AnimationComponent::GetInvalidTag()
-{
-  return kInvalidAnimationTag;
-}
-  
-bool AnimationComponent::TagIsAlexa( AnimationTag tag ) const
-{
-  const bool isAlexa = (tag == _tagForAlexaListening)
-                       || (tag == _tagForAlexaThinking)
-                       || (tag == _tagForAlexaSpeaking)
-                       || (tag == _tagForAlexaError);
-  return isAlexa;
-}
-  
-void AnimationComponent::SendAlexaCallback( uint8_t tag, bool playing ) const
-{
-  if( _alexaResponseCallback ) {
-    // must match order in clad file
-    if( tag == _tagForAlexaListening ) {
-      _alexaResponseCallback( 0, playing );
-    } else if( tag == _tagForAlexaThinking ) {
-      _alexaResponseCallback( 1, playing );
-    } else if( tag == _tagForAlexaSpeaking ) {
-      _alexaResponseCallback( 2, playing );
-    } else if( tag == _tagForAlexaError ) {
-      _alexaResponseCallback( 3, playing );
-    }
-  }
-}
-
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

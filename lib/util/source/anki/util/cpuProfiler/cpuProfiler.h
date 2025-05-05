@@ -24,9 +24,9 @@
 #include <assert.h>
 #include <vector>
 
-#if ANKI_CPU_PROFILER_ENABLED
 
-  #define ANKI_CPU_CONSOLEVARGROUP "CpuProfiler"
+
+#if ANKI_CPU_PROFILER_ENABLED
 
   #define ANKI_CPU_PROFILER_WARN_ON_NO_PROFILER     0   // Enable to track down calls on untracked threads
 
@@ -40,15 +40,7 @@
   class CpuProfiler
   {
   public:
-    static const char* CpuProfilerLogging() {
-      return "Never,Every tick,Every 2 ticks,Every 4 ticks,Every 8 ticks,Every 16 ticks,Every 32 ticks";
-    }
     
-    static uint32_t CpuProfilerLoggingTime(int option) {
-      static uint32_t times[] = {Anki::Util::CpuThreadProfiler::kLogFrequencyNever, 1, 2, 4, 8, 16, 32};
-      return times[option];
-    }
-
     CpuProfiler()
       : _threadProfilerCount(0)
       , _creationTimePoint(CpuProfileClock::now())
@@ -262,17 +254,13 @@
 #else  // ANKI_CPU_PROFILER_ENABLED
 
 
-#define ANKI_CPU_PROFILE(name) 
+  #define ANKI_CPU_PROFILE(name)
+  #define ANKI_CPU_PROFILE_START(varName, name)
+  #define ANKI_CPU_PROFILE_STOP(varName)
+  #define ANKI_CPU_TICK(tickName, maxTickTime_ms, logFreq)
+  #define ANKI_CPU_TICK_ONE_TIME(tickName)
+  #define ANKI_CPU_REMOVE_THIS_THREAD()
 
-#define ANKI_CPU_PROFILE_START(varName, name) 
-
-#define ANKI_CPU_PROFILE_STOP(varName) 
-
-#define ANKI_CPU_TICK(tickName, maxTickTime_ms, logFreq) 
-
-#define ANKI_CPU_TICK_ONE_TIME(tickName) 
-
-#define ANKI_CPU_REMOVE_THIS_THREAD() 
 
 #endif // ANKI_CPU_PROFILER_ENABLED
 

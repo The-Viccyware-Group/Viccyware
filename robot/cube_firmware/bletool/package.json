@@ -8,8 +8,7 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {},
-  "dependencies": {
-    "noble": "^1.9.1"
+  "devDependencies": {
+    "noble": "git://github.com/jacobrosenthal/noble.git#highsierra"
   }
 }

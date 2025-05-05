@@ -1,0 +1,27 @@
+// File: behaviorType
+// Author: Lee Crippen
+// Created: 10/15/2015
+// Copyright: Anki, inc. 2015
+
+#include "clad/types/behaviorComponent/behaviorClasses.clad"
+#include "clad/types/behaviorComponent/behaviorIDs.clad"
+
+namespace Anki {
+namespace Cozmo {
+
+// Each of these should map to exactly 1 instance of a behavior at runtime
+// Only needs to include behaviors that make sense for e.g. SDK to request directly
+enum uint_8 ExecutableBehaviorType {
+  EnrollFace,
+  FindFaces,
+  FistBump,
+  LiftLoadTest,
+  StackBlocks,
+  Wait,
+
+  Count
+}
+
+
+} // namespace Cozmo
+} // namespace Anki

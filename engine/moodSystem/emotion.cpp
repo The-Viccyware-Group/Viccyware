@@ -12,32 +12,30 @@
 
 
 #include "engine/moodSystem/emotion.h"
-
-#include "engine/moodSystem/moodDecayEvaluator.h"
 #include "util/console/consoleInterface.h"
 #include "util/graphEvaluator/graphEvaluator2d.h"
 #include "util/logging/logging.h"
 #include "util/math/math.h"
 #include <assert.h>
 
+
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   
-const float kEmotionValueMin     = -1.0f;
-const float kEmotionValueDefault =  0.0f;
-const float kEmotionValueMax     =  1.0f;
+static constexpr float kEmotionValueMin     = -1.0f;
+static constexpr float kEmotionValueDefault =  0.0f;
+static constexpr float kEmotionValueMax     =  1.0f;
   
 #if REMOTE_CONSOLE_ENABLED
 static const char* kEmotionSectionName = "Mood.Emotion";
 #endif // REMOTE_CONSOLE_ENABLED
+CONSOLE_VAR(bool,     kEnableEmotionDecay,       kEmotionSectionName, true);
 CONSOLE_VAR(uint32_t, kMaxEmotionHistorySamples, kEmotionSectionName,  128);
 
 Emotion::Emotion()
   : _history(kMaxEmotionHistorySamples)
   , _value(kEmotionValueDefault)
-  , _minValue(kEmotionValueMin)
-  , _maxValue(kEmotionValueMax)
   , _timeDecaying(0.0f)
 {
   _history.push_back( HistorySample(_value, 0.0f) );
@@ -58,7 +56,6 @@ float Emotion::GetHistoryValueTicksAgo(uint32_t numTicksBackwards) const
   const uint32_t numEntries = Util::numeric_cast<uint32_t>(_history.size());
   if ((numEntries > 0) && (numTicksBackwards > 0))
   {
-    ++numTicksBackwards; // so that this method name is accurate, skip the last entry in _history, which is the current _value
     const uint32_t sampleIndex = (numEntries > numTicksBackwards) ? (numEntries - numTicksBackwards) : 0;
     const HistorySample& oldSample = _history[sampleIndex];
     return oldSample._value;
@@ -100,29 +97,33 @@ float Emotion::GetHistoryValueSecondsAgo(float secondsBackwards) const
 }
   
   
-void Emotion::Update(const MoodDecayEvaulator& evaluator, float timeDelta_s, float& velocity, float& accel)
+void Emotion::Update(const Anki::Util::GraphEvaluator2d& decayGraph, double currentTime, float timeDelta)
 {
-  _value = evaluator.EvaluateDecay(_value, _timeDecaying, timeDelta_s, velocity, accel);
-
-  _timeDecaying += timeDelta_s;
-  
-  _history.push_back( HistorySample(_value, timeDelta_s) );
-  
-  // clamp rate and accel based on emotion value range
-  if( (_value <= _minValue) && (velocity < 0.0f) ) {
-    velocity = 0.0f;
-    accel = Anki::Util::Max(0.0f, accel);
-  } else if( (_value >= _maxValue) && (velocity > 0.0f) ) {
-    velocity = 0.0f;
-    accel = Anki::Util::Min(0.0f, accel);
+  if (kEnableEmotionDecay)
+  {
+    const float prevDecayScalar = decayGraph.EvaluateY(_timeDecaying);
+    assert(prevDecayScalar >= 0.0f);
+    
+    _timeDecaying += timeDelta;
+    
+    const float newDecayScalar = decayGraph.EvaluateY(_timeDecaying);
+    assert(newDecayScalar >= 0.0f);
+    
+    // delta scalar effectively undoes the previous scale and applies the new one
+    const float deltaScalar = FLT_GT(prevDecayScalar, 0.0f) ? (newDecayScalar / prevDecayScalar) : newDecayScalar;
+    
+    const float newValue = _value * deltaScalar;
+    _value = newValue;
   }
+  
+  _history.push_back( HistorySample(_value, timeDelta) );
 }
 
 
 void Emotion::Add(float penalizedDeltaValue)
 {
   const float oldValue = _value;
-  const float newValue = Anki::Util::Clamp(_value + penalizedDeltaValue, _minValue, _maxValue);
+  const float newValue = Anki::Util::Clamp(_value + penalizedDeltaValue, kEmotionValueMin, kEmotionValueMax);
   _value = newValue;
   
   const bool isSufficentChangeToResetDecay = (Util::Abs(penalizedDeltaValue) > 0.05f); // penalty can prevent reset (if it scales value too far), but clamping at min/max cannot prevent it
@@ -147,18 +148,7 @@ void Emotion::SetValue(float newValue)
   _timeDecaying = 0.0f;
 }
 
-void Emotion::SetEmotionValueRange(float min, float max)
-{
-  ANKI_VERIFY(min <= max,
-              "Emotion.SetEmotionValueRange.Invalid",
-              "Invalid range %f - %f",
-              min,
-              max);
-  _minValue = min;
-  _maxValue = max;
-}
 
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

@@ -18,7 +18,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class FaceDisplayImpl
 {
@@ -43,15 +43,12 @@ public:
 
   // Print text to face display
   void FacePrintf(const char *format, ...);
-
-  // set face display brightness (int 0..20)
-  void SetFaceBrightness(int level);
   
 private:
   
 }; // class FaceDisplayImpl
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMOANIM_FACE_DISPLAY_IMPL_H

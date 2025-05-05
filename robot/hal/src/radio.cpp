@@ -11,20 +11,17 @@
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "anki/cozmo/robot/hal.h"
 #include "anki/cozmo/robot/logging.h"
-#include "clad/robotInterface/messageRobotToEngine.h"
-#include "clad/robotInterface/messageRobotToEngine_send_helper.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string>
 
 #include "coretech/messaging/shared/LocalUdpServer.h"
-#include "coretech/messaging/shared/socketConstants.h"
 
 #define ARRAY_SIZE(inArray)   (sizeof(inArray) / sizeof((inArray)[0]))
 
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
 
     namespace { // "Private members"
       const size_t RECV_BUFFER_SIZE = 1024 * 4;
@@ -51,35 +48,24 @@ namespace Anki {
       return RESULT_OK;
     }
 
-    void StopRadio()
-    {
-      AnkiInfo("HAL.RadioStop", "");
-      server.StopListening();
-    }
-
     bool HAL::RadioIsConnected(void)
     {
       return server.HasClient();
     }
 
-    void HAL::DisconnectRadio(bool sendDisconnectMsg)
+    void HAL::DisconnectRadio(void)
     {
-      if (sendDisconnectMsg && RadioIsConnected()) {
-        RobotInterface::RobotServerDisconnect msg;
-        RobotInterface::SendMessage(msg);
-      }
-      
       server.Disconnect();
       recvBufSize_ = 0;
     }
 
-    bool HAL::RadioSendPacket(const void *buffer, const size_t length)
+    bool HAL::RadioSendPacket(const void *buffer, const u32 length)
     {
       if (server.HasClient()) {
         const ssize_t bytesSent = server.Send((char*)buffer, length);
         if (bytesSent < (ssize_t) length) {
-          AnkiError("HAL.RadioSendPacket.FailedToSend", "Failed to send msg contents (%zd/%zu sent)", bytesSent, length);
-          DisconnectRadio(false);
+          AnkiError("HAL.RadioSendPacket.FailedToSend", "Failed to send msg contents (%zd/%zd sent)", bytesSent, length);
+          DisconnectRadio();
           return false;
         }
 
@@ -117,7 +103,7 @@ namespace Anki {
       else if (dataLen < 0) {
         // Something went wrong
         AnkiError("HAL.RadioGetNextPacket", "Receive failed");
-        DisconnectRadio(false);
+        DisconnectRadio();
         return 0;
       }
       else {
@@ -130,5 +116,5 @@ namespace Anki {
       return static_cast<u32>(dataLen);
 
     } // RadioGetNextMessage()
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

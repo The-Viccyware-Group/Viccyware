@@ -39,19 +39,19 @@ public:
   ~ComponentWrapper(){
   }
 
-  bool IsComponentValid() const {return (_componentPtr != nullptr) && IsComponentValidInternal(); }
-  virtual bool IsComponentValidInternal() const {return true;}
+  bool IsValueValid() const {return (_componentPtr != nullptr) && IsValueValidInternal(); }
+  virtual bool IsValueValidInternal() const {return true;}
 
   template<typename T>
-  T& GetComponent() const { 
-    ANKI_VERIFY(IsComponentValid(),"ComponentWrapper.GetComponent.ValueIsNotValid",""); 
+  T& GetValue() const { 
+    ANKI_VERIFY(IsValueValid(),"ComponentWrapper.GetValue.ValueIsNotValid",""); 
     auto castPtr = static_cast<T*>(_componentPtr); 
     return *castPtr;
   }
 
   template<typename T>
-  T* GetComponentPtr() const { 
-    ANKI_VERIFY(IsComponentValid(),"ComponentWrapper.GetComponent.ValueIsNotValid",""); 
+  T* GetBasePtr() const { 
+    ANKI_VERIFY(IsValueValid(),"ComponentWrapper.GetValue.ValueIsNotValid",""); 
     auto castPtr = static_cast<T*>(_componentPtr); 
     return castPtr;
   }

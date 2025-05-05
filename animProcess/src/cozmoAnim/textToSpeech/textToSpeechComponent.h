@@ -1,11 +1,14 @@
 /**
 * File: textToSpeechComponent.h
 *
-* Author: Various Artists
+* Author: Molly Jameson
+* Created: 03/21/16
+*
+* Overhaul: Andrew Stein / Jordan Rivas, 08/18/16
 *
 * Description: Component wrapper to generate, cache and use wave data from a given string and style.
 *
-* Copyright: Anki, Inc. 2016-2018
+* Copyright: Anki, Inc. 2016
 *
 */
 
@@ -13,31 +16,26 @@
 #define __Anki_cozmo_cozmoAnim_textToSpeech_textToSpeechComponent_H__
 
 #include "audioEngine/audioTools/standardWaveDataContainer.h"
-#include "audioEngine/audioTools/streamingWaveDataInstance.h"
-#include "audioEngine/audioTypes.h"
 #include "coretech/common/shared/types.h"
 #include "clad/audio/audioEventTypes.h"
 #include "clad/audio/audioGameObjectTypes.h"
-#include "clad/audio/audioSwitchTypes.h"
+#include "clad/types/sayTextStyles.h"
 #include "clad/types/textToSpeechTypes.h"
 #include "util/helpers/templateHelpers.h"
 #include <deque>
 #include <mutex>
-#include <map>
+#include <unordered_map>
 
 // Forward declarations
 namespace Anki {
-  namespace Vector {
-    namespace Anim {
-      class AnimContext;
-    }
+  namespace Cozmo {
+    class AnimContext;
     namespace Audio {
       class CozmoAudioController;
     }
     namespace RobotInterface {
-      struct TextToSpeechPrepare;
-      struct TextToSpeechPlay;
-      struct TextToSpeechCancel;
+      struct TextToSpeechStart;
+      struct TextToSpeechStop;
     }
     namespace TextToSpeech {
       class TextToSpeechProvider;
@@ -51,30 +49,21 @@ namespace Anki {
 }
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class TextToSpeechComponent
 {
 public:
-  // Public type declarations
-  using TTSID_t = uint8_t;
 
-  // Public constants
-  static constexpr TTSID_t kInvalidTTSID = 0;
-
-  // Constructor, destructor
-  TextToSpeechComponent(const Anim::AnimContext* context);
+  TextToSpeechComponent(const AnimContext* context);
   ~TextToSpeechComponent();
-
-  // Reports active TTSID (if any), else kInvalidTTSID
-  TTSID_t GetActiveTTSID() { return _activeTTSID; }
 
   //
   // CLAD message handlers are called on the main thread to handle incoming requests.
   //
-  void HandleMessage(const RobotInterface::TextToSpeechPrepare& msg);
-  void HandleMessage(const RobotInterface::TextToSpeechPlay& msg);
-  void HandleMessage(const RobotInterface::TextToSpeechCancel& msg);
+  void HandleMessage(const RobotInterface::TextToSpeechStart& msg);
+  void HandleMessage(const RobotInterface::TextToSpeechStop& msg);
+  
 
   //
   // Update method is called once per tick on main thread. This method responds to events
@@ -82,61 +71,47 @@ public:
   //
   void Update();
 
-  //
-  // Called on main thread to set a new locale
-  //
-  void SetLocale(const std::string & locale);
-
-  // Callbacks invoked by audio engine
-  void OnAudioPlaying(const TTSID_t ttsID);
-  void OnAudioComplete(const TTSID_t ttsID);
-  void OnAudioError(const TTSID_t ttsID);
-
 private:
   // -------------------------------------------------------------------------------------------------------------------
   // Private types
   // -------------------------------------------------------------------------------------------------------------------
-  using AudioController = Vector::Audio::CozmoAudioController;
-  using StreamingWaveDataPtr = std::shared_ptr<AudioEngine::StreamingWaveDataInstance>;
-  using AudioTtsProcessingStyle = AudioMetaData::SwitchState::Robot_Vic_External_Processing;
-  using TextToSpeechProvider = TextToSpeech::TextToSpeechProvider;
-  using DispatchQueue = Util::Dispatch::Queue;
-  using EventTuple = std::tuple<TTSID_t, TextToSpeechState, f32>;
-  using EventQueue = std::deque<EventTuple>;
+  using AudioController = Anki::Cozmo::Audio::CozmoAudioController;
+  using TextToSpeechProvider = Anki::Cozmo::TextToSpeech::TextToSpeechProvider;
+  using DispatchQueue = Anki::Util::Dispatch::Queue;
+  using TTSID_t = uint8_t;
+  using EventPair = std::pair<TTSID_t, TextToSpeechState>;
+  using EventQueue = std::deque<EventPair>;
 
-  // Audio creation state
+  // TTS creation state
   enum class AudioCreationState {
-    None,       // No data available
-    Preparing,  // Audio generation in progress
-    Playable,   // Audio is ready to play
-    Prepared    // Audio is complete
+    None,       // Does NOT exist
+    Preparing,  // In process of creating data
+    Ready       // Data is ready to use
   };
 
   // TTS data bundle
   struct TtsBundle
   {
     // TTS request context
-    TextToSpeechTriggerMode triggerMode = TextToSpeechTriggerMode::Invalid;
     AudioCreationState state = AudioCreationState::None;
-    AudioTtsProcessingStyle style = AudioTtsProcessingStyle::Unprocessed;
-    StreamingWaveDataPtr waveData;
-  };
+    SayTextVoiceStyle style = SayTextVoiceStyle::Count;
+    float pitchScalar = 0.f;
+    AudioEngine::StandardWaveDataContainer* waveData = nullptr;
 
-  // Shared pointer to data bundle
-  using BundlePtr = std::shared_ptr<TtsBundle>;
+    ~TtsBundle() { Util::SafeDelete(waveData); }
+  };
 
   // -------------------------------------------------------------------------------------------------------------------
   // Private members
   // -------------------------------------------------------------------------------------------------------------------
 
+  static constexpr TTSID_t kInvalidTTSID = 0;
+
   // Internal mutex
   mutable std::mutex _lock;
 
   // Map of data bundles
-  std::map<TTSID_t, BundlePtr> _bundleMap;
-
-  // Active TTSID, if any
-  TTSID_t _activeTTSID;
+  std::unordered_map<TTSID_t, TtsBundle> _ttsWaveDataMap;
 
   // Audio controller provided by context
   AudioController * _audioController = nullptr;
@@ -148,51 +123,49 @@ private:
   std::unique_ptr<TextToSpeechProvider> _pvdr;
 
   // Thread-safe event queue
-  EventQueue _event_queue;
-  std::mutex _event_mutex;
+  EventQueue _evtq;
+  std::mutex _evtq_mutex;
 
   // -------------------------------------------------------------------------------------------------------------------
   // Private methods
   // -------------------------------------------------------------------------------------------------------------------
 
   // Thread-safe event notifications
-  void PushEvent(const EventTuple& event);
-  bool PopEvent(EventTuple& event);
+  void PushEvent(const EventPair& evt);
+  bool PopEvent(EventPair& evt);
 
-  // Initialize TTS utterance and get first chunk of TTS audio.
-  // Returns RESULT_OK on success, else error code.
-  // Sets done to true when audio generation is complete.
-  Result GetFirstAudioData(const std::string & text,
-                           float durationScalar,
-                           float pitchScalar,
-                           const StreamingWaveDataPtr & data,
-                           bool & done);
+  // Use Text to Speech lib to create audio data & reformat into StandardWaveData format
+  // Return nullptr if Text to Speech lib fails to create audio data
+  AudioEngine::StandardWaveDataContainer* CreateAudioData(const std::string& text,
+                                                          SayTextVoiceStyle style,
+                                                          float durationScalar);
 
-  // Get next chunk of TTS audio.
-  // Returns RESULT_OK on success, else error code.
-  // Sets done to true when audio generation is complete.
-  Result GetNextAudioData(const StreamingWaveDataPtr & data, bool & done);
+  // Find TtsBundle for operation
+  const TtsBundle* GetTtsBundle(const TTSID_t ttsID) const;
 
-  // Get bundle for given ID
-  // Returns nullptr if ID is not found
-  BundlePtr GetBundle(const TTSID_t ttsID);
+  TtsBundle* GetTtsBundle(const TTSID_t ttsID);
 
   // Asynchronous create the wave data for the given text and style, to be played later
   // Use GetOperationState() to check if wave data is Ready
   // Return RESULT_OK on success
   Result CreateSpeech(const TTSID_t ttsID,
-                      const TextToSpeechTriggerMode triggerMode,
                       const std::string& text,
-                      const AudioTtsProcessingStyle style,
+                      const SayTextVoiceStyle style,
                       const float durationScalar,
                       const float pitchScalar);
 
+  // Get the current state of the create speech operation
+  AudioCreationState GetOperationState(const TTSID_t ttsID) const;
+
   // Set up Audio Engine to play text's audio data
   // out_duration_ms provides approximate duration of event before processing in audio engine
-  // Return false if the audio has NOT been created or is not yet ready. Output parameters will NOT be valid.
-  bool PrepareAudioEngine(const TTSID_t ttsID, float& out_duration_ms);
+  // Return false if the audio has NOT been created or is not yet ready, out_duration_ms will NOT be valid.
+  // NOTE: If this method is able to pass speech audio data ownership to plugin it will call ClearOperationData()
+  // TODO: Currently there is only 1 source plugin for inserting audio it would be nice to have more
+  bool PrepareAudioEngine(const TTSID_t ttsID, const SayTextVoiceStyle style, float& out_duration_ms);
 
-  // Clear speech audio data from audio engine and clear operation data
+  // Clear Speech audio data from audio engine and clear operation data
+  // TODO: Currently there is only 1 source plugin for inserting audio it would be nice to have more
   void CleanupAudioEngine(const TTSID_t ttsID);
 
   // Clear speech operation audio data from memory
@@ -207,27 +180,16 @@ private:
   //
   void OnStateInvalid(const TTSID_t ttsID);
   void OnStatePreparing(const TTSID_t ttsID);
-  void OnStatePlayable(const TTSID_t ttsID, const f32 duration_ms);
-  void OnStatePrepared(const TTSID_t ttsID, const f32 duration_ms);
+  void OnStateReady(const TTSID_t ttsID);
 
   // Audio helpers
-  void SetAudioProcessingStyle(AudioTtsProcessingStyle style);
-  bool PostAudioEvent(uint8_t ttsID);
-  void StopActiveTTS();
-  void ClearActiveTTS();
-
-  // SWAG estimate of final duration
-  f32 GetEstimatedDuration_ms(const std::string & text);
-  f32 GetDuration_ms(const StreamingWaveDataPtr & waveData);
-  f32 GetDuration_ms(const BundlePtr & bundle);
-
-  // AudioEngine Callbacks
-  void OnUtteranceCompleted(uint8_t ttsID);
+  void SetAudioProcessingStyle(SayTextVoiceStyle style);
+  void SetAudioProcessingPitch(float pitchScalar);
 
 }; // class TextToSpeechComponent
 
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 
 

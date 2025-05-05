@@ -18,7 +18,7 @@
 #include "util/graphEvaluator/graphEvaluator2d.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 class BehaviorProxGetToDistance : public ICozmoBehavior
@@ -59,13 +59,13 @@ private:
     Util::GraphEvaluator2d distMMToSpeedMMGraph;
   } _params;
 
-  Pose2d _previousProxObjectPose;
+  Pose3d _previousProxObjectPose;
 
   
 }; // class BehaviorAcknowledgeCubeMoved
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_ProxBehaviors_BehaviorProxGetToDistance_H__

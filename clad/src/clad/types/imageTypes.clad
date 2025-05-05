@@ -1,11 +1,23 @@
 /** Clad message definitions for the messages sent from the WiFi to the engine.
  */
 
-#include "clad/types/imageFormats.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
+enum uint_8 ImageEncoding
+{
+  NoneImageEncoding,
+  RawGray, // no compression
+  RawRGB,  // no compression, just [RGBRGBRG...]
+  YUYV,
+  BAYER,
+  JPEGGray,
+  JPEGColor,
+  JPEGColorHalfWidth,
+  JPEGMinimizedGray, // Minimized grayscale JPEG - no header, no footer, no byte stuffing
+  JPEGMinimizedColor // Minimized grayscale JPEG - no header, no footer, no byte stuffing, with added color data
+}
 
 enum uint_8 ImageSendMode {
     Off,
@@ -24,7 +36,7 @@ message ImageChunk {
   uint_32         imageId,
   uint_16         width,
   uint_16         height,
-  Anki::Vision::ImageEncoding imageEncoding,
+  ImageEncoding   imageEncoding,
   uint_8          displayIndex,
   uint_8          imageChunkCount,
   uint_8          chunkId,
@@ -43,11 +55,12 @@ message CameraCalibration
   float_32 distCoeffs[8], // NUM_RADIAL_DISTORTION_COEFFS
 }
 
-enum uint_8 IlluminationState {
-  Unknown = 0,
-  Illuminated,
-  Darkened
+enum uint_8 ImageQuality {
+  Unchecked  = 0,
+  Good,
+  TooDark,
+  TooBright
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

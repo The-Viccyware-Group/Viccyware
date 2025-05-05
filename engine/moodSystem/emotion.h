@@ -25,13 +25,8 @@ namespace Util {
   class GraphEvaluator2d;
 }
   
-namespace Vector {
+namespace Cozmo {
 
-class MoodDecayEvaulator;
-  
-extern const float kEmotionValueMin;
-extern const float kEmotionValueDefault;
-extern const float kEmotionValueMax;
 
 class Emotion
 {
@@ -41,7 +36,7 @@ public:
   
   void Reset();
   
-  void Update(const MoodDecayEvaulator& evaluator, float timeDelta, float& velocity, float& accel);            
+  void Update(const Anki::Util::GraphEvaluator2d& decayGraph, double currentTime, float timeDelta);
   
   void  Add(float penalizedDeltaValue);
   void  SetValue(float newValue);
@@ -51,12 +46,6 @@ public:
   float GetHistoryValueSecondsAgo(float secondsBackwards) const;
   float GetDeltaRecentTicks(uint32_t numTicksBackwards) const { return _value - GetHistoryValueTicksAgo(numTicksBackwards); }
   float GetDeltaRecentSeconds(float secondsBackwards)   const { return _value - GetHistoryValueSecondsAgo(secondsBackwards); }
-  
-  float GetMin() const { return _minValue; }
-  float GetMax() const { return _maxValue; }
-
-  // range defaults to values specified in cpp, but can get set manually here
-  void SetEmotionValueRange(float min, float max);
   
   struct HistorySample
   {
@@ -71,14 +60,12 @@ private:
   
   Util::CircularBuffer<HistorySample> _history;
   float                               _value;
-  float                               _minValue;
-  float                               _maxValue;
 
   float                               _timeDecaying;
 };
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

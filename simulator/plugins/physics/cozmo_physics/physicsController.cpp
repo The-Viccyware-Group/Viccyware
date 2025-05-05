@@ -4,7 +4,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 void PhysicsController::Init()
 {
@@ -79,5 +79,5 @@ const dBodyID PhysicsController::GetdBodyID(const std::string& objectName)
   return _dBodyIDMap[objectName];
 }
 
-}  // namespace Vector
+}  // namespace Cozmo
 }  // namespace Anki

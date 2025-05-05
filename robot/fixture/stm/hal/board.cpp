@@ -1,25 +1,13 @@
 #include <assert.h>
 #include "board.h"
-#include "contacts.h"
 #include "portable.h"
 #include "timer.h"
-
-#define BOARD_DEBUG 0
-
-#if BOARD_DEBUG > 0
-#warning "BOARD_DEBUG"
-#include "console.h"
-#endif
 
 namespace Board
 {
   static board_rev_t m_board_revision = BOARD_REV_INVALID;
   
-  //-----------------------------------------------------------------------------
-  //                  Init
-  //-----------------------------------------------------------------------------
-  
-  enum pinstate_e { HIGH = '1', LOW = '0', Z = 'Z', CAP2GND = 'C' };
+  enum pinstate_e { HIGH, LOW, Z };
   static pinstate_e test_pin_state_(GPIO_TypeDef* GPIOx, uint32_t pin)
   {
     uint16_t GPIO_Pin = (1 << pin);
@@ -28,36 +16,25 @@ namespace Board
     GPIO_StructInit( &GPIO_InitStructure ); //set struct defaults
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin;
     
-    //initial state, pull down & discharge
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
+    //test value with internal pull-up
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
     GPIO_Init(GPIOx, &GPIO_InitStructure);
-    Timer::wait(1000);
-    
-    //flip on the internal pull-up, measure rise time (if it rises) and final pin state
-    //GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP
-    //GPIO_Init(GPIOx, &GPIO_InitStructure);
-    const int ctr_max = 2000; //100us @ ~50ns loop time
-    int ctr=0, read=0;
-    GPIOx->PUPDR = (GPIOx->PUPDR & ~(GPIO_PUPDR_PUPDR0<<(pin*2))) | ((GPIO_PuPd_UP)<<(pin*2));
-    do {
-      read = (GPIOx->IDR & GPIO_Pin) > 0; //GPIO_ReadInputDataBit(GPIOx, GPIO_Pin);
-    } while( !read && ++ctr < ctr_max );
-    int pu_val = read; //final pin value
-    int pu_ctr = ctr;  //rise time
+    Timer::wait(100);
+    u8 pu_val = GPIO_ReadInputDataBit(GPIOx, GPIO_Pin);
     
     //test value with internal pull-down
     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
     GPIO_Init(GPIOx, &GPIO_InitStructure);
     Timer::wait(100);
-    int pd_val = GPIO_ReadInputDataBit(GPIOx, GPIO_Pin);
+    u8 pd_val = GPIO_ReadInputDataBit(GPIOx, GPIO_Pin);
     
     pinstate_e state;
     if( !pu_val && !pd_val )    //pulled low externally
       state = LOW;
     else if( pu_val && pd_val ) //pulled high exeternally
       state = HIGH;
-    else if( pu_val && !pd_val ) //floating or capacitor to gnd
-      state = pu_ctr > 2 ? CAP2GND : Z;
+    else if( pu_val && !pd_val ) //floating
+      state = Z;
     else //if( !pu_val && pd_val ) //bizarro world?
       assert( false );
     
@@ -67,10 +44,6 @@ namespace Board
       GPIO_Init(GPIOB, &GPIO_InitStructure);
     }
     
-    #if BOARD_DEBUG > 0
-    ConsolePrintf("test_pin_state_(%i)=%c : up/dn=%i/%i upctr=%i\n", pin, (char)state, pu_val, pd_val, pu_ctr );
-    #endif
-    
     return state;
   }
 
@@ -78,26 +51,19 @@ namespace Board
   {
     pinstate_e board_id0 = test_pin_state_( PC13_BRD_REV0::bank, PC13_BRD_REV0::pin );
     pinstate_e board_id1 = test_pin_state_( PC14_BRD_REV1::bank, PC14_BRD_REV1::pin );
-    pinstate_e board_id2 = test_pin_state_( PC15_BRD_REV2::bank, PC15_BRD_REV2::pin );
     
-    #if BOARD_DEBUG > 0
-    ConsolePrintf("BOARD REVISION DETECT BITS: <%c%c%c>\n", (char)board_id2, (char)board_id1, (char)board_id0);
-    #endif
+      //reserved ID pins are NC/float. return unknown if firmware is older than fixture hardware (or hw error).
+    if( board_id1 != Z )
+      return BOARD_REV_UNKNOWN;
     
-    //ambiguity confuses and infuriates us! Ahhh!
-    if( board_id0 == Z || board_id1 == Z || board_id2 == Z )
-      return BOARD_REV_INVALID;
-    
-    if( board_id0 == LOW && board_id1 == LOW && board_id2 == LOW )
-      return BOARD_REV_1_0;
-    
-    if( board_id0 == HIGH && board_id1 == LOW && board_id2 == LOW )
-      return BOARD_REV_2_0;
-    
-    if( board_id0 == HIGH && board_id1 == CAP2GND && board_id2 == CAP2GND )
-      return BOARD_REV_A;
-    
-    return BOARD_REV_FUTURE; //time travel is possible
+    //fixture 1.0 rev1,2,3 did not have a board revision check. pins are NC/float.
+    //fixture 1.5+ implemented this check
+    if( board_id0 == Z )
+      return BOARD_REV_1_0_REV3; //or rev1,2. Can't tell.
+    else if( board_id0 == LOW )
+      return BOARD_REV_1_5_1;
+    else //no revision currently pulls this pin high.
+      return BOARD_REV_UNKNOWN;
   }
   
   void init()
@@ -112,30 +78,31 @@ namespace Board
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
     
-    m_board_revision = revision_detect_();
-    
     //LEDs
     LEDPIN_RED::set(); //off
     LEDPIN_RED::init(MODE_OUTPUT, PULL_UP, TYPE_PUSHPULL, SPEED_LOW);
     LEDPIN_GRN::set(); //off
     LEDPIN_GRN::init(MODE_OUTPUT, PULL_UP, TYPE_PUSHPULL, SPEED_LOW);
-    LEDPIN_YLW::set(); //off
-    LEDPIN_YLW::init(MODE_OUTPUT, PULL_UP, TYPE_PUSHPULL, SPEED_LOW);
     
     //Piezo Buzzer (BZZ): no-pull (input state), out 0 (output state)
     BZZ::init(MODE_INPUT, PULL_NONE);
     BZZ::reset();
     
+    //XXX: Always enable charger/ENCHG - this is the only way to turn off cube power
+    ENCHG::set();
+    ENCHG::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_LOW);
+    
     //motor control disable
-    MOTDRV_IN1::init(MODE_INPUT, PULL_DOWN);
-    MOTDRV_EN1::init(MODE_INPUT, PULL_DOWN);
-    MOTDRV_IN2::init(MODE_INPUT, PULL_DOWN);
-    MOTDRV_EN2::init(MODE_INPUT, PULL_DOWN);
+    PB12_IN1::init(MODE_INPUT, PULL_DOWN);
+    PB13_EN1::init(MODE_INPUT, PULL_DOWN);
+    PB14_IN2::init(MODE_INPUT, PULL_DOWN);
+    PB15_EN2::init(MODE_INPUT, PULL_DOWN);
     Timer::wait(100);
 
-    //DUT_VEXT off
-    Contacts::init();
-    Contacts::powerOff();
+    //default low (VEXT disabled)
+    CHGTX::reset();
+    CHGTX::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_LOW);
+    //Contacts::powerOff(0,0);
     
     //VBAT controls
     ENBAT_LC::set();
@@ -144,14 +111,7 @@ namespace Board
     NBAT::init(MODE_OUTPUT, PULL_NONE, TYPE_OPENDRAIN, SPEED_LOW);
     NBATSINK::set();
     NBATSINK::init(MODE_OUTPUT, PULL_NONE, TYPE_OPENDRAIN, SPEED_LOW);
-    ENCHG::reset();
-    ENCHG::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_LOW);
-    Board::powerOff(PWR_VBAT,0);
-    
-    //CUBEBAT controls
-    ENCHG_CUBE::reset();
-    ENCHG_CUBE::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_LOW);
-    Board::powerOff(PWR_CUBEBAT,0);
+    disableVBAT();
     
     //DUT_PROG controls
     PROG_HV::set();
@@ -160,11 +120,9 @@ namespace Board
     PROG_LV::set();
     PROG_LV::type(TYPE_OPENDRAIN);
     PROG_LV::init(MODE_OUTPUT, PULL_NONE, TYPE_OPENDRAIN, SPEED_LOW);
-    Board::powerOff(PWR_DUTPROG,0);
+    disableDUTPROG();
     
-    //UAMP/DUT_VDD controls
-    Board::powerOff(PWR_DUTVDD,0,0);
-    Board::powerOff(PWR_UAMP,0,0);
+    m_board_revision = revision_detect_();
     
     //ADC
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
@@ -186,44 +144,39 @@ namespace Board
     ADC_Cmd(ADC1, ENABLE);
     
     //Buttons
-    PB1::init(MODE_INPUT, PULL_UP);
-    PB2::init(MODE_INPUT, PULL_UP);
-    PB3::init(MODE_INPUT, PULL_UP);
-    PB4::init(MODE_INPUT, PULL_UP);
+    BTN1::init(MODE_INPUT, PULL_UP);
+    BTN2::init(MODE_INPUT, PULL_UP);
+    
+    //XXX: Fix 1.5 signals force OLED to reset/deselected in case it's populated
+    XXX_0_OLED_RESN::reset();
+    XXX_0_OLED_RESN::init(MODE_OUTPUT, PULL_NONE);
+    XXX_1_OLED_CSN::set();
+    XXX_1_OLED_CSN::init(MODE_OUTPUT, PULL_NONE);
     
     inited = true;
   }
 
-  //-----------------------------------------------------------------------------
-  //                  Revision
-  //-----------------------------------------------------------------------------
-  
   board_rev_t revision() {
     return m_board_revision;
   }
 
   char* revString(void) 
   {
-    if( revision() <= BOARD_REV_INVALID )
-      return (char*)"INVALID";
+    char* s;
     switch( revision() ) {
-      case BOARD_REV_1_0:       return (char*)"1.0"; //break;
-      case BOARD_REV_2_0:       return (char*)"2.0"; //break;
-      case BOARD_REV_A:         return (char*)"A";   //break;
-      default:                  return (char*)"?";   //break;
+      case BOARD_REV_1_0_REV1:
+      case BOARD_REV_1_0_REV2:
+      case BOARD_REV_1_0_REV3:  s = (char*)"1.0.r{1,2,3}"; break;
+      case BOARD_REV_1_5_1:     s = (char*)"1.5.1"; break;
+      default:                  s = (char*)"?"; break;
     }
+    return s;
   }
 
-  //-----------------------------------------------------------------------------
-  //                  LEDs & Buttons
-  //-----------------------------------------------------------------------------
-  
   void ledOn(led_e led) {
     switch( led ) {
       case LED_RED:    LEDPIN_RED::reset(); break;
       case LED_GREEN:  LEDPIN_GRN::reset(); break;
-      case LED_YLW:    LEDPIN_YLW::reset(); break;
-      default: break;
     }
   }
 
@@ -231,8 +184,6 @@ namespace Board
     switch( led ) {
       case LED_RED:    LEDPIN_RED::set(); break;
       case LED_GREEN:  LEDPIN_GRN::set(); break;
-      case LED_YLW:    LEDPIN_YLW::set(); break;
-      default: break;
     }
   }
 
@@ -240,17 +191,13 @@ namespace Board
     switch( led ) {
       case LED_RED:    LEDPIN_RED::write( !LEDPIN_RED::read() ); break;
       case LED_GREEN:  LEDPIN_GRN::write( !LEDPIN_GRN::read() ); break;
-      case LED_YLW:    LEDPIN_YLW::write( !LEDPIN_YLW::read() ); break;
-      default: break;
     }
   }
 
   static bool btnPressed_(btn_e btn) {
     switch( btn ) {
-      case Board::BTN_1: return !(PB1::read() > 0); //break;
-      case Board::BTN_2: return !(PB2::read() > 0); //break;
-      case Board::BTN_3: return !(PB3::read() > 0); //break;
-      case Board::BTN_4: return !(PB4::read() > 0); //break;
+      case Board::BTN_1: return !(BTN1::read() > 0); //break;
+      case Board::BTN_2: return !(BTN2::read() > 0); //break;
       default: return 0; //break;
     }
   }
@@ -306,175 +253,62 @@ namespace Board
     return 0; //no change
   }
   
-  //-----------------------------------------------------------------------------
-  //                  Power
-  //-----------------------------------------------------------------------------
-  
   static u8 vbatIsEnabled = 1; //force init sync
-  static u8 cubebatIsEnabled = 1; //force init sync
+  void enableVBAT()
+  {
+    NBATSINK::set(); // Disable sink (to prevent blowing up the fixture)
+    NBAT::reset();
+    ENCHG::set();
+    vbatIsEnabled = 1;
+  }
+
+  void disableVBAT()
+  {
+    if (vbatIsEnabled)
+    {
+      NBAT::set();        //GPIO_SetBits(GPIOC, GPIO_Pin_2);
+      //ENCHG::set();       //GPIO_SetBits(GPIOA, GPIO_Pin_15);
+      ENCHG::reset();     //GPIO_ResetBits(GPIOA, GPIOA_ENCHG);
+      Timer::wait(1);
+      NBATSINK::reset();  //GPIO_ResetBits(GPIOD, GPIO_Pin_2);  // Enable sink to quickly discharge any remaining power
+      ENBAT_LC::reset();  //GPIO_ResetBits(GPIOC, GPIO_Pin_1);  // Sink even more current (down to 0.3V at least)
+      Timer::wait(50000);
+      NBATSINK::set();    //GPIO_SetBits(GPIOD, GPIO_Pin_2);    // Disable sink (to prevent blowing up the fixture)  
+      ENBAT_LC::set();    //GPIO_SetBits(GPIOC, GPIO_Pin_1);
+    }
+    vbatIsEnabled = 0;
+  }
+
+  bool VBATisEnabled() {
+    return vbatIsEnabled;
+  }
+
   static u8 dutprogIsEnabled = 1; //force init sync
-  static u8 dutvddIsEnabled = 1; //force init sync
-  static u8 uampIsEnabled = 1; //force init sync
-  
-  void powerOn(pwr_e net, int turn_on_delay_ms)
+  void enableDUTPROG(int turn_on_delay_ms)
   {
-    bool was_off = !Board::powerIsOn(net);
-    
-    switch( net )
-    {
-      case PWR_VEXT:
-        Contacts::powerOn(0); //no delay
-        break;
-      
-      case PWR_VBAT:
-        NBATSINK::set(); //disable current sink
-        ENBAT_LC::set();
-        NBAT::reset();
-        ENCHG::set();
-        vbatIsEnabled = 1;
-        break;
-        
-      case PWR_CUBEBAT:
-        ENCHG_CUBE::set(); //enable cube regulator
-        cubebatIsEnabled = 1;
-        break;
-      
-      case PWR_DUTPROG:
-        PROG_LV::set();   //disable current sink
-        PROG_HV::reset(); //enable HV PFET
-        dutprogIsEnabled = 1;
-        break;
-        
-      case PWR_DUTVDD:
-        Board::powerOff(PWR_UAMP,0,0); //UAMP-DUTVDD conflict
-        DUT_VDD::set();
-        DUT_VDD::init(MODE_OUTPUT,PULL_NONE);
-        dutvddIsEnabled = 1;
-        break;
-      
-      case PWR_UAMP:
-        Board::powerOff(PWR_DUTVDD,0,0); //UAMP-DUTVDD conflict
-        UAMP::set();
-        UAMP::init(MODE_OUTPUT,PULL_NONE);
-        uampIsEnabled = 1;
-        break;
-    }
-    
-    if( was_off )
+    PROG_LV::set();   //disable current sink
+    PROG_HV::reset(); //enable HV PFET
+    if( !dutprogIsEnabled )
       Timer::delayMs(turn_on_delay_ms);
+    dutprogIsEnabled = 1;
   }
   
-  void powerOff(pwr_e net, int turn_off_delay_ms, bool force)
+  void disableDUTPROG(int turn_off_delay_ms, bool force)
   {
-    switch( net )
+    if( dutprogIsEnabled )
     {
-      case PWR_VEXT:
-        Contacts::powerOff(turn_off_delay_ms, force);
-        break;
-      
-      case PWR_VBAT:
-        if( vbatIsEnabled )
-        {
-          NBAT::set();
-          ENCHG::reset();
-          if( force ) {
-            Timer::wait(1);
-            NBATSINK::reset();  // Enable sink to quickly discharge any remaining power
-            ENBAT_LC::reset();  // Sink even more current (down to 0.3V at least)
-          }
-          Timer::delayMs(turn_off_delay_ms);
-          NBATSINK::set();    // Disable sink (to prevent blowing up the fixture)  
-          ENBAT_LC::set();
-        }
-        vbatIsEnabled = 0;
-        break;
-        
-      case PWR_CUBEBAT:
-        if( cubebatIsEnabled )
-        {
-          ENCHG_CUBE::reset();
-          if( force ) {
-            Timer::wait(1);
-            //add some current sink to quickly discharge?
-          }
-          Timer::delayMs(turn_off_delay_ms);
-        }
-        cubebatIsEnabled = 0;
-        break;
-        
-      case PWR_DUTPROG:
-        if( dutprogIsEnabled )
-        {
-          PROG_HV::set(); //disable HV PFET
-          if( force ) {
-            Timer::wait(1);
-            PROG_LV::reset(); //current sink to discharge quicklier
-          }
-          Timer::delayMs(turn_off_delay_ms);
-          PROG_LV::set();     //disable current sink
-        }
-        dutprogIsEnabled = 0;
-        break;
-      
-      case PWR_DUTVDD:
-        if( dutvddIsEnabled )
-        {
-          if( force ) {
-            DUT_VDD::reset(); //drive low to discharge
-          } else {
-            DUT_VDD::init(MODE_INPUT,PULL_NONE); //just disconnect
-          }
-          Timer::delayMs(turn_off_delay_ms);
-        }
-        DUT_VDD::init(MODE_INPUT,PULL_NONE);
-        dutvddIsEnabled = 0;
-        break;
-        
-      case PWR_UAMP:
-        if( uampIsEnabled )
-        {
-          if( force ) {
-            UAMP::reset(); //drive low to discharge
-          } else {
-            UAMP::init(MODE_INPUT,PULL_NONE); //just disconnect
-          }
-          Timer::delayMs(turn_off_delay_ms);
-        }
-        UAMP::init(MODE_INPUT,PULL_NONE);
-        uampIsEnabled = 0;
-        break;
+      PROG_HV::set(); //disable HV PFET
+      if( force )
+        PROG_LV::reset(); //current sink to discharge quicklier
+      Timer::delayMs(turn_off_delay_ms);
+      PROG_LV::set();     //disable current sink
     }
+    dutprogIsEnabled = 0;
   }
   
-  bool powerIsOn(pwr_e net)
-  {
-    switch( net ) {
-      case PWR_VEXT:    return Contacts::powerIsOn();
-      case PWR_VBAT:    return vbatIsEnabled;
-      case PWR_CUBEBAT: return cubebatIsEnabled;
-      case PWR_DUTPROG: return dutprogIsEnabled;
-      case PWR_DUTVDD:  return dutvddIsEnabled;
-      case PWR_UAMP:    return uampIsEnabled;
-    }
-    return false;
+  bool DUTPROGisEnabled() {
+    return dutprogIsEnabled;
   }
-  
-  char* power2str(pwr_e net)
-  {
-    switch( net ) {
-      case PWR_VEXT:    return (char*)"VEXT";
-      case PWR_VBAT:    return (char*)"VBAT";
-      case PWR_CUBEBAT: return (char*)"CUBEBAT";
-      case PWR_DUTPROG: return (char*)"DUTPROG";
-      case PWR_DUTVDD:  return (char*)"DUTVDD";
-      case PWR_UAMP:    return (char*)"UAMP";
-    }
-    return (char*)"?";
-  }
-  
-  //-----------------------------------------------------------------------------
-  //                  buzzer
-  //----------------------------------------------------------------------------
   
   void buzz(u8 f_kHz, u16 duration_ms)
   {
@@ -496,10 +330,6 @@ namespace Board
   void buzzerOff() {
     BZZ::mode(MODE_INPUT);  //pu-1
   }
-  
-  //-----------------------------------------------------------------------------
-  //                  ADC
-  //----------------------------------------------------------------------------
   
   uint32_t getAdcMv(adc_chan_e chan, int oversample, int pin_chg_us)
   {
@@ -547,5 +377,17 @@ namespace Board
     const int VCC = 2800;
     return (adc_raw * VCC) >> 12;
   }
+}
+
+#include "contacts.h"
+namespace Board
+{
+  //DEPRECIATED
+  //XXX: remove from board API - update app to use Contacts interface
+  void enableVEXT() { Contacts::powerOn(0); }
+  void disableVEXT() { Contacts::powerOff(0,0); }
+  bool VEXTisEnabled() { return Contacts::powerIsOn(); }
+  void VEXTon(int turn_on_delay_ms) { Contacts::powerOn(turn_on_delay_ms); }
+  void VEXToff(int turn_off_delay_ms) { Contacts::powerOff(turn_off_delay_ms); }
 }
 

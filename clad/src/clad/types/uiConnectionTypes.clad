@@ -5,7 +5,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 enum uint_8 UiConnectionType {
@@ -13,11 +13,9 @@ enum uint_8 UiConnectionType {
     UI = 0,
     SdkOverUdp,
     SdkOverTcp,
-    Switchboard,
-    Gateway,
     Count
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

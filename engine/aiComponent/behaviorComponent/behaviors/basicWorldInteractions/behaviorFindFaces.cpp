@@ -24,7 +24,7 @@
 #include "engine/actions/basicActions.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 const char* const kMaxFaceAgeToLookKey = "maxFaceAgeToLook_ms";
@@ -118,12 +118,12 @@ void BehaviorFindFaces::OnBehaviorActivated()
   const auto& robotInfo = GetBEI().GetRobotInfo();
   
   // Get known faces
-  const RobotTimeStamp_t latestImageTimeStamp = robotInfo.GetLastImageTimeStamp();
+  const TimeStamp_t latestImageTimeStamp = robotInfo.GetLastImageTimeStamp();
   _dVars.imageTimestampWhenActivated = latestImageTimeStamp;
   
-  _dVars.startingFaces = GetBEI().GetFaceWorld().GetFaceIDs(latestImageTimeStamp > _iConfig.maxFaceAgeToLook_ms ?
-                                                            latestImageTimeStamp - _iConfig.maxFaceAgeToLook_ms :
-                                                            0);
+  _dVars.startingFaces = GetBEI().GetFaceWorld().GetFaceIDsObservedSince(latestImageTimeStamp > _iConfig.maxFaceAgeToLook_ms ?
+                                                                         latestImageTimeStamp - _iConfig.maxFaceAgeToLook_ms :
+                                                                         0);
   const bool hasRecentFaces = !_dVars.startingFaces.empty();
   if ((_iConfig.stoppingCondition == StoppingCondition::AnyFace) &&
       hasRecentFaces){
@@ -160,7 +160,7 @@ void BehaviorFindFaces::BehaviorUpdate()
     if (_iConfig.stoppingCondition == StoppingCondition::AnyFace) {
       shouldStop = GetBEI().GetFaceWorld().HasAnyFaces(_dVars.imageTimestampWhenActivated);
     } else if (_iConfig.stoppingCondition == StoppingCondition::NewFace) {
-      const auto& newFaces = GetBEI().GetFaceWorld().GetFaceIDs(_dVars.imageTimestampWhenActivated);
+      const auto& newFaces = GetBEI().GetFaceWorld().GetFaceIDsObservedSince(_dVars.imageTimestampWhenActivated);
       // Check if newFaces is a subset of startingFaces.
       // If not, then a new face ID must have been added at some point.
       const bool newFaceAdded = !std::includes(_dVars.startingFaces.begin(), _dVars.startingFaces.end(),
@@ -210,5 +210,5 @@ const char* BehaviorFindFaces::StoppingConditionToString(BehaviorFindFaces::Stop
   }
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

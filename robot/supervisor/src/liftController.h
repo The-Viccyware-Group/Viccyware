@@ -14,12 +14,11 @@
 #ifndef COZMO_LIFT_CONTROLLER_H_
 #define COZMO_LIFT_CONTROLLER_H_
 
-#include "clad/types/motorTypes.h"
 #include "coretech/common/shared/types.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace LiftController {
       
       Result Init();
@@ -32,9 +31,7 @@ namespace Anki {
       
       // Moves lift all the way down and sets that position to 0
       // Automatically enables motor if it was disabled
-      // Note: if a non-empty calibration reason is provided,
-      // this will also send up a DAS event for the calibration
-      void StartCalibrationRoutine(const bool autoStarted, const MotorCalibrationReason& reason);
+      void StartCalibrationRoutine(bool autoStarted = false);
       
       // Returns true if calibration has completed
       bool IsCalibrated();      
@@ -49,20 +46,6 @@ namespace Anki {
       // TODO: Get rid of SetAngularVelocty?
       void SetAngularVelocity(const f32 speed_rad_per_sec, const f32 accel_rad_per_sec2 = MAX_LIFT_ACCEL_RAD_PER_S2);
       
-      // Command the desired angle of the lift
-      // If useVPG, the commanded position profile considers current velocity and honors max velocity/acceleration.
-      // If not useVPG, desired height_mm is commanded instantaneously.
-      void SetDesiredAngle(f32 angle_rad,
-                           f32 speed_rad_per_sec = MAX_LIFT_SPEED_RAD_PER_S,
-                           f32 accel_rad_per_sec2 = MAX_LIFT_ACCEL_RAD_PER_S2,
-                           bool useVPG = true);
-      
-      // Command the desired angle of the lift
-      // duration_seconds:  The time it should take for it to reach the desired height
-      // acc_start_frac:    The fraction of duration that it should be accelerating at the start
-      // acc_end_frac:      The fraction of duration that it should be slowing down to a stop at the end
-      void SetDesiredAngleByDuration(f32 angle_rad, f32 acc_start_frac, f32 acc_end_frac, f32 duration_seconds);
-
       // Command the desired height of the lift
       // If useVPG, the commanded position profile considers current velocity and honors max velocity/acceleration.
       // If not useVPG, desired height_mm is commanded instantaneously.
@@ -84,6 +67,9 @@ namespace Anki {
       // False if speed is 0 for more than LIFT_STOP_TIME.
       bool IsMoving();
       
+      // Returns the last height that was commanded via SetDesiredHeight()
+      f32 GetLastCommandedHeightMM();
+      
       // Get current height of the lift
       f32 GetHeightMM();
       
@@ -97,7 +83,6 @@ namespace Anki {
       // Momentarily enables motor even if it was disabled
       void Brace();
       void Unbrace();
-      bool IsBracing();
       
       // Stops any nodding or movement at all.
       void Stop();
@@ -109,12 +94,8 @@ namespace Anki {
       // Calls callback upon completion of check
       void CheckForLoad(void (*callback)(bool) = SendLiftLoadMessage);
       
-      // Returns true if motor hasn't been calibrated since the last time
-      // sycon reported that the encoder is invalid
-      bool IsEncoderInvalid();
-
     } // namespace LiftController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // COZMO_LIFT_CONTROLLER_H_

@@ -19,11 +19,11 @@
 
 #include "engine/components/cubes/ledAnimation.h"
 
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 TEST(CubeLedAnimation, TestAllFields)
 {
-  CubeLightState lightState;
+  LightState lightState;
   
   lightState.onColor   = 0xAABBCCDD;
   lightState.offColor  = 0x11223344;
@@ -75,7 +75,7 @@ TEST(CubeLedAnimation, TestAllFields)
 
 TEST(CubeLedAnimation, TestOffset)
 {
-  CubeLightState lightState;
+  LightState lightState;
   
   lightState.onColor   = 0xAABBCCDD;
   lightState.offColor  = 0x11223344;
@@ -111,7 +111,7 @@ TEST(CubeLedAnimation, TestOffset)
 
 TEST(CubeLedAnimation, TestPlayOnce)
 {
-  CubeLightState lightState;
+  LightState lightState;
   
   lightState.onColor   = 0xAABBCCDD;
   lightState.offColor  = 0x11223344;
@@ -148,7 +148,7 @@ TEST(CubeLedAnimation, TestPlayOnce)
 
 TEST(CubeLedAnimation, TestLinkToOther)
 {
-  CubeLightState lightState;
+  LightState lightState;
   
   lightState.onColor   = 0xAABBCCDD;
   lightState.offColor  = 0x11223344;

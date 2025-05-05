@@ -4,14 +4,13 @@
 // Copyright: Anki Inc (c) 2016
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 UnexpectedMovementType
 {
   TURNED_BUT_STOPPED = 0,       // Trying to turn but is stuck
   TURNED_IN_SAME_DIRECTION,     // Turning and forced to turn faster
-  TURNED_IN_OPPOSITE_DIRECTION, // Turning and spun in opposite direction
-  ROTATING_WITHOUT_MOTORS,      // Motors aren't commanding a turn but the gyro reports one (must be enabled)
+  TURNED_IN_OPPOSITE_DIRECTION  // Turning and spun in opposite direction
 }
 
 enum uint_8 UnexpectedMovementSide
@@ -23,5 +22,5 @@ enum uint_8 UnexpectedMovementSide
   RIGHT
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

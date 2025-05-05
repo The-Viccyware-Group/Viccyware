@@ -1,14 +1,6 @@
-# Anki Vector SDK
+# Victor Python SDK
 
-The Python SDK currently lives under `tools/sdk/vector-python-sdk-private/`. Instructions to
-use the SDK can be found [on confluence](https://ankiinc.atlassian.net/wiki/spaces/VD/pages/441319496/Python+Vector+SDK+-+Getting+Started).
+The SDK itself is now at https://github.com/anki/victor-python-sdk-private
 
-## scripts
-
-Contains scripts for setup of the python sdk.
-Further details may be found [in scripts' README](scripts/README.md)
-
-## gateway-tests
-
-The `gateway-tests` directory contains a few tests scripts which may be executed with pytest.
-Further details may be found [in gateway-tests's README](gateway-tests/README.md)
+The `victorclad` directory contains boilerplate for creating a separate Python
+package for the CLAD dependency.

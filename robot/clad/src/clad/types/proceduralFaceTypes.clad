@@ -5,7 +5,7 @@
 // ROBOT_CLAD_SHARED
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // These are the names of procedural eye parameters we can control on Cozmo's face.
 // These parameters are available for both left and right eyes.
@@ -35,7 +35,6 @@ enum uint_8 ProceduralEyeParameter {
     GlowSize,         // 0 for no glow, 1 for glow width/height equal to half eye width/height (-1 to leave as is)
     HotSpotCenterX,   // Center of the hotspot ("pupil") relative to center...
     HotSpotCenterY,   // ... specified as a fraction of the current eye width/height [-1,+1]
-    GlowLightness,    // [0,1] 0 for no glow, 1 for full brightness
     NumParameters
 }
 
@@ -48,9 +47,9 @@ structure ProceduralFaceParameters {
     float_32 scanlineOpacity,      // Use -1 to use current
 
     // Vector of values for each ProceduralEyeParameter for each eye:
-    float_32 leftEye[25],          // NOTE: Must match NumParameters above
-    float_32 rightEye[25]          //   "
+    float_32 leftEye[24],          // NOTE: Must match NumParameters above
+    float_32 rightEye[24]          //   "
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

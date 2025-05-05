@@ -1,4 +1,3 @@
-
 /**
  * File: testVisionSystem.cpp
  *
@@ -16,16 +15,13 @@
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "coretech/common/shared/types.h"
-#include "coretech/common/shared/math/rotation.h"
+#include "coretech/common/engine/math/rotation.h"
 
 #include "engine/cozmoContext.h"
 #include "engine/robotDataLoader.h"
 #include "engine/vision/visionSystem.h"
 #include "engine/vision/laserPointDetector.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
-
-#include "coretech/neuralnets/neuralNetJsonKeys.h"
-#include "coretech/neuralnets/neuralNetRunner.h"
 
 #include "coretech/vision/engine/imageCache.h"
 #include "coretech/vision/shared/MarkerCodeDefinitions.h"
@@ -43,14 +39,15 @@
 #include "coretech/common/engine/colorRGBA.h"
 
 
-extern Anki::Vector::CozmoContext* cozmoContext;
+extern Anki::Cozmo::CozmoContext* cozmoContext;
 
 TEST(VisionSystem, DISABLED_CameraCalibrationTarget_InvertedBox)
 {
   NativeAnkiUtilConsoleSetValueWithString("CalibTargetType",
-                                          std::to_string(Anki::Vector::CameraCalibrator::INVERTED_BOX).c_str());
+                                          std::to_string(Anki::Cozmo::CameraCalibrator::INVERTED_BOX).c_str());
   
-  Anki::Vector::VisionSystem* visionSystem = new Anki::Vector::VisionSystem(cozmoContext);
+  Anki::Cozmo::VisionSystem* visionSystem = new Anki::Cozmo::VisionSystem(cozmoContext);
+  cozmoContext->GetDataLoader()->LoadRobotConfigs();
   Anki::Result result = visionSystem->Init(cozmoContext->GetDataLoader()->GetRobotVisionConfig());
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
   
@@ -62,7 +59,21 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_InvertedBox)
                                                                                              0.f));
   result = visionSystem->UpdateCameraCalibration(calib);
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
-    
+  
+  // Turn on _only_ marker detection and camera calibration
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::Idle, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::DetectingMarkers, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::ComputingCalibration, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  // Make sure we run on every frame
+  result = visionSystem->PushNextModeSchedule(Anki::Cozmo::AllVisionModesSchedule({{Anki::Cozmo::VisionMode::DetectingMarkers, Anki::Cozmo::VisionModeSchedule(1)}}));
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
   Anki::Vision::ImageCache imageCache;
   
   Anki::Vision::ImageRGB img;
@@ -73,23 +84,14 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_InvertedBox)
   result = img.Load(testImgPath);
   
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
-
-  // When this test was originally written, marker detector would run on the same sized image that ImageCache
-  // was reset with. This is no longer the case. Now ImageCache is reset with a Full sized image and
-  // marker detector always runs at half the original image's resolution so we need to scale these images by 2.
-  img.Resize(2.f, Anki::Vision::ResizeMethod::Linear);
   
   imageCache.Reset(img);
-
-  Anki::Vector::VisionSystemInput input;
-  input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers);
-  input.modesToProcess.Insert(Anki::Vector::VisionMode::Calibration);
-  input.imageBuffer = imageCache.GetBuffer();
   
-  result = visionSystem->Update(input);
+  Anki::Cozmo::VisionPoseData robotState; // not needed just to detect markers
+  result = visionSystem->Update(robotState, imageCache);
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
   
-  Anki::Vector::VisionProcessingResult processingResult;
+  Anki::Cozmo::VisionProcessingResult processingResult;
   bool resultAvailable = visionSystem->CheckMailbox(processingResult);
   EXPECT_TRUE(resultAvailable);
   
@@ -150,9 +152,10 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_InvertedBox)
 TEST(VisionSystem, DISABLED_CameraCalibrationTarget_Qbert)
 {
   NativeAnkiUtilConsoleSetValueWithString("CalibTargetType",
-                                          std::to_string(Anki::Vector::CameraCalibrator::QBERT).c_str());
+                                          std::to_string(Anki::Cozmo::CameraCalibrator::QBERT).c_str());
 
-  Anki::Vector::VisionSystem* visionSystem = new Anki::Vector::VisionSystem(cozmoContext);
+  Anki::Cozmo::VisionSystem* visionSystem = new Anki::Cozmo::VisionSystem(cozmoContext);
+  cozmoContext->GetDataLoader()->LoadRobotConfigs();
   Anki::Result result = visionSystem->Init(cozmoContext->GetDataLoader()->GetRobotVisionConfig());
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
   
@@ -164,7 +167,21 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_Qbert)
                                                                                              0.f));
   result = visionSystem->UpdateCameraCalibration(calib);
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
-    
+  
+  // Turn on _only_ marker detection and camera calibration
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::Idle, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::DetectingMarkers, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  result = visionSystem->SetNextMode(Anki::Cozmo::VisionMode::ComputingCalibration, true);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
+  // Make sure we run on every frame
+  result = visionSystem->PushNextModeSchedule(Anki::Cozmo::AllVisionModesSchedule({{Anki::Cozmo::VisionMode::DetectingMarkers, Anki::Cozmo::VisionModeSchedule(1)}}));
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
+  
   Anki::Vision::ImageCache imageCache;
   
   Anki::Vision::ImageRGB img;
@@ -174,23 +191,14 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_Qbert)
   result = img.Load(testImgPath);
   
   ASSERT_EQ(Anki::Result::RESULT_OK, result);
-
-  // When this test was originally written, marker detector would run on the same sized image that ImageCache
-  // was reset with. This is no longer the case. Now ImageCache is reset with a Full sized image and
-  // marker detector always runs at half the original image's resolution so we need to scale these images by 2.
-  img.Resize(2.f, Anki::Vision::ResizeMethod::Linear);
   
   imageCache.Reset(img);
   
-  Anki::Vector::VisionSystemInput input;
-  input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers);
-  input.modesToProcess.Insert(Anki::Vector::VisionMode::Calibration);
-  input.imageBuffer = imageCache.GetBuffer();
+  Anki::Cozmo::VisionPoseData robotState; // not needed just to detect markers
+  result = visionSystem->Update(robotState, imageCache);
+  ASSERT_EQ(Anki::Result::RESULT_OK, result);
   
-  result = visionSystem->Update(input);
-    ASSERT_EQ(Anki::Result::RESULT_OK, result);
-  
-  Anki::Vector::VisionProcessingResult processingResult;
+  Anki::Cozmo::VisionProcessingResult processingResult;
   bool resultAvailable = visionSystem->CheckMailbox(processingResult);
   EXPECT_TRUE(resultAvailable);
   
@@ -248,115 +256,6 @@ TEST(VisionSystem, DISABLED_CameraCalibrationTarget_Qbert)
   visionSystem = nullptr;
 }
 
-
-TEST(VisionSystem, ImageCompositing_MarkerDetection)
-{
-  using namespace Anki;
-
-  const char* kDebugName = "Test.VisionSystem.ImageCompositing_MarkerDetection";
-
-  Vector::VisionSystem visionSystem(cozmoContext);
-  Result result = visionSystem.Init(cozmoContext->GetDataLoader()->GetRobotVisionConfig());
-  Json::Value cfg = cozmoContext->GetDataLoader()->GetRobotVisionConfig();
-  const u32 imageReadyPeriod = JsonTools::ParseUInt32(cfg["ImageCompositing"],"imageReadyPeriod", kDebugName);
-  const u32 imageResetPeriod = imageReadyPeriod * JsonTools::ParseUInt32(cfg["ImageCompositing"],"numImageReadyCyclesBeforeReset", kDebugName);
-  ASSERT_EQ(RESULT_OK, result);
-
-  // Don't really need a valid camera calibration, so just pass a dummy one in
-  // to make vision system happy.
-  auto calib = std::make_shared<Vision::CameraCalibration>(360,640,290.f,290.f,160.f,120.f,0.f);
-  result = visionSystem.UpdateCameraCalibration(calib);
-  ASSERT_EQ(RESULT_OK, result);
-
-  const std::string testImageDir = cozmoContext->GetDataPlatform()->pathToResource(Util::Data::Scope::Resources,
-                                                                                   "test/markerDetectionTests/ImageCompositing");
-  
-  // we only care about detecting the charger in the dark
-  const auto isChargerDetected = [](const std::list<Vision::ObservedMarker>& markers) -> bool {
-    return !markers.empty() && 
-           strncmp("MARKER_CHARGER_HOME", markers.front().GetCodeName(), 19)==0;
-  };
-
-  // Each test case is a collection of images at a given ambient lighting level (given by 2nd folder name),
-  //  and a given LCD brightness (given by the 3rd folder name).
-  // For example:
-  //  "light1p75" is at light level 1.75 (using an arbitrary scale marked on a hardware dimmer switch).
-  //  "1" refers to LCD brightness level =20. Other values this can be are "0" which maps to LCD=1
-  std::vector<std::string> testCaseSubDirs = {
-    "light1p75/1",
-
-    "light2p0/0",
-    "light2p0/1",
-
-    "light2p25/0",
-    "light2p25/1",
-
-    "light2p5/0",
-    "light2p5/1",
-  };
-
-  for(const auto& subdir : testCaseSubDirs) {
-    const std::vector<std::string> testFiles = Util::FileUtils::FilesInDirectory(Util::FileUtils::FullFilePath({testImageDir, subdir}), false, ".jpg");
-    PRINT_CH_DEBUG("VisionSystem", kDebugName, "Loaded %zu images (%s)", testFiles.size(), subdir.c_str());
-    
-    DEV_ASSERT_MSG((testFiles.size()>=imageResetPeriod), kDebugName, "Not enough images for one reset period.");
-    
-    Vision::ImageCache imageCache;
-    size_t countCompositeImagesProcessed = 0;
-    bool foundMarker = false;
-    for(size_t index = 0; index < testFiles.size(); ++index) {
-      std::string filename = testFiles[index];
-
-      Vision::Image img;
-      result = img.Load(Util::FileUtils::FullFilePath({testImageDir, subdir, filename}));
-      ASSERT_EQ(RESULT_OK, result);
-      imageCache.Reset(img);
-
-      Anki::Vector::VisionSystemInput input;
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers);
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers_FullFrame);
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers_FastRotation);
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers_Composite);
-      input.imageBuffer = imageCache.GetBuffer();
-
-      Vector::VisionPoseData robotState; // not needed just to detect markers
-      robotState.cameraPose.SetParent(robotState.histState.GetPose()); // just so we don't trigger an assert
-      input.poseData = robotState;
-      
-      result = visionSystem.Update(input);
-      ASSERT_EQ(RESULT_OK, result);
-
-      Vector::VisionProcessingResult processingResult;
-      processingResult.observedMarkers.clear();
-      bool resultAvailable = visionSystem.CheckMailbox(processingResult);
-      EXPECT_TRUE(resultAvailable);
-
-      foundMarker |= isChargerDetected(processingResult.observedMarkers);
-      countCompositeImagesProcessed += processingResult.modesProcessed.Contains(Vector::VisionMode::Markers_Composite);
-      if( index == 0 ) { // first image 
-        // Ensure no images are found in a base image (thus requiring compositing to detect a marker)
-        EXPECT_FALSE(foundMarker);
-      }
-    }
-
-    EXPECT_TRUE(foundMarker);
-
-    // at the time of writing this test, we expect that:
-    // - image compositing incorporates a new image every frame 
-    //    that MarkerDetection is turned on while the mode is
-    //    enabled.
-    // - however, image composites are only considered PROCESSED 
-    //    if marker detection was run with its output AND
-    //    the buffer for compositing was reset.
-    // - for these tests, we will get at least one full cycle
-    //    including a reset.
-    // NOTE: if we fail on this line, likely we need to ensure
-    //  the configuration parameters in the vision_config.json
-    //  makes sense  
-    EXPECT_GE(countCompositeImagesProcessed, 1);
-  }
-}
-
 TEST(VisionSystem, MarkerDetectionTests)
 {
 # define DISABLED        0
@@ -371,7 +270,8 @@ TEST(VisionSystem, MarkerDetectionTests)
   // Construct a vision system
   // NOTE: We don't just use a MarkerDetector here because the VisionSystem also does CLAHE preprocessing which
   //       is part of this test (e.g. for low light performance)
-  Vector::VisionSystem visionSystem(cozmoContext);
+  Cozmo::VisionSystem visionSystem(cozmoContext);
+  cozmoContext->GetDataLoader()->LoadRobotConfigs();
   Result result = visionSystem.Init(cozmoContext->GetDataLoader()->GetRobotVisionConfig());
   ASSERT_EQ(RESULT_OK, result);
 
@@ -379,6 +279,17 @@ TEST(VisionSystem, MarkerDetectionTests)
   // to make vision system happy. All that matters is the image dimensions be correct.
   auto calib = std::make_shared<Vision::CameraCalibration>(240,320,290.f,290.f,160.f,120.f,0.f);
   result = visionSystem.UpdateCameraCalibration(calib);
+  ASSERT_EQ(RESULT_OK, result);
+
+  // Turn on _only_ marker detection
+  result = visionSystem.SetNextMode(Cozmo::VisionMode::Idle, true);
+  ASSERT_EQ(RESULT_OK, result);
+
+  result = visionSystem.SetNextMode(Cozmo::VisionMode::DetectingMarkers, true);
+  ASSERT_EQ(RESULT_OK, result);
+
+  // Make sure we run on every frame
+  result = visionSystem.PushNextModeSchedule(Cozmo::AllVisionModesSchedule({{Cozmo::VisionMode::DetectingMarkers, Cozmo::VisionModeSchedule(1)}}));
   ASSERT_EQ(RESULT_OK, result);
 
   // Grab all the test images from "resources/test/lowLightMarkerDetectionTests"
@@ -389,6 +300,7 @@ TEST(VisionSystem, MarkerDetectionTests)
   {
     std::string subDir;
     f32         expectedFailureRate;
+    bool        isDarkOnLight;
     std::function<bool(const std::list<Vision::ObservedMarker>&, const std::string& filename)> didSucceedFcn;
   };
 
@@ -405,10 +317,32 @@ TEST(VisionSystem, MarkerDetectionTests)
     return (strncmp(codeName, filename.c_str(), strlen(codeName)) == 0);
   };
   
-  std::vector<TestDefinition> testDefinitions = {
+  const std::vector<TestDefinition> testDefinitions = {
+
+    TestDefinition{
+      .subDir = "BacklitStack",
+      .expectedFailureRate = 0.f,
+      .isDarkOnLight = true,
+      .didSucceedFcn = [](const std::list<Vision::ObservedMarker>& markers, const std::string&) -> bool
+      {
+        return markers.size() >= 2;
+      }
+    },
+
+    TestDefinition{
+      .subDir = "LowLight",
+      .expectedFailureRate = .02f,
+      .isDarkOnLight = true,
+      .didSucceedFcn = [](const std::list<Vision::ObservedMarker>& markers, const std::string&) -> bool
+      {
+        return !markers.empty();
+      }
+    },
+
     TestDefinition{
       .subDir = "NoMarkers",
       .expectedFailureRate = 0.f,
+      .isDarkOnLight = true,
       .didSucceedFcn = [](const std::list<Vision::ObservedMarker>& markers, const std::string&) -> bool
       {
         return markers.empty();
@@ -417,45 +351,30 @@ TEST(VisionSystem, MarkerDetectionTests)
 
     TestDefinition{
       .subDir = "LightOnDark_Circle",
-      .expectedFailureRate = 0.08f, // Should be 0 VIC-1165
+      .expectedFailureRate = 0.05f, // Should be 0 VIC-1165
+      .isDarkOnLight = false,
       .didSucceedFcn = matchFilenameFcn,
     },
 
     TestDefinition{
       .subDir = "LightOnDark_Square",
       .expectedFailureRate = 0.f,
+      .isDarkOnLight = false,
       .didSucceedFcn = matchFilenameFcn,
     },
 
     TestDefinition{
       .subDir = "LightOnDark_Charger",
       .expectedFailureRate = 0.05f, // Should be 0 VIC-1165
+      .isDarkOnLight = false,
       .didSucceedFcn = [](const std::list<Vision::ObservedMarker>& markers, const std::string& filename) -> bool
       {
         return (markers.size() == 1) && (strncmp("MARKER_CHARGER_HOME", markers.front().GetCodeName(), 19) == 0);
       }
     },
+  };
 
-  };
-    
-  const std::vector<std::string> markerDirs = {
-    "MARKER_CHARGER_HOME", "MARKER_LIGHTCUBE_CIRCLE_BACK", "MARKER_LIGHTCUBE_CIRCLE_BOTTOM",
-    "MARKER_LIGHTCUBE_CIRCLE_FRONT", "MARKER_LIGHTCUBE_CIRCLE_LEFT",  "MARKER_LIGHTCUBE_CIRCLE_RIGHT",
-    "MARKER_LIGHTCUBE_CIRCLE_TOP"
-  };
-  
-  for(auto const& markerDir : markerDirs)
-  {
-    testDefinitions.push_back(TestDefinition{
-      .subDir = markerDir,
-      .expectedFailureRate = 0.1f, // Can we get this to 0? (VIC-1165)
-      .didSucceedFcn = [&markerDir](const std::list<Vision::ObservedMarker>& markers, const std::string& filename) -> bool
-      {
-        return (markers.size() == 1) && (markerDir.compare(0, markerDir.length(), markers.front().GetCodeName()) == 0);
-      }
-    });
-  }
-    
+
   Vision::ImageCache imageCache;
 
   for(auto & testDefinition : testDefinitions)
@@ -466,7 +385,7 @@ TEST(VisionSystem, MarkerDetectionTests)
     const std::vector<std::string> testFiles_png = Util::FileUtils::FilesInDirectory(Util::FileUtils::FullFilePath({testImageDir, subDir}), false, ".png");
     std::copy(testFiles_png.begin(), testFiles_png.end(), std::back_inserter(testFiles));
 
-    EXPECT_FALSE(testFiles.empty());
+    NativeAnkiUtilConsoleSetValueWithString("MarkerDetector_DarkOnLight", (testDefinition.isDarkOnLight ? "1" : "0"));
     
     u32 numFailures = 0;
     for(auto & filename : testFiles)
@@ -475,28 +394,14 @@ TEST(VisionSystem, MarkerDetectionTests)
       result = img.Load(Util::FileUtils::FullFilePath({testImageDir, subDir, filename}));
       ASSERT_EQ(RESULT_OK, result);
 
-      // When this test was originally written, marker detector would run on the same sized image that ImageCache
-      // was reset with. This is no longer the case. Now ImageCache is reset with a Full sized image and
-      // marker detector always runs at half the original image's resolution so we need to scale these images by 2.
-      // Note: This resizes with Cubic instead of Linear because the tests fail when the images are resized with Linear
-      img.Resize(2.f, Vision::ResizeMethod::Cubic);
-      
       imageCache.Reset(img);
 
-      Anki::Vector::VisionSystemInput input;
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers);
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers_FullFrame);
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::Markers_FastRotation);
-      input.imageBuffer = imageCache.GetBuffer();
-  
-      Vector::VisionPoseData robotState; // not needed just to detect markers
+      Cozmo::VisionPoseData robotState; // not needed just to detect markers
       robotState.cameraPose.SetParent(robotState.histState.GetPose()); // just so we don't trigger an assert
-      input.poseData = robotState;
-      
-      result = visionSystem.Update(input);
+      result = visionSystem.Update(robotState, imageCache);
       ASSERT_EQ(RESULT_OK, result);
 
-      Vector::VisionProcessingResult processingResult;
+      Cozmo::VisionProcessingResult processingResult;
       bool resultAvailable = visionSystem.CheckMailbox(processingResult);
       EXPECT_TRUE(resultAvailable);
 
@@ -511,9 +416,9 @@ TEST(VisionSystem, MarkerDetectionTests)
 
       if(DEBUG_DISPLAY != DISABLED && ((DEBUG_DISPLAY != ENABLE_ON_FAIL) || !success))
       {
-        for(auto const& debugImg : processingResult.debugImages)
+        for(auto const& debugImg : processingResult.debugImageRGBs)
         {
-          debugImg.second.Display(debugImg.first);
+          debugImg.second.Display(debugImg.first.c_str());
         }
 
         Vision::ImageRGB dispImg(img);
@@ -574,7 +479,7 @@ TEST(VisionSystem, ImageQuality)
   using namespace Anki;
 
   // Construct a vision system
-  Vector::VisionSystem visionSystem(cozmoContext);
+  Cozmo::VisionSystem visionSystem(cozmoContext);
 
   // Make sure we are running every frame so we don't skip test images!
   Json::Value config = cozmoContext->GetDataLoader()->GetRobotVisionConfig();
@@ -588,80 +493,54 @@ TEST(VisionSystem, ImageQuality)
   result = visionSystem.UpdateCameraCalibration(calib);
   ASSERT_EQ(RESULT_OK, result);
 
+  // Turn on _only_ image quality check
+  result = visionSystem.SetNextMode(Cozmo::VisionMode::Idle, true);
+  ASSERT_EQ(RESULT_OK, result);
+
+  result = visionSystem.SetNextMode(Cozmo::VisionMode::CheckingQuality, true);
+  ASSERT_EQ(RESULT_OK, result);
+
+  result = visionSystem.PushNextModeSchedule(Cozmo::AllVisionModesSchedule({{Cozmo::VisionMode::CheckingQuality, Cozmo::VisionModeSchedule(1)}}));
+  ASSERT_EQ(RESULT_OK, result);
+
   const std::string testImageDir = cozmoContext->GetDataPlatform()->pathToResource(Util::Data::Scope::Resources,
                                                                                    "test/imageQualityTests");
 
   const std::vector<std::string> testSubDirs = {
     "Good", "TooBright", "TooDark"
   };
-  
-  struct Test {
-    std::string subDir;
-    s32 exposureTime_ms;
-    f32 exposureGain;
-  };
-  
-  const std::vector<Test> tests = {
-    {
-      .subDir = "Good",
-      .exposureTime_ms = 31,
-      .exposureGain = 2.f
-    },
-    {
-      .subDir = "TooBright",
-      .exposureTime_ms = visionSystem.GetMinCameraExposureTime_ms(),
-      .exposureGain = visionSystem.GetMinCameraGain(),
-    },
-    {
-      .subDir = "TooDark",
-      .exposureTime_ms = visionSystem.GetMaxCameraExposureTime_ms(),
-      .exposureGain = visionSystem.GetMaxCameraGain()
-    },
-  };
 
   Vision::ImageCache imageCache;
 
-  for(auto & test : tests)
+  // Fake the exposure parameters so that we are always against the extremes in order
+  // to trigger TooDark and TooBright
+  const Cozmo::VisionSystem::GammaCurve gammaCurve{};
+  result = visionSystem.SetCameraExposureParams(1, 1, 1, 2.f, 2.f, 2.f, gammaCurve);
+  ASSERT_EQ(RESULT_OK, result);
+
+  for(auto & subDir : testSubDirs)
   {
-    const std::string fullFileName = Util::FileUtils::FullFilePath({testImageDir, test.subDir});
-    const std::vector<std::string> testFiles = Util::FileUtils::FilesInDirectory(fullFileName, false, ".jpg");
+    const std::vector<std::string> testFiles = Util::FileUtils::FilesInDirectory(Util::FileUtils::FullFilePath({testImageDir, subDir}), false, ".jpg");
 
     for(auto & filename : testFiles)
     {
-      // Fake the exposure parameters so that we are always against the extremes in order
-      // to trigger TooDark and TooBright
-      const Vector::VisionSystem::GammaCurve gammaCurve{};
-      result = visionSystem.SetCameraExposureParams(test.exposureTime_ms, test.exposureGain, gammaCurve);
-      ASSERT_EQ(RESULT_OK, result);
-      
       Vision::ImageRGB img;
-      result = img.Load(Util::FileUtils::FullFilePath({testImageDir, test.subDir, filename}));
+      result = img.Load(Util::FileUtils::FullFilePath({testImageDir, subDir, filename}));
       ASSERT_EQ(RESULT_OK, result);
 
-      // When this test was originally written, marker detector would run on the same sized image that ImageCache
-      // was reset with. This is no longer the case. Now ImageCache is reset with a Full sized image and
-      // marker detector always runs at half the original image's resolution so we need to scale these images by 2.
-      img.Resize(2.f, Vision::ResizeMethod::Linear);
-      
       imageCache.Reset(img);
 
-      Anki::Vector::VisionSystemInput input;
-      input.modesToProcess.Insert(Anki::Vector::VisionMode::AutoExp);
-      input.imageBuffer = imageCache.GetBuffer();
-      
-      Vector::VisionPoseData robotState; // not needed for image quality check
+      Cozmo::VisionPoseData robotState; // not needed for image quality check
       robotState.cameraPose.SetParent(robotState.histState.GetPose()); // just so we don't trigger an assert
-      input.poseData = robotState;
-
-      result = visionSystem.Update(input);
+      result = visionSystem.Update(robotState, imageCache);
       ASSERT_EQ(RESULT_OK, result);
 
-      Vector::VisionProcessingResult processingResult;
+      Cozmo::VisionProcessingResult processingResult;
       bool resultAvailable = visionSystem.CheckMailbox(processingResult);
       EXPECT_TRUE(resultAvailable);
 
       // Make sure the detected quality is as expected for this subdir
-      EXPECT_EQ(test.subDir, EnumToString(processingResult.imageQuality));
+      EXPECT_EQ(subDir, EnumToString(processingResult.imageQuality));
 
       PRINT_NAMED_INFO("VisionSystem.ImageQuality", "%s = %s",
                        filename.c_str(), EnumToString(processingResult.imageQuality));
@@ -669,7 +548,7 @@ TEST(VisionSystem, ImageQuality)
 #     define DISPLAY_IMAGES 0
       if(DISPLAY_IMAGES)
       {
-        for(auto const& debugImg : processingResult.debugImages)
+        for(auto const& debugImg : processingResult.debugImageRGBs)
         {
           debugImg.second.Display(debugImg.first.c_str());
         }
@@ -701,26 +580,20 @@ GTEST_TEST(LaserPointDetector, LaserDetect)
     Vision::ImageCache imageCache;
     Result result = testImg.Load(imageName);
     ASSERT_EQ(RESULT_OK, result);
-
-    // When this test was originally written, marker detector would run on the same sized image that ImageCache
-    // was reset with. This is no longer the case. Now ImageCache is reset with a Full sized image and
-    // marker detector always runs at half the original image's resolution so we need to scale these images by 2.
-    testImg.Resize(2.f, Vision::ResizeMethod::Linear);
-    
     imageCache.Reset(testImg);
 
     // Create LaserPointDetector and test on image
-    Vision::DebugImageList<Vision::CompressedImage> debugImageList;
-    std::list<Vector::ExternalInterface::RobotObservedLaserPoint> points;
+    Cozmo::DebugImageList<Anki::Vision::ImageRGB> debugImageList;
+    std::list<Cozmo::ExternalInterface::RobotObservedLaserPoint> points;
 
-    Vector::LaserPointDetector detector(nullptr);
+    Cozmo::LaserPointDetector detector(nullptr);
     result = detector.Detect(imageCache, false, points, debugImageList);
     ASSERT_EQ(RESULT_OK, result);
     EXPECT_EQ(expectedPoints, points.size()) << "Image: "<<imageName;
 
     if (DEBUG_LASER_DISPLAY) {
       for (auto image: debugImageList) {
-        image.second.Display(imageName.c_str());
+        image.second.Display(imageName.c_str(), 0);
       }
     }
 
@@ -749,135 +622,4 @@ GTEST_TEST(LaserPointDetector, LaserDetect)
 
 } // LaserPointDetector
 
-// This test is meant to avoid checking in a vision_config.json or code changes that break the ability to load
-// the neural net model(s) successfully.
-GTEST_TEST(NeuralNets, InitFromConfig)
-{
-  using namespace Anki;
-  
-  // Load vision_config.json file and get NeuralNets section
-  const Json::Value& config = cozmoContext->GetDataLoader()->GetRobotVisionConfig();
-  ASSERT_TRUE(config.isMember(NeuralNets::JsonKeys::NeuralNets));
-  const Json::Value& neuralNetConfig = config[NeuralNets::JsonKeys::NeuralNets];
-  ASSERT_TRUE(neuralNetConfig.isMember(NeuralNets::JsonKeys::Models));
-  const Json::Value& allModelsConfig = neuralNetConfig[NeuralNets::JsonKeys::Models];
-  
-  const std::string visionConfigPath = Util::FileUtils::FullFilePath({"config", "engine", "vision"});
-  const std::string dataPath = cozmoContext->GetDataPlatform()->pathToResource(Util::Data::Scope::Resources,
-                                                                               visionConfigPath);
-  const std::string cachePath = cozmoContext->GetDataPlatform()->pathToResource(Util::Data::Scope::Cache, "vision");
-  const std::string modelPath = Util::FileUtils::FullFilePath({dataPath, "dnn_models"});
-  const std::string dnnCachePath = Util::FileUtils::FullFilePath({cachePath, "neural_nets"});
-  
-  // Make sure "NeuralNetRunner" load succeeds for each model, given all the current params in vision_config.json
-  ASSERT_TRUE(allModelsConfig.isArray());
-  for(const auto& modelConfig : allModelsConfig)
-  {
-    NeuralNets::NeuralNetRunner neuralNetRunner(modelPath);
-    const Result loadRunnerResult = neuralNetRunner.Init(dnnCachePath, modelConfig);
-    ASSERT_EQ(RESULT_OK, loadRunnerResult);
-    
-    // Check that the model file exists and is a .tflite model (unless this is an "offboard" model definition)
-    ASSERT_TRUE(modelConfig.isMember(NeuralNets::JsonKeys::ModelType));
-    const std::string modelTypeStr = modelConfig[NeuralNets::JsonKeys::ModelType].asString();
-    if(modelTypeStr != NeuralNets::JsonKeys::OffboardModelType)
-    {
-      ASSERT_TRUE(modelConfig.isMember(NeuralNets::JsonKeys::GraphFile));
-      const std::string modelFileName = modelConfig[NeuralNets::JsonKeys::GraphFile].asString();
-      
-      // Make sure we have correct extension
-      const size_t extIndex = modelFileName.find_last_of(".");
-      ASSERT_NE(std::string::npos, extIndex); // must have extension
-      const std::string extension = modelFileName.substr(extIndex, std::string::npos);
-      ASSERT_EQ(".tflite", extension); // TODO: make this depend on which neural net platform we're building with?
-      
-      // Make sure model file exists
-      const std::string fullModelPath = Util::FileUtils::FullFilePath({modelPath, modelFileName});
-      ASSERT_TRUE(Util::FileUtils::FileExists(fullModelPath));
-    }
-  }
-}
 
-GTEST_TEST(VisionModeSet, BasicFunctionality)
-{
-  using namespace Anki::Vector;
-  
-  VisionModeSet set1;
-  ASSERT_TRUE(set1.IsEmpty());
-  
-  set1.Insert(VisionMode::Markers);
-  ASSERT_FALSE(set1.IsEmpty());
-  
-  ASSERT_TRUE(set1.Contains(VisionMode::Markers));
-  ASSERT_FALSE(set1.Contains(VisionMode::Faces));
-  
-  set1.Insert(VisionMode::Markers); // shouldn't change anything
-  ASSERT_TRUE(set1.Contains(VisionMode::Markers));
-  ASSERT_EQ(1, set1.size());
-  
-  set1.Clear();
-  ASSERT_TRUE(set1.IsEmpty());
-  
-  VisionModeSet set2{VisionMode::Faces};
-  ASSERT_FALSE(set2.IsEmpty());
-  ASSERT_TRUE(set2.Contains(VisionMode::Faces));
-  ASSERT_EQ(1, set2.size());
-  set2.Insert(VisionMode::Markers);
-  ASSERT_EQ(2, set2.size());
-  
-  VisionModeSet set3{VisionMode::Markers, VisionMode::Motion, VisionMode::Faces};
-  ASSERT_EQ(3, set3.size());
-  
-  VisionModeSet intersection = set2.Intersect(set3);
-  ASSERT_EQ(2, intersection.size());
-  ASSERT_TRUE(intersection.Contains(VisionMode::Markers));
-  ASSERT_TRUE(intersection.Contains(VisionMode::Faces));
-  ASSERT_FALSE(intersection.Contains(VisionMode::Motion));
-  
-  intersection = set1.Intersect(set2);
-  ASSERT_TRUE(intersection.IsEmpty());
-  
-  intersection = set2.Intersect(VisionModeSet{VisionMode::Illumination});
-  ASSERT_TRUE(intersection.IsEmpty());
-  
-  // Hard-coded multi-insertion
-  set1.Insert(VisionMode::Markers, VisionMode::Motion, VisionMode::Faces);
-  ASSERT_EQ(3, set1.size());
-  
-  set1.Clear();
-  ASSERT_TRUE(set1.IsEmpty());
-  
-  // Insert/enable/remove using a container of VisionModes
-  const std::list<VisionMode> listOfModes{
-    VisionMode::Faces,
-    VisionMode::Motion,
-    VisionMode::Illumination
-  };
-  
-  set1.Insert(listOfModes);
-  ASSERT_EQ(listOfModes.size(), set1.size());
-  std::for_each(listOfModes.begin(), listOfModes.end(), [&set1](VisionMode mode)
-                {
-                  ASSERT_TRUE(set1.Contains(mode));
-                });
-  
-  // Bulk disable from a list of VisionModes
-  set1.Enable(listOfModes, false);
-  ASSERT_TRUE(set1.IsEmpty());
-  
-  // Bulk enable
-  set1.Enable(listOfModes, true);
-  ASSERT_EQ(listOfModes.size(), set1.size());
-  std::for_each(listOfModes.begin(), listOfModes.end(), [&set1](VisionMode mode)
-                {
-                  ASSERT_TRUE(set1.Contains(mode));
-                });
-  
-  // Bulk removal
-  set1.Remove(listOfModes);
-  ASSERT_TRUE(set1.IsEmpty());
-  
-  // NOTE: This will not compile because a container of VisionMode types is static_asserted
-  //const std::vector<int> foo{1,2,3};
-  //set1.Insert(bob);
-}

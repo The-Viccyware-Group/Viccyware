@@ -22,20 +22,18 @@
 #include "util/entityComponent/iDependencyManagedComponent.h"
 #include "engine/robotComponents_fwd.h"
 #include "engine/events/ankiEvent.h"
-#include "proto/external_interface/settings.pb.h"
-#include <memory>
 #include <vector>
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace RobotInterface {
 class RobotToEngine;
 }
 class Robot;
 
 namespace Audio {
-class AudioBehaviorStackListener;
+
 
 class EngineRobotAudioClient : public IDependencyManagedComponent<RobotComponentID>, 
                                public AudioEngine::Multiplexer::AudioMuxClient 
@@ -43,14 +41,15 @@ class EngineRobotAudioClient : public IDependencyManagedComponent<RobotComponent
 public:
   using CurveType = AudioEngine::Multiplexer::CurveType;
 
-  EngineRobotAudioClient();
+  EngineRobotAudioClient()
+  : IDependencyManagedComponent(this, RobotComponentID::EngineAudioClient) {}
 
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override {};
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
+    dependencies.insert(RobotComponentID::CozmoContext);
   };
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
   //////
@@ -60,7 +59,9 @@ public:
 
   // Engine Robot Audio Client Helper Methods
   //--------------------------------------------------------------------------------------------------------------------
-  void SetRobotMasterVolume( external_interface::Volume volume );
+  // Control Robot's master volume
+  // Volume is [0.0 - 1.0]
+  void SetRobotMasterVolume( float volume, int32_t timeInMilliSeconds = 0, CurveType curve = CurveType::Linear );
 
 
   // Basic Audio Client Methods
@@ -87,13 +88,14 @@ public:
                               int32_t timeInMilliSeconds = 0,
                               CurveType curve = CurveType::Linear ) const override;
 
+  // When the Robot's message handle setup is complete use robot to send message and subscribe audio callback messages
+  void SubscribeAudioCallbackMessages( Robot* robot );
+
+
 private:
   
   Robot* _robot = nullptr;
-  std::unique_ptr<AudioBehaviorStackListener> _behaviorListener;
-  std::vector<Signal::SmartHandle>            _signalHandles;
-
-  void SubscribeAudioCallbackMessages( Robot* robot );
+  std::vector<Signal::SmartHandle> _signalHandles;
   
   void HandleRobotEngineMessage( const AnkiEvent<RobotInterface::RobotToEngine>& message );
 

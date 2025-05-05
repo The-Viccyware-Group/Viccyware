@@ -15,7 +15,7 @@
 
 
 #include "coretech/common/shared/types.h"
-#include "coretech/common/shared/math/point_fwd.h"
+#include "coretech/common/engine/math/point.h"
 #include "json/json-forwards.h"
 #include "util/math/math.h"
 #include <string>
@@ -123,10 +123,6 @@ public:
 
   inline GraphTheta GetGraphTheta() const { return (GraphTheta) round(Util::ClampAngle2PI(theta) * GraphState::oneOverRadiansPerAngle_) % GraphState::numAngles_; }
   inline Point2f    GetPointXY_mm() const { return Point2f(x_mm, y_mm); }
-
-  static float GetDistanceBetween(const State_c& start, const GraphState& end);
-  static float GetDistanceBetween(const State_c& start, const State_c& end);
-  static float GetMinAngleBetween(const State_c& start, const State_c& end);
 
   // TODO: store these as Point2f natively to avoid construction? we almost always use both as a point anyway
   float x_mm;

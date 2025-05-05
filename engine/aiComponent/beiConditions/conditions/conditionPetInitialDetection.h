@@ -20,7 +20,7 @@
 #include <set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionPetInitialDetection : public IBEICondition
 {
@@ -30,7 +30,7 @@ public:
 protected:
   virtual bool AreConditionsMetInternal(BehaviorExternalInterface& behaviorExternalInterface) const override;
   virtual void GetRequiredVisionModes(std::set<VisionModeRequest>& requiredVisionModes) const override {
-    requiredVisionModes.insert({ VisionMode::Pets, EVisionUpdateFrequency::Low });
+    requiredVisionModes.insert({ VisionMode::DetectingPets, EVisionUpdateFrequency::Low });
   }
 private:  
   // Everything we have already reacted to
@@ -39,7 +39,7 @@ private:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_WantsToRunStrategies_ConditionPetInitialDetection_H__

@@ -15,11 +15,10 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/dispatch/iBehaviorDispatcher.h"
 
-#include "clad/types/behaviorComponent/behaviorTimerTypes.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/dispatch/helpers/behaviorCooldownInfo.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorDispatcherStrictPriorityWithCooldown : public IBehaviorDispatcher
 {
@@ -32,9 +31,6 @@ class BehaviorDispatcherStrictPriorityWithCooldown : public IBehaviorDispatcher
 protected:
   
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
-  virtual void GetLinkedActivatableScopeBehaviors(std::set<IBehavior*>& delegates) const override;
-  virtual bool WantsToBeActivatedBehavior() const override;
-
   virtual ICozmoBehaviorPtr GetDesiredBehavior() override;
   virtual void BehaviorDispatcher_OnActivated() override;
   virtual void BehaviorDispatcher_OnDeactivated() override;
@@ -44,16 +40,8 @@ protected:
 private:
   struct InstanceConfig {
     InstanceConfig();
-    // Index here matches the index in IBehaviorDispatcher::GetAllPossibleDispatches()
+    // index here matches the index in IBehaviorDispatcher::GetAllPossibleDispatches()
     std::vector< BehaviorCooldownInfo > cooldownInfo;
-    std::vector< std::pair<BehaviorTimerTypes, bool> > linkedBehaviorTimerInfo;
-
-    // if true, links activation scope and WantsToBeActivated with it's delegates
-    bool linkScope;
-    
-    // if true, this deactivating this behavior clears all cooldown info
-    bool resetCooldownOnDeactivation;
-    
   };
 
   struct DynamicVariables {
@@ -68,7 +56,7 @@ private:
   
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

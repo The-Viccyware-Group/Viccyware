@@ -1,8 +1,0 @@
-{
-  "behaviorClass": "ClearChargerArea",
-  "behaviorID": "ClearChargerArea",
-
-  "tryToPickUpCube" : true,
-
-  "maxNumAttempts" : 3
-}

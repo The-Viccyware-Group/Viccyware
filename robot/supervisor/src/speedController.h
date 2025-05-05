@@ -7,7 +7,7 @@
 #define VEHICLEARM_SPEED_CONTROLLER_H_
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
   namespace SpeedController {
     
     // Controller params
@@ -58,7 +58,7 @@ namespace Anki {
     void Manage(void);
     
   } // namespace SpeedController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif

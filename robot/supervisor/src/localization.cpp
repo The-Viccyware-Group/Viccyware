@@ -33,7 +33,7 @@
 #define SLIP_MODELLING 2
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace Localization {
 
       struct PoseStamp {
@@ -51,10 +51,14 @@ namespace Anki {
 
         // private members
         ::Anki::Embedded::Pose2d currMatPose;
+        
+        f32 defaultDriveCenterOffset_ = DRIVE_CENTER_OFFSET;
 
         // Localization:
         f32 x_=0.f, y_=0.f;  // mm
         Radians orientation_(0.f);
+        bool onRamp_ = false;
+        bool onBridge_ = false;
 
         // Pose of the robot's drive center which is carry state dependent
         f32 driveCenter_x_ = 0.f, driveCenter_y_ = 0.f;
@@ -85,7 +89,7 @@ namespace Anki {
         const u8 POSE_HISTORY_RES_IN_CYCLES = 6;
         
         // Never need to erase elements, just overwrite with new data.
-        const u8 POSE_HISTORY_SIZE = 2000/(ROBOT_TIME_STEP_MS * POSE_HISTORY_RES_IN_CYCLES); // 2000ms of history
+        const u8 POSE_HISTORY_SIZE = 600/(ROBOT_TIME_STEP_MS * POSE_HISTORY_RES_IN_CYCLES); // 600ms of history
 
         PoseStamp hist_[POSE_HISTORY_SIZE];
         u16 hStart_ = 0;
@@ -145,7 +149,7 @@ namespace Anki {
 
       Result GetHistIdx(TimeStamp_t t, u16& idx)
       {
-        // TODO: Binary search for timestamp (VIC-12973)
+        // TODO: Binary search for timestamp
         //       For now just doing a straight up linear search.
 
         // Check if t is older than oldest pose in history
@@ -165,6 +169,10 @@ namespace Anki {
           if (hist_[idx].t == t) {
             return RESULT_OK;
           } else if (hist_[idx].t > t) {
+
+            // TODO: Does this interpolation really help that much?
+            //       Poses in history are already really close together (5ms).
+            //       Maybe just pick the closest pose?
             return InterpolatePose(prevIdx, idx, t, idx);
           }
           prevIdx = idx;
@@ -394,6 +402,8 @@ namespace Anki {
       Result Init() {
         SetCurrPose(0,0,0);
 
+        onRamp_ = false;
+
         prevLeftWheelPos_ = HAL::MotorGetPosition(MotorID::MOTOR_LEFT_WHEEL);
         prevRightWheelPos_ = HAL::MotorGetPosition(MotorID::MOTOR_RIGHT_WHEEL);
 
@@ -404,15 +414,98 @@ namespace Anki {
         return RESULT_OK;
       }
 
+      Result SendRampTraverseStartMessage()
+      {
+        RampTraverseStart msg;
+        msg.timestamp = HAL::GetTimeStamp();
+        if(RobotInterface::SendMessage(msg)) {
+          return RESULT_OK;
+        }
+        return RESULT_FAIL;
+      }
+
+      Result SendRampTraverseComplete(const bool success)
+      {
+        RampTraverseComplete msg;
+        msg.timestamp = HAL::GetTimeStamp();
+        msg.didSucceed = success;
+        if(RobotInterface::SendMessage(msg)) {
+          return RESULT_OK;
+        }
+        return RESULT_FAIL;
+      }
+
+      Result SetOnRamp(bool onRamp)
+      {
+        Result lastResult = RESULT_OK;
+        if(onRamp == true && onRamp_ == false) {
+          // We weren't on a ramp but now we are
+          RampTraverseStart msg;
+          msg.timestamp = HAL::GetTimeStamp();
+          if(RobotInterface::SendMessage(msg) == false) {
+            lastResult = RESULT_FAIL;
+          }
+        }
+        else if(onRamp == false && onRamp_ == true) {
+          // We were on a ramp and now we're not
+          RampTraverseComplete msg;
+          msg.timestamp = HAL::GetTimeStamp();
+          if(RobotInterface::SendMessage(msg) == false) {
+            lastResult = RESULT_FAIL;
+          }
+        }
+
+        onRamp_ = onRamp;
+
+        return lastResult;
+      }
+
+      bool IsOnRamp() {
+        return onRamp_;
+      }
+
+
+      Result SetOnBridge(bool onBridge)
+      {
+        Result lastResult = RESULT_OK;
+
+        if(onBridge == true && onBridge_ == false) {
+          // We weren't on a bridge but now we are
+          BridgeTraverseStart msg;
+          msg.timestamp = HAL::GetTimeStamp();
+          if(RobotInterface::SendMessage(msg) == false) {
+            lastResult = RESULT_FAIL;
+          }
+        }
+        else if(onBridge == false && onBridge_ == true) {
+          // We were on a bridge and no we're not
+          BridgeTraverseComplete msg;
+          msg.timestamp = HAL::GetTimeStamp();
+          if(RobotInterface::SendMessage(msg) == false) {
+            lastResult = RESULT_FAIL;
+          }
+        }
+        return lastResult;
+      }
+
+      bool IsOnBridge() {
+        return onBridge_;
+      }
+
+      void SetDriveCenterOffset(f32 offset_mm)
+      {
+        defaultDriveCenterOffset_ = offset_mm;
+      }
       
       f32 GetDriveCenterOffset()
       {
         // Get offset of the drive center from robot origin depending on carry state
         if (PickAndPlaceController::IsCarryingBlock()) {
-          return DRIVE_CENTER_OFFSET_CARRYING_CUBE;
+          // If carrying a block the drive center goes forward, possibly to robot origin
+          return 0;
         }
 
-        return DRIVE_CENTER_OFFSET;
+        return defaultDriveCenterOffset_;
       }
 
       void Update()
@@ -451,8 +544,8 @@ namespace Anki {
         
         if (movement) {
 #if(DEBUG_LOCALIZATION)
-          printf("\ncurrWheelPos (%f, %f)   prevWheelPos (%f, %f)\n",
-                 currLeftWheelPos, currRightWheelPos, prevLeftWheelPos_, prevRightWheelPos_);
+          PRINT("\ncurrWheelPos (%f, %f)   prevWheelPos (%f, %f)\n",
+                currLeftWheelPos, currRightWheelPos, prevLeftWheelPos_, prevRightWheelPos_);
 #endif
 
           f32 lRadius, rRadius; // Radii of each wheel arc path (+ve radius means origin of arc is to the left)
@@ -495,10 +588,10 @@ namespace Anki {
           }
 
 #if(DEBUG_LOCALIZATION)
-          printf("lRadius %f, rRadius %f, lDist %f, rDist %f, cTheta %f, cDist %f, cRadius %f\n",
-                 lRadius, rRadius, lDist, rDist, cTheta, cDist, cRadius);
+          PRINT("lRadius %f, rRadius %f, lDist %f, rDist %f, cTheta %f, cDist %f, cRadius %f\n",
+                lRadius, rRadius, lDist, rDist, cTheta, cDist, cRadius);
 
-          printf("oldPose: %f %f %f\n", x_, y_, orientation_.ToFloat());
+          PRINT("oldPose: %f %f %f\n", x_, y_, orientation_.ToFloat());
 #endif
 
           f32 driveCenterOffset = GetDriveCenterOffset();
@@ -630,7 +723,7 @@ namespace Anki {
           }
 
 #if(DEBUG_LOCALIZATION)
-          printf("newPose: %f %f %f\n", x_, y_, orientation_.ToFloat());
+          PRINT("newPose: %f %f %f\n", x_, y_, orientation_.ToFloat());
 #endif
 
         }
@@ -644,14 +737,8 @@ namespace Anki {
         
 
 #if(USE_OVERLAY_DISPLAY)
-        static bool shouldUpdateDisplay = false;
-        if (movement) {
-          shouldUpdateDisplay = true;
-        }
-        if(shouldUpdateDisplay && HAL::GetTimeStamp()%100 == 0)
+        if(movement && HAL::GetTimeStamp()%100 == 0)
         {
-          shouldUpdateDisplay = false;
-          
           using namespace Sim::OverlayDisplay;
 
           SetText(CURR_EST_POSE, "Est. Pose: (x,y)=(%.4f, %.4f) at deg=%.1f",
@@ -686,7 +773,7 @@ namespace Anki {
         }
 
 #if(DEBUG_LOCALIZATION)
-        printf("LOC: %f, %f, %f\n", x_, y_, orientation_.getDegrees());
+        PRINT("LOC: %f, %f, %f\n", x_, y_, orientation_.getDegrees());
 #endif
       }
 

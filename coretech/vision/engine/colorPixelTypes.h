@@ -5,7 +5,7 @@
  * Date:   11/9/2015
  *
  * Description: Defines an RGB & RGBA pixels for color images and sets them up to be
- *              understandable/usable by OpenCV. Defines HSV float pixel.
+ *              understandable/usable by OpenCV.
  *
  * Copyright: Anki, Inc. 2015
  **/
@@ -15,7 +15,6 @@
 
 #include "coretech/common/shared/types.h"
 #include "util/math/numericCast.h"
-#include "util/math/math.h"
 #include <opencv2/core.hpp>
 
 namespace Anki {
@@ -108,7 +107,7 @@ namespace Vision {
     
     PixelRGB565(u8 r, u8 g, u8 b)
     {
-      SetValue(r, g, b);
+      SetValue((u16(0xF8 & r) << 8) | (u16(0xFC & g) << 3) | (u16(0xF8 & b) >> 3));
     }
     
     PixelRGB565(const PixelRGB& pixRGB)
@@ -130,7 +129,6 @@ namespace Vision {
     inline u32 ToRGBA32(u8 alpha = 0xFF) const;
 
     inline void SetValue(u16 value){ *((u16*)&(this->operator[](0))) = value; }
-    inline void SetValue(u8 r, u8 g, u8 b) { SetValue((u16(0xF8 & r) << 8) | (u16(0xFC & g) << 3) | (u16(0xF8 & b) >> 3)); };
     inline u16 GetValue()    const { return *((u16*)&(this->operator[](0))); }
     inline u8  GetHighByte() const { return this->operator[](1); }
     inline u8  GetLowByte()  const { return this->operator[](0); }
@@ -141,46 +139,10 @@ namespace Vision {
     static constexpr u16 Gmask = 0x07E0;
     static constexpr u16 Bmask = 0x001F;
   };
+
   
   static_assert(sizeof(PixelRGB565)==2,  "PixelRGB565 not 2 bytes!");
   
-  /**
-   * @brief Pixel in HSV format. Values should range from [0,1].
-   */
-  class PixelHSV : public cv::Vec3f
-  {
-  public:
-
-    PixelHSV(float h, float s, float v) : cv::Vec3f(h,s,v) { }
-    PixelHSV() : PixelHSV(0,0,0) { }
-    PixelHSV(const PixelRGB& rgb) : PixelHSV()
-    {
-      FromPixelRGB(rgb);
-    }
-
-    // Const accessors
-    float  h() const { return this->operator[](0); }
-    float  s() const { return this->operator[](1); }
-    float  v() const { return this->operator[](2); }
-
-    // Non-const accessors
-    float& h() { return this->operator[](0); }
-    float& s() { return this->operator[](1); }
-    float& v() { return this->operator[](2); }
-
-    /**
-     * Convert to a PixelRGB. Source: https://www.cs.rit.edu/~ncs/color/t_convert.html
-     */
-    PixelRGB ToPixelRGB() const;
-
-    /**
-     * Convert from a PixelRGB. Source: https://www.cs.rit.edu/~ncs/color/t_convert.html
-     * @param rgb
-     */
-    void FromPixelRGB(const PixelRGB& rgb);
-
-  }; // class PixelHSV
-
   //
   // Inlined implementations
   //
@@ -294,18 +256,10 @@ namespace Vision {
   {
     union cast_t {
       struct {
-#if defined(VICOS)
-        u8 b;
-        u8 g;
-        u8 r;
-        u8 a;
-#else
         u8 a;
         u8 r;
         u8 g;
         u8 b;
-#endif
-
       };
       u32 result;
     } pixel;
@@ -322,17 +276,10 @@ namespace Vision {
   {
     union cast_t {
       struct {
-#if defined(VICOS)
-        u8 r;
-        u8 g;
-        u8 b;
-        u8 a;
-#else
         u8 b;
         u8 g;
         u8 r;
         u8 a;
-#endif
       };
       u32 result;
     } pixel;

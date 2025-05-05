@@ -4,7 +4,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 enum uint_8 LogLevel
@@ -17,5 +17,5 @@ enum uint_8 LogLevel
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

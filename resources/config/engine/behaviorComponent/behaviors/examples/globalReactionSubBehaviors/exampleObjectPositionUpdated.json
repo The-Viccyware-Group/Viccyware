@@ -1,0 +1,10 @@
+{
+  "behaviorClass": "AnimSequence",
+  "behaviorID": "ExampleObjectPositionUpdated",
+  "animTriggers": ["AcknowledgeObject"],
+  "wantsToBeActivatedConditions": [
+    {
+      "conditionType" : "ObjectPositionUpdated"
+    }
+  ]  
+}

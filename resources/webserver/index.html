@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 
@@ -11,9 +12,6 @@
     <link rel="stylesheet" href="style.css">
     <script src="jquery-1.12.4.js"></script>
     <script src="jquery-ui.js"></script>
-    <script src="jquery.flot.min.js"></script>
-    <script src="jquery.dataTables.min.js"></script>
-    <script src="jquery.flot.orderBars.js"></script>
 
     <script>
     // NOTE these enums must match those in WebService.cpp
@@ -27,34 +25,26 @@
     var mainPageInitialized = false;
     var connectedToWebotsSim = false;
     var whichWebServer = whichWebServerEnum.UNKNOWN;
-    var tickBudget_ms = 0;
     var curPageName = "";
 
-    var allowConsoleVarsPage = true;
     var allowPerfPage = true;
-    var allowPerfMetricPage = true;
-    var perfAutoUpdate = true;
+    var perfAutoUpdate = false;
     var perfAutoUpdatePeriod_ms = 1000;
     var perfAutoUpdatePeriodMin_ms = 250;   // Minimum auto update period
     var perfAutoUpdateTimerId = 0;
-    var perfRequestInProgress = false;
-    var perfRequestQueued = false;
-    var perfSavedTriggeredByTimer = false;
 
     var perfItems = [
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1500000, desc:"CPU Freq",        units:"kHz" },
+        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1500000, desc:"CPU freq",        units:"kHz" },
         { activeUpdate:true, val:"", hasGraph:true,  graphMax:150,     desc:"Temperature",     units:"Celsius" },
         { activeUpdate:true, val:"", hasGraph:false, graphMax:0,       desc:"Uptime",          units:"seconds" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,       desc:"Idle Time",       units:"seconds" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,       desc:"Real Time Clock", units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:438388,  desc:"Memory Claimed",  units:"kB",      updateFunction:MemUseInfo1 },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:438388,  desc:"Memory Used",     units:"kB",      updateFunction:MemUseInfo2 },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,       desc:"Idle time",       units:"seconds" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,       desc:"Real time clock", units:"" },
+        { activeUpdate:true, val:"", hasGraph:true,  graphMax:429268,  desc:"Memory",          units:"kB",      updateFunction:MemUseInfo },
         { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"Overall CPU",     units:"%",       updateFunction:CPUTimeInfo },
         { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"CPU0",            units:"%",       updateFunction:CPUTimeInfo },
         { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"CPU1",            units:"%",       updateFunction:CPUTimeInfo },
         { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"CPU2",            units:"%",       updateFunction:CPUTimeInfo },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"CPU3",            units:"%",       updateFunction:CPUTimeInfo },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:100000,  desc:"/data Disk Space",units:"kB",      updateFunction:DiskSpaceInfo }
+        { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,     desc:"CPU3",            units:"%",       updateFunction:CPUTimeInfo }
     ];
 
     const kNumCPUTimeValues = 8;    // Number of time values to read per cpu
@@ -66,143 +56,28 @@
         '3':{ prevUsedTime:0, prevTotalTime:0 }
     };
 
-    var procAutoUpdate = true;
+    var procAutoUpdate = false;
     var procAutoUpdatePeriod_ms = 1000;
     var procAutoUpdatePeriodMin_ms = 1000;   // Minimum auto update period
     var procAutoUpdateTimerId = 0;
-    var procRequestInProgress = false;
-    var procRequestQueued = false;
-    var procSavedTriggeredByTimer = false;
 
-    var engineAutoUpdate = true;
+    var engineAutoUpdate = false;
     var engineAutoUpdatePeriod_ms = 1000;
     var engineAutoUpdatePeriodMin_ms = 250;   // Minimum auto update period
     var engineAutoUpdateTimerId = 0;
-    var engineRequestInProgress = false;
-    var engineRequestQueued = false;
-    var engineSavedTriggeredByTimer = false;
 
     var engineItems = [
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5,      desc:"Battery (filtered)",        units:"volts" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5,      desc:"Battery (raw)",             units:"volts" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5,      desc:"Charger (raw)",             units:"volts" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Battery level",             units:"" },
-        { activeUpdate:true, val:"", hasGraph:true, graphMax:60,      desc:"Battery temp",              units:"C" },        
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Battery charging",          units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"On charger contacts",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"On charger platform",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Fully charged time",        units:"seconds" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Low battery time",          units:"seconds" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Off treads state",          units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Pose angle",                units:"degrees" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Pose pitch",                units:"degrees" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Head angle",                units:"degrees" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:100,    desc:"Lift height",               units:"mm" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Left wheel speed",          units:"mmps" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Right wheel speed",         units:"mmps" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Accel X",                   units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Accel Y",                   units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Accel Z",                   units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Gyro X",                    units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Gyro Y",                    units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Gyro Z",                    units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5000,   desc:"Backpack touch sensor",     units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1024,   desc:"Cliff sensor 0 (FL)",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1024,   desc:"Cliff sensor 1 (FR)",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1024,   desc:"Cliff sensor 2 (BL)",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1024,   desc:"Cliff sensor 3 (BR)",       units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Cliff sensor reads white",  units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Prox latest data timestamp",units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:1000,   desc:"Prox distance",             units:"mm" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:30,     desc:"Prox signal intensity",     units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:0.5,    desc:"Prox ambient intensity",    units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:196,    desc:"Prox SPAD count",           units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Prox range status",         units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Carrying object ID",        units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Carrying object on top ID", units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Head tracking object ID",   units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Localized to object ID",    units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Status flags",              units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Mic recent direction",      units:"" },
-        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Mic selected direction",    units:"" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:15,     desc:"Camera frame rate",         units:"fps" },
-        { activeUpdate:true, val:"", hasGraph:true,  graphMax:15,     desc:"Vision processing rate",    units:"fps" }
+        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5,      desc:"Battery (filtered)",  units:"volts" },
+        { activeUpdate:true, val:"", hasGraph:true,  graphMax:5,      desc:"Battery (raw)",       units:"volts" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Battery level",       units:"" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Battery charging",    units:"" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"On charger contacts", units:"" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"On charger platform", units:"" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Fully charged time",  units:"seconds" },
+        { activeUpdate:true, val:"", hasGraph:false, graphMax:0,      desc:"Low battery time",    units:"seconds" }
     ];
 
-    var pmAutoUpdate = true;
-    var pmAutoUpdatePeriod_ms = 1000;
-    var pmAutoUpdatePeriodMin_ms = 250;   // Minimum auto update period
-    var pmAutoUpdateTimerId = 0;
-    var pmRequestInProgress = false;
-    var pmRequestQueued = false;
-    var pmSavedTriggeredByTimer = false;
-    var pmMaxNumFrames = 0;   // Size (in frames) of the PerfMetric buffer on the robot
-    var pmGraphAutoUpdate = false;
-    var pmGraphAutoUpdatePeriod_ms = 1000;
-    var pmGraphAutoUpdatePeriodMin_ms = 250;    // Minimum auto update period
-    var pmGraphAutoUpdateTimerId = 0;
-    var pmGraphAutoUpdateRequestInProgress = false;
-    var pmGraphAutoUpdateRequestQueued = false;
-    var pmGraphAutoUpdateSavedTriggeredByTimer = false;
-    var pmGraphAutoUpdateLastFrameIndex = -1;   // -1 means 'dump everything the first time'
-    var pmGraphMinMaxYAxisForTimeData = 0;
-    var pmChart = null;
-    var chartOptions = {
-      series: {
-        bars: {
-          show: true,
-          order: 1  // For side-by-side bars instead of overlaying on top of each other
-        }
-      },
-      bars: {
-        align: "center",
-        barWidth: 0.4
-      },
-      legend: {
-        show: true,
-        position: "sw"
-      },
-      yaxis: {
-        min: 0.0,
-        minTickSize: 1,
-        tickFormatter: function(val, axis, precision) { return pmShowMsInYAxis ? val.toString() + "ms" : val.toFixed(precision); }
-      },
-      xaxis: {
-        ticks: 10,
-        tickLength: 10,
-        tickDecimals: 0
-      },
-      grid: {
-        show: true,
-        markings: setMarkings
-      }
-    }
-    var pmTickData = [];
-    var pmXModeEnum = {
-        ALL:0,
-        LAST_N:1,
-        RANGE:2,
-    };
-    var pmXMode = pmXModeEnum.ALL;
-    var pmXModeLastN = 100;
-    var pmXModeFirst = 50;
-    var pmXModeLast = 150;
-    var pmDataSelectorInitialized = false;
-    const pmNumDataSelectors = 3;
-    var pmShowMsInYAxis = false;
-
-    function setMarkings(axes) {
-        var markings = [];
-        markings.push({ yaxis: { from: tickBudget_ms, to: tickBudget_ms }, color: "#bb0000"});
-        return markings;
-    }
-
     var dialogOKFunction = undefined;
-
-    function preserveSpaces(str) {
-      return str.replace(" ","&nbsp;");
-    }
-
 
     function ClearAllPages() {
         $('div[id^="page_"]').hide();
@@ -215,9 +90,7 @@
 
     function SetPage(pageName) {
         // Page EXIT actions:
-        if (curPageName == "page_consolevars") {
-            $('#content_console_vars').hide();
-        } else if (curPageName == "page_perf") {
+        if (curPageName == "page_perf") {
             if (perfAutoUpdate) {
                 clearTimeout(perfAutoUpdateTimerId);
             }
@@ -228,11 +101,6 @@
         } else if (curPageName == "page_engine") {
             if (engineAutoUpdate) {
                 clearTimeout(engineAutoUpdateTimerId);
-            }
-        } else if (curPageName == "page_perfmetric") {
-            if (pmAutoUpdate) {
-                clearTimeout(pmAutoUpdateTimerId);
-                clearTimeout(pmGraphAutoUpdateTimerId);
             }
         }
 
@@ -250,29 +118,19 @@
                 mainPageInitialized = true;
                 $.post("/getmainrobotinfo", function(data) {
                     var payload = data.split("\n");
-                    $("#main_robot_serial_number").html(payload[0]);
-                    $("#main_robot_ip_address").html(payload[1]);
-                    $("#main_build_config").html(payload[2]);
-                    $("#main_os_version").html(payload[3]);
-                    $("#main_cmd_line").html(payload[4]);
-                    $("#main_robot_name").html(payload[5]);
-                    $("#main_os_build_version").html(payload[6]);
-                    $("#main_build_sha").html(payload[7]);
-                    $("#main_robot_mac_address").html(payload[8]);
-                    $("#main_robot_ssid").html(payload[9]);
+                    $("#main_robot_id").html(payload[0]);
+                    $("#main_robot_serial_number").html(payload[1]);
+                    $("#main_robot_ip_address").html(payload[2]);
+                    $("#main_build_config").html(payload[3]);
+                    $("#main_os_version").html(payload[4]);
+                    $("#main_cmd_line").html(payload[5]);
+                    $("#main_robot_name").html(payload[6]);
+                    $("#main_os_build_version").html(payload[7]);
+                    $("#main_build_sha").html(payload[8]);
                 })
             }
-        } else if (pageName == "page_consolevars") {
-            if (allowConsoleVarsPage) {
-                $("#consolevars_main_section").show();
-                $("#consolevars_page_disabled").hide();
-                $('#content_console_vars').show();
-            } else {
-                $("#consolevars_main_section").hide();
-                $("#consolevars_page_disabled").show();
-            }
         } else if (pageName == "page_perf") {
-            if (allowPerfPage) {
+            if (allowPerfPage && !connectedToWebotsSim) {
                 UpdatePerfHeader();
                 $("#perf_page_disabled").hide();
                 $("#perf_page_disabled_webots").hide();
@@ -298,8 +156,14 @@
             }
             else {                
                 $("#perf_main_section").hide();
-                $("#perf_page_disabled_webots").hide();
-                $("#perf_page_disabled").show();
+                if (connectedToWebotsSim) {
+                    $("#perf_page_disabled_webots").show();
+                    $("#perf_page_disabled").hide();
+                }
+                else {
+                    $("#perf_page_disabled_webots").hide();
+                    $("#perf_page_disabled").show();
+                }
             }
         } else if (pageName == "page_processes") {
             if (!connectedToWebotsSim) {
@@ -341,26 +205,6 @@
                 $("#engine_main_section").hide();
                 $("#engine_page_disabled").show();
             }
-        } else if (pageName == "page_perfmetric") {
-          if (allowPerfMetricPage) {
-            UpdatePerfMetricHeader();
-            UpdatePerfMetricGraphAutoUpdateHeader();
-            $("#perfmetric_page_disabled").hide();
-            if (pmAutoUpdate) {
-                // When entering perf metric page and auto-update is on, do the first update immediately
-                pmAutoUpdateTimerId = setTimeout(SendPerfMetricUpdateRequest, 0, true);
-            }
-            if (pmGraphAutoUpdate) {
-                // When entering perf metric page and graph auto-update is on, do the first update immediately
-                pmGraphAutoUpdateTimerId = setTimeout(SendPerfMetricGraphUpdateRequest, 0, true);
-            }
-            UpdatePMWidgets();
-            DrawPerfMetricChart();
-          }
-          else {
-            $("#perfmetric_main_section").hide();
-            $("#perfmetric_page_disabled").show();
-          }
         }
     }
 
@@ -380,7 +224,7 @@
         }
     }
     function ButtonHandler_SetUpdatePeriod() {
-        var v = parseInt($("#update_freq_value").val());
+        var v = $("#update_freq_value").val();
         perfAutoUpdatePeriod_ms = Math.max(v, perfAutoUpdatePeriodMin_ms);
         UpdatePerfHeader();
     }
@@ -392,13 +236,6 @@
     }
 
     function SendPerfUpdateRequest(triggeredByTimer) {
-        if (perfRequestInProgress) {
-            perfRequestQueued = true;
-            perfSavedTriggeredByTimer = triggeredByTimer;
-            return;
-        }
-        //console.log('SendPerfUpdateRequest');
-        perfRequestInProgress = true;
         var whichStats = "";
         var numItems = perfItems.length;
         for (var i = 0; i < numItems; i++) {
@@ -425,51 +262,27 @@
                     }
                 }
             }
-            perfRequestInProgress = false;
-            if (perfRequestQueued) {
-                perfRequestQueued = false;
-                SendPerfUpdateRequest(perfSavedTriggeredByTimer);
-            }
         });
         if (perfAutoUpdate && triggeredByTimer) {
             perfAutoUpdateTimerId = setTimeout(SendPerfUpdateRequest, perfAutoUpdatePeriod_ms, true);
         }
     }
 
-    function MemUseInfo1(payload, itemIndex) {
+    function MemUseInfo(payload, itemIndex) {
         var values = payload.split(',');
         var totalMem_kB = parseInt(values[0]);
         var freeMem_kB = parseInt(values[1]);
         var usedMem_kB = totalMem_kB - freeMem_kB;
-        var v = usedMem_kB + " claimed, " + freeMem_kB + " free";
-        $("#id_perf_row_value_" + itemIndex).html(v);        
-        var graph = $('#' + 'id_graph_' + itemIndex);
-        graph.progressbar( "option", "value", usedMem_kB );
-        graph.progressbar( "option", "max", totalMem_kB );
-    }
-
-    function MemUseInfo2(payload, itemIndex) {
-        var values = payload.split(',');
-        var totalMem_kB = parseInt(values[0]);
-        var availMem_kB = parseInt(values[1]);
-        var usedMem_kB = totalMem_kB - availMem_kB;
-        var v = usedMem_kB + " used, " + availMem_kB + " available";
+        var v = usedMem_kB + " used, " + freeMem_kB + " free";
         $("#id_perf_row_value_" + itemIndex).html(v);
         var graph = $('#' + 'id_graph_' + itemIndex);
         graph.progressbar( "option", "value", usedMem_kB );
         graph.progressbar( "option", "max", totalMem_kB );
     }
 
-    // http://www.linuxhowtos.org/System/procstat.htm
     function CPUTimeInfo(payload, itemIndex) {
-        if (payload.length < 4) {
-            // Do nothing if CPU time info not ready
-            return;
-        }
         var whichCPU = payload.charAt(3);
-        // Strip off the CPU indicator from start of string, along with space(s):
-        payload = payload.substr(payload.indexOf(' '));
-        payload = payload.trim();
+        payload = payload.substring(5); // Strip cpu name and space(s)
         // Parse the first 8 integers out of the line:
         var stringValues = payload.split(' ');
         var values = [];
@@ -485,29 +298,15 @@
         var deltaTotalTime = totalTime - prev["prevTotalTime"];
         var deltaUsedTime = usedTime - prev["prevUsedTime"];
 
-        if (deltaTotalTime > 0) {
-            var usedPct = deltaUsedTime * 100 / deltaTotalTime;
-            // Note: In future, more of this data could be displayed.  Perhaps in a multi-section progress bar
-            $("#id_perf_row_value_" + itemIndex).html(usedPct.toFixed(2));
-            var graph = $('#' + 'id_graph_' + itemIndex);
-            graph.progressbar( "option", "value", usedPct );
-
-            // Save the last reading for this CPU so it can be used next call
-            prev["prevUsedTime"] = usedTime;
-            prev["prevTotalTime"] = totalTime;
-        }
-    }
-
-    function DiskSpaceInfo(payload, itemIndex) {
-        var values = payload.split(',');
-        var total_kB = parseInt(values[0]);
-        var avail_kB = parseInt(values[1]);
-        var used_kB = total_kB - avail_kB;
-        var v = used_kB + " used, " + avail_kB + " available";
-        $("#id_perf_row_value_" + itemIndex).html(v);
+        var usedPct = deltaUsedTime * 100 / deltaTotalTime;
+        // Note: In future, more of this data could be displayed.  Perhaps in a multi-section progress bar
+        $("#id_perf_row_value_" + itemIndex).html(usedPct.toFixed(2));
         var graph = $('#' + 'id_graph_' + itemIndex);
-        graph.progressbar( "option", "value", used_kB );
-        graph.progressbar( "option", "max", total_kB );
+        graph.progressbar( "option", "value", usedPct );
+
+        // Save the last reading for this CPU so it can be used next call
+        prev["prevUsedTime"] = usedTime;
+        prev["prevTotalTime"] = totalTime;
     }
 
     function UpdateProcHeader() {
@@ -525,7 +324,7 @@
         }
     }
     function ButtonHandler_ProcSetUpdatePeriod() {
-        var v = parseInt($("#proc_update_freq_value").val());
+        var v = $("#proc_update_freq_value").val();
         procAutoUpdatePeriod_ms = Math.max(v, procAutoUpdatePeriodMin_ms);
         UpdateProcHeader();
     }
@@ -551,13 +350,6 @@
         });
     }
     function SendProcUpdateRequest(triggeredByTimer) {
-        if (procRequestInProgress) {
-            procRequestQueued = true;
-            procSavedTriggeredByTimer = triggeredByTimer;
-            return;
-        }
-        //console.log('SendProcUpdateRequest');
-        procRequestInProgress = true;
         var query = "";
         $('#table_processes tr').each(function() {
             if (query != "") {
@@ -570,11 +362,6 @@
             for (var i = 0; i < payload.length; i++) {
                 var procData = payload[i].split('=');
                 $('#' + procData[0]).find('#status').html(procData[1]);
-            }
-            procRequestInProgress = false;
-            if (procRequestQueued) {
-                procRequestQueued = false;
-                SendProcUpdateRequest(procSavedTriggeredByTimer);
             }
         });
         if (procAutoUpdate && triggeredByTimer) {
@@ -598,7 +385,7 @@
         }
     }
     function ButtonHandler_EngineSetUpdatePeriod() {
-        var v = parseInt($("#engine_update_freq_value").val());
+        var v = $("#engine_update_freq_value").val();
         engineAutoUpdatePeriod_ms = Math.max(v, engineAutoUpdatePeriodMin_ms);
         UpdateEngineHeader();
     }
@@ -610,13 +397,6 @@
     }
 
     function SendEngineUpdateRequest(triggeredByTimer) {
-        if (engineRequestInProgress) {
-            engineRequestQueued = true;
-            engineSavedTriggeredByTimer = triggeredByTimer;
-            return;
-        }
-        //console.log('SendEngineUpdateRequest');
-        engineRequestInProgress = true;
         var whichStats = "";
         var numItems = engineItems.length;
         for (var i = 0; i < numItems; i++) {
@@ -643,34 +423,10 @@
                     }
                 }
             }
-            engineRequestInProgress = false;
-            if (engineRequestQueued) {
-                engineRequestQueued = false;
-                SendEngineUpdateRequest(engineSavedTriggeredByTimer);
-            }
         });
         if (engineAutoUpdate && triggeredByTimer) {
             engineAutoUpdateTimerId = setTimeout(SendEngineUpdateRequest, engineAutoUpdatePeriod_ms, true);
         }
-    }
-
-    function InitConfirmDialog() {
-        $("#confirm_dialog").dialog({ autoOpen: false, modal: true, resizable: false,
-            draggable: true,
-            width: 'auto',
-            buttons: {
-                "OK": function() {
-                    $("#confirm_dialog").dialog("close");
-                    if (dialogOKFunction !== undefined) {
-                        dialogOKFunction();
-                        dialogOKFunction = undefined;
-                    }
-                },
-                "Cancel": function () {
-                    $("#confirm_dialog").dialog("close");
-                    dialogOKFunction = undefined;
-                }
-        } });
     }
 
     function StartConfirmDialog(title, body, okfunction) {
@@ -706,301 +462,6 @@
         });
     }
 
-    function UpdatePerfMetricHeader() {
-        $("#pm_auto_update").html("Auto update is " + (pmAutoUpdate ? "ON" : "off"));
-        $("#pm_cur_update_period").html("Update period: " + pmAutoUpdatePeriod_ms + "ms");
-        $('#pm_update_freq_value').val(pmAutoUpdatePeriod_ms);
-    }
-    function UpdatePerfMetricGraphAutoUpdateHeader() {
-        $("#pm_graph_auto_update").html("Graph auto update is " + (pmGraphAutoUpdate ? "ON" : "off"));
-        $("#pm_cur_graph_update_period").html("Update period: " + pmGraphAutoUpdatePeriod_ms + "ms");
-        $('#pm_graph_update_freq_value').val(pmGraphAutoUpdatePeriod_ms);
-    }
-
-    function AddSeries(elementIndex, firstTick, lastTick) {
-        var series = [];
-        for (var tickIndex = firstTick; tickIndex <= lastTick; tickIndex++) {
-            var data = [];
-            data.push(tickIndex);
-            data.push(pmTickData[tickIndex][elementIndex]);
-            series.push(data);
-        }
-        return series;
-    }
-
-    function DrawPerfMetricChart() {
-        var ticksInData = pmTickData.length;
-        if (ticksInData == 0) {
-            return;
-        }
-        var firstTick = 0;
-        var lastTick = ticksInData - 1;
-        switch (pmXMode) {
-            case pmXModeEnum.ALL:
-                break;
-            case pmXModeEnum.LAST_N:
-                firstTick = lastTick - pmXModeLastN + 1;
-                if (firstTick < 0) {
-                    firstTick = 0;
-                }
-                break;
-            case pmXModeEnum.RANGE:
-                firstTick = pmXModeFirst;
-                lastTick = pmXModeLast;
-                if (firstTick >= ticksInData) {
-                    firstTick = ticksInData - 1;
-                }
-                if (lastTick >= ticksInData) {
-                    lastTick = ticksInData - 1;
-                }
-                if (lastTick < firstTick) {
-                    lastTick = firstTick;
-                }
-                break;
-        }
-
-        var plotData = [];
-        pmShowMsInYAxis = false;
-        for (var i = 0; i < pmNumDataSelectors; i++) {
-            var elementIndex = parseInt($('#menu_pm_data_' + i).val());
-            if (elementIndex >= 0) {
-                // If it's one of the 'duration' data, we want to show 'ms' in the y axis
-                if (elementIndex < 5) {
-                    pmShowMsInYAxis = true;
-                }
-                elementIndex += 2;  // Offset to get to the first real data
-                plotData.push(AddSeries(elementIndex, firstTick, lastTick));
-            }
-        }
-        if (pmChart == null) {
-            $('#pm_chart_container').html("");
-            pmChart = $.plot($('#pm_chart_container'), plotData, chartOptions);
-        }
-
-        pmChart.getAxes().xaxis.options.min = firstTick;
-        pmChart.getAxes().xaxis.options.max = lastTick;
-
-        pmChart.setData(plotData);
-
-        pmChart.getAxes().yaxis.options.max = null; // null means 'automatic'
-        if (pmShowMsInYAxis) {
-            // When showing any tick-time-related data, ensure the vertical scale of the
-            // graph does not get small enough that the tick budget line is no longer on
-            // the graph (enforce a minimum to the max y axis value)
-            var dataMax = pmChart.getAxes().yaxis.datamax;
-            if (dataMax < pmGraphMinMaxYAxisForTimeData) {
-                pmChart.getAxes().yaxis.options.max = pmGraphMinMaxYAxisForTimeData;
-            }
-        }
-
-        pmChart.setupGrid();
-        pmChart.draw();
-    }   
-
-    function ButtonHandler_PerfMetricToggleAutoUpdate() {
-        pmAutoUpdate = !pmAutoUpdate;
-        UpdatePerfMetricHeader();
-        if (pmAutoUpdate) {
-            pmAutoUpdateTimerId = setTimeout(SendPerfMetricUpdateRequest, 0, true);
-        } else {
-            clearTimeout(pmAutoUpdateTimerId);
-        }
-    }
-    function ButtonHandler_PerfMetricSetUpdatePeriod() {
-        var v = parseInt($("#pm_update_freq_value").val());
-        pmAutoUpdatePeriod_ms = Math.max(v, pmAutoUpdatePeriodMin_ms);
-        UpdatePerfMetricHeader();
-    }
-    function ButtonHandler_PerfMetricUpdateNow() {
-        SendPerfMetricUpdateRequest(false);
-    }
-
-    function SendPerfMetricUpdateRequest(triggeredByTimer) {
-        if (pmRequestInProgress) {
-            pmRequestQueued = true;
-            pmSavedTriggeredByTimer = triggeredByTimer;
-            return;
-        }
-        //console.log('SendPerfMetricUpdateRequest');
-        pmRequestInProgress = true;
-        $.post("perfmetric?status", {}, function(result){
-            var payload = result.split(",");
-            $('#id_pm_status').html(payload[0]);
-            pmMaxNumFrames = payload[2];
-            $('#id_pm_status_frames').html("Frames recorded: " + payload[1] + " of " + pmMaxNumFrames);
-            pmRequestInProgress = false;
-            if (pmRequestQueued) {
-                pmRequestQueued = false;
-                SendPerfMetricUpdateRequest(pmSavedTriggeredByTimer);
-            }
-        });
-        if (pmAutoUpdate && triggeredByTimer) {
-            pmAutoUpdateTimerId = setTimeout(SendPerfMetricUpdateRequest, pmAutoUpdatePeriod_ms, true);
-        }
-    }
-
-    function ButtonHandler_PerfMetricStart() {
-        $.post("perfmetric?start", {}, function(result){});
-        SendPerfMetricUpdateRequest(false);
-    }
-    function ButtonHandler_PerfMetricStop() {
-        $.post("perfmetric?stop", {}, function(result){});
-        SendPerfMetricUpdateRequest(false);
-    }
-    function ButtonHandler_PerfMetricDump() {
-        $.post("perfmetric?dumpresponse", {}, function(result){
-            $("#id_pm_dump_result").html(preserveSpaces(result));
-        });
-    }
-    function ButtonHandler_PerfMetricDumpAll() {
-        $("#id_pm_dump_result").html("Loading...");
-        $.post("perfmetric?dumpresponseall", {}, function(result){
-            // Pull the 'next frame buffer index' out of the first line
-            // of the result, and then remove that line from the result
-            var firstNewlineIndex = result.indexOf('\n');
-            var firstLine = result.substring(0, firstNewlineIndex);
-            var firstLineItems = firstLine.split(':');
-            pmGraphAutoUpdateLastFrameIndex = parseInt(firstLineItems[1]);
-            var result = result.substring(firstNewlineIndex + 1);
-            // Fill in the dump area
-            $("#id_pm_dump_result").html(preserveSpaces(result));
-            var lines = result.split("\n");
-            if (!pmDataSelectorInitialized) {
-                pmDataSelectorInitialized = true;
-                if (pmGraphAutoUpdate) {
-                    // If user had toggled graph auto update on before the first 'dump all', we are
-                    // in the midst of that but need to set up the next graph update request (to
-                    // happen immediately)
-                    pmGraphAutoUpdateTimerId = setTimeout(SendPerfMetricGraphUpdateRequest, 0, true);
-                }
-                // Parse the header lines to auto-construct data series selectors:
-                var headingsLine1 = lines[0].match(/\S+/g);
-                var headingsLine2 = lines[1].match(/\S+/g);
-                for (var i = 0; i < pmNumDataSelectors; i++) {
-                    var selectorId = '#menu_pm_data_' + i;
-                    for (var j = 0; j < headingsLine1.length; j++) {
-                        var dataSelectorItemText = headingsLine1[j] + ' ' + headingsLine2[j];
-                        $(selectorId).append($('<option>', {
-                            value: j,
-                            text: dataSelectorItemText
-                        }));
-                    }
-                    $(selectorId).selectmenu('refresh');
-                }
-            }
-            // Parse into data we can use in a graph
-            const numHeaderLines = 2;
-            var ticks = lines.length - (numHeaderLines + 9);
-            if (ticks < 0) {
-                ticks = 0;
-            }
-            pmTickData = [];
-            var lineIndex = numHeaderLines;
-            for (var i = 0; i < ticks; i++, lineIndex++) {
-                var tickData = lines[lineIndex].trim().replace(/\s\s+/g, ' ').split(' ');
-                pmTickData.push(tickData);
-            }
-        });
-    }
-    function ButtonHandler_PerfMetricDumpLog() {
-        $.post("perfmetric?dumplog", {}, function(result){});
-    }
-    function ButtonHandler_PerfMetricDumpLogAll() {
-        $.post("perfmetric?dumplogall", {}, function(result){});
-    }
-    function ButtonHandler_PerfMetricFiles() {
-        $.post("perfmetric?dumpfiles", {}, function(result){});
-    }
-    function ButtonHandler_PerfMetricRender() {
-        DrawPerfMetricChart();
-    }
-    function ButtonHandler_PMSetNumTicks() {
-        pmXModeLastN = parseInt($("#pm_num_ticks").val());
-        UpdatePMWidgets();
-    }
-    function ButtonHandler_PMSetFirstTick() {
-        pmXModeFirst = parseInt($('#pm_first_tick').val());
-        UpdatePMWidgets();
-    }
-    function ButtonHandler_PMSetLastTick() {
-        pmXModeLast = parseInt($('#pm_last_tick').val());
-        UpdatePMWidgets();
-    }
-    function ButtonHandler_PerfMetricToggleGraphAutoUpdate() {
-        pmGraphAutoUpdate = !pmGraphAutoUpdate;
-        UpdatePerfMetricGraphAutoUpdateHeader();
-        if (pmGraphAutoUpdate) {
-            pmGraphAutoUpdateTimerId = setTimeout(SendPerfMetricGraphUpdateRequest, 0, true);
-        } else {
-            clearTimeout(pmGraphAutoUpdateTimerId);
-        }
-    }
-    function ButtonHandler_PerfMetricSetGraphUpdatePeriod() {
-        var v = parseInt($("#pm_graph_update_freq_value").val());
-        pmGraphAutoUpdatePeriod_ms = Math.max(v, pmGraphAutoUpdatePeriodMin_ms);
-        UpdatePerfMetricGraphAutoUpdateHeader();
-    }
-    function SendPerfMetricGraphUpdateRequest(triggeredByTimer) {
-        if (pmGraphAutoUpdateRequestInProgress) {
-            pmGraphAutoUpdateRequestQueued = true;
-            pmGraphAutoUpdateSavedTriggeredByTimer = triggeredByTimer;
-            return;
-        }
-        if (!pmDataSelectorInitialized) {
-            // If we haven't dumped all data yet (which also populates the data selectors),
-            // then do that now (INSTEAD of getting frames since last dump)
-            ButtonHandler_PerfMetricDumpAll();
-            return;
-        }
-        else {
-            pmGraphAutoUpdateRequestInProgress = true;
-            $.post("perfmetric?dumpresponsesince" + pmGraphAutoUpdateLastFrameIndex, {}, function(result) {
-                var lines = result.split("\n");
-                var headerLine = lines[0].split(',');
-                pmGraphAutoUpdateLastFrameIndex = parseInt(headerLine[0]);
-                var numFrames = parseInt(headerLine[1]);
-                // Pull the data for the last N ticks out and add to chart data
-                var lineIndex = 1;
-                for (var i = 0; i < numFrames; i++, lineIndex++) {
-                    var tickData = lines[lineIndex].trim().replace(/\s\s+/g, ' ').split(',');
-                    pmTickData.push(tickData);
-                }
-                // Now possibly delete some of the oldest frames.  In theory we can just keep adding frames
-                // indefinitely but let's stick to a policy of keeping only the same frames as are in the
-                // robot's PerfMetric buffer.
-                if (pmMaxNumFrames > 0) {   // Only if this has been set
-                    if (pmTickData.length > pmMaxNumFrames) {
-                        pmTickData = pmTickData.slice(-pmMaxNumFrames);
-                    }
-                }
-                // Now refresh the graph
-                DrawPerfMetricChart();
-
-                pmGraphAutoUpdateRequestInProgress = false;
-                if (pmGraphAutoUpdateRequestQueued) {
-                    pmGraphAutoUpdateRequestQueued = false;
-                    SendPerfMetricGraphUpdateRequest(pmGraphAutoUpdateSavedTriggeredByTimer);
-                }
-            });
-        }
-        if (pmGraphAutoUpdate && triggeredByTimer) {
-             pmGraphAutoUpdateTimerId = setTimeout(SendPerfMetricGraphUpdateRequest, pmGraphAutoUpdatePeriod_ms, true);
-        }
-    }
-
-    function UpdatePMWidgets() {
-        $('span_all').visible = (pmXMode == pmXModeEnum.ALL);
-        $('span_last_n').visible = (pmXMode == pmXModeEnum.LAST_N);
-        $('span_range').visible = (pmXMode == pmXModeEnum.RANGE);
-        $("#pm_cur_num_ticks").html("Num ticks: " + pmXModeLastN);
-        $('#pm_num_ticks').val(pmXModeLastN);
-        $("#pm_cur_first_tick").html("First: " + pmXModeFirst);
-        $('#pm_first_tick').val(pmXModeFirst);
-        $("#pm_cur_last_tick").html("Last: " + pmXModeLast);
-        $('#pm_last_tick').val(pmXModeLast);
-    }
-
-
     $(document).ready(function() {
         ClearAllPages();
         $("#btn_toggle_auto_update").click(ButtonHandler_ToggleAutoUpdate);
@@ -1017,31 +478,22 @@
         $("#btn_console_vars_save").click(ButtonHandler_ConsoleVarsSave);
         $("#btn_console_vars_reset").click(ButtonHandler_ConsoleVarsReset);
         $("#btn_console_vars_delete").click(ButtonHandler_ConsoleVarsDelete);
-        $("#btn_pm_toggle_auto_update").click(ButtonHandler_PerfMetricToggleAutoUpdate);
-        $("#btn_pm_set_update_period").click(ButtonHandler_PerfMetricSetUpdatePeriod);
-        $("#btn_pm_update_now").click(ButtonHandler_PerfMetricUpdateNow);
-        $("#btn_pm_start").click(ButtonHandler_PerfMetricStart);
-        $("#btn_pm_stop").click(ButtonHandler_PerfMetricStop);
-        $("#btn_pm_dump").click(ButtonHandler_PerfMetricDump);
-        $("#btn_pm_dump_all").click(ButtonHandler_PerfMetricDumpAll);
-        $("#btn_pm_dump_log").click(ButtonHandler_PerfMetricDumpLog);
-        $("#btn_pm_dump_log_all").click(ButtonHandler_PerfMetricDumpLogAll);
-        $("#btn_pm_dump_files").click(ButtonHandler_PerfMetricFiles);
-        $("#btn_pm_render").click(ButtonHandler_PerfMetricRender);
-        $("#btn_num_ticks_set").click(ButtonHandler_PMSetNumTicks);
-        $("#btn_first_tick_set").click(ButtonHandler_PMSetFirstTick);
-        $("#btn_last_tick_set").click(ButtonHandler_PMSetLastTick);
-        $("#btn_pm_toggle_graph_auto_update").click(ButtonHandler_PerfMetricToggleGraphAutoUpdate);
-        $("#btn_pm_set_graph_update_period").click(ButtonHandler_PerfMetricSetGraphUpdatePeriod);
-        $("#menu_pm_xmode").selectmenu({
-            width: 150
-        });
-        for (var i = 0; i < pmNumDataSelectors; i++) {
-            $("#menu_pm_data_" + i).selectmenu({
-                width: 200
-            });
-        }
-        InitConfirmDialog();
+        $("#confirm_dialog").dialog({ autoOpen: false, modal: true, resizable: false,
+            draggable: true,
+            width: 'auto',
+            buttons: {
+                "OK": function() {
+                    $("#confirm_dialog").dialog("close");
+                    if (dialogOKFunction !== undefined) {
+                        dialogOKFunction();
+                        dialogOKFunction = undefined;
+                    }
+                },
+                "Cancel": function () {
+                    $("#confirm_dialog").dialog("close");
+                    dialogOKFunction = undefined;
+                }
+        } });
 
         $.post("getinitialconfig", function(data) {
             var payload = data.split("\n");
@@ -1052,14 +504,6 @@
             $("#main_robot_connection_type").html(connectedToWebotsSim ? "Webots Simulator" : "Physical Robot");
             allowPerfPage = (payload[4] === "true");
             whichWebServer = payload[5];
-            allowConsoleVarsPage = (payload[6] === "true");
-            allowPerfMetricPage = (payload[7] === "true");
-            tickBudget_ms = parseInt(payload[8]);
-            // Set the 'minumum max' of y axis value (for time-related data), so that the
-            // red budget marking is always on the chart even with very low time values
-            const nextHighest = 10;
-            pmGraphMinMaxYAxisForTimeData = Math.floor((tickBudget_ms + nextHighest) / nextHighest);
-            pmGraphMinMaxYAxisForTimeData *= nextHighest;
             SetPage(startPage);
         });
         // Initialize the perf table
@@ -1069,7 +513,7 @@
             var data = perfItems[r];
             var s = "<tr height='34px'><td><input id='id_perf_checkbox_" + r + "' type='checkbox' onClick='onPerfRowCheckboxClickHandler(" + r + ")'/>" +
                 "</td><td style='text-align:right'>" + data["desc"] +
-                "</td><td style='text-align:right' width='250px' id='id_perf_row_value_" + r +
+                "</td><td style='text-align:right' width='180px' id='id_perf_row_value_" + r +
                 "'></td><td>" + data["units"] + "</td><td width='300px' id='id_graph_" + r + "'></td></tr>";
             table.append(s);
         }
@@ -1086,6 +530,9 @@
         }
     });
     $(function() {
+        // $(".widget input[type=submit], .widget a, .widget button").button();
+        // $(".widget input[type=submit]").button();
+
         $("button").click(function(event) {
             var name = event.target.name;
             if (name.startsWith('page_')) {
@@ -1097,31 +544,12 @@
             event.preventDefault();
         });
         $("input[type='submit']").click(function(event) {
-            if (event.target.value == 'consolevars') {
-                $('#content_console_vars').html("Loading...");
-                $.post("/" + event.target.value + "?embedded", function(data) {
-                    $('#content_console_vars').html(data);
-                    $('#content_console_vars').show();
-                    InitConfirmDialog();
-                });
-            }
-            else {
-                $.post("/" + event.target.value, function(data) {
-                    $("#content").html(data);
-                    $("#content").show();
-                    InitConfirmDialog();
-                });
-            }
+            $.post("/"+event.target.value, function(data) {
+                $("#content").html(data);
+                $("#content").show();
+            });
             event.preventDefault();
         });
-        $(".pmxmodelistbox").each(function() {
-            $(this).selectmenu({
-                change: function(event, data) {
-                    pmXMode = data.item.index;
-                    UpdatePMWidgets();
-                }
-            });
-        })
     });
     </script>
 </head>
@@ -1142,7 +570,6 @@
             <button type="button" name="page_perf">PERF</button>&nbsp&nbsp&nbsp
             <button type="button" name="page_processes">PROCESSES</button>&nbsp&nbsp&nbsp
             <button type="button" name="page_engine">ENGINE</button>&nbsp&nbsp&nbsp
-            <button type="button" name="page_perfmetric">PERF METRIC</button>&nbsp&nbsp&nbsp
         </div>
         <hr>
 
@@ -1152,16 +579,13 @@
                     <td width='160px' style='text-align:right'>Connected to:</td><td id="main_robot_connection_type"></td>
                 </tr>
                 <tr>
+                    <td style='text-align:right'>Robot ID:</td><td id="main_robot_id"></td>
+                </tr>
+                <tr>
                     <td style='text-align:right'>Robot Name:</td><td id="main_robot_name"></td>
                 </tr>
                 <tr>
                     <td style='text-align:right'>Robot Serial Number:</td><td id="main_robot_serial_number"></td>
-                </tr>
-                <tr>
-                    <td style='text-align:right'>MAC Address:</td><td id="main_robot_mac_address"></td>
-                </tr>
-                <tr>
-                    <td style='text-align:right'>SSID:</td><td id="main_robot_ssid"></td>
                 </tr>
                 <tr>
                     <td style='text-align:right'>IP Address:</td><td id="main_robot_ip_address"></td>
@@ -1186,51 +610,48 @@
         </div>
 
         <div id="page_consolevars">
-            <div id='consolevars_main_section'>
-                These are for the console variables and console functions in THIS process only.<br>
-                <table border=1>
-                    <tr>
-                        <th>description</th><th>url</th>
-                    </tr>
-                    <tr>
-                        <td>View and edit console variables</td><td><a href="/consolevars">/consolevars</a></td>
-                    </tr>
-                    <tr>
-                        <td>List console variables</td><td><a href="/consolevarlist">/consolevarlist</a></td>
-                    </tr>
-                    <tr>
-                        <td>List console variables matching</td><td>/consolevarlist?key=search_key</td>
-                    </tr>
-                    <tr>
-                        <td>Set console variable</td><td>/consolevarset?key=name_of_variable&amp;value=new_value_of_variable</td>
-                    </tr>
-                    <tr>
-                        <td>Get console variable</td><td>/consolevarget?key=name_of_variable</td>
-                    </tr>
-                    <tr>
-                        <td>List console functions</td><td><a href="/consolefunclist">/consolefunclist</a></td>
-                    </tr>
-                    <tr>
-                        <td>List console functions matching</td><td>/consolefunclist?key=search_key</td>
-                    </tr>
-                    <tr>
-                        <td>Call console function</td><td>/consolefunccall?func=name_of_function&amp;args=arguments</td>
-                    </tr>
-                </table>
-                <br/>
-                <div>
-                    <input type="submit" value="consolevars">
-                </div><br>
-                <div>
-                    <button id='btn_console_vars_load'>LOAD console vars</button>
-                    <button id='btn_console_vars_save'>SAVE console vars</button>
-                    <button id='btn_console_vars_delete'>DELETE console vars save file</button>
-                    <button id='btn_console_vars_reset'>RESET console vars to default values</button>
-                </div>
-                <br><br>
-                <a href="webViz.html">WebViz</a>
+            These are for the console variables and console functions in THIS process only.<br>
+            <table border=1>
+                <tr>
+                    <th>description</th><th>url</th>
+                </tr>
+                <tr>
+                    <td>View and edit console variables</td><td><a href="/consolevars">/consolevars</a></td>
+                </tr>
+                <tr>
+                    <td>List console variables</td><td><a href="/consolevarlist">/consolevarlist</a></td>
+                </tr>
+                <tr>
+                    <td>List console variables matching</td><td>/consolevarlist?key=search_key</td>
+                </tr>
+                <tr>
+                    <td>Set console variable</td><td>/consolevarset?key=name_of_variable&amp;value=new_value_of_variable</td>
+                </tr>
+                <tr>
+                    <td>Get console variable</td><td>/consolevarget?key=name_of_variable</td>
+                </tr>
+                <tr>
+                    <td>List console functions</td><td><a href="/consolefunclist">/consolefunclist</a></td>
+                </tr>
+                <tr>
+                    <td>List console functions matching</td><td>/consolefunclist?key=search_key</td>
+                </tr>
+                <tr>
+                    <td>Call console function</td><td>/consolefunccall?func=name_of_function&amp;args=arguments</td>
+                </tr>
+            </table>
+            <br/>
+            <div>
+                <input type="submit" value="consolevars">
+            </div><br>
+            <div>
+                <button id='btn_console_vars_load'>LOAD console vars</button>
+                <button id='btn_console_vars_save'>SAVE console vars</button>
+                <button id='btn_console_vars_delete'>DELETE console vars save file</button>
+                <button id='btn_console_vars_reset'>RESET console vars to default values</button>
             </div>
-            <div id='consolevars_page_disabled'>The console vars/funcs page is disabled in the standalone webserver.  Use the Engine or Anim webserver instead.</div>
+            <br><br>
+            <a href="webViz.html">WebViz</a>
         </div>
 
         <div id="page_perf">
@@ -1330,71 +751,6 @@
             </div>
         </div>
 
-        <div id="page_perfmetric">
-          <br>
-          <div id='perfmetric_main_section'>
-            <button id='btn_pm_update_now'>Update NOW</button>&nbsp&nbsp&nbsp&nbsp
-            <input  id='pm_update_freq_value' type='number' max='100000'></input>
-            <button id='btn_pm_set_update_period'>Set update period (ms)</button>
-            <span   id='pm_cur_update_period'></span>&nbsp&nbsp&nbsp&nbsp
-            <button id='btn_pm_toggle_auto_update'>Toggle Auto Update</button>
-            <span   id='pm_auto_update'></span>
-            <br>
-            <button class='perfmetricbutton' id='btn_pm_start'>Start</button>&nbsp&nbsp&nbsp&nbsp
-            <button class='perfmetricbutton' id='btn_pm_stop'>Stop</button>&nbsp&nbsp&nbsp&nbsp
-            <span id='id_pm_status' display: inline-block; vertical-align: middle;></span>&nbsp&nbsp&nbsp&nbsp
-            <span id='id_pm_status_frames'></span>
-            <br>
-            <button class='perfmetricbutton' id='btn_pm_dump'>Dump</button>&nbsp&nbsp&nbsp&nbsp
-            <button class='perfmetricbutton' id='btn_pm_dump_all'>Dump all</button>&nbsp&nbsp&nbsp&nbsp
-            <button class='perfmetricbutton' id='btn_pm_dump_log'>Dump summary to log</button>&nbsp&nbsp&nbsp&nbsp
-            <button class='perfmetricbutton' id='btn_pm_dump_log_all'>Dump all to log</button>&nbsp&nbsp&nbsp&nbsp
-            <button class='perfmetricbutton' id='btn_pm_dump_files'>Dump to files</button>&nbsp&nbsp&nbsp&nbsp
-            <br>Data Selectors:
-            <select id='menu_pm_data_0'>
-                <option selected='selected' value=-1>(NONE)</option>
-            </select>&nbsp&nbsp&nbsp&nbsp
-            <select id='menu_pm_data_1'>
-                <option selected='selected' value=-1>(NONE)</option>
-            </select>&nbsp&nbsp&nbsp&nbsp
-            <select id='menu_pm_data_2'>
-                <option selected='selected' value=-1>(NONE)</option>
-            </select>&nbsp&nbsp&nbsp&nbsp
-            <br>
-            <button class='perfmetricbutton2' id='btn_pm_render'>Render Graph</button>&nbsp&nbsp&nbsp&nbsp
-            <select class='pmxmodelistbox' id='menu_pm_xmode'>
-                <option selected='selected'>All Ticks!</option>
-                <option>Last N Ticks</option>
-                <option>Tick Range</option>
-            </select>&nbsp&nbsp&nbsp&nbsp
-            <span id='span_all'></span>
-            <span id='span_last_n'>
-                <input  id='pm_num_ticks' type='number' max='10000' class='perfmetricinput'"></input>
-                <button id='btn_num_ticks_set'>Set</button>
-                <span   id='pm_cur_num_ticks'></span>&nbsp&nbsp&nbsp&nbsp
-            </span>
-            <span id='span_range'>
-                <input  id='pm_first_tick' type='number' max='10000' class='perfmetricinput'></input>
-                <button id='btn_first_tick_set'>Set</button>
-                <span   id='pm_cur_first_tick'></span>&nbsp&nbsp&nbsp&nbsp
-                <input  id='pm_last_tick' type='number' max='10000' class='perfmetricinput'></input>
-                <button id='btn_last_tick_set'>Set</button>
-                <span   id='pm_cur_last_tick'></span>&nbsp&nbsp&nbsp&nbsp
-            </span>
-            <br>
-            <input  id='pm_graph_update_freq_value' type='number' max='100000'></input>
-            <button id='btn_pm_set_graph_update_period'>Set graph update period (ms)</button>
-            <span   id='pm_cur_graph_update_period'></span>&nbsp&nbsp&nbsp&nbsp
-            <button id='btn_pm_toggle_graph_auto_update'>Toggle Graph Auto Update</button>
-            <span   id='pm_graph_auto_update'></span>
-            <br><br>
-            <div id='pm_chart_container' style="width:1000px;height:300px">To get a graph, first click 'Dump all', then select one or more data selectors, then click 'Render Graph'</div>
-            <br><br>
-            <div id='id_pm_dump_result' class='consoleoutput'></div>
-          </div>
-          <div id='perfmetric_page_disabled'>The PerfMetric page is disabled in the standalone webserver.  Use the Engine or Anim webserver instead.</div>
-        </div>
-
         <div id="confirm_dialog" title="">
           <p id='confirm_dialog_body'></p>
           <p>Are you sure?</p>
@@ -1403,8 +759,6 @@
     </div>
 
     <div id="content">
-    </div>
-    <div id='content_console_vars'>
     </div>
 </body>
 

@@ -82,9 +82,9 @@ GTEST_TEST(TestEnvironment, LoadPrimFile)
   // know not to change or remove it
   ASSERT_TRUE(env.ReadMotionPrimitives((std::string(QUOTE(TEST_DATA_PATH)) + std::string(TEST_PRIM_FILE)).c_str()));
 
-  ASSERT_FALSE(env.allActions_.GetForwardPrimTable().empty());
-  for(size_t i=0; i<env.allActions_.GetForwardPrimTable().size(); ++i) {
-    ASSERT_FALSE(env.allActions_.GetForwardPrimTable()[i].empty());
+  ASSERT_FALSE(env.allMotionPrimitives_.empty());
+  for(size_t i=0; i<env.allMotionPrimitives_.size(); ++i) {
+    ASSERT_FALSE(env.allMotionPrimitives_[i].empty());
   }
 }
 
@@ -97,9 +97,9 @@ GTEST_TEST(TestEnvironment, DumpAndInit)
   // know not to change or remove it
   EXPECT_TRUE(env.ReadMotionPrimitives((std::string(QUOTE(TEST_DATA_PATH)) + std::string(TEST_PRIM_FILE)).c_str()));
 
-  EXPECT_FALSE(env.allActions_.GetForwardPrimTable().empty());
-  for(size_t i=0; i<env.allActions_.GetForwardPrimTable().size(); ++i) {
-    EXPECT_FALSE(env.allActions_.GetForwardPrimTable()[i].empty());
+  EXPECT_FALSE(env.allMotionPrimitives_.empty());
+  for(size_t i=0; i<env.allMotionPrimitives_.size(); ++i) {
+    EXPECT_FALSE(env.allMotionPrimitives_[i].empty());
   }
 
   env.AddObstacleAllThetas(Anki::RotatedRectangle(50.0, -10.0, 80.0, -10.0, 20.0));
@@ -127,7 +127,8 @@ GTEST_TEST(TestEnvironment, DumpAndInit)
 
   // check that the environments match
   ASSERT_EQ(env.GetNumObstacles(), env2.GetNumObstacles());
-  ASSERT_EQ(env.allActions_.GetForwardPrimTable().size(), env2.allActions_.GetForwardPrimTable().size());
+  ASSERT_FLOAT_EQ(env.GetResolution_mm(), env2.GetResolution_mm());
+  ASSERT_EQ(env.allMotionPrimitives_.size(), env2.allMotionPrimitives_.size());
 }
 
 
@@ -344,11 +345,11 @@ GTEST_TEST(TestEnvironment, ReverseSuccessorsMatch_WithObstacle)
         EXPECT_EQ(rIt.Front().actionID, it.Front().actionID);
         EXPECT_FLOAT_EQ(rIt.Front().g, it.Front().g)
           << "g value incorrect " << ((int)it.Front().actionID) << ": "
-          << env.GetActionSpace().GetActionType(it.Front().actionID).GetName();
+          << env.GetActionType(it.Front().actionID).GetName();
         EXPECT_FLOAT_EQ(rIt.Front().penalty, it.Front().penalty);
         EXPECT_GT(rIt.Front().penalty, 0.0f)
           << "action penalty fail " << ((int)it.Front().actionID) << ": "
-          << env.GetActionSpace().GetActionType(it.Front().actionID).GetName();
+          << env.GetActionType(it.Front().actionID).GetName();
       }
       rIt.Next(env);
     }

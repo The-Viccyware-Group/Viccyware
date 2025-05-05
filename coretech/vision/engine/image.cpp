@@ -9,26 +9,21 @@
  * Copyright: Anki, Inc. 2014
  **/
 
-#include "coretech/common/engine/math/polygon.h"
-#include "coretech/common/engine/math/quad.h"
-#include "coretech/vision/engine/cameraCalibration.h"
-#include "coretech/vision/engine/image.h"
+#include "coretech/common/engine/math/point_impl.h"
+#include "coretech/common/engine/math/quad_impl.h"
+#include "coretech/vision/engine/image_impl.h"
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/helpers/ankiDefines.h"
-#include "util/helpers/boundedWhile.h"
-#include "util/cpuProfiler/cpuProfiler.h"
 
+#if ANKICORETECH_USE_OPENCV
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
-#include "image.h"
-
-#include <fstream>
-#include "anki/cozmo/shared/factory/emrHelper.h"
+#endif
 
 namespace {
-
+  
 template <typename T>
 void ResizeKeepAspectRatioHelper(const cv::Mat_<T>& src, cv::Mat_<T>& dest, s32 desiredCols, s32 desiredRows,
                                  int method, bool onlyReduceSize)
@@ -44,7 +39,7 @@ void ResizeKeepAspectRatioHelper(const cv::Mat_<T>& src, cv::Mat_<T>& dest, s32 
   else {
     desiredSize = {newNumberRows, desiredRows};
   }
-
+ 
   if(onlyReduceSize && src.rows < desiredSize.height && src.cols < desiredSize.width)
   {
     // Source is already smaller than the desired size in both dimensions, and onlyReduceSize was specifed, so
@@ -60,140 +55,25 @@ void ResizeKeepAspectRatioHelper(const cv::Mat_<T>& src, cv::Mat_<T>& dest, s32 
       PRINT_NAMED_ERROR("ResizeKeepAspectRatioHelper.CvResizeException", "Error while resizing image: %s,"
                         "ratio %f, rows: %d, cols: %d, desiredSize: (%d, %d)",
                         e.what(), ratio, src.rows, src.cols, desiredSize.width, desiredSize.height);
-      return;
     }
   }
 }
-
+  
 } // anonymous namespace
 
 namespace Anki {
 namespace Vision {
-
+  
 #pragma mark --- ImageBase ---
-
-  // Helper to read bitmap files when using Image::Load()
-  static cv::Mat ReadBMP(const std::string& input_bmp_name)
-  {
-    std::ifstream file(input_bmp_name, std::ios::in | std::ios::binary);
-    if (!file) {
-      PRINT_NAMED_ERROR("ReadBMP.FileNotFound", "%s", input_bmp_name.c_str());
-      return cv::Mat();
-    }
-
-    const auto begin = file.tellg();
-    file.seekg(0, std::ios::end);
-    const auto end = file.tellg();
-    assert(end >= begin);
-    const size_t len = (size_t) (end - begin);
-
-    // Decode the bmp header
-    const uint8_t* img_bytes = new uint8_t[len];
-    file.seekg(0, std::ios::beg);
-    file.read((char*)img_bytes, len);
-    const int32_t header_size = *(reinterpret_cast<const int32_t*>(img_bytes + 10));
-    const int32_t width = *(reinterpret_cast<const int32_t*>(img_bytes + 18));
-    const int32_t height = *(reinterpret_cast<const int32_t*>(img_bytes + 22));
-    const int32_t bpp = *(reinterpret_cast<const int32_t*>(img_bytes + 28));
-    const int32_t channels = bpp / 8;
-
-    // there may be padding bytes when the width is not a multiple of 4 bytes
-    // 8 * channels == bits per pixel
-    const int row_size = (8 * channels * width + 31) / 32 * 4;
-
-    // if height is negative, data layout is top down
-    // otherwise, it's bottom up
-    const bool top_down = (height < 0);
-    const int32_t absHeight = abs(height);
-
-    // Decode image, allocating tensor once the image size is known
-    cv::Mat img(height, width, CV_8UC(channels));
-    uint8_t* output = img.data;
-
-    const uint8_t* input = &img_bytes[header_size];
-
-    for (int i = 0; i < absHeight; i++)
-    {
-      int src_pos;
-      int dst_pos;
-
-      for (int j = 0; j < width; j++)
-      {
-        if (!top_down) {
-          src_pos = ((absHeight - 1 - i) * row_size) + j * channels;
-        } else {
-          src_pos = i * row_size + j * channels;
-        }
-
-        dst_pos = (i * width + j) * channels;
-
-        switch (channels) {
-          case 1:
-            output[dst_pos] = input[src_pos];
-            break;
-          case 3:
-            // BGR -> RGB
-            output[dst_pos] = input[src_pos + 2];
-            output[dst_pos + 1] = input[src_pos + 1];
-            output[dst_pos + 2] = input[src_pos];
-            break;
-          case 4:
-            // BGRA -> RGBA
-            output[dst_pos] = input[src_pos + 2];
-            output[dst_pos + 1] = input[src_pos + 1];
-            output[dst_pos + 2] = input[src_pos];
-            output[dst_pos + 3] = input[src_pos + 3];
-            break;
-          default:
-            PRINT_NAMED_ERROR("ReadBMP.UnexpectedNumChannels", "%d", channels);
-            return cv::Mat();
-        }
-      }
-    }
-
-    return img;
-  }
-
+  
   template<typename T>
   Result ImageBase<T>::Load(const std::string& filename)
   {
-    const std::string ext = filename.substr(filename.size()-3,3);
-    if(ext == "bmp" || ext == "BMP")
-    {
-      if(GetNumChannels() == 3)
-      {
-        // Converts to RGB internally (not BGR), so no need to use the SetFromShowableFormat call below
-        this->get_CvMat_() = ReadBMP(filename);
-      }
-      else
-      {
-        // TODO: provide mechanism to convert to grayscale internally?
-        // Workaround: Caller can load into ImageRGB and then convert to Image.
-        PRINT_NAMED_ERROR("ImageBase.Load.BMPNotSupportedWithSingleChannel",
-                          "Bitmap images must be loaded into 3-channel images.");
-        return RESULT_FAIL;
-      }
-    }
-    else
-    {
-      cv::Mat showableImage;
-      try {
-        showableImage = cv::imread(filename, (GetNumChannels() == 1 ?
-                                              CV_LOAD_IMAGE_GRAYSCALE :
-                                              CV_LOAD_IMAGE_COLOR));
-      }
-      catch(const cv::Exception& e)
-      {
-        PRINT_NAMED_ERROR("ImageBase.Load.CvImreadFailed",
-                          "OpenCV Error: %s", e.what());
-        return RESULT_FAIL;
-      }
-
-      if(!showableImage.empty())
-      {
-        SetFromShowableFormat(showableImage);
-      }
-    }
+    const cv::Mat showableImage = cv::imread(filename, (GetNumChannels() == 1 ?
+                                             CV_LOAD_IMAGE_GRAYSCALE :
+                                             CV_LOAD_IMAGE_COLOR));
+    
+    SetFromShowableFormat(showableImage);
 
     if(IsEmpty()) {
       return RESULT_FAIL;
@@ -201,20 +81,20 @@ namespace Vision {
       return RESULT_OK;
     }
   }
-
+  
   template<typename T>
   Result ImageBase<T>::Save(const std::string &filename, s32 quality) const
   {
     std::vector<int> compression_params;
     compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
     compression_params.push_back(quality);
-
+    
     // Convert color images to BGR(A) for saving (as assumed by imwrite)
     cv::Mat saveImg;
     ConvertToShowableFormat(saveImg);
-
+    
     Util::FileUtils::CreateDirectory(filename, true, true);
-
+    
     try {
       const bool success = imwrite(filename, saveImg, compression_params);
       if(!success) {
@@ -230,10 +110,10 @@ namespace Vision {
                           filename.c_str(), ex.what());
       return RESULT_FAIL;
     }
-
+    
     return RESULT_OK;
   }
-
+  
   template<typename T>
   ImageBase<T>& ImageBase<T>::operator= (const ImageBase<T> &other)
   {
@@ -242,18 +122,18 @@ namespace Vision {
     Array2d<T>::operator=(other);
     return *this;
   }
-
+  
   template<typename T>
   void ImageBase<T>::Display(const char *windowName, s32 pauseTime_ms) const
   {
-#   if !defined(ANKI_PLATFORM_OSX)
+#   if defined(ANKI_PLATFORM_IOS) || defined(ANKI_PLATFORM_ANDROID)
     {
-      PRINT_NAMED_WARNING("ImageBase.Display.NoDisplay",
+      PRINT_NAMED_WARNING("ImageBase.Display.NoDisplayOnAndroidOrIOS",
                           "Ignoring display request for %s", windowName);
       return;
     }
 #   endif
-
+    
     cv::Mat dispImg;
     ConvertToShowableFormat(dispImg);
 
@@ -264,30 +144,30 @@ namespace Vision {
   template<typename T>
   void ImageBase<T>::CloseDisplayWindow(const char *windowName)
   {
-#   if !defined(ANKI_PLATFORM_OSX)
+#   if defined(ANKI_PLATFORM_IOS) || defined(ANKI_PLATFORM_ANDROID)
     {
-      PRINT_NAMED_WARNING("ImageBase.CloseDisplayWindow.NoDisplay",
+      PRINT_NAMED_WARNING("ImageBase.CloseDisplayWindow.NoDisplayOnAndroidOrIOS",
                           "Ignoring close display request for %s", windowName);
       return;
     }
 #   endif
-
+    
     cv::destroyWindow(windowName);
   }
-
+  
   template<typename T>
   void ImageBase<T>::CloseAllDisplayWindows()
   {
-#   if !defined(ANKI_PLATFORM_OSX)
+#   if defined(ANKI_PLATFORM_IOS) || defined(ANKI_PLATFORM_ANDROID)
     {
       // NOTE: Display should not be possible (via similar checks above), so
       // there's no real harm in calling this method, so just a debug, not
       // a warning.
-      PRINT_NAMED_DEBUG("ImageBase.CloseAllDisplayWindows.NoDisplay", "");
+      PRINT_NAMED_DEBUG("ImageBase.CloseAllDisplayWindows.NoDisplayOnAndroidOrIOS", "");
       return;
     }
 #   endif
-
+    
     cv::destroyAllWindows();
   }
 
@@ -302,38 +182,38 @@ namespace Vision {
   {
     cv::line(this->get_CvMat_(), start.get_CvPoint_(), end.get_CvPoint_(), GetCvColor(color), thickness);
   }
-
+  
   template<typename T>
   void ImageBase<T>::DrawCircle(const Point2f& center, const ColorRGBA& color, const s32 radius, const s32 thickness)
   {
     cv::circle(this->get_CvMat_(), center.get_CvPoint_(), radius, GetCvColor(color), thickness);
   }
-
+  
   template<typename T>
   void ImageBase<T>::DrawFilledCircle(const Point2f& center, const ColorRGBA& color, const s32 radius)
   {
     cv::circle(this->get_CvMat_(), center.get_CvPoint_(), radius, GetCvColor(color), CV_FILLED);
   }
-
+  
   template<typename T>
   void ImageBase<T>::DrawRect(const Rectangle<f32>& rect, const ColorRGBA& color, const s32 thickness)
   {
     cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), thickness);
   }
-
+  
   template<typename T>
   void ImageBase<T>::DrawFilledRect(const Rectangle<f32>& rect, const ColorRGBA& color)
   {
     cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), CV_FILLED);
   }
 
-
+  
   template<typename T>
   void ImageBase<T>::DrawRect(const Rectangle<s32>& rect, const ColorRGBA& color, const s32 thickness)
   {
     cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), thickness);
   }
-
+  
   template<typename T>
   void ImageBase<T>::DrawFilledRect(const Rectangle<s32>& rect, const ColorRGBA& color)
   {
@@ -351,55 +231,6 @@ namespace Vision {
   }
 
   template<typename T>
-  static void DrawPolyHelper(ImageBase<T>* img, const cv::Mat& ptsMat,
-                             const cv::Scalar& color, const s32 thickness,
-                             const bool closed)
-  {
-    const cv::Point *pts = (const cv::Point*) ptsMat.data;
-    int npts = ptsMat.rows;
-
-    try {
-      cv::polylines(img->get_CvMat_(), &pts, &npts, 1, closed, color, thickness);
-    }
-    catch (cv::Exception& e)
-    {
-      PRINT_NAMED_ERROR("ImageBase.DrawPolyHelper.OpenCvPolylinesFailed",
-                        "%s", e.what());
-      return;
-    }
-  }
-
-  template<typename T>
-  void ImageBase<T>::DrawPoly(const Poly2f& poly, const ColorRGBA& color, const s32 thickness, const bool closed)
-  {
-    cv::Mat ptsMat((int)poly.size(), 2, CV_32SC1);
-    int row = 0;
-    for(auto const& polyPt : poly)
-    {
-      s32 *ptsMat_row = ptsMat.ptr<s32>(row++);
-      ptsMat_row[0] = (s32)std::round(polyPt.x());
-      ptsMat_row[1] = (s32)std::round(polyPt.y());
-    }
-
-    DrawPolyHelper(this, ptsMat, GetCvColor(color), thickness, closed);
-  }
-
-  template<typename T>
-  void ImageBase<T>::DrawPoly(const Poly2i& poly, const ColorRGBA& color, const s32 thickness, const bool closed)
-  {
-    cv::Mat ptsMat((int)poly.size(), 2, CV_32FC1);
-    int row = 0;
-    for(auto const& polyPt : poly)
-    {
-      f32 *ptsMat_row = ptsMat.ptr<f32>(row++);
-      ptsMat_row[0] = polyPt.x();
-      ptsMat_row[1] = polyPt.y();
-    }
-
-    DrawPolyHelper(this, ptsMat, GetCvColor(color), thickness, closed);
-  }
-
-  template<typename T>
   void ImageBase<T>::DrawFilledConvexPolygon(const std::vector<Point2i> points, const ColorRGBA& color)
   {
     std::vector<cv::Point> cvpts;
@@ -409,7 +240,7 @@ namespace Vision {
     }
     cv::fillConvexPoly(this->get_CvMat_(), cvpts, GetCvColor(color));
   }
-
+  
   // Compile time "LUT" for converting from our resize method to OpenCV's
   static inline int GetOpenCvInterpMethod(ResizeMethod method)
   {
@@ -417,125 +248,40 @@ namespace Vision {
     {
       case ResizeMethod::NearestNeighbor:
         return CV_INTER_NN;
-
+        
       case ResizeMethod::Linear:
         return CV_INTER_LINEAR;
-
+        
       case ResizeMethod::Cubic:
         return CV_INTER_CUBIC;
-
+        
       case ResizeMethod::AverageArea:
         return CV_INTER_AREA;
-
-      case ResizeMethod::Lanczos:
-        return CV_INTER_LANCZOS4;
     }
   }
-
-
+  
+  
   template<typename T>
   void ImageBase<T>::DrawText(const Point2f& position, const std::string& str,
                               const ColorRGBA& color, f32 scale, bool dropShadow,
-                              int thickness, bool centered)
+                              int thickness)
   {
-    Point2f alignedPos(position);
-    if(centered)
-    {
-      const cv::Size textSize = cv::getTextSize(str, CV_FONT_NORMAL, scale, thickness, nullptr);
-      alignedPos.x() -= textSize.width/2;
-    }
-
     if(dropShadow) {
-      cv::Point shadowPos(alignedPos.get_CvPoint_());
+      cv::Point shadowPos(position.get_CvPoint_());
       shadowPos.x += 1;
       shadowPos.y += 1;
       cv::putText(this->get_CvMat_(), str, shadowPos, CV_FONT_NORMAL, scale, GetCvColor(NamedColors::BLACK), thickness);
     }
-    cv::putText(this->get_CvMat_(), str, alignedPos.get_CvPoint_(), CV_FONT_NORMAL, scale, GetCvColor(color), thickness);
+    cv::putText(this->get_CvMat_(), str, position.get_CvPoint_(), CV_FONT_NORMAL, scale, GetCvColor(color), thickness);
   }
-
-  template<typename T>
-  Vec2f ImageBase<T>::GetTextSize(const std::string& str, f32 scale, int thickness)
-  {
-    auto sz = cv::getTextSize(str, CV_FONT_NORMAL, scale, thickness, nullptr);
-    return Vec2f(sz.width, sz.height);
-  }
-
-  template<typename T>
-  void ImageBase<T>::MakeTextFillImageWidth(const std::string& text,
-					    int font,
-					    int thickness,
-					    int imageWidth,
-					    cv::Size& textSize,
-					    float& scale)
-  {
-    scale = 0.1f;
-    cv::Size prevTextSize(0,0);
-    // TODO Use binary search instead
-    for(; scale < 3.f; scale += 0.05f)
-    {
-      textSize = cv::getTextSize(text,
-				 font,
-				 scale,
-				 1,
-				 nullptr);
-
-      if(textSize.width > imageWidth)
-      {
-	scale -= 0.05f;
-	textSize = prevTextSize;
-	break;
-      }
-      prevTextSize = textSize;
-    }
-  }
-
-  template<typename T>
-  void ImageBase<T>::DrawTextCenteredHorizontally(const std::string& text,
-						  int font,
-						  float scale,
-						  int thickness,
-						  const ColorRGBA& color,
-						  int verticalPos,
-						  bool drawTwiceToMaybeFillGaps)
-  {
-    int baseline = 0;
-    cv::Size textSize = cv::getTextSize(text,
-					font,
-					scale,
-					thickness,
-					&baseline);
-
-    Point2f p((this->GetNumCols() - textSize.width)/2, verticalPos);
-
-    this->DrawText(p,
-		   text,
-		   color,
-		   scale,
-		   false,
-		   thickness);
-
-    if(drawTwiceToMaybeFillGaps)
-    {
-      p.y() += 1;
-
-      this->DrawText(p,
-		     text,
-		     color,
-		     scale,
-		     false,
-		     thickness);
-    }
-  }
-
-
+  
   template<typename T>
   void ImageBase<T>::Resize(f32 scaleFactor, ResizeMethod method)
   {
     cv::resize(this->get_CvMat_(), this->get_CvMat_(), cv::Size(), scaleFactor, scaleFactor,
                GetOpenCvInterpMethod(method));
   }
-
+  
   template<typename T>
   void ImageBase<T>::Resize(s32 desiredRows, s32 desiredCols, ResizeMethod method)
   {
@@ -545,7 +291,7 @@ namespace Vision {
                  GetOpenCvInterpMethod(method));
     }
   }
-
+  
   template<typename T>
   void ImageBase<T>::Resize(ImageBase<T>& resizedImage, ResizeMethod method) const
   {
@@ -598,106 +344,81 @@ namespace Vision {
   template<typename T>
   void ImageBase<T>::BoxFilter(ImageBase<T>& filtered, u32 size) const
   {
-    try {
-      cv::boxFilter(this->get_CvMat_(), filtered.get_CvMat_(), -1, cv::Size(size, size));
-    }
-    catch (cv::Exception& e) {
-      PRINT_NAMED_ERROR("ImageBase.BoxFilter.OpenCvBoxFilterFailed",
-                        "%s", e.what());
-      this->CopyTo(filtered); // Just put the unfiltered source into the destination
-    }
+    DEV_ASSERT(size%2==0, "ImageBase.BoxFilter.SizeNotMultipleOf2");
+    cv::boxFilter(this->get_CvMat_(), filtered.get_CvMat_(), -1, cv::Size(size, size));
   }
-
-  template<typename T>
-  void ImageBase<T>::Undistort(const CameraCalibration& calib, ImageBase<T>& undistortedImage) const
-  {
-    DEV_ASSERT( (this != &undistortedImage) && (this->GetDataPointer() != undistortedImage.GetDataPointer()),
-               "ImageBase.Undistort.CannotOperateInPlace");
-
-    undistortedImage.Allocate(GetNumRows(), GetNumCols());
-    const CameraCalibration scaledCalib = calib.GetScaled(GetNumRows(), GetNumCols());
-    try {
-      cv::undistort(this->get_CvMat_(), undistortedImage.get_CvMat_(),
-                    scaledCalib.GetCalibrationMatrix().get_CvMatx_(),
-                    scaledCalib.GetDistortionCoeffs());
-    }
-    catch (cv::Exception& e) {
-      PRINT_NAMED_ERROR("ImageBase.Undistort.OpenCvUndistortFailed",
-                        "%s", e.what());
-    }
-  }
-
+  
   // Explicit instantation for each image type:
   template class ImageBase<u8>;
   template class ImageBase<PixelRGB>;
   template class ImageBase<PixelRGBA>;
   template class ImageBase<PixelRGB565>;
-
+  
 #pragma mark --- Image ---
-
+  
   Image::Image()
   : ImageBase<u8>()
   {
-
+    
   }
-
+  
   Image::Image(s32 nrows, s32 ncols)
   : ImageBase<u8>(nrows, ncols)
   {
-
+    
   }
-
+  
   Image::Image(s32 nrows, s32 ncols, const u8& pixel)
   : ImageBase<u8>(nrows, ncols, pixel)
   {
-
+    
   }
-
+  
   Image::Image(s32 nrows, s32 ncols, const ColorRGBA& color)
   : ImageBase<u8>(nrows, ncols, color)
   {
-
+    
   }
 
   Image::Image(s32 nrows, s32 ncols, u8* data)
   : ImageBase<u8>(nrows, ncols, data)
   {
-
+    
   }
-
+  
   Image::Image(const Array2d<u8>& array2d)
   : ImageBase<u8>(array2d)
   {
-
+    
   }
 
 # if ANKICORETECH_USE_OPENCV
   Image::Image(cv::Mat_<u8>& cvMat)
   : ImageBase<u8>(cvMat)
   {
-
+    
   }
 # endif
-
+  
   Image& Image::Negate()
   {
     cv::bitwise_not(get_CvMat_(), get_CvMat_());
     return *this;
   }
-
+ 
   Image Image::GetNegative() const
   {
     Image output;
     cv::bitwise_not(get_CvMat_(), output.get_CvMat_());
     return output;
   }
-
+  
   Image& Image::Threshold(u8 value)
   {
     get_CvMat_() = get_CvMat_() > value;
     return *this;
   }
-
+  
   Image  Image::Threshold(u8 value) const
   {
     Image thresholdedImage;
@@ -710,12 +431,12 @@ namespace Vision {
     const s32 count = cv::connectedComponents(this->get_CvMat_(), labelImage.get_CvMat_());
     return count;
   } // GetConnectedComponents()
-
+  
   s32 Image::GetConnectedComponents(Array2d<s32>& labelImage, std::vector<ConnectedComponentStats>& stats) const
   {
     cv::Mat cvStats, cvCentroids;
     const s32 count = cv::connectedComponentsWithStats(this->get_CvMat_(), labelImage.get_CvMat_(), cvStats, cvCentroids);
-    for(s32 iComp=0; iComp < count; ++iComp)
+    for(s32 iComp=0; iComp < count; ++iComp) 
     {
       const s32* compStats = cvStats.ptr<s32>(iComp);
       const f64* compCentroid = cvCentroids.ptr<f64>(iComp);
@@ -727,16 +448,16 @@ namespace Vision {
         .boundingBox = Rectangle<s32>(compStats[cv::CC_STAT_LEFT],  compStats[cv::CC_STAT_TOP],
                                       compStats[cv::CC_STAT_WIDTH], compStats[cv::CC_STAT_HEIGHT]),
       };
-
+      
       stats.push_back(std::move(stat));
     }
-
+    
     return count;
   }
 
   inline cv::Scalar Image::GetCvColor(const ColorRGBA& color) const {
     // Copied formula from Matlab's rgb2gray
-    u8 gray = static_cast<u8>(0.2989f * color.r()) + (0.5870f * color.g()) + (0.1140f * color.b());
+    u8 gray = static_cast<u8>(0.2989f * color.r()) + (0.5870f * color.g()) + (0.1140f * color.b()); 
     return cv::Scalar(gray, gray, gray, 0);
   }
 
@@ -751,7 +472,7 @@ namespace Vision {
 
   void Image::BoxFilter(ImageBase<u8>& filtered, u32 size) const
   {
-    #if defined(__APPLE__)
+    #if defined(MAC)
     #define IS_MAC 1
     #else
     #define IS_MAC 0
@@ -759,12 +480,12 @@ namespace Vision {
 
     // Use base class's BoxFilter if the size is not 3 or this is mac
     // (will just use OpenCV's boxFilter)
-    if(size != 3 || IS_MAC || GetNumRows() < 3 || GetNumCols() < 3)
+    if(size != 3 || IS_MAC)
     {
       ImageBase<u8>::BoxFilter(filtered, size);
       return;
     }
-
+      
     filtered.Allocate(GetNumRows(), GetNumCols());
 
     #ifdef __ARM_NEON__
@@ -791,7 +512,7 @@ namespace Vision {
           sum = vaddw_u8(sum, row3);                                \
                                                                     \
           /* Shift the summed rows left once and then twice */      \
-          /* and add in order to sum horizontally */               \
+          /* and add in order to sum horizonatally */               \
           uint16x8_t shifted = vextq_u16(sum, kZeros, 1);           \
           uint16x8_t shifted2 = vextq_u16(sum, kZeros,  2);         \
           sum = vaddq_u16(sum, shifted);                            \
@@ -825,13 +546,13 @@ namespace Vision {
 
     #else
 
-      // Neon not available so increment row pointers to setup
+      // Neon not available so increment row pointers to setup 
       // element by element filtering
       #define FILTER_ROW_NEON(row1Ptr, row2Ptr, row3Ptr, outputPtr) \
         row1Ptr++; \
         row2Ptr++; \
         row3Ptr++;
-
+    
     #endif // #ifdef __ARM_NEON__
 
     // Macro to run a 3x3 box filter on a row of an image
@@ -839,7 +560,7 @@ namespace Vision {
     // All arguments are u8*
     #define FILTER_ROW(row1Ptr, row2Ptr, row3Ptr, outputPtr)    \
       {                                                         \
-        s32 c = 1;                                              \
+        u32 c = 1;                                              \
         FILTER_ROW_NEON(row1Ptr, row2Ptr, row3Ptr, outputPtr);  \
                                                                 \
         for(; c < GetNumCols()-1; c++)                          \
@@ -900,15 +621,15 @@ namespace Vision {
       const u8* nextRow = GetRow(1);
       u8* filteredRow = filtered.GetRow(0);
 
-      filteredRow[0] = (u8)(((f32)(curRow[0]) +
-                             (f32)(curRow[1]*2) +
-                             (f32)(nextRow[0]*2) +
+      filteredRow[0] = (u8)(((f32)(curRow[0]) + 
+                             (f32)(curRow[1]*2) + 
+                             (f32)(nextRow[0]*2) + 
                              (f32)(nextRow[1]*4)) * (1/9.f));
 
       const u32 lastCols = GetNumCols() - 1;
-      filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) +
-                                    (f32)(curRow[lastCols-1]*2) +
-                                    (f32)(nextRow[lastCols]*2) +
+      filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) + 
+                                    (f32)(curRow[lastCols-1]*2) + 
+                                    (f32)(nextRow[lastCols]*2) + 
                                     (f32)(nextRow[lastCols-1]*4)) * (1/9.f));
 
       r = 1;
@@ -919,18 +640,18 @@ namespace Vision {
         nextRow = GetRow(r+1);
         filteredRow = filtered.GetRow(r);
 
-        filteredRow[0] = (u8)(((f32)(curRow[0]) +
-                               (f32)(prevRow[0]) +
-                               (f32)(nextRow[0]) +
-                               (f32)(curRow[1]*2) +
-                               (f32)(prevRow[1]*2) +
+        filteredRow[0] = (u8)(((f32)(curRow[0]) + 
+                               (f32)(prevRow[0]) + 
+                               (f32)(nextRow[0]) + 
+                               (f32)(curRow[1]*2) + 
+                               (f32)(prevRow[1]*2) + 
                                (f32)(nextRow[1]*2)) * (1/9.f));
 
-        filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) +
-                                      (f32)(prevRow[lastCols]) +
-                                      (f32)(nextRow[lastCols]) +
-                                      (f32)(curRow[lastCols-1]*2) +
-                                      (f32)(prevRow[lastCols-1]*2) +
+        filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) + 
+                                      (f32)(prevRow[lastCols]) + 
+                                      (f32)(nextRow[lastCols]) + 
+                                      (f32)(curRow[lastCols-1]*2) + 
+                                      (f32)(prevRow[lastCols-1]*2) + 
                                       (f32)(nextRow[lastCols-1]*2)) * (1/9.f));
       }
 
@@ -939,336 +660,17 @@ namespace Vision {
       nextRow = GetRow(r);
       filteredRow = filtered.GetRow(r);
 
-      filteredRow[0] = (u8)(((f32)(curRow[0]) +
-                             (f32)(curRow[1]*2) +
-                             (f32)(prevRow[0]*2) +
+      filteredRow[0] = (u8)(((f32)(curRow[0]) + 
+                             (f32)(curRow[1]*2) + 
+                             (f32)(prevRow[0]*2) + 
                              (f32)(prevRow[1]*4)) * (1/9.f));
 
-      filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) +
-                                    (f32)(curRow[lastCols-1]*2) +
-                                    (f32)(prevRow[lastCols]*2) +
+      filteredRow[lastCols] = (u8)(((f32)(curRow[lastCols]) + 
+                                    (f32)(curRow[lastCols-1]*2) + 
+                                    (f32)(prevRow[lastCols]*2) + 
                                     (f32)(prevRow[lastCols-1]*4)) * (1/9.f));
     }
   }
-
-#define SATURATE_CAST(x) (x) // cv::saturate_cast<u8>
-  void Image::ConvertV2RGB565(u8 hue, u8 sat, ImageRGB565& output)
-  {
-    output.Allocate(GetNumRows(), GetNumCols());
-
-    f32 h = (f32)hue * (360/256.f) * (1/60.f);
-    f32 s = (f32)sat * (1/255.f);
-    u32 i = floor(h);
-    f32 dh = h - i; // decimal part of h
-
-    s32 numRows = GetNumRows();
-    s32 numCols = GetNumCols();
-
-    if(this->IsContinuous() && output.IsContinuous())
-    {
-      numCols *= numRows;
-      numRows = 1;
-    }
-
-#ifdef __ARM_NEON__
-    // Setup a whole bunch of constants based on the fixed
-    // hue and saturation
-
-    // Vectors to hold LUT table to figure out which variables will
-    // need to be set to r, g, and b
-    const uint8x8_t rp = vcreate_u8(0x00000000FFFF0000);
-    const uint8x8_t rq = vcreate_u8(0x000000000000FF00);
-    const uint8x8_t rt = vcreate_u8(0x000000FF00000000);
-
-    const uint8x8_t gp = vcreate_u8(0x0000FFFF00000000);
-    const uint8x8_t gq = vcreate_u8(0x00000000FF000000);
-    const uint8x8_t gt = vcreate_u8(0x00000000000000FF);
-
-    const uint8x8_t bp = vcreate_u8(0x000000000000FFFF);
-    const uint8x8_t bq = vcreate_u8(0x0000FF0000000000);
-    const uint8x8_t bt = vcreate_u8(0x0000000000FF0000);
-
-    float32x4x3_t hsv1;
-    float32x4x3_t hsv2;
-    hsv1.val[0] = vdupq_n_f32(h);
-    hsv2.val[0] = vdupq_n_f32(h);
-
-    hsv1.val[1] = vdupq_n_f32(s);
-    hsv2.val[1] = vdupq_n_f32(s);
-
-    const float32x4_t f1 = vdupq_n_f32(dh);
-    const uint8x8_t index = vdup_n_u8(i);
-
-    // The following block is repeated 3 times one for each color channel
-
-    // Depending on which of the 6 sectors hue falls in r,g,b may either be set
-    // from V, p, q, or t. index holds which sector each pixel's hue is in and is used
-    // to index into the tables held by rp,rq,rt gp,gq,gt and bp,bq,bt. The result of
-    // the look up will either be all 0s or all 1s. If all 1s, then for this sector the
-    // variable corresponding to the table should be used for this channel.
-    // Ex: HSV = (0, 1, 1) which is sector 0 so r = V, g = t, b = p
-    // rp[0] == 0s, rq[0] == 0s, rt[0] == 0s  r is set from V
-    // gp[0] == 0s, gq[0] == 0s, gt[0] == 1s  g is set from t
-    // bp[0] == 1s, bq[0] == 0s, bt[0] == 0s  b is set from p
-
-    // Check if r should be set from p
-    uint8x8_t which = vtbl1_u8(rp, index);
-    // Expand to f32 and multiply by 0xFFFFFFFF so
-    // elements will be all 1s or all 0s
-    uint16x8_t which16x8 = vmovl_u8(which);
-    uint16x4_t which16x4_1 = vget_low_u16(which16x8);
-    uint32x4_t which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t  rp_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    // Check if r should be set from q
-    which = vtbl1_u8(rq, index);
-    // Expand to f32 and multiply by 0xFFFFFFFF so
-    // elements will be all 1s or all 0s
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t rq_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    // Check if r should be set from t
-    which = vtbl1_u8(rt, index);
-    // Expand to f32 and multiply by 0xFFFFFFFF so
-    // elements will be all 1s or all 0s
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t rt_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(gp, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t gp_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(gq, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t gq_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(gt, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t gt_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(bp, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t bp_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(bq, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t bq_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    which = vtbl1_u8(bt, index);
-    which16x8 = vmovl_u8(which);
-    which16x4_1 = vget_low_u16(which16x8);
-    which32x4_1 = vmovl_u16(which16x4_1);
-    which32x4_1 = vmulq_n_u32(which32x4_1, 0xFFFFFFFF);
-    const float32x4_t bt_whichF32x4_1 = vreinterpretq_f32_u32(which32x4_1);
-
-    const float32x4_t kOne = vdupq_n_f32(1.f);
-
-    const s32 kNumElementsProcessedPerLoop = 8;
-#endif
-
-    for(u32 r = 0; r < numRows; r++)
-    {
-      const u8* row = reinterpret_cast<u8*>(GetRow(r));
-      u16* out = reinterpret_cast<u16*>(output.GetRow(r));
-
-      s32 c = 0;
-
-#ifdef __ARM_NEON__
-      for(; c < numCols - (kNumElementsProcessedPerLoop - 1); c += kNumElementsProcessedPerLoop)
-      {
-        uint8x8_t hsv255 = vld1_u8(row);
-        row += kNumElementsProcessedPerLoop;
-
-        // Expand V to float and convert from 0-255 to 0-1
-        uint16x8_t which16x8 = vmovl_u8(hsv255);
-        uint16x4_t which16x4_1 = vget_low_u16(which16x8);
-        uint16x4_t which16x4_2 = vget_high_u16(which16x8);
-        uint32x4_t which32x4_1 = vmovl_u16(which16x4_1);
-        uint32x4_t which32x4_2 = vmovl_u16(which16x4_2);
-        float32x4_t whichF32x4_1 = vcvtq_f32_u32(which32x4_1);
-        float32x4_t whichF32x4_2 = vcvtq_f32_u32(which32x4_2);
-        hsv1.val[2] = vmulq_n_f32(whichF32x4_1, 1/255.f);
-        hsv2.val[2] = vmulq_n_f32(whichF32x4_2, 1/255.f);
-
-        // p = V * ( 1 - S )
-        float32x4_t p1 = vsubq_f32(kOne, hsv1.val[1]);
-        p1 = vmulq_f32(p1, hsv1.val[2]);
-        float32x4_t p2 = vsubq_f32(kOne, hsv2.val[1]);
-        p2 = vmulq_f32(p2, hsv2.val[2]);
-
-        // q = V * ( 1 - (S * f) )
-        float32x4_t q1 = vmulq_f32(hsv1.val[1], f1);
-        q1 = vsubq_f32(kOne, q1);
-        q1 = vmulq_f32(q1, hsv1.val[2]);
-        float32x4_t q2 = vmulq_f32(hsv2.val[1], f1);
-        q2 = vsubq_f32(kOne, q2);
-        q2 = vmulq_f32(q2, hsv2.val[2]);
-
-        // t = V * ( 1 - (S * ( 1 - f ) ) )
-        float32x4_t t1 = vsubq_f32(kOne, f1);
-        t1 = vmulq_f32(t1, hsv1.val[1]);
-        t1 = vsubq_f32(kOne, t1);
-        t1 = vmulq_f32(t1, hsv1.val[2]);
-        float32x4_t t2 = vsubq_f32(kOne, f1);
-        t2 = vmulq_f32(t2, hsv2.val[1]);
-        t2 = vsubq_f32(kOne, t2);
-        t2 = vmulq_f32(t2, hsv2.val[2]);
-
-
-        // The following block is repeated 3 times one for each color channel
-
-        // Depending on which of the 6 sectors hue falls in r,g,b may either be set
-        // from V, p, q, or t. index holds which sector each pixel's hue is in and is used
-        // to index into the tables held by rp,rq,rt gp,gq,gt and bp,bq,bt. The result of
-        // the look up will either be all 0s or all 1s. If all 1s, then for this sector the
-        // variable corresponding to the table should be used for this channel.
-        // Ex: HSV = (0, 1, 1) which is sector 0 so r = V, g = t, b = p
-        // rp[0] == 0s, rq[0] == 0s, rt[0] == 0s  r is set from V
-        // gp[0] == 0s, gq[0] == 0s, gt[0] == 1s  g is set from t
-        // bp[0] == 1s, bq[0] == 0s, bt[0] == 0s  b is set from p
-
-        // Initialize to V
-        float32x4_t r1 = hsv1.val[2];
-        float32x4_t r2 = hsv2.val[2];
-
-        // If r should be set from p then whichF32x4 will be 1s which will
-        // select values from p instead of r
-        r1 = vbslq_f32(rp_whichF32x4_1, p1, r1);
-        r2 = vbslq_f32(rp_whichF32x4_1, p2, r2);
-
-        // If r should be set from q then whichF32x4 will be 1s which will
-        // select values from q instead of r
-        r1 = vbslq_f32(rq_whichF32x4_1, q1, r1);
-        r2 = vbslq_f32(rq_whichF32x4_1, q2, r2);
-
-        // If r should be set from t then whichF32x4 will be 1s which will
-        // select values from t instead of r
-        r1 = vbslq_f32(rt_whichF32x4_1, t1, r1);
-        r2 = vbslq_f32(rt_whichF32x4_1, t2, r2);
-
-        // Repeat for green
-
-        float32x4_t g1 = hsv1.val[2];
-        float32x4_t g2 = hsv2.val[2];
-
-        g1 = vbslq_f32(gp_whichF32x4_1, p1, g1);
-        g2 = vbslq_f32(gp_whichF32x4_1, p2, g2);
-
-        g1 = vbslq_f32(gq_whichF32x4_1, q1, g1);
-        g2 = vbslq_f32(gq_whichF32x4_1, q2, g2);
-
-        g1 = vbslq_f32(gt_whichF32x4_1, t1, g1);
-        g2 = vbslq_f32(gt_whichF32x4_1, t2, g2);
-
-        // Repeat for blue
-
-        float32x4_t b1 = hsv1.val[2];
-        float32x4_t b2 = hsv2.val[2];
-
-        b1 = vbslq_f32(bp_whichF32x4_1, p1, b1);
-        b2 = vbslq_f32(bp_whichF32x4_1, p2, b2);
-
-        b1 = vbslq_f32(bq_whichF32x4_1, q1, b1);
-        b2 = vbslq_f32(bq_whichF32x4_1, q2, b2);
-
-        b1 = vbslq_f32(bt_whichF32x4_1, t1, b1);
-        b2 = vbslq_f32(bt_whichF32x4_1, t2, b2);
-
-        // Convert from 0-1 to 0-255
-        r1 = vmulq_n_f32(r1, 255.f);
-        g1 = vmulq_n_f32(g1, 255.f);
-        b1 = vmulq_n_f32(b1, 255.f);
-        r2 = vmulq_n_f32(r2, 255.f);
-        g2 = vmulq_n_f32(g2, 255.f);
-        b2 = vmulq_n_f32(b2, 255.f);
-
-        // Convert from f32x4 r,g,b to 16x8 rgb565
-        uint32x4_t color32x4_1 = vcvtq_u32_f32(r1);
-        uint16x4_t color16x4_1 = vqmovn_u32(color32x4_1);
-        uint32x4_t color32x4_2= vcvtq_u32_f32(r2);
-        uint16x4_t color16x4_2 = vqmovn_u32(color32x4_2);
-        uint16x8_t colorR16x8 = vcombine_u16(color16x4_1, color16x4_2);
-        // Shift red bits into top half of a u16
-        colorR16x8 = vshlq_n_u16(colorR16x8, 8);
-
-        color32x4_1 = vcvtq_u32_f32(g1);
-        color16x4_1 = vqmovn_u32(color32x4_1);
-        color32x4_2 = vcvtq_u32_f32(g2);
-        color16x4_2 = vqmovn_u32(color32x4_2);
-        uint16x8_t colorG16x8 = vcombine_u16(color16x4_1, color16x4_2);
-        // Shift green bits into top half of u16
-        colorG16x8 = vshlq_n_u16(colorG16x8, 8);
-
-        // Shift green bits by 5 and insert into red vector this is the RG56 of RGB565
-        uint16x8_t colorRG = vsriq_n_u16(colorR16x8, colorG16x8, 5);
-
-        color32x4_1 = vcvtq_u32_f32(b1);
-        color16x4_1 = vqmovn_u32(color32x4_1);
-        color32x4_2 = vcvtq_u32_f32(b2);
-        color16x4_2 = vqmovn_u32(color32x4_2);
-        uint16x8_t colorB16x8 = vcombine_u16(color16x4_1, color16x4_2);
-        // Shift blue bits into top half of a u16
-        colorB16x8 = vshlq_n_u16(colorB16x8, 8);
-
-        // Shift blue bits right by 11 and insert into red/green vector
-        uint16x8_t rgb565 = vsriq_n_u16(colorRG, colorB16x8, 11);
-
-        // Write into output
-        vst1q_u16(out, rgb565);
-        out += kNumElementsProcessedPerLoop;
-      }
-#endif
-
-      for(; c < numCols; c++)
-      {
-        f32 v = (*row) * (1.f/255.f);
-
-        static const int sector_data[][3]= {{1,3,0}, {1,0,2},
-                                            {3,0,1}, {0,2,1},
-                                            {0,1,3}, {2,1,0}};
-
-        float vpqt[4];
-        vpqt[0] = v;
-        vpqt[1] = v * (1.f - s);
-        vpqt[2] = v * (1.f - (s * dh));
-        vpqt[3] = v * (1.f - (s * (1.f - dh)));
-
-        u16 b = SATURATE_CAST(vpqt[sector_data[i][0]] * 255);
-        u16 g = SATURATE_CAST(vpqt[sector_data[i][1]] * 255);
-        u16 r = SATURATE_CAST(vpqt[sector_data[i][2]] * 255);
-
-        *out = (r << 8 & 0xF800) |
-               (g << 3 & 0x07E0) |
-               (b >> 3);
-
-        ++row;
-        ++out;
-      }
-    }
-  }
-#undef SATURATE_CAST
 
   void ImageRGB::ConvertHSV2RGB565(ImageRGB565& output)
   {
@@ -1355,11 +757,11 @@ namespace Vision {
         // i will be between [0, 5]
         float32x4_t i1 = vcvtq_f32_u32(vcvtq_u32_f32(hsv1.val[0]));
         float32x4_t i2 = vcvtq_f32_u32(vcvtq_u32_f32(hsv2.val[0]));
-
+        
         // H - floor(H) will be the decimal portion of H
         float32x4_t f1 = vsubq_f32(hsv1.val[0], i1);
         float32x4_t f2 = vsubq_f32(hsv2.val[0], i2);
-
+        
         // p = V * ( 1 - S )
         float32x4_t p1 = vsubq_f32(kOne, hsv1.val[1]);
         p1 = vmulq_f32(p1, hsv1.val[2]);
@@ -1397,7 +799,7 @@ namespace Vision {
         // Depending on which of the 6 sectors hue falls in r,g,b may either be set
         // from V, p, q, or t. index holds which sector each pixel's hue is in and is used
         // to index into the tables held by rp,rq,rt gp,gq,gt and bp,bq,bt. The result of
-        // the look up will either be all 0s or all 1s. If all 1s, then for this sector the
+        // the look up will either be all 0s or all 1s. If all 1s, then for this sector the 
         // variable corresponding to the table should be used for this channel.
         // Ex: HSV = (0, 1, 1) which is sector 0 so r = V, g = t, b = p
         // rp[0] == 0s, rq[0] == 0s, rt[0] == 0s  r is set from V
@@ -1410,7 +812,7 @@ namespace Vision {
 
         // Check if r should be set from p
         uint8x8_t which = vtbl1_u8(rp, index);
-        // Expand to f32 and multiply by 0xFFFFFFFF so
+        // Expand to f32 and multiply by 0xFFFFFFFF so 
         // elements will be all 1s or all 0s
         which16x8 = vmovl_u8(which);
         which16x4_1 = vget_low_u16(which16x8);
@@ -1429,7 +831,7 @@ namespace Vision {
 
         // Check if r should be set from q
         which = vtbl1_u8(rq, index);
-        // Expand to f32 and multiply by 0xFFFFFFFF so
+        // Expand to f32 and multiply by 0xFFFFFFFF so 
         // elements will be all 1s or all 0s
         which16x8 = vmovl_u8(which);
         which16x4_1 = vget_low_u16(which16x8);
@@ -1448,7 +850,7 @@ namespace Vision {
 
         // Check if r should be set from t
         which = vtbl1_u8(rt, index);
-        // Expand to f32 and multiply by 0xFFFFFFFF so
+        // Expand to f32 and multiply by 0xFFFFFFFF so 
         // elements will be all 1s or all 0s
         which16x8 = vmovl_u8(which);
         which16x4_1 = vget_low_u16(which16x8);
@@ -1600,12 +1002,12 @@ namespace Vision {
 
       for(; c < numCols; c++)
       {
-        f32 h = (f32)row[0] * (360/256.f) * (1/60.f);
+        f32 h = (f32)row[0] * (360/255.f) * (1/60.f);
         f32 s = (f32)row[1] * (1/255.f);
         f32 v = (f32)row[2] * (1/255.f);
 
-        static const int sector_data[][3]= {{1,3,0}, {1,0,2},
-                                            {3,0,1}, {0,2,1},
+        static const int sector_data[][3]= {{1,3,0}, {1,0,2}, 
+                                            {3,0,1}, {0,2,1}, 
                                             {0,1,3}, {2,1,0}};
 
         u32 i = floor(h);
@@ -1632,41 +1034,35 @@ namespace Vision {
   }
 
 
-
+  
 #if 0
 #pragma mark --- ImageRGBA ---
 #endif
-
+  
   ImageRGBA::ImageRGBA()
   : ImageBase<PixelRGBA>()
   {
-
+    
   }
-
+  
   ImageRGBA::ImageRGBA(s32 nrows, s32 ncols)
   : ImageBase<PixelRGBA>(nrows, ncols)
   {
-
+    
   }
-
-  ImageRGBA::ImageRGBA(s32 nrows, s32 ncols, const PixelRGBA& fillValue)
-  : ImageBase<PixelRGBA>(nrows, ncols, fillValue)
-  {
-
-  }
-
+  
   ImageRGBA::ImageRGBA(s32 nrows, s32 ncols, u32* data)
   : ImageBase<PixelRGBA>(nrows, ncols, reinterpret_cast<PixelRGBA*>(data))
   {
-
+    
   }
-
+  
   ImageRGBA::ImageRGBA(const ImageRGB& imageRGB, u8 alpha)
   : ImageRGBA(imageRGB.GetNumRows(), imageRGB.GetNumCols())
   {
     PixelRGBA* dataRGBA = GetDataPointer();
     const PixelRGB* dataRGB = imageRGB.GetDataPointer();
-
+    
     for(s32 i=0; i<GetNumElements(); ++i)
     {
       dataRGBA[i].r() = dataRGB[i].r();
@@ -1674,31 +1070,23 @@ namespace Vision {
       dataRGBA[i].b() = dataRGB[i].b();
       dataRGBA[i].a() = alpha;
     }
-
+    
     SetTimestamp(imageRGB.GetTimestamp());
     SetImageId(imageRGB.GetImageId());
   }
-
+  
   Image ImageRGBA::ToGray() const
   {
     Image grayImage(GetNumRows(), GetNumCols());
     FillGray(grayImage);
     return grayImage;
   }
-
+  
   void ImageRGBA::FillGray(Image& grayImage) const
   {
     grayImage.SetTimestamp(GetTimestamp()); // Make sure timestamp gets transferred!
     grayImage.SetImageId(GetImageId());
     cv::cvtColor(this->get_CvMat_(), grayImage.get_CvMat_(), CV_RGBA2GRAY);
-  }
-
-  ImageRGBA& ImageRGBA::SetFromGray(const Image& imageGray)
-  {
-    cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), CV_GRAY2RGBA);
-    SetTimestamp(imageGray.GetTimestamp());
-    SetImageId(imageGray.GetImageId());
-    return *this;
   }
 
   ImageRGBA& ImageRGBA::SetFromRGB565(const ImageRGB565& rgb565, const u8 alpha)
@@ -1707,7 +1095,7 @@ namespace Vision {
     //       given differences in endian-ness.
 
     DEV_ASSERT(this->IsContinuous(), "ImageRGBA.IsNotContinuous");
-
+    
     int nrows = rgb565.GetNumRows();
     int ncols = rgb565.GetNumCols();
     if(rgb565.IsContinuous()) {
@@ -1734,23 +1122,23 @@ namespace Vision {
     DEV_ASSERT(showImg.channels() == 3, "ImageRGBA.SetFromShowableFormat.UnexpectedNumChannels");
     cv::cvtColor(showImg, this->get_CvMat_(), cv::COLOR_BGR2RGBA);
   }
-
-#if 0
+  
+#if 0 
 #pragma mark --- ImageRGB ---
-#endif
-
+#endif 
+  
   ImageRGB::ImageRGB()
   : ImageBase<PixelRGB>()
   {
-
+    
   }
-
+  
   ImageRGB::ImageRGB(s32 nrows, s32 ncols)
   : ImageBase<PixelRGB>(nrows, ncols)
   {
-
+    
   }
-
+  
   ImageRGB::ImageRGB(s32 nrows, s32 ncols, const PixelRGB& fillValue)
   : ImageBase<PixelRGB>(nrows, ncols, fillValue)
   {
@@ -1760,15 +1148,15 @@ namespace Vision {
   ImageRGB::ImageRGB(s32 nrows, s32 ncols, u8* data)
   : ImageBase<PixelRGB>(nrows, ncols, reinterpret_cast<PixelRGB*>(data))
   {
-
+    
   }
-
+  
   ImageRGB::ImageRGB(const ImageRGBA& imageRGBA)
   : ImageBase<PixelRGB>(imageRGBA.GetNumRows(), imageRGBA.GetNumCols())
   {
     PixelRGB* dataRGB = GetDataPointer();
     const PixelRGBA* dataRGBA = imageRGBA.GetDataPointer();
-
+    
     for(s32 i=0; i<GetNumElements(); ++i)
     {
       // TODO: Is this faster? memcpy(dataRGB+i, dataRGBA+i, 3);
@@ -1779,19 +1167,19 @@ namespace Vision {
     SetTimestamp(imageRGBA.GetTimestamp());
     SetImageId(imageRGBA.GetImageId());
   }
-
+  
   ImageRGB::ImageRGB(const ImageRGB565& rgb565)
   : ImageRGB(rgb565.GetNumRows(), rgb565.GetNumCols())
   {
     SetFromRGB565(rgb565);
   }
-
+  
   ImageRGB::ImageRGB(const Image& imageGray)
   : ImageBase<PixelRGB>(imageGray.GetNumRows(), imageGray.GetNumCols())
   {
     SetFromGray(imageGray);
   }
-
+  
   ImageRGB& ImageRGB::SetFromGray(const Image& imageGray)
   {
     cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), CV_GRAY2RGB);
@@ -1799,7 +1187,7 @@ namespace Vision {
     SetImageId(imageGray.GetImageId());
     return *this;
   }
-
+  
   ImageRGB& ImageRGB::SetFromRGB565(const ImageRGB565 &rgb565)
   {
     // Similar to how COLOR_BGR5652BGR appears to be swapping R and B in ConvertToShowableFormat(),
@@ -1808,38 +1196,14 @@ namespace Vision {
     return *this;
   }
 
-  Image ImageRGB::ToGray(const ImageRGB::RGBToGrayMethod method) const
-  {
-    switch(method) {
-      case ImageRGB::RGBToGrayMethod::GreenChannel:
-        return ToGrayFromGreenChannel();
-
-      case RGBToGrayMethod::DoubleGreen:
-        return  ToGrayFromDoubleGreen();
-    }
-  }
-
-  void ImageRGB::FillGray(Image &grayOut, const ImageRGB::RGBToGrayMethod method) const
-  {
-    switch(method) {
-      case RGBToGrayMethod::DoubleGreen:
-        FillGrayFromDoubleGreen(grayOut);
-        break;
-
-      case RGBToGrayMethod::GreenChannel:
-        FillGrayFromGreenChannel(grayOut);
-        break;
-    }
-  }
-
-  Image ImageRGB::ToGrayFromDoubleGreen() const
+  Image ImageRGB::ToGray() const
   {
     Image grayImage(GetNumRows(), GetNumCols());
     FillGray(grayImage);
     return grayImage;
   }
-
-  void ImageRGB::FillGrayFromDoubleGreen(Anki::Vision::Image &grayImage) const
+  
+  void ImageRGB::FillGray(Image& grayImage) const
   {
     grayImage.SetTimestamp(GetTimestamp()); // Make sure timestamp gets transferred!
     grayImage.SetImageId(GetImageId());
@@ -1887,36 +1251,13 @@ namespace Vision {
       for(; j < numCols; j++)
       {
         *grayPtr = (((u16)imageRGBPtr->r() + (((u16)imageRGBPtr->g()) << 1) + (u16)imageRGBPtr->b()) >> 2);
-
+        
         imageRGBPtr++;
         grayPtr++;
       }
     }
   }
-
-  Image ImageRGB::ToGrayFromGreenChannel() const
-  {
-    Image grayImage(GetNumRows(), GetNumCols());
-    FillGrayFromGreenChannel(grayImage);
-    return grayImage;
-  }
-
-  void ImageRGB::FillGrayFromGreenChannel(Image& grayImage) const
-  {
-    grayImage.SetTimestamp(GetTimestamp()); // Make sure timestamp gets transferred!
-    grayImage.SetImageId(GetImageId());
-
-    cv::Mat_<u8>& cvGrayImage = grayImage.get_CvMat_();
-
-    try {
-      cv::extractChannel(get_CvMat_(), cvGrayImage, 1); // gets green channel from BGR (or RGB!)
-    }
-    catch (const cv::Exception &e) {
-      PRINT_NAMED_ERROR("ImageRGB.FillGrayFromGreenChannel.ExtractChannelError",
-                        "Error while extracting channel: %s", e.what());
-    }
-  }
-
+  
   Image ImageRGB::Threshold(u8 value, bool anyChannel) const
   {
     std::function<u8(const PixelRGB&)> thresholdFcn = [value,anyChannel](const PixelRGB& p)
@@ -1927,25 +1268,25 @@ namespace Vision {
         return 0;
       }
     };
-
+    
     Image out(GetNumRows(), GetNumCols());
     ApplyScalarFunction(thresholdFcn, out);
-
+    
     return out;
   }
-
+  
   ImageRGB& ImageRGB::NormalizeColor(Array2d<s32>* workingArray)
   {
     GetNormalizedColor(*this, workingArray);
     return *this;
   }
-
+  
   void ImageRGB::GetNormalizedColor(ImageRGB& imgNorm, Array2d<s32>* workingArray) const
   {
     this->CopyTo(imgNorm); // makes data continuous, which is required for reshape
-
+    
     DEV_ASSERT(imgNorm.IsContinuous(), "ImageRGB.GetNormalizedColor.NotContinuous");
-
+    
     // Wrap an Nx3 "header" around the original color data
     cv::Mat imageVector;
     try
@@ -1958,7 +1299,7 @@ namespace Vision {
                         "%s", e.what());
       return;
     }
-
+    
     // Compute the sum along the rows, yielding an Nx1 vector
     cv::Mat_<s32> imageSum;
     if(workingArray != nullptr)
@@ -1975,7 +1316,7 @@ namespace Vision {
                         "%s", e.what());
       return;
     }
-
+    
     // Scale each row by 255 and divide by the sum, placing the result directly into output data
     // TODO: Avoid the repeat?
     try
@@ -1989,13 +1330,9 @@ namespace Vision {
       return;
     }
   }
-
+  
   void ImageRGB::ConvertToShowableFormat(cv::Mat& showImg) const {
-    if (Vector::IsXray()) {
-      this->get_CvMat_().copyTo(showImg);
-    } else {
-      cv::cvtColor(this->get_CvMat_(), showImg, cv::COLOR_RGB2BGR);
-    }
+    cv::cvtColor(this->get_CvMat_(), showImg, cv::COLOR_RGB2BGR);
   }
 
   void ImageRGB::SetFromShowableFormat(const cv::Mat& showImg) {
@@ -2013,95 +1350,60 @@ namespace Vision {
   {
     SetFromImageRGB(imageRGB);
   }
-
+  
   ImageRGB565::ImageRGB565()
   : ImageBase<PixelRGB565>()
   {
-
+    
   }
-
+  
   ImageRGB565::ImageRGB565(s32 nrows, s32 ncols)
   : ImageBase<PixelRGB565>(nrows, ncols)
   {
-
+    
   }
-
-  ImageRGB565::ImageRGB565(s32 nrows, s32 ncols, const std::vector<u16>& pixels)
-  : ImageBase<PixelRGB565>(nrows, ncols)
-  {
-    SetFromVector( pixels );
-  }
-
+  
   ImageRGB565& ImageRGB565::SetFromImage(const Image& image)
   {
     Allocate(image.GetNumRows(), image.GetNumCols());
-
+    
     std::function<PixelRGB565(const u8&)> convertFcn = [](const u8& pix)
     {
       PixelRGB565 pixRGB565(pix,pix,pix);
       return pixRGB565;
     };
-
+    
     image.ApplyScalarFunction(convertFcn, *this);
-
+    
     return *this;
   }
-
+  
   ImageRGB565& ImageRGB565::SetFromImageRGB(const ImageRGB& imageRGB)
   {
-    ANKI_CPU_PROFILE("ImageRGB565::SetFromImageRGB");
     // Similar to how COLOR_BGR5652BGR appears to be swapping R and B in ConvertToShowableFormat(),
     // COLOR_RGB2BGR565 here appears not to, which is what we want.
     cv::cvtColor(imageRGB.get_CvMat_(), this->get_CvMat_(), cv::COLOR_RGB2BGR565);
     return *this;
   }
-
+  
   ImageRGB565& ImageRGB565::SetFromImageRGB(const ImageRGB& imageRGB, const std::array<u8, 256>& gammaLUT)
   {
     Allocate(imageRGB.GetNumRows(), imageRGB.GetNumCols());
-
+    
     std::function<PixelRGB565(const PixelRGB&)> convertFcn = [&gammaLUT](const PixelRGB& pixRGB)
     {
       PixelRGB565 pixRGB565(gammaLUT[pixRGB.r()], gammaLUT[pixRGB.g()], gammaLUT[pixRGB.b()]);
       return pixRGB565;
     };
-
+    
     imageRGB.ApplyScalarFunction(convertFcn, *this);
-
-    return *this;
-  }
-
-  ImageRGB565& ImageRGB565::SetFromImageRGB2BGR(const ImageRGB& imageRGB, const std::array<u8, 256>& gammaLUT)
-  {
-    Allocate(imageRGB.GetNumRows(), imageRGB.GetNumCols());
-
-    std::function<PixelRGB565(const PixelRGB&)> convertFcn = [&gammaLUT](const PixelRGB& pixRGB)
-    {
-      PixelRGB565 pixRGB565(gammaLUT[pixRGB.b()], gammaLUT[pixRGB.g()], gammaLUT[pixRGB.r()]);
-      return pixRGB565;
-    };
-
-    imageRGB.ApplyScalarFunction(convertFcn, *this);
-
+    
     return *this;
   }
 
   ImageRGB565& ImageRGB565::SetFromImageRGB565(const ImageRGB565& imageRGB565)
   {
     imageRGB565.CopyTo(*this);
-    return *this;
-  }
-
-  ImageRGB565& ImageRGB565::SetFromVector(const std::vector<u16>& externalData)
-  {
-    u16* internalDataPtr = GetRawDataPointer();
-    const size_t pixelCount = GetNumRows() * GetNumCols();
-    DEV_ASSERT(externalData.size() == pixelCount, "ImageRGB565.SetFromShowableFormat.UnexpectedNumChannels");
-    for(auto& i : externalData)
-    {
-      *internalDataPtr = i;
-      ++internalDataPtr;
-    }
     return *this;
   }
 

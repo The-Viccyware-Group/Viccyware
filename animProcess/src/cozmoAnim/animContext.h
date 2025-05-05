@@ -36,24 +36,15 @@ class AudioMultiplexer;
 }
 }
 
-namespace Vector {
-
-class Alexa;
-namespace Anim {
-  class BackpackLightComponent;
-}
+namespace Cozmo {
+  
 namespace MicData {
-  class MicDataSystem;
+  class MicDataProcessor;
 }
-namespace Anim {
-  class RobotDataLoader;
-}
-class ShowAudioStreamStateManager;
+class RobotDataLoader;
 class ThreadIDInternal;
-class PerfMetricAnim;
-
+  
 namespace Audio {
-class AudioPlaybackSystem;
 class CozmoAudioController;
 }
 namespace RobotInterface {
@@ -63,7 +54,7 @@ namespace WebService {
 class WebService;
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 // ---------- END FORWARD DECLARATIONS ----------
@@ -72,65 +63,55 @@ class WebService;
 
 // Here begins the actual namespace and interface for AnimContext
 namespace Anki {
-namespace Vector {
-namespace Anim {
-
+namespace Cozmo {
+  
 class AnimContext : private Util::noncopyable
 {
   using AudioMultiplexer = AudioEngine::Multiplexer::AudioMultiplexer;
-
+  
 public:
   AnimContext(Util::Data::DataPlatform* dataPlatform);
   AnimContext();
   virtual ~AnimContext();
-
+  
   Util::Data::DataPlatform*             GetDataPlatform() const { return _dataPlatform; }
   Util::Locale*                         GetLocale() const { return _locale.get(); }
   Util::RandomGenerator*                GetRandom() const { return _random.get(); }
-  Anim::RobotDataLoader*                GetDataLoader() const { return _dataLoader.get(); }
+  RobotDataLoader*                      GetDataLoader() const { return _dataLoader.get(); }
   Audio::CozmoAudioController*          GetAudioController() const; // Can return nullptr
   AudioMultiplexer*                     GetAudioMultiplexer() const { return _audioMux.get(); }
-  MicData::MicDataSystem*               GetMicDataSystem() const { return _micDataSystem.get(); }
-  ShowAudioStreamStateManager*          GetShowAudioStreamStateManager() const { return _showStreamStateManager.get(); }
+  MicData::MicDataProcessor*            GetMicDataProcessor() const { return _micDataProcessor.get(); }
   WebService::WebService*               GetWebService() const { return _webService.get(); }
-  Audio::AudioPlaybackSystem*           GetAudioPlaybackSystem() const { return _audioPlayer.get(); }
-  Alexa*                                GetAlexa() const { return _alexa.get(); }
-  BackpackLightComponent*               GetBackpackLightComponent() const { return _backpackLightComponent.get(); }
-  PerfMetricAnim*                       GetPerfMetric() const { return _perfMetric.get(); }
 
   void SetRandomSeed(uint32_t seed);
 
-  void SetLocale(const std::string & locale);
+  // Tell the context that this is the main thread
+  void SetMainThread();
 
+  // Returns true if the current thread is the "main" one. Requires SetMainThread to have been called
+  bool IsMainThread() const;
+  
 private:
   // This is passed in and held onto, but not owned by the context (yet.
   // It really should be, and that refactoring will have to happen soon).
   Util::Data::DataPlatform*                      _dataPlatform = nullptr;
-
-  // Context holds onto these things for everybody.
-  //
-  // Note that MicDataSystem calls into Alexa component, so MicDataSystem
-  // must be shut down BEFORE Alexa component is destroyed!
-  //
+  
+  // Context holds onto these things for everybody:
   std::unique_ptr<Util::Locale>                  _locale;
   std::unique_ptr<AudioMultiplexer>              _audioMux;
   std::unique_ptr<Util::RandomGenerator>         _random;
-  std::unique_ptr<Anim::RobotDataLoader>         _dataLoader;
-  std::unique_ptr<Alexa>                         _alexa;
-  std::unique_ptr<MicData::MicDataSystem>        _micDataSystem;
-  std::unique_ptr<ShowAudioStreamStateManager>   _showStreamStateManager;
+  std::unique_ptr<RobotDataLoader>               _dataLoader;
+  std::unique_ptr<MicData::MicDataProcessor>     _micDataProcessor;
   std::unique_ptr<WebService::WebService>        _webService;
-  std::unique_ptr<Audio::AudioPlaybackSystem>    _audioPlayer;
-  std::unique_ptr<BackpackLightComponent>        _backpackLightComponent;
-  std::unique_ptr<PerfMetricAnim>                _perfMetric;
 
-
+  // for holding the thread id (and avoiding needed to include the .h here)
+  std::unique_ptr<ThreadIDInternal> _threadIdHolder;
+  
   void InitAudio(Util::Data::DataPlatform* dataPlatform);
 };
+  
 
-
-} // namespace Anim
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_AnimContext_H__

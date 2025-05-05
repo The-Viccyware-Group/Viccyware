@@ -709,7 +709,7 @@ int main(int argc, char* argv[])
   std::string cachePath    = FileUtils::FullFilePath({cwdPath, "temp"});
   std::string externalPath = FileUtils::FullFilePath({cwdPath, "temp"});
   Util::Data::DataPlatform dataPlatform(filesPath, cachePath, externalPath, resourcePath);
-  Vector::CozmoContext cozmoContext(&dataPlatform, nullptr);
+  Cozmo::CozmoContext cozmoContext(&dataPlatform, nullptr);
   
   Json::Value config;
   config["FaceDetection"]["DetectionMode"] = "video";

@@ -17,7 +17,7 @@
 //        out of products-cozmo)
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
   namespace SteeringController {
     
     // Available steering controller modes.
@@ -45,11 +45,7 @@ namespace Anki {
     void SetRotationSpeedLimit(f32 rad_per_s);
     f32  GetRotationSpeedLimit();
     void DisableRotationSpeedLimit();
-
-    // For Enabling/Disabling all Execute****() functions
-    void Enable();
-    void Disable();
-
+    
     //This manages at a high level what the steering controller needs to do (steer, use open loop, etc.)
     void Manage();
     
@@ -123,7 +119,7 @@ namespace Anki {
                                            bool useShortestDir);
     
   } // namespace SteeringController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // STEERING_CONTROLLER_H_

@@ -16,14 +16,14 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 
-#include "cannedAnimLib/proceduralFace/proceduralFace.h"
+#include "cannedAnimLib/proceduralFace.h"
 #include "clad/externalInterface/messageEngineToGame.h"
 #include "coretech/common/engine/colorRGBA.h"
-#include "coretech/vision/engine/image_fwd.h"
+#include "coretech/vision/engine/image_impl.h"
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorDevDisplayReadingsOnFace : public ICozmoBehavior
 {

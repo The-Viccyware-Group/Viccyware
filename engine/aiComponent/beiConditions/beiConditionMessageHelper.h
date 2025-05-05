@@ -19,24 +19,12 @@
 #include <set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace ExternalInterface {
 enum class MessageEngineToGameTag : uint8_t;
 enum class MessageGameToEngineTag : uint8_t;
-class MessageGameToEngine;
-class MessageEngineToGame;
 }
-  
-
-template<typename T>
-class AnkiEvent;
-
-using GameToEngineEvent = AnkiEvent<ExternalInterface::MessageGameToEngine>;
-using EngineToGameEvent = AnkiEvent<ExternalInterface::MessageEngineToGame>;
-
-using EngineToGameTag   = ExternalInterface::MessageEngineToGameTag;
-using GameToEngineTag   = ExternalInterface::MessageGameToEngineTag;
 
 class BehaviorExternalInterface;
 class IBEIConditionEventHandler;
@@ -51,8 +39,8 @@ public:
 
   ~BEIConditionMessageHelper();
 
-  void SubscribeToTags(std::set<EngineToGameTag>&& tags);
-  void SubscribeToTags(std::set<GameToEngineTag>&& tags);
+  void SubscribeToTags(std::set<ExternalInterface::MessageEngineToGameTag>&& tags);
+  void SubscribeToTags(std::set<ExternalInterface::MessageGameToEngineTag>&& tags);
 
 private:
 

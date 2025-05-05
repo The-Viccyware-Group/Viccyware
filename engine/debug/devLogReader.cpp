@@ -15,7 +15,7 @@
 #include "util/logging/logging.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 DevLogReader::DevLogReader(const std::string& directory)
 : _directory(directory)
@@ -179,5 +179,5 @@ bool DevLogReader::CheckTimeAndCallback(uint32_t time_ms)
   
   return true;
 }
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

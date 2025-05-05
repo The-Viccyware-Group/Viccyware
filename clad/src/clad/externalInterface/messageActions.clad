@@ -3,16 +3,17 @@
 // Author: Andrew Stein
 // Copyright: Anki Inc (c) 2016
 
-#include "clad/audio/audioSwitchTypes.clad"
 #include "clad/types/actionTypes.clad"
 #include "clad/types/visionModes.clad"
+#include "clad/types/objectFamilies.clad"
 #include "clad/types/pathMotionProfile.clad"
 #include "clad/types/proceduralFaceTypes.clad"
+#include "clad/types/sayTextStyles.clad"
 #include "clad/types/animationTrigger.clad"
 #include "clad/types/petTypes.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace ExternalInterface {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -41,8 +42,11 @@ message CalibrateMotors {
     bool calibrateLift
 }
 
-// CliffAlignToWhite
-message CliffAlignToWhite {
+// DriveOffChargerContacts
+//  Mostly useful for SDK usage where motors are locked while on the charger.
+//  This action drives forward slightly to get off the charger.
+message DriveOffChargerContacts {
+
 }
 
 // DriveStraight
@@ -100,7 +104,8 @@ message PickupObject {
     PathMotionProfile  motionProf,
     float_32           approachAngle_rad,
     bool               useApproachAngle,
-    bool               usePreDockPose
+    bool               usePreDockPose,
+    bool               checkForObjectOnTop = 1, // Fail if object on top
 }
 
 // PlaceObjectOnGround
@@ -135,7 +140,8 @@ message PlaceOnObject {
     PathMotionProfile motionProf,
     float_32 approachAngle_rad,
     bool   useApproachAngle,
-    bool usePreDockPose
+    bool usePreDockPose,
+    bool checkForObjectOnTop = 1
 }
 
 // PlaceRelObject
@@ -161,11 +167,6 @@ message PlayAnimation {
     bool    ignoreBodyTrack=0,
     bool    ignoreHeadTrack=0,
     bool    ignoreLiftTrack=0
-}
-
-// ListAnimations
-message ListAnimations {
-    
 }
 
 // PlayAnimationGroup
@@ -205,6 +206,11 @@ message FacePlant {
   bool usePreDockPose
 }
 
+// ReadToolCode
+message ReadToolCode {
+
+}
+
 // RealignWithObject
 // Realign with object when accidently moved by a small amount.
 message RealignWithObject {
@@ -220,6 +226,7 @@ message RollObject {
   bool doDeepRoll,
   bool useApproachAngle,
   bool usePreDockPose,
+  bool checkForObjectOnTop = 1, // fail if object on top
   bool rollWithoutDocking = 0
 }
 
@@ -227,8 +234,17 @@ message RollObject {
 message SayText {
   string              text,
   AnimationTrigger    playEvent,      // Set AnimationTrigger::Count to only play the Tts without an animation
-  AudioMetaData::SwitchState::Robot_Vic_External_Processing  voiceStyle,
-  float_32            durationScalar = 1.0
+  SayTextVoiceStyle   voiceStyle,
+  float_32            durationScalar = 1.0,
+  float_32            voicePitch = 0.0,
+  bool                fitToDuration   // Use Animation Trigger group to generate an animation to fit the duration of the text to speech audio
+}
+
+message SayTextWithIntent {
+  string              text,
+  AnimationTrigger    playEvent,    // Set AnimationTrigger::Count to only play the text without an animation
+  SayTextIntent       intent,       // Intents have predefined values for the voice style and duration scalar
+  bool                fitToDuration // Use Animation Trigger group to generate an animation to fit the duration of the text to speech audio
 }
 
 enum int_32 SearchForNearbyObjectDefaults {
@@ -253,14 +269,6 @@ message SetHeadAngle {
     float_32 duration_sec
 }
 
-// SetLiftAngle
-message SetLiftAngle {
-    float_32 angle_rad,
-    float_32 max_speed_rad_per_sec,
-    float_32 accel_rad_per_sec2,
-    float_32 duration_sec
-}
-
 // SetLiftHeight
 message SetLiftHeight {
     float_32 height_mm,
@@ -276,8 +284,7 @@ message SetLiftHeight {
 //   Use objectID = u32_MAX to disable tracking.
 message TrackToFace {
     uint_32 faceID,
-    bool    headOnly,
-    bool    moveEyes,
+    bool    headOnly
 }
 
 // TrackToObject
@@ -287,8 +294,7 @@ message TrackToFace {
 //   Use objectID = u32_MAX to disable tracking.
 message TrackToObject {
     uint_32 objectID,
-    bool    headOnly,
-    bool    moveEyes,
+    bool    headOnly
 }
 
 // TrackToLaserPoint
@@ -301,6 +307,12 @@ message TrackToPet {
     float_32         timeout_sec, // Give up after not seeing a pet for this long (0 to never give up)
     uint_32          petID,       // Set to UnknownFaceID (-1) to use first of specified PetType
     Vision::PetType  petType      // Set to Unknown to use any pet type (ignored if ID set)
+}
+
+// TraverseObject
+message TraverseObject {
+  PathMotionProfile motionProf,
+  bool usePreDockPose
 }
 
 // TurnInPlace
@@ -470,7 +482,7 @@ message WaitForImages {
 union RobotActionUnion {
   AlignWithObject               alignWithObject,
   CalibrateMotors               calibrateMotors,
-  CliffAlignToWhite             cliffAlignToWhite,
+  DriveOffChargerContacts       driveOffChargerContacts,
   DriveStraight                 driveStraight,
   FacePlant                     facePlant,
   FlipBlock                     flipBlock,
@@ -487,17 +499,19 @@ union RobotActionUnion {
   PlayAnimationGroup            playAnimationGroup,
   PlayAnimationTrigger          playAnimationTrigger,
   PopAWheelie                   popAWheelie,
+  ReadToolCode                  readToolCode,
   RealignWithObject             realignWithObject,
   RollObject                    rollObject,
   SayText                       sayText,
+  SayTextWithIntent             sayTextWithIntent,
   SearchForNearbyObject         searchForNearbyObject,
   SetHeadAngle                  setHeadAngle,
   SetLiftHeight                 setLiftHeight,
-  SetLiftAngle                  setLiftAngle,
   TrackToFace                   trackFace,
   TrackToObject                 trackObject,
   TrackToLaserPoint             trackLaserPoint,
   TrackToPet                    trackPet,
+  TraverseObject                traverseObject,
   TurnInPlace                   turnInPlace,
   TurnTowardsFace               turnTowardsFace,
   TurnTowardsImagePoint         turnTowardsImagePoint,
@@ -518,5 +532,5 @@ union RobotActionUnion {
 
 
 } // namespace U2G
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

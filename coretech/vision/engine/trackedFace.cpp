@@ -11,91 +11,130 @@
  **/
 
 #include "coretech/vision/engine/trackedFace.h"
-#include "util/helpers/templateHelpers.h"
- 
+#include "coretech/vision/engine/camera.h"
+#include "coretech/common/engine/math/point_impl.h"
+
 namespace Anki {
 namespace Vision {
+  
+  static const f32 DistanceBetweenEyes_mm = 62.f;
+  
+  // Assuming a max face detection of 3m, focal length of 300 and distanceBetweenEyes_mm of 62
+  // then the smallest distance between eyes in pixels will be ~6
+  static const f32 MinDistBetweenEyes_pixels = 6;
   
   TrackedFace::TrackedFace()
   : _smileAmount(false, 0.f, 0.f)
   , _gaze(false, 0.f, 0.f)
   , _blinkAmount(false, 0.f, 0.f)
   , _headPose(M_PI_2, X_AXIS_3D(), {0.f, 0.f, 0.f})
-  , _eyePose(M_PI_2, X_AXIS_3D(), {0.f, 0.f, 0.f})
   {
     
   }
-
-  const TrackedFace::ExpressionValues& TrackedFace::GetExpressionValues() const
+  
+  f32 TrackedFace::GetIntraEyeDistance() const
   {
-    if(ANKI_DEVELOPER_CODE)
+    f32 imageDist = (_leftEyeCen - _rightEyeCen).Length();
+
+    f32 yaw  = std::cos(GetHeadYaw().ToFloat());
+    
+    if(NEAR_ZERO(yaw))
     {
-      // Documentation (in trackedFace.h and in Okao expression manual) says this should be a histogram
-      // summing to 100. Verify that's true (in debug builds).
-      s32 sum=0;
-      for(auto const& value : _expression)
-      {
-        sum += value;
-      }
-      const bool noExpressionValues = (sum==0);
-      DEV_ASSERT_MSG(noExpressionValues || (sum==100), "TrackedFace.GetExpressionValues.HistSumNot100", "%d", sum);
+      yaw = 1;
     }
     
+    if(NEAR_ZERO(imageDist))
+    {
+      PRINT_NAMED_WARNING("TrackedFace.GetIntraEyeDistance.ZeroEyeDist",
+                          "LeftEyeCen (%f %f) RightEyeCen (%f %f) Dist %f",
+                          _leftEyeCen.x(),
+                          _leftEyeCen.y(),
+                          _rightEyeCen.x(),
+                          _rightEyeCen.y(),
+                          imageDist);
+      imageDist = MinDistBetweenEyes_pixels;
+    }
+    
+    return imageDist / yaw;
+  }
+  
+  bool TrackedFace::UpdateTranslation(const Vision::Camera& camera)
+  {
+    bool usedRealCenters = true;
+    Point2f leftEye, rightEye;
+    f32 intraEyeDistance = 0;
+    if(!GetEyeCenters(leftEye, rightEye))
+    {
+      // No eyes set: Use fake eye centers
+      DEV_ASSERT(_rect.Area() > 0, "Invalid face rectangle");
+      Point2f leftEye(GetRect().GetXmid() - .25f*GetRect().GetWidth(),
+                      GetRect().GetYmid() - .125f*GetRect().GetHeight());
+      Point2f rightEye(GetRect().GetXmid() + .25f*GetRect().GetWidth(),
+                       GetRect().GetYmid() - .125f*GetRect().GetHeight());
+
+      usedRealCenters = false;
+      intraEyeDistance = std::max((rightEye - leftEye).Length(), MinDistBetweenEyes_pixels);
+    }
+    else
+    {
+      intraEyeDistance = GetIntraEyeDistance();
+    }
+    
+    DEV_ASSERT(!NEAR_ZERO(intraEyeDistance), "IntraEyeDistance is near zero");
+      
+    // Get unit vector along camera ray from the point between the eyes in the image
+    Point2f eyeMidPoint(leftEye);
+    eyeMidPoint += rightEye;
+    eyeMidPoint *= 0.5f;
+    
+    Point3f ray(eyeMidPoint.x(), eyeMidPoint.y(), 1.f);
+    DEV_ASSERT(camera.IsCalibrated(), "Camera should be calibrated");
+    ray = camera.GetCalibration()->GetInvCalibrationMatrix() * ray;
+    ray.MakeUnitLength();
+    
+    ray *= camera.GetCalibration()->GetFocalLength_x() * DistanceBetweenEyes_mm / intraEyeDistance;
+    
+    _headPose.SetTranslation(ray);
+    _isTranslationSet = true;
+    _headPose.SetParent(camera.GetPose());
+    
+    return usedRealCenters;
+  }
+  
+  const TrackedFace::FacialExpressionValues& TrackedFace::GetExpressionValues() const
+  {
     return _expression;
   }
   
   // Return the expression with highest value
-  FacialExpression TrackedFace::GetMaxExpression(ExpressionValue* valuePtr) const
+  FacialExpression TrackedFace::GetMaxExpression(s32* valuePtr) const
   {
-    static_assert(Util::EnumToUnderlying(FacialExpression::Unknown) == -1,
-                  "Expecting Unknown expression to be value -1");
+    static_assert((s32)FacialExpression::Unknown == -1, "Expecting Unknown expression to be value -1");
     
-    // This tracks the index of the expression in the array with the max value
-    auto maxExprIndex = Util::EnumToUnderlying(FacialExpression::Unknown);
-    
-    // This is used to increment through the expression array, starting from the 0 index,
-    // and using the underlying type of the FacialExpression enum
-    auto crntExpIndex = static_cast<std::underlying_type_t<FacialExpression>>(0);
-    
-    ExpressionValue maxValue = 0;
-    for(auto const& crntValue : _expression)
+    FacialExpression maxExpression = FacialExpression::Unknown;
+    s32 maxValue = -1;
+    for(s32 crntExpression = 0; crntExpression < (s32)FacialExpression::Count; ++crntExpression)
     {
-      if(crntValue > maxValue) {
-        maxValue = crntValue;
-        maxExprIndex = crntExpIndex;
+      if(_expression[crntExpression] > maxValue) {
+        maxValue = _expression[crntExpression];
+        maxExpression = (FacialExpression)crntExpression;
       }
-      ++crntExpIndex;
     }
     
     if(nullptr != valuePtr)
     {
       *valuePtr = maxValue;
     }
-    return static_cast<FacialExpression>(maxExprIndex);
+    return maxExpression;
   }
   
-  void TrackedFace::SetExpressionValue(FacialExpression whichExpression, ExpressionValue newValue)
+  void TrackedFace::SetExpressionValue(FacialExpression whichExpression, f32 newValue)
   {
-    DEV_ASSERT_MSG(Util::InRange(newValue, ExpressionValue(0), ExpressionValue(100)),
-                   "TrackedFace.SetExpressionValue.BadValue",
-                   "%s:%d", EnumToString(whichExpression), newValue);
-    
-    const auto expressionIndex = Util::EnumToUnderlying(whichExpression);
+    const u32 expressionIndex = (u32)whichExpression;
+    DEV_ASSERT(expressionIndex < (u32)FacialExpression::Count, "TrackedFace.SetExpressionValue.BadExpression");
     _expression[expressionIndex] = newValue;
   }
-
-  void TrackedFace::Shift(const Point2f& shift)
-  {
-    for (auto& feature: _features)
-    {
-      for (auto& point: feature) 
-      {
-        point += shift;
-      }
-    }
-    _rect = Rectangle<f32>(_rect.GetX() + shift.x(), _rect.GetY() + shift.y(),
-                           _rect.GetWidth(), _rect.GetHeight());
-  }
+  
 } // namespace Vision
 } // namespace Anki
 

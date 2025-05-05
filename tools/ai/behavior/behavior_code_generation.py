@@ -26,10 +26,10 @@ ${auto_generated_comment}
 
 $includes
 
-#include "clad/types/behaviorComponent/behaviorClasses.h"
+#include "clad/types/behaviorComponent/behaviorTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 ICozmoBehaviorPtr BehaviorFactory::CreateBehavior(const Json::Value& config)
 {
@@ -40,10 +40,6 @@ ICozmoBehaviorPtr BehaviorFactory::CreateBehavior(const Json::Value& config)
   switch (behaviorType)
   {
 $factory_case_statements
-  }
-
-  if( ANKI_DEVELOPER_CODE ) {
-    newBehavior->CheckJson(config);
   }
     
   return newBehavior;
@@ -86,7 +82,7 @@ def write_behavior_factory_cpp(filename, behaviors, path_to_behavior_code):
 behavior_class_clad_prefix = '''\
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // BehaviorClass identifies the ICozmoBehavior child class which the behavior is
 // an instance of. The names of the BehaviorClass, the code file, and the actual C++ class
@@ -128,12 +124,12 @@ def write_behavior_class_clad(filename, behaviors):
 behavior_id_clad_prefix = '''\
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // BehaviorID is a unique identifier for each instance of a behavior
 // so that they can be referenced by other parts of the behavior system
 
-enum uint_16 BehaviorID {
+enum uint_8 BehaviorID {
 
   // required (not based on config)
   Anonymous,

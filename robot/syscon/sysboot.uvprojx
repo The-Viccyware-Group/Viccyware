@@ -71,7 +71,7 @@
           <BeforeMake>
             <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name>python ./tools/export.py build/publickeys.h</UserProg1Name>
+            <UserProg1Name>c:\cygwin\bin\bash -c "python3 ./tools/export.py build/publickeys.h"</UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
@@ -298,7 +298,7 @@
               <OCR_RVCT9>
                 <Type>0</Type>
                 <StartAddress>0x20000000</StartAddress>
-                <Size>0x1ffc</Size>
+                <Size>0x2000</Size>
               </OCR_RVCT9>
               <OCR_RVCT10>
                 <Type>0</Type>
@@ -332,7 +332,7 @@
             <v6WtE>0</v6WtE>
             <VariousControls>
               <MiscControls>--gnu</MiscControls>
-              <Define>STM32F030X8,BOOTLOADER,WHISKEY</Define>
+              <Define>STM32F030X8,BOOTLOADER</Define>
               <Undefine></Undefine>
               <IncludePath>boot;common;schema;crypto;build</IncludePath>
             </VariousControls>
@@ -349,7 +349,7 @@
             <useXO>0</useXO>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>WHISKEY</Define>
+              <Define></Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>
             </VariousControls>
@@ -408,14 +408,14 @@
               <FilePath>.\boot\startup_stm32f030x8.s</FilePath>
             </File>
             <File>
+              <FileName>power.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\boot\power.cpp</FilePath>
+            </File>
+            <File>
               <FileName>sha256.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\crypto\sha256.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>analog.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\boot\analog.cpp</FilePath>
             </File>
           </Files>
         </Group>
@@ -423,14 +423,14 @@
           <GroupName>common</GroupName>
           <Files>
             <File>
+              <FileName>analog.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>.\common\analog.cpp</FilePath>
+            </File>
+            <File>
               <FileName>flash.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>.\common\flash.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>power.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>.\boot\power.cpp</FilePath>
             </File>
           </Files>
         </Group>

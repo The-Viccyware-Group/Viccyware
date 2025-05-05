@@ -1,10 +1,5 @@
 project(das_client)
 
-include(anki_build_cxx)
-include(anki_build_strip)
-
-option(USE_DAS "Enable DAS logs" OFF)
-
 set(SRCS
   src/DAS.cpp
   src/dasAppender.cpp
@@ -13,6 +8,7 @@ set(SRCS
   src/dasInit.cpp
   src/dasLogFileAppender.cpp
   src/fileUtils.cpp
+  src/jsoncpp.cpp
   src/stringUtils.cpp
   src/stringUtils.h
   src/taskExecutor.cpp
@@ -20,28 +16,7 @@ set(SRCS
 )
 
 set(PLATFORM_SRCS "")
-set(PLATFORM_LIBS "")
-set(PLATFORM_INCLUDES "")
-
-if (VICOS)
-
-  message(STATUS "DAS Platform: VICOS")
-
-  set(PLATFORM_SRCS
-    vicos/dasLogMacros.h
-    vicos/dasLocalAppenderImpl.h
-    vicos/dasLocalAppenderImpl.cpp
-    vicos/dasLocalAppenderFactory.cpp
-    vicos/dasPostToServer.cpp
-  )
-
-  set(PLATFORM_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/vicos)
-  set(PLATFORM_LIBS log curl z)
-
-elseif (ANDROID)
-
-  message(STATUS "DAS Platform: ANDROID" )
-
+if (ANDROID)
   set(PLATFORM_SRCS
     android/DASNativeLib/jni/dasJni.cpp
     android/DASNativeLib/jni/dasLocalAppenderFactory.cpp
@@ -50,16 +25,7 @@ elseif (ANDROID)
     android/DASNativeLib/jni/dasLogMacros.h
     android/DASNativeLib/jni/dasPlatform_android.cpp
   )
-  set(PLATFORM_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/android/DASNativeLib/jni)
-  set(PLATFORM_LIBS android log)
-
-  # needed to workaround localeconv issue with c++_shared on android
-  target_compile_definitions(DAS PRIVATE -DNO_LOCALE_SUPPORT=1)
-
-elseif (MACOSX)
-
-  message(STATUS "DAS Platform: UNIX")
-
+elseif (MACOSX OR VICOS)
   set(PLATFORM_SRCS
     unix/dasLocalAppenderFactory.cpp
     unix/dasLocalAppenderImpl.cpp
@@ -67,29 +33,33 @@ elseif (MACOSX)
     unix/dasLogMacros.h
     unix/dasPostToServer.cpp
   )
-  set(PLATFORM_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/unix)
-
 endif()
 
-add_library(DAS STATIC
-  ${SRCS} ${PLATFORM_SRCS}
-)
+set(PLATFORM_LIBS "")
+if (ANDROID)
+  set(PLATFORM_LIBS android log)
+elseif(VICOS)
+  set(PLATFORM_LIBS log)
+endif()
 
-target_compile_options(DAS
-  PRIVATE
-  ${ANKI_BUILD_CXX_COMPILE_OPTIONS}
-  ${ASAN_CXX_FLAGS} 
+add_library(DAS
+  ${SRCS}
+  ${PLATFORM_SRCS}
 )
+include(android_strip)
+android_strip(TARGET DAS)
 
-target_compile_definitions(DAS
-  PUBLIC
-  USE_DAS=$<BOOL:${USE_DAS}>
-  PRIVATE
-  ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS}
-)
+set(PLATFORM_INCLUDES "")
 
-target_include_directories(DAS
-  PUBLIC
+if (ANDROID)
+  # needed to workaround localeconv issue with c++_shared on android
+  target_compile_definitions(DAS PRIVATE -DNO_LOCALE_SUPPORT=1)
+  set(PLATFORM_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/android/DASNativeLib/jni)
+elseif (MACOSX OR VICOS)
+  set(PLATFORM_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/unix)
+endif()
+
+target_include_directories(DAS PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/DAS>
@@ -98,12 +68,5 @@ target_include_directories(DAS
 )
 
 target_link_libraries(DAS
-  PRIVATE
   ${PLATFORM_LIBS}
-  jsoncpp
-  ${ASAN_STATIC_LINKER_FLAGS}
 )
-
-anki_build_target_license(DAS "ANKI")
-
-anki_build_strip(TARGET DAS)

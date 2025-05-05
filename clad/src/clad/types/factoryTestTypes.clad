@@ -5,10 +5,9 @@
 
 #include "clad/types/birthCertificate.clad"
 #include "clad/types/proxMessages.clad"
-#include "clad/types/tofTypes.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 FactoryTestState {
   GetPrevTestResults,
@@ -20,6 +19,7 @@ enum uint_8 FactoryTestState {
   TakeCalibrationImages,    // Take and save images of calibration patterns
   ComputeCameraCalibration, // Compute calibration and check that values are reasonable
   WaitForCameraCalibration,
+  ReadLiftToolCode,
   GotoPickupPose,
   StartPickup,
   PickingUpBlock,
@@ -54,7 +54,6 @@ enum uint_8 FactoryTestResultCode {
   CALIB_POSE_WRITE_FAILED,
   TOO_MANY_CALIB_IMAGES,
   CALIB_POSE_GET_FAILED,
-
   READ_TOOL_CODE_FAILED,
   TOOL_CODE_POSITIONS_OOR,
   TOOL_CODE_WRITE_FAILED,
@@ -75,15 +74,11 @@ enum uint_8 FactoryTestResultCode {
   TEST_CANCELLED,
   ROBOT_PICKUP,
   TOOL_CODE_IMAGES_WRITE_FAILED,
-
-  NOISY_TOUCH_SENSOR,
-
+  FIRST_CALIB_IMAGE_NOT_TAKEN,
   CUBE_POSE_WRITE_FAILED,
   LIFT_MOTOR_CALIB_UNEXPECTED,
   HEAD_MOTOR_CALIB_UNEXPECTED,
-
-  BACKPACK_ELECTRICAL_ERROR,
-
+  WIPED_ALL,
   ROBOT_FAILED_PREPLAYPEN_TESTS,
   ROBOT_NOT_TESTED,
   MOTORS_UNCALIBRATED,
@@ -91,36 +86,26 @@ enum uint_8 FactoryTestResultCode {
   NVSTORAGE_WRITE_FAILED,
   NVSTORAGE_SEND_FAILED,
   TOO_MANY_TOOL_CODE_IMAGES,
-
-  RAMPOST_ERROR,
-
+  CALIB_META_INFO_WRITE_FAILED,
   IMU_INFO_WRITE_FAILED,
   NO_ACTIVE_OBJECTS_DISCOVERED,
-
-  UNEXPECTED_TOUCH_DETECTED,
-
+  NO_PREPLAYPEN_CENTROIDS,
   COMPUTE_CAM_POSE_FAILED,
   CAM_POSE_OOR,
   PLAY_SOUND_FAILED,
   PREV_TEST_RESULTS_READ_FAILED,
-
-  START_TOF_FAILED,
-
+  WRONG_FIRMWARE_VERSION,
   CLIFF_VALUE_TOO_HIGH,
   CLIFF_VALUE_TOO_LOW,
   BACKUP_NOT_STRAIGHT,
   BATTERY_TOO_LOW,
   NO_IMU_DATA,
   BACK_AND_FORTH_NOT_STRAIGHT,
-
-  CALIBRATE_TOF_FAILED,
-  STOP_TOF_FAILED,
-
+  WRONG_BODY_HW_VERSION,
+  NO_BODY_VERSION_MESSAGE,
   NVSTORAGE_ERASE_FAILED,
-
-  SETUP_TOF_FAILED,
-
-  NO_WIFI_APS_DISCOVERED,
+  PARSE_HEADER_FAILED,
+  ONE_POINT_ZERO_FIRMWARE,
   UNKNOWN_BODY_COLOR,
 
   // Victor specific error codes
@@ -150,10 +135,8 @@ enum uint_8 FactoryTestResultCode {
   NO_FFT_RESULT,
   TOUCH_VALUES_OOR,
   DISTANCE_SENSOR_OOR,
-  CERT_CHECK_FAILED,
 
-  // ==== NO MORE SPACE !!!! =================================
-  // ==== New result codes should replace unused ones ========
+  // ==== New result codes should be added at the end ========
   // ==== Never delete codes, even if they are deprecated! ===
   // ==== NB: Factory expects codes to be 0-99 so if you exceed 100 errors codes let them know! ===
 }
@@ -202,37 +185,15 @@ structure PoseData {
 }
 
 structure DistanceSensorData {
-  float_32 proxDistanceToTarget_mm,
-  float_32 visualDistanceToTarget_mm,
-  float_32 visualAngleAwayFromTarget_rad
-}
-
-structure RangeSensorData {
-  RangeDataRaw rangeData,
-  float_32     visualDistanceToTarget_mm,
-  float_32     visualAngleAwayFromTarget_rad,
-  float_32     headAngle_rad
+  ProxSensorData proxSensorData,
+  float_32       visualDistanceToTarget_mm,
+  float_32       visualAngleAwayFromTarget_rad
 }
 
 structure TouchSensorValues {
   uint_16 data[uint_16]
 }
 
-structure TouchSensorFilt {
-  float_32 min,
-  float_32 max,
-  float_32 stddev
-}
 
-// Bit masks to enable/disable various playpen checks
-// via a word in the emr
-enum no_cpp_class uint_32 PlaypenTestMask {
-  BackpackElectricalError      = 0x00000001,
-  UnexpectedTouchDetectedError = 0x00000002,
-  NoisyTouchSensorError        = 0x00000004,
-  CubeRadioError               = 0x00000008,
-  WifiScanError                = 0x00000010,
-}
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

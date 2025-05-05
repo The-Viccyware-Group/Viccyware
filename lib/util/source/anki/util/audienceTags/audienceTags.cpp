@@ -75,7 +75,7 @@ const std::vector<std::string>& AudienceTags::CalculateQualifiedTags() const
   {
     // report qualified tags
     std::string tagList = Util::StringJoin(_qualifiedTags, ' ');
-    PRINT_NAMED_INFO("audience_tags.qualified", "%s", tagList.c_str());
+    LOG_EVENT("audience_tags.qualified", "%s", tagList.c_str());
   }
   return _qualifiedTags;
 }

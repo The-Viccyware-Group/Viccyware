@@ -16,7 +16,7 @@
 #define __Cozmo_Engine_UnitTestKey_H__
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class UnitTestKey
 {
@@ -24,11 +24,9 @@ private:
   UnitTestKey(){}
   
   friend class TestBehaviorHighLevelAI;
-  friend class TestBehaviorFramework;
-  friend class BehaviorDirectoryStructure_Run_Test;
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Engine_UnitTestKey_H__

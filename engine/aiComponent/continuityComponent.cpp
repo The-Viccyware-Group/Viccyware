@@ -1,10 +1,10 @@
 /**
-* File: continuityComponent.cpp
+* File: continuityComponent.h
 *
 * Author: Kevin M. Karol
 * Created: 2/1/18
 *
-* Description: Component responsible for ensuring decisions by the behavior system
+* Description: Component responsible for ensuring decisions by the behavior system 
 * blend together well by the time they are sent to robot
 *
 * Copyright: Anki, Inc. 2018
@@ -13,50 +13,21 @@
 
 #include "engine/aiComponent/continuityComponent.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "engine/actions/animActions.h"
-#include "engine/aiComponent/aiComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorComponent.h"
-#include "engine/aiComponent/behaviorComponent/userIntentComponent.h"
-#include "engine/externalInterface/externalInterface.h"
 #include "engine/robot.h"
 
 namespace Anki {
-namespace Vector {
-
+namespace Cozmo {
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ContinuityComponent::ContinuityComponent(Robot& robot)
 : IDependencyManagedComponent<AIComponentID>(this, AIComponentID::ContinuityComponent)
 , _robot(robot)
-, _animTag(ActionConstants::INVALID_TAG)
 {
 
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-ContinuityComponent::~ContinuityComponent()
-{
-  Util::SafeDelete(_nextActionToQueue);
-}
   
-void ContinuityComponent::InitDependent(Robot *robot, const AICompMap& dependentComps)
-{
-  if( robot->HasExternalInterface() ){
-    auto onCompletedAction = [this](const AnkiEvent<ExternalInterface::MessageEngineToGame>& event)
-    {
-      if( event.GetData().GetTag() == ExternalInterface::MessageEngineToGameTag::RobotCompletedAction ) {
-        const auto& msg = event.GetData().Get_RobotCompletedAction();
-        if( msg.idTag == _animTag ) {
-          _playingGetOut = false;
-          _animTag = ActionConstants::INVALID_TAG;
-        }
-      }
-    };
-    _signalHandles.push_back(_robot.GetExternalInterface()->Subscribe( ExternalInterface::MessageEngineToGameTag::RobotCompletedAction,
-                                                                       onCompletedAction ) );
-  }
-}
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ContinuityComponent::UpdateDependent(const AICompMap& dependentComps)
 {
@@ -72,10 +43,7 @@ void ContinuityComponent::UpdateDependent(const AICompMap& dependentComps)
 bool ContinuityComponent::GetIntoAction(IActionRunner* action)
 {
   if(_playingGetOut){
-    if( _nextActionToQueue != nullptr ) {
-      PRINT_NAMED_WARNING("ContinuityComponent.GetIntoAction.ReplacingAction", "Replacing delegated action");
-      delete _nextActionToQueue;
-    }
+    delete _nextActionToQueue;
     _nextActionToQueue = action;
     return true;
   }else{
@@ -94,37 +62,14 @@ bool ContinuityComponent::GetOutOfAction(u32 idTag)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ContinuityComponent::PlayEmergencyGetOut(AnimationTrigger anim)
 {
-  if( _playingGetOut ) {
-    PRINT_NAMED_WARNING( "ContinuityComponent.PlayEmergencyGetOut.MultipleGetOuts",
-                         "Continuity component is trying to play multiple emergency getouts (%s)",
-                         AnimationTriggerToString(anim) );
-  }
-
-  // Prevent emergency getouts from playing when we are displaying info screens
-  // such as pairing or CC screens as the getout animations can draw over the info screens
-  if(_displayingInfoFace)
-  {
-    PRINT_NAMED_INFO("ContinuityComponent.PlayEmergencyGetOut.DisplayingInfoFace",
-                     "Not playing emergency get out %s due to info face being displayed",
-                     EnumToString(anim));
-    return;
-  }
-
-  BehaviorComponent& bComp = _robot.GetAIComponent().GetComponent<BehaviorComponent>();
-  if( bComp.GetComponent<UserIntentComponent>().WaitingForTriggerWordGetInToFinish() ) {
-    PRINT_NAMED_INFO("ContinuityComponent.PlayEmergencyGetOut.WaitingForTriggerWordGetInToFinish",
-                     "Not playing emergency get out %s due to trigger word get in anim playing",
-                     EnumToString(anim));
-    return;
-  }
-  
   // Queue now to cancel current action
   IActionRunner* animAction = new TriggerAnimationAction(anim);
-  const auto animTag = animAction->GetTag();
+  auto getOutCompleteCallback = [this](ActionResult res){
+    _playingGetOut = false;
+  };
+
+  animAction->AddCompletionCallback(getOutCompleteCallback);
   _playingGetOut = QueueAction(animAction);
-  if( _playingGetOut ) {
-    _animTag = animTag;
-  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -142,5 +87,5 @@ bool ContinuityComponent::QueueAction(IActionRunner* action)
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

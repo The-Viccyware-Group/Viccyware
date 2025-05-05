@@ -13,6 +13,7 @@
 #include "coretech/common/engine/colorRGBA.h"
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/math/pose.h"
+#include "coretech/common/engine/math/point_impl.h"
 
 #include "util/logging/logging.h"
 #include "util/math/numericCast.h"
@@ -105,7 +106,7 @@ std::string ParseString(const Json::Value& config, const char* key, const std::s
     return node.asUInt();
   }
 
-#if !defined(__ANDROID__) && !defined(VICOS)
+#ifndef __ANDROID__
   template<>
   uint32_t GetValue<uint32_t>(const Json::Value& node) {
     return node.asUInt();

@@ -18,7 +18,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   
 static const char* kEmotionTypeKey = "emotionType";
@@ -72,6 +72,6 @@ bool EmotionAffector::WriteToJson(Json::Value& outJson) const
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

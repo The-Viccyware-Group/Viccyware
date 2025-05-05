@@ -14,7 +14,7 @@
 #define __Anki_Cozmo_Basestation_Components_DockingComponent_H__
 
 #include "coretech/common/engine/objectIDs.h"
-#include "coretech/common/engine/robotTimeStamp.h"
+#include "coretech/common/shared/types.h"
 
 #include "coretech/vision/engine/visionMarker.h"
 #include "coretech/vision/shared/MarkerCodeDefinitions.h"
@@ -28,7 +28,7 @@
 #include "util/helpers/noncopyable.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ObservableObject;
 class Robot;
@@ -42,7 +42,7 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
   //////
@@ -56,7 +56,6 @@ public:
   // - how many firmware side retries should occur
   // - which docking method to use
   // - whether or not to a lift load check
-  // - whether or not to begin raising the lift at the same time as beginning to back up
   Result DockWithObject(const ObjectID objectID,
                         const f32 speed_mmps,
                         const f32 accel_mmps2,
@@ -69,14 +68,13 @@ public:
                         const f32 placementOffsetAngle_rad = 0,
                         const u8 numRetries = 2,
                         const DockingMethod dockingMethod = DockingMethod::BLIND_DOCKING,
-                        const bool doLiftLoadCheck = false,
-                        const bool backUpWhileLiftingCube = false);
+                        const bool doLiftLoadCheck = false);
   
   // Tells the robot to abort docking
   Result AbortDocking() const;
   
   // Sends an updated docking error signal to the robot if we are currently docking
-  void UpdateDockingErrorSignal(const RobotTimeStamp_t t) const;
+  void UpdateDockingErrorSignal(const TimeStamp_t t) const;
   
   void SetPickingOrPlacing(bool t) {_isPickingOrPlacing = t;}
   bool IsPickingOrPlacing() const {return _isPickingOrPlacing;}

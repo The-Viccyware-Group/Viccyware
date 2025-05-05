@@ -5,7 +5,6 @@
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 
 #include "engine/components/visionComponent.h"
-#include "engine/components/visionScheduleMediator/visionScheduleMediator.h"
 #include "engine/faceWorld.h"
 #include "engine/robot.h"
 #include "engine/cozmoContext.h"
@@ -40,14 +39,14 @@ static const f32 ExpectedDetectionPercent   = 90.f;
 //static const s32 ExpectedNumFaceIDsLimit    = 10;
 static const f32 ExpectedFalsePositivePercent = 1.f;
 
-extern Anki::Vector::CozmoContext* cozmoContext;
+extern Anki::Cozmo::CozmoContext* cozmoContext;
 
 using namespace Anki;
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 // Console vars we want to modify for the tests below
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   extern bool kIgnoreFacesBelowRobot;
   extern f32 kBodyTurnSpeedThreshFace_degs;
   extern f32 kHeadTurnSpeedThreshFace_degs;
@@ -64,12 +63,12 @@ static const std::vector<const char*> imageFileExtensions = {"jpg", "jpeg", "png
 
 // Helper lambda to pass an image file into the vision component and
 // then update FaceWorld with any resulting detections
-static void Recognize(Robot& robot, RobotTimeStamp_t timestamp, RobotState& stateMsg, Vision::Image& img,
+static void Recognize(Robot& robot, TimeStamp_t timestamp, RobotState& stateMsg, Vision::Image& img,
                       const std::string& filename, const char *dispName, const std::set<std::string>& namesPresent)
 {
   Result lastResult = RESULT_OK;
   
-  stateMsg.timestamp = (TimeStamp_t)timestamp;
+  stateMsg.timestamp = timestamp;
   lastResult = robot.UpdateFullRobotState(stateMsg);
   ASSERT_EQ(RESULT_OK, lastResult);
   
@@ -84,16 +83,10 @@ static void Recognize(Robot& robot, RobotTimeStamp_t timestamp, RobotState& stat
     ASSERT_EQ(RESULT_OK, lastResult);
   }
   
-  img.SetTimestamp((TimeStamp_t)timestamp);
+  img.SetTimestamp(timestamp);
   
   Vision::ImageRGB imgRGB(img);
-  Vision::ImageBuffer buffer(reinterpret_cast<u8*>(img.GetDataPointer()),
-                             img.GetNumRows(),
-                             img.GetNumCols(),
-                             Vision::ImageEncoding::RawRGB,
-                             (TimeStamp_t)timestamp,
-                             0);
-  lastResult = robot.GetVisionComponent().SetNextImage(buffer);
+  lastResult = robot.GetVisionComponent().SetNextImage(imgRGB);
   ASSERT_EQ(RESULT_OK, lastResult);
   
   lastResult = robot.GetVisionComponent().UpdateAllResults();
@@ -103,7 +96,7 @@ static void Recognize(Robot& robot, RobotTimeStamp_t timestamp, RobotState& stat
   {
     Vision::ImageRGB dispImg(img);
 
-    auto faceIDs = robot.GetFaceWorld().GetFaceIDs(timestamp);
+    auto faceIDs = robot.GetFaceWorld().GetFaceIDsObservedSince(timestamp);
     std::list<Vision::TrackedFace> faces;
     for(auto faceID : faceIDs)
     {
@@ -166,11 +159,11 @@ static void Recognize(Robot& robot, RobotTimeStamp_t timestamp, RobotState& stat
 
 } // Recognize()
 
-Result Enroll(Robot& robot, RobotTimeStamp_t& fakeTime, RobotState& stateMsg, Vision::Image& img, const std::string& dataPath, const std::string& userDir)
+Result Enroll(Robot& robot, TimeStamp_t& fakeTime, RobotState& stateMsg, Vision::Image& img, const std::string& dataPath, const std::string& userDir)
 {
   const std::string& enrollSubDir = "enroll";
   
-  robot.GetVisionComponent().SetFaceEnrollmentMode();
+  robot.GetVisionComponent().SetFaceEnrollmentMode(Vision::FaceEnrollmentPose::LookingStraight);
   
   // Get the images to use for enrollment
   auto enrollFiles = Util::FileUtils::FilesInDirectory(Util::FileUtils::FullFilePath({dataPath, userDir, enrollSubDir}),
@@ -194,7 +187,7 @@ Result Enroll(Robot& robot, RobotTimeStamp_t& fakeTime, RobotState& stateMsg, Vi
     Recognize(robot, fakeTime, stateMsg, img, enrollFile, "EnrollImage", {userDir});
     
     // Get the faces observed in the current image
-    auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDs(img.GetTimestamp());
+    auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDsObservedSince(img.GetTimestamp());
 
     if(observedFaceIDs.empty())
     {
@@ -225,7 +218,8 @@ Result Enroll(Robot& robot, RobotTimeStamp_t& fakeTime, RobotState& stateMsg, Vi
         
         // Recognized, not just tracked: start enrolling the ID
         enrollmentID = observedID;
-        robot.GetVisionComponent().SetFaceEnrollmentMode(enrollmentID,
+        robot.GetVisionComponent().SetFaceEnrollmentMode(Vision::FaceEnrollmentPose::LookingStraight,
+                                                         enrollmentID,
                                                          (int)Vision::FaceRecognitionConstants::MaxNumEnrollDataPerAlbumEntry);
         
       }
@@ -256,7 +250,7 @@ Result Enroll(Robot& robot, RobotTimeStamp_t& fakeTime, RobotState& stateMsg, Vi
   return RESULT_FAIL;
 }
 
-Result ShowBlankFrames(s32 N, Robot& robot, RobotTimeStamp_t& fakeTime, RobotState& stateMsg, Vision::Image& img, const char* dispName)
+Result ShowBlankFrames(s32 N, Robot& robot, TimeStamp_t& fakeTime, RobotState& stateMsg, Vision::Image& img, const char* dispName)
 {
   Result lastResult = RESULT_OK;
   
@@ -274,7 +268,7 @@ Result ShowBlankFrames(s32 N, Robot& robot, RobotTimeStamp_t& fakeTime, RobotSta
     
     // We should not detect faces in any frames past the "lost" count
     if(iBlank >= 2) {
-      auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDs(img.GetTimestamp());
+      auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDsObservedSince(img.GetTimestamp());
       if(!observedFaceIDs.empty())
       {
         lastResult = RESULT_FAIL;
@@ -365,28 +359,28 @@ TEST(FaceRecognition, VideoRecognitionAndTracking)
   
   Vision::kFaceRecognitionExtraDebug = true;
   
-  RobotTimeStamp_t fakeTime = 100000;
+  TimeStamp_t fakeTime = 100000;
   const TimeStamp_t kTestTimeInc = 65;
   
   s32 totalFalsePositives = 0;
   
-  DependencyManagedEntity<RobotComponentID> dependentComps;
-  dependentComps.AddDependentComponent(RobotComponentID::CozmoContextWrapper, new ContextWrapper(cozmoContext));
+  DependencyManagedEntity<RobotComponentID> dependentComponents;
+  dependentComponents.AddDependentComponent(RobotComponentID::CozmoContext, new ContextWrapper(cozmoContext));
   for(s32 iReload=0; iReload<2; ++iReload)
   {
     // All-new robot, face tracker, and face world for each person for this test
     Robot robot(1, cozmoContext);
-    robot.FakeSyncRobotAck();
+    robot.FakeSyncTimeAck();
 
     // Fake a state message update for robot
     RobotState stateMsg( Robot::GetDefaultRobotState() );
     
     robot.GetVisionComponent().SetIsSynchronous(true);
-    robot.GetVisionComponent().InitDependent(&robot, dependentComps);
+    robot.GetVisionComponent().InitDependent(&robot, dependentComponents);
     
     robot.GetVisionComponent().SetCameraCalibration(camCalib);
-    robot.GetVisionScheduleMediator().DevOnly_ReleaseAllSubscriptions();
-    robot.GetVisionScheduleMediator().DevOnly_SelfSubscribeVisionMode({VisionMode::Faces});
+    robot.GetVisionComponent().EnableMode(VisionMode::Idle, true);
+    robot.GetVisionComponent().EnableMode(VisionMode::DetectingFaces, true);
     robot.GetVisionComponent().Enable(true);
     
     if(iReload == 0)
@@ -421,7 +415,7 @@ TEST(FaceRecognition, VideoRecognitionAndTracking)
     }
     
     // Allow session-only enrollment
-    robot.GetVisionComponent().SetFaceEnrollmentMode();
+    robot.GetVisionComponent().SetFaceEnrollmentMode(Vision::FaceEnrollmentPose::LookingStraight);
     
     for(auto & test : testDirData)
     {
@@ -457,7 +451,7 @@ TEST(FaceRecognition, VideoRecognitionAndTracking)
           stats.totalFrames++;
           
           // Get the faces observed in the current image
-          auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDs(img.GetTimestamp());
+          auto observedFaceIDs = robot.GetFaceWorld().GetFaceIDsObservedSince(img.GetTimestamp());
           
           if(observedFaceIDs.size() != test.names.size()) {
             PRINT_NAMED_WARNING("FaceRecognition.VideoRecognitionAndTracking.WrongNumFacesDetected",

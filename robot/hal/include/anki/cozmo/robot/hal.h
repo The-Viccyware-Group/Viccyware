@@ -36,34 +36,24 @@
 #include "sim_hal.h"
 #endif
 
-// Whether or not to read/process imu data on a thread
-#define PROCESS_IMU_ON_THREAD 1
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace HAL {
 
 
 /************************************************************************
  * \section Parameters and Constants
  */
-
+  
+/// Number of time stamp ticks per second
+static const int TICKS_PER_SECOND = 200;
 /// Scale value for maximum motor power in HAL
 static const f32 MOTOR_MAX_POWER = 1.0f;
+/// Maximum number of object advertisements reported in a time step
+//static const size_t MAX_ADVERTISEMENTS_PER_TICK = 16;
 
-//
-// Initialize HAL
-// Blocks until initialization complete or shutdownSignal becomes non-zero
-// Returns RESULT_OK or error
-//
-Result Init(const int * shutdownSignal);
-
-//
-// Perform a single HAL "tick"
-// Returns RESULT_OK or error
-//
+Result Init(void);
 Result Step(void);
-void Stop(void);
 
 /************************************************************************
  * \section Time
@@ -75,19 +65,20 @@ u32 GetMicroCounter(void);
 /// Block main execution for specified number of microseconds
 void MicroWait(u32 microseconds);
 
-/// Retrieve current time (from steady_clock) in ms 
+/** Retrieve current time robot time stamp
+ * TimeStamps are in units of approximate miliseconds but are ticked by the hardware processor update at
+ * TICKS_PER_SECOND. The engine sets timestamp on connect to the robot process but otherwise it increases
+ * monotonically.
+ */
 extern "C" TimeStamp_t GetTimeStamp(void);
 
-/// Retrieve the number of times a hardware watchdog reset has occurred.
-u8 GetWatchdogResetCounter(void);
-
-/************************************************************************
- * \section Debug
+/** Sets the robot timestamp to value
+ * Set timing offset on engine connect.
  */
+void SetTimeStamp(TimeStamp_t t);
 
-// Print full body data to log every specified number of tics
-// 0 disables printing
-void PrintBodyData(u32 period_tics, bool motors, bool prox, bool battery);
+/// Retrieve the number of times a hardware watchdog reset has occured.
+u8 GetWatchdogResetCounter(void);
 
 /************************************************************************
  * \section IMU Interface
@@ -95,9 +86,14 @@ void PrintBodyData(u32 period_tics, bool motors, bool prox, bool battery);
 
 /// IMU_DataStructure contains 3-axis acceleration and 3-axis gyro data
 struct IMU_DataStructure
-{
-  f32 accel[3];  ///< mm/s/s
-  f32 gyro[3]; ///< rad/s
+{ 
+  f32 acc_x;  ///< mm/s/s
+  f32 acc_y;  ///< mm/s/s
+  f32 acc_z;  ///< mm/s/s
+  f32 rate_x; ///< rad/s
+  f32 rate_y; ///< rad/s
+  f32 rate_z; ///< rad/s
+  
   f32 temperature_degC;
 };
 
@@ -129,7 +125,6 @@ void MotorSetPower(const MotorID motor, const f32 power);
 void MotorResetPosition(const MotorID motor);
 
 /** Returns units based on the specified motor type:
- * Note: this function must be called once per tick for each motor
  * @param[in] Motor to retrieve
  * @return Wheels are in mm/s, everything else is in radians/s.
  */
@@ -143,21 +138,6 @@ f32 MotorGetPosition(const MotorID motor);
 
 /// Measures the unitless load on all motors
 s32 MotorGetLoad();
-
-/************************************************************************
- * \section Encoder state
- */
-
-// Whether or not the encoders have been "disabled". 
-// (In reality they are operating at a lower frequency so that motion can be detected.)
-// This happens normally if the motors are not actively being driven.
-bool AreEncodersDisabled();
-
-// Whether or not the head/lift was detected to have moved while the encoders were "disabled"
-// i.e. Calibration is necessary!
-// Note: This gets cleared as soon as the motor is driven again
-bool IsHeadEncoderInvalid();
-bool IsLiftEncoderInvalid();
 
 /************************************************************************
  * \section Proximity / Cliff sensors
@@ -174,10 +154,15 @@ typedef enum
 } CliffID; //TODO: assert matches DropSensor, or use directly
 
 /// Face proximity sensor
-ProxSensorDataRaw GetRawProxData();
+ProxSensorData GetRawProxData();
 
 /// Cliff sensors
 u16 GetRawCliffData(const CliffID cliff_id);
+
+/// Value of light sensor when IR light is off
+/// Used to do additional logic on whether or not the ambient light
+/// is too bright to trust the cliff reading
+u16 GetCliffOffLevel(const CliffID cliff_id);
 
 /************************************************************************
  * \section Microphones
@@ -188,7 +173,7 @@ using SendDataFunction = Result (*)(const s16* latestMicData, uint32_t numSample
 /** Grants access to microphone data from this tick.
  * @param[in] Provides a function pointer for actually sending out the message using the mic data
  * @return true if more data needs to be sent (and this should be called again) false otherwise
- */
+ */ 
 bool HandleLatestMicData(SendDataFunction sendDataFunc);
 
 /************************************************************************
@@ -196,7 +181,7 @@ bool HandleLatestMicData(SendDataFunction sendDataFunc);
  */
 
 /// Button IDs
-typedef enum
+typedef enum 
 {
   BUTTON_CAPACITIVE = 0,
   BUTTON_POWER = 1,
@@ -208,7 +193,7 @@ typedef enum
  * @return Mechanical buttons return 0 or 1. Capacitive buttons return an analog value
  */
 u16 GetButtonState(const ButtonID button_id);
- 
+
 /************************************************************************
  * \section Battery
  */
@@ -225,25 +210,8 @@ bool BatteryIsCharging();
 /// Return whether or not the robot is connected to a charger
 bool BatteryIsOnCharger();
 
-/// Return whether or not the battery has been disconnected from the charging circuit
-/// after being on charge base for more than 30 min.
-bool BatteryIsDisconnected();
-
-// Return temperature of battery in C
-u8 BatteryGetTemperature_C();
-
-// Whether or not the battery is overheating.
-// Syscon will shutoff 30s after this first becomes true.
-bool BatteryIsOverheated();
-
-// Battery is low. 
-// Time until shutdown: POWER_DOWN_WARNING_TIME
-bool BatteryIsLow();
-
-/// Return detected charger voltage
-f32 ChargerGetVoltage();
 /************************************************************************
- * \section LEDs
+ * \section Leds
  */
 
 /// LED identifiers
@@ -268,47 +236,36 @@ enum {
  * @param[in] color 32 bit RGBA
  */
 void SetLED(const LEDId led_id, const u32 color);
-void SetSystemLED(u32 color);
 
 /************************************************************************
  * \section Power management
  */
 
 /// Run levels for the hardware
-typedef enum
+typedef enum 
 {
-  POWER_MODE_ACTIVE           = 0x0,
-  POWER_MODE_CALM             = 0x1,
+  POWER_STATE_OFF               = 0x00,
+  POWER_STATE_OFF_WAKE_ON_RADIO = 0x01,
+  POWER_STATE_ON                = 0x02,
+  POWER_STATE_IDLE              = 0x03,
+  POWER_STATE_FORCE_RECOVERY    = 0x04,
+  POWER_STATE_OTA_MODE          = 0x08,
+  POWER_STATE_CHARGER_TEST_MODE = 0x41,
+  POWER_STATE_DTM_MODE          = 0x42,
 } PowerState;
 
-/** Command syscon to enter specified power state
+/** Command hardware to enter specified power state
+ * @warning Some power states will power off the android processor
  */
-void PowerSetDesiredMode(const PowerState state);
+void PowerSetMode(const PowerState state);
 
-/** Get last desired syscon mode that was commanded
- */
-PowerState PowerGetDesiredMode();
-
-/** Get syscon's current power state
- */
-PowerState PowerGetMode();
-
-/** Get syscon's current power state
- */
-PowerState PowerGetMode();
-
-// Returns true if syscon says it's going to shutoff power soon
-bool IsShutdownImminent();
-
-// Shutoff robot power completely
-void Shutdown();
 
 /************************************************************************
  * \section "Radio" comms to/from engine
  */
 bool RadioIsConnected();
 
-void DisconnectRadio(bool sendDisconnectMsg = true);
+void DisconnectRadio();
 
 /** Gets the next packet from the radio
  * @param buffer [out] A buffer into which to copy the packet. Must have MTU bytes available
@@ -321,12 +278,12 @@ u32 RadioGetNextPacket(u8* buffer);
  * @param length [in] The number of bytes to be sent
  * @return true if the packet was queued for transmission, false if it couldn't be queued.
  */
-bool RadioSendPacket(const void *buffer, const size_t length);
+bool RadioSendPacket(const void *buffer, const u32 length);
 
 /** Wrapper method for sending messages NOT PACKETS
  * @param msgID The ID (tag) of the message to be sent
  * @param buffer A pointer to the message to be sent
- * @return True if successfully queued, false otherwise
+ * @return True if sucessfully queued, false otherwise
  */
 bool RadioSendMessage(const void *buffer, const u16 size, const u8 msgID);
 
@@ -338,8 +295,6 @@ bool RadioSendMessage(const void *buffer, const u16 size, const u8 msgID);
 /// Returns the unique serial number of the robot
 u32 GetID();
 
-const uint8_t* const GetSysconVersionInfo();
-
 /************************************************************************
  * \section Error reporting
  */
@@ -347,9 +302,9 @@ const uint8_t* const GetSysconVersionInfo();
 /// Force a hard fault in the processor, used for hardware assert
 void FORCE_HARDFAULT();
 #define HAL_ASSERT(c) do { if(!(c)) FORCE_HARDFAULT(); } while(0)
-
+  
 } // namespace HAL
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_ROBOT_HARDWAREINTERFACE_H

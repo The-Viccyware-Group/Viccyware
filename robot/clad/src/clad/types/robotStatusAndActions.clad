@@ -8,7 +8,7 @@
 #include "clad/types/proxMessages.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_32 RobotStatusFlag {
     NoneRobotStatusFlag,
@@ -22,22 +22,12 @@ enum uint_32 RobotStatusFlag {
     IS_PATHING              = 0x00000080,
     LIFT_IN_POS             = 0x00000100,
     HEAD_IN_POS             = 0x00000200,
-    CALM_POWER_MODE         = 0x00000400,
-    IS_BATTERY_DISCONNECTED = 0x00000800,
+    // FREE FLAG            = 0x00000400,
+    // FREE FLAG            = 0x00000800,
     IS_ON_CHARGER           = 0x00001000,
     IS_CHARGING             = 0x00002000,
-    CLIFF_DETECTED          = 0x00004000,   // TODO (VIC-3578): Remove this
+    CLIFF_DETECTED          = 0x00004000,
     ARE_WHEELS_MOVING       = 0x00008000,
-    IS_BEING_HELD           = 0x00010000,
-    IS_MOTION_DETECTED      = 0x00020000, // whether the IMU detects motion
-    IS_BATTERY_OVERHEATED   = 0x00040000,
-
-    ENCODERS_DISABLED       = 0x00100000,
-    ENCODER_HEAD_INVALID    = 0x00200000,
-    ENCODER_LIFT_INVALID    = 0x00400000,
-
-    IS_BATTERY_LOW          = 0x01000000,
-    IS_SHUTDOWN_IMMINENT    = 0x02000000,
 }
 
 enum uint_8 DockAction
@@ -56,32 +46,11 @@ enum uint_8 DockAction
   DA_ALIGN_SPECIAL,   // Align as if we are picking up an object (want to get lift
                       // fingers into object grooves) but will not move the lift before
                       // or afterwards
+  DA_RAMP_ASCEND,     // Going up a ramp
+  DA_RAMP_DESCEND,    // Going down a ramp
+  DA_CROSS_BRIDGE,    // Crossing a bridge
   DA_BACKUP_ONTO_CHARGER,           // Reverse onto the charger platform
   DA_BACKUP_ONTO_CHARGER_USE_CLIFF, // Reverse onto the charger platform, using cliff sensors for angle correction
-  DA_CLIFF_ALIGN_TO_WHITE,    // Squares up the robot such the two front cliff sensors are over the white line
-                              // of the habitat, provided one of the sensors is already detecting white.
-}
-
-// For the given DockAction, do we expect the dock object to move as a result of docking?
-// For example, aligning with a block would not cause the block to move, but picking it
-// up would. This is useful for localization.
-enum_concept bool ExpectDockObjectToMove[DockAction]
-{
-  DA_PICKUP_LOW                    = 1,
-  DA_PICKUP_HIGH                   = 1,
-  DA_PLACE_HIGH                    = 1,
-  DA_PLACE_LOW                     = 1,
-  DA_PLACE_LOW_BLIND               = 1,
-  DA_ROLL_LOW                      = 1,
-  DA_DEEP_ROLL_LOW                 = 1, 
-  DA_POST_DOCK_ROLL                = 1,
-  DA_FACE_PLANT                    = 1,
-  DA_POP_A_WHEELIE                 = 1,
-  DA_ALIGN                         = 0,
-  DA_ALIGN_SPECIAL                 = 1,
-  DA_BACKUP_ONTO_CHARGER           = 0,
-  DA_BACKUP_ONTO_CHARGER_USE_CLIFF = 0,
-  DA_CLIFF_ALIGN_TO_WHITE          = 0
 }
 
 enum uint_8 CarryState
@@ -105,7 +74,6 @@ structure RobotPose
   float_32 z,
   float_32 angle,
   float_32 pitch_angle,
-  float_32 roll_angle,
 }
 
 structure RobotState
@@ -120,30 +88,25 @@ structure RobotState
   float_32 liftAngle,
   AccelData accel,  // in head-frame (mm/s^2)
   GyroData gyro,    // in head-frame (rad/s)
-  IMUDataFrame imuData[6], // gyro data for image processing (every 5 ms) (size IMUConstants::IMU_FRAMES_PER_ROBOT_STATE)
-  float_32 batteryVoltage,
-  float_32 chargerVoltage,
   uint_32 status, // RobotStatusFlag packs as a uint_32
   uint_16 cliffDataRaw[4],
-  ProxSensorDataRaw proxData,
+  ProxSensorData proxData,
   uint_16 backpackTouchSensorRaw,
-  uint_8  cliffDetectedFlags,
-  uint_8  whiteDetectedFlags,
-  uint_8  battTemp_C,
   int_8   currPathSegment, // -1 if not traversing a path
 }
 
-// Make sure that there is a corresponding code in faultCodes.h
-// for each shutdown reason here.
-enum uint_8 ShutdownReason {
-  SHUTDOWN_UNKNOWN,
-  SHUTDOWN_BUTTON,
-  SHUTDOWN_BATTERY_CRITICAL_VOLT,
-  SHUTDOWN_BATTERY_CRITICAL_TEMP,
-  SHUTDOWN_GYRO_NOT_CALIBRATING,
+// These enum values should match the body color
+// enum in robot/fixture/app/robotTest.c (factory-1.5 branch)
+enum int_8 BodyColor
+{
+  UNKNOWN   = -1,
+  WHITE_v10 = 0,  // White Cozmo 1.0
+  RESERVED  = 1,  // Unused reserved value
+  WHITE_v15 = 2,  // White Cozmo 1.5
+  CE_LM_v15 = 3,  // Black/Collector's Edition/Liquid Metal Cozmo 1.5
+
+  COUNT
 }
 
-
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

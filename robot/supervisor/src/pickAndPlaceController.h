@@ -22,7 +22,7 @@
 #include "clad/types/dockingSignals.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
 
     // Forward declaration
     namespace VisionSystem {
@@ -44,23 +44,26 @@ namespace Anki {
         POPPING_A_WHEELIE,
         MOVING_LIFT_POSTDOCK,
         BACKOUT,
+        TRAVERSE_RAMP,
+        TRAVERSE_RAMP_DOWN,
+        ENTER_BRIDGE,
+        TRAVERSE_BRIDGE,
+        LEAVE_BRIDGE,
         PICKUP_ANIM,
         BACKUP_ON_CHARGER,
         DRIVE_FORWARD,
-        CLIFF_ALIGN_TO_WHITE,
       } Mode;
 
       Result Init();
 
       Result Update();
-      
+
       Mode GetMode();
       
       DockAction GetCurAction();
 
       bool IsBusy();
       bool IsCarryingBlock();
-      bool IsPickingUp();
 
       void SetCarryState(CarryState state);
       CarryState GetCarryState();
@@ -87,11 +90,6 @@ namespace Anki {
                          const f32 rel_y,
                          const f32 rel_angle);
 
-      // Start and stop action to align cliff sensors to "white" line
-      // One front sensor must already be detecting white when this is called.
-      void CliffAlignToWhite();
-      void StopCliffAlignToWhite();
-
       // Abort whatever pick or place action we're currently doing
       void Reset();
 
@@ -101,13 +99,8 @@ namespace Anki {
                                const u32 driveDuration_ms,
                                const f32 backupDist_mm);
       
-      // When set, this will cause the robot to begin backing up at the same time that he begins to raise the lift
-      // during cube pickup. This prevents cube pickup from failing when the cube is pressed up against a wall or other
-      // rigid surface.
-      void SetBackUpWhileLiftingCube(const bool b);
-      
     } // namespace PickAndPlaceController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // COZMO_PICK_AND_PLACE_CONTROLLER_H_

@@ -26,7 +26,7 @@ class ImageCache;
 class Profiler;
 }
 
-namespace Vector {
+namespace Cozmo {
 // Forward declaration:
 struct VisionPoseData;
 class VizManager;

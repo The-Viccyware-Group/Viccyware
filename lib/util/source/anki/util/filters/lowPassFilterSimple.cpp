@@ -22,9 +22,15 @@ namespace Util {
 
 LowPassFilterSimple::LowPassFilterSimple(const float samplePeriod_sec,
                                          const float desiredTimeConstant_sec)
+: kFilterCoef(samplePeriod_sec / (desiredTimeConstant_sec + samplePeriod_sec))
 {
-  UpdateFilterCoeff(samplePeriod_sec, desiredTimeConstant_sec);
+  // For details about the above computation of the filter coefficient see
+  // https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter
+  
+  DEV_ASSERT(samplePeriod_sec > 0, "LowPassFilterSimple.LowPassFilterSimple.InvalidSamplePeriod");
+  DEV_ASSERT(desiredTimeConstant_sec > 0, "LowPassFilterSimple.LowPassFilterSimple.InvalidTimeConstant");
 }
+
 
 float LowPassFilterSimple::AddSample(const float value)
 {
@@ -32,7 +38,7 @@ float LowPassFilterSimple::AddSample(const float value)
     _filteredValue = value;
     _initialized = true;
   } else {
-    _filteredValue = _filterCoef * value + (1 - _filterCoef) * _filteredValue;
+    _filteredValue = kFilterCoef * value + (1 - kFilterCoef) * _filteredValue;
   }
   
   return _filteredValue;
@@ -50,29 +56,6 @@ void LowPassFilterSimple::Reset()
 {
   _filteredValue = 0.f;
   _initialized = false;
-}
-
-void LowPassFilterSimple::SetSamplePeriod(const float samplePeriod_sec)
-{
-  UpdateFilterCoeff(samplePeriod_sec, _desiredTimeConstant_sec);
-}
-
-void LowPassFilterSimple::SetTimeConstant(const float desiredTimeConstant_sec)
-{
-  UpdateFilterCoeff(_samplePeriod_sec, desiredTimeConstant_sec);
-}
-
-void LowPassFilterSimple::UpdateFilterCoeff(const float samplePeriod_sec, const float desiredTimeConstant_sec)
-{
-  DEV_ASSERT(samplePeriod_sec > 0, "LowPassFilterSimple.UpdateFilterCoeff.InvalidSamplePeriod");
-  DEV_ASSERT(desiredTimeConstant_sec > 0, "LowPassFilterSimple.UpdateFilterCoeff.InvalidTimeConstant");
-
-  _samplePeriod_sec = samplePeriod_sec;
-  _desiredTimeConstant_sec = desiredTimeConstant_sec;
-
-  // For details about the computation of the filter coefficient below see
-  // https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter
-  _filterCoef = samplePeriod_sec / (desiredTimeConstant_sec + samplePeriod_sec);
 }
 
 } // namespace Util

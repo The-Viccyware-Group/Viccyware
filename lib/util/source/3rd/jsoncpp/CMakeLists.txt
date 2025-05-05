@@ -4,7 +4,6 @@ add_library(jsoncpp
   STATIC
   jsoncpp.cpp
 )
-anki_build_target_license(jsoncpp "MIT,${CMAKE_CURRENT_SOURCE_DIR}/json/json.h")
 
 add_definitions(-DNO_LOCALE_SUPPORT=1)
 

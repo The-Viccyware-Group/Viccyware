@@ -38,7 +38,7 @@ namespace Vision{
 class Profiler;
 }
 
-namespace Vector {
+namespace Cozmo {
 
 class CozmoContext;
 
@@ -226,7 +226,7 @@ protected:
 
   float FindThreshold(std::vector<float>& distances) const;
 
-  float _threshold = -1.f;
+  float _threshold;
   float _medianMultiplier = 5.0; // This value might be changed by the Json config
 };
 
@@ -260,7 +260,7 @@ protected:
 
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

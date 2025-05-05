@@ -4,24 +4,15 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 AnimEvent {
   DEVICE_AUDIO_TRIGGER,
   ENERGY_DRAINCUBE_END,
   TAPPED_BLOCK,
-  LISTENING_BEGIN,
-  TOGGLE_NUMBERS_DISPLAY,
-  DEAL_CARDS_BEGIN,
-  SWIPE_CARDS_BEGIN,
-  DANCE_BEAT_SYNC,
-  CUBE_LIGHT_TOGGLE,
-  TTS_BEGIN,
-  CHANGE_EYE_COLOR,
-  FLIP_DOWN_BEGIN,   // For OnBack and OnFace reactions, when the robot is about to flip back onto his treads
 
   Count
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -1,16 +1,11 @@
-VICOS_BUILD_TOOL_VER:=1.1.0-r04
+ANDROID_NDK_ROOT:=~/.anki/android/ndk-repository/android-ndk-r15b
 
+ANDROID_ARM_TOOLS_ROOT:=../../generated/android/tools/arm
+ANDROID_ARM_TOOLS_BIN:=$(ANDROID_ARM_TOOLS_ROOT)/bin
 
-VICOS_ARM_TOOLS_ROOT:=~/.anki/vicos-sdk/dist/$(VICOS_BUILD_TOOL_VER)
+CROSS_COMPILE = $(ANDROID_ARM_TOOLS_BIN)/arm-linux-androideabi-
 
-VICOS_ARM_TOOLS_BIN:=$(VICOS_ARM_TOOLS_ROOT)/prebuilt/bin
-
-# Compilation Tools
-
-CROSS_COMPILE = $(VICOS_ARM_TOOLS_BIN)/arm-oe-linux-gnueabi-
-
-CFLAGS = -c -fPIC -Wall
-
+CFLAGS = -c -fPIC -Wall -pie
 
 # All the c files in this directory will be compiled
 SRCDIR = src
@@ -27,7 +22,7 @@ SRCS = $(wildcard $(SRCDIR)/*.c)
 OBJECTS = $(SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 
 
-all: $(VICOS_ARM_TOOLS_ROOT) $(LIB)
+all: $(ANDROID_ARM_TOOLS_ROOT) $(LIB)
 
 $(LIB): $(OBJECTS)
 	$(CROSS_COMPILE)ar rcs $(LIB) $(OBJECTS)
@@ -35,7 +30,7 @@ $(LIB): $(OBJECTS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	mkdir -p $(OBJDIR)
-	$(CROSS_COMPILE)clang $(CFLAGS) $< -I$(INCDIR) -o $@
+	$(CROSS_COMPILE)gcc $(CFLAGS) $< -I$(INCDIR) -o $@
 
 
 clean:

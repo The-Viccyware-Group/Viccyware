@@ -36,18 +36,19 @@ namespace Util {
 }
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
 
     class CozmoContext;
     class Robot;
     class RobotManager;
+    class GameMessagePort;
     
     class UiMessageHandler : public IExternalInterface
     {
     public:
       
-      UiMessageHandler(u32 hostUiDeviceID); // Force construction with stuff in Init()?
+      UiMessageHandler(u32 hostUiDeviceID, GameMessagePort* messagePipe); // Force construction with stuff in Init()?
       virtual ~UiMessageHandler();
       
       Result Init(CozmoContext* context, const Json::Value& config);
@@ -77,14 +78,18 @@ namespace Anki {
       
       bool HasDesiredNumUiDevices() const;
       
+      virtual void OnRobotDisconnected(uint32_t robotID) override;
+      
+      virtual bool IsInSdkMode() const override { return _sdkStatus.IsInAnySdkMode(); }
+      
       virtual void SetSdkStatus(SdkStatusType statusType, std::string&& statusText) override
       {
         _sdkStatus.SetStatus(statusType, std::move(statusText));
       }
 
-      virtual uint32_t GetMessageCountGtE() const override { return _messageCountGameToEngine; }
-      virtual uint32_t GetMessageCountEtG() const override { return _messageCountEngineToGame; }
-      virtual void     ResetMessageCounts() override { _messageCountGameToEngine = 0; _messageCountEngineToGame = 0; }
+      virtual uint32_t GetMessageCountGtE() const override { return _messageCountGtE; }
+      virtual uint32_t GetMessageCountEtG() const override { return _messageCountEtG; }
+      virtual void     ResetMessageCounts() override { _messageCountGtE = 0; _messageCountEtG = 0; }
 
     private:
       
@@ -103,11 +108,29 @@ namespace Anki {
         return const_cast<ISocketComms*>( const_cast<const UiMessageHandler*>(this)->GetSocketComms(type) );
       }
       
-      bool AreAnyConnectedDevicesOnAnySocket() const;
+      const ISocketComms* GetSdkSocketComms() const
+      {
+        const ISocketComms* socketComms = GetSocketComms(UiConnectionType::SdkOverTcp);
+        return socketComms ? socketComms : GetSocketComms(UiConnectionType::SdkOverUdp);
+      }
+      
+      ISocketComms* GetSdkSocketComms()
+      {
+        return const_cast<ISocketComms*>( const_cast<const UiMessageHandler*>(this)->GetSdkSocketComms() );
+      }
+      
+      uint32_t GetNumConnectedDevicesOnAnySocket() const;
       
       bool ShouldHandleMessagesFromConnection(UiConnectionType type) const;
       
+      bool IsSdkCommunicationEnabled() const;
+      
+      void OnEnterSdkMode(const AnkiEvent<ExternalInterface::MessageGameToEngine>& event);
+      void OnExitSdkMode(const AnkiEvent<ExternalInterface::MessageGameToEngine>& event);
+      void DoExitSdkMode(bool isExternalSdkMode);
+      
       void UpdateSdk();
+      void UpdateIsSdkCommunicationEnabled();
       
       // As long as there are messages available from the comms object,
       // process them and pass them along to robots.
@@ -124,6 +147,9 @@ namespace Anki {
       
       bool ConnectToUiDevice(ISocketComms::DeviceId deviceId, UiConnectionType connectionType);
       void HandleEvents(const AnkiEvent<ExternalInterface::MessageGameToEngine>& event);
+      
+      // Some events need to be sent from Unity -> SDK or from SDK -> Unity
+      void HandleGameToGameEvents(const AnkiEvent<ExternalInterface::MessageGameToEngine>& event);
       
       // ============================== Private Types ==============================
       
@@ -157,15 +183,15 @@ namespace Anki {
 
       CozmoContext*                       _context = nullptr;
 
-      uint32_t                            _messageCountGameToEngine = 0;
-      uint32_t                            _messageCountEngineToGame = 0;
+      uint32_t                            _messageCountGtE = 0;
+      uint32_t                            _messageCountEtG = 0;
       
     }; // class MessageHandler
     
     
 #undef MESSAGE_BASECLASS_NAME
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 

@@ -18,14 +18,14 @@
 #include "engine/components/sensors/proxSensorComponent.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace{
-  const char* kDistToSpeedKey  = "distMM_speedMM_Graph";
-  const char* kGoalDistanceKey = "goalDistance_mm";
-  const char* kGoalTolerenceKey = "tolerence_mm";
-  const char* kEndWhenGoalReachedKey = "endWhenGoalReached";
-  const float kThresholdSensedMoved_mm = 25;
+const char* kDistToSpeedKey  = "distMM_speedMM_Graph";
+const char* kGoalDistanceKey = "goalDistance_mm";
+const char* kGoalTolerenceKey = "tolerence_mm";
+const char* kEndWhenGoalReachedKey = "endWhenGoalReached";
+const float kThresholdSensedMoved_mm = 25;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -88,9 +88,11 @@ void BehaviorProxGetToDistance::BehaviorUpdate()
     return;
   }
 
-  const auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetComponent<ProxSensorComponent>();
-  const auto& proxData = proxSensor.GetLatestProxData();
-  if( !proxData.foundObject ){
+  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
+
+  u16 proxDist_mm = 0;
+  const bool isReadingValid = proxSensor.GetLatestDistance_mm(proxDist_mm);
+  if(!isReadingValid){
     CancelSelf();
     return;
   }
@@ -107,9 +109,9 @@ void BehaviorProxGetToDistance::BehaviorUpdate()
   }
 
   if(!IsControlDelegated()){
-    const float speed_mm_s = _params.distMMToSpeedMMGraph.EvaluateY(proxData.distance_mm);
+    const float speed_mm_s = _params.distMMToSpeedMMGraph.EvaluateY(proxDist_mm);
     DelegateIfInControl(new DriveStraightAction(CalculateDistanceToDrive(), speed_mm_s));
-    const bool isSensorReadingValid = proxSensor.GetLatestProxData().foundObject;
+    const bool isSensorReadingValid = proxSensor.CalculateSensedObjectPose(_previousProxObjectPose);
     DEV_ASSERT(isSensorReadingValid, "BehaviorProxGetToDistance.BehaviorUpdate.SensorReadingInvalid");
   }
 
@@ -120,38 +122,37 @@ void BehaviorProxGetToDistance::BehaviorUpdate()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 float BehaviorProxGetToDistance::CalculateDistanceToDrive() const
 {
-  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetComponent<ProxSensorComponent>();
-  const auto& proxData = proxSensor.GetLatestProxData();
+  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
   
-  if (!proxData.foundObject) {
-    PRINT_NAMED_WARNING("BehaviorProxGetToDistance.CalculateDistanceToDrive.NoObjectFound",
-                        "No object found to drive to!");
+  u16 proxDist_mm = 0;
+  const bool isReadingValid = proxSensor.GetLatestDistance_mm(proxDist_mm);
+  
+  if (!isReadingValid) {
+    PRINT_NAMED_WARNING("BehaviorProxGetToDistance.CalculateDistanceToDrive.InvalidReading",
+                        "Invalid distance sensor reading received");
     return 0.f;
   }
   
-  float distanceToDrive = proxData.distance_mm - _params.goalDistance_mm;
+  float distanceToDrive = proxDist_mm - _params.goalDistance_mm;
   
   // See if there's a distance at which we want to change speed that occurs before we
   // make it all the way to our goal distance
   {
     const bool drivingForward = (distanceToDrive >= 0);
     // make sure we get something that we can actually drive to
-    const float distOutsideDriveTolerence = drivingForward
-        ? (proxData.distance_mm -  _params.tolarance_mm)
-        : (proxData.distance_mm +  _params.tolarance_mm);
+    const float distOutsideDriveTolerence = drivingForward ? (proxDist_mm -  _params.tolarance_mm) : (proxDist_mm +  _params.tolarance_mm); 
     const Util::GraphEvaluator2d::Node* closestNode = GetNodeClosestToDistance(distOutsideDriveTolerence, drivingForward);
-
+    
     const bool isNodeCloser = drivingForward
-        ? (closestNode != nullptr) && (closestNode->_x > _params.goalDistance_mm)
-        : (closestNode != nullptr) && (closestNode->_x < _params.goalDistance_mm);
-
+          ? (closestNode != nullptr) && (closestNode->_x >  _params.goalDistance_mm)
+          : (closestNode != nullptr) && (closestNode->_x < _params.goalDistance_mm);
+    
     if(isNodeCloser){
-      distanceToDrive = proxData.distance_mm - closestNode->_x;
+      distanceToDrive = proxDist_mm - closestNode->_x;
     }
   }
   
   return distanceToDrive;
-  return 0.f;
 }
 
 
@@ -178,14 +179,14 @@ const Util::GraphEvaluator2d::Node* BehaviorProxGetToDistance::GetNodeClosestToD
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorProxGetToDistance::ShouldRecalculateDrive()
 {
-  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetComponent<ProxSensorComponent>();
-  const auto& proxData = proxSensor.GetLatestProxData();
+  Pose3d sensedObjectPose;
   f32 distSqrSensedChanged_mm = 0.f;
-  const bool recalculate = proxData.foundObject &&
-      ComputeDistanceSQBetween(_previousProxObjectPose, proxData.objectPose, distSqrSensedChanged_mm) &&
-      distSqrSensedChanged_mm > (kThresholdSensedMoved_mm * kThresholdSensedMoved_mm);
+  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
+  const bool recalculate = proxSensor.CalculateSensedObjectPose(sensedObjectPose) &&
+         ComputeDistanceSQBetween(_previousProxObjectPose, sensedObjectPose, distSqrSensedChanged_mm) &&
+         distSqrSensedChanged_mm > (kThresholdSensedMoved_mm * kThresholdSensedMoved_mm);
   if(recalculate){
-   _previousProxObjectPose = proxData.objectPose;
+    _previousProxObjectPose = sensedObjectPose;
   }
   return recalculate;
 }
@@ -194,15 +195,15 @@ bool BehaviorProxGetToDistance::ShouldRecalculateDrive()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorProxGetToDistance::IsWithinGoalTolerence() const
 {
-  const auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetComponent<ProxSensorComponent>();
-  const auto& proxData = proxSensor.GetLatestProxData();
-  const bool isReadingValid = proxData.foundObject;
+  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
+  u16 proxDist_mm = 0;
+  const bool isReadingValid = proxSensor.GetLatestDistance_mm(proxDist_mm);
   if(isReadingValid){
-    return Util::IsNear(proxData.distance_mm, _params.goalDistance_mm, _params.tolarance_mm);
+    return Util::IsNear(proxDist_mm, _params.goalDistance_mm, _params.tolarance_mm);
   }
   return false;
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

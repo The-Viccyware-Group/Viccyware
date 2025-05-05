@@ -4,12 +4,11 @@ ROBOT_CLAD_SHARED
  
  
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
-enum no_cpp_class uint_8 IMUConstants
+enum uint_8 IMUConstants
 {
-  IMU_FRAMES_PER_ROBOT_STATE = 6,
-  IMU_CHUNK_SIZE = 8,
+    IMU_CHUNK_SIZE = 8,
 }
 
 message IMURequest
@@ -27,11 +26,6 @@ structure GyroData {
   float_32 x,  // rad/s
   float_32 y,
   float_32 z
-}
-
-structure IMUDataFrame {
-  uint_32  timestamp = 0, // HAL timestamp (ms)
-  GyroData gyroRobotFrame // rad/s
 }
 
 namespace RobotInterface {
@@ -63,6 +57,15 @@ message IMUTemperature {
 }
 
 } // RobotInterface
+
+
+message ImageImuData {
+  uint_32  systemTimestamp_ms,
+  float_32 rateX,
+  float_32 rateY,
+  float_32 rateZ
+}
+
 
 } // Cozmo
 } // Anki

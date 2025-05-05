@@ -16,7 +16,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 /**
  * exception definitions
@@ -171,7 +171,7 @@ static const char* GetExceptionDefinition(int exception)
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // BASESTATION_UTILS_EXCEPTIONS_H_

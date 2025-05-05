@@ -18,11 +18,9 @@
 #include "util/signals/simpleSignal_fwd.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace ExternalInterface {
-class MessageGameToEngine;
-class MessageEngineToGame;
 enum class MessageEngineToGameTag : uint8_t;
 enum class MessageGameToEngineTag : uint8_t;
 }

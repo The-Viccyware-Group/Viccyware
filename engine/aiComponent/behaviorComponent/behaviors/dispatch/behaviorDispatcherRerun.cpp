@@ -18,31 +18,25 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviors/devDelegationRequirements.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 static const char* kConfigKeyDelegateID = "delegateID";
 static const char* kConfigKeyNumRuns = "numRuns";
-static const char* kConfigKeyPresetConditions = "presetConditions";
 static const char* kBehaviorsKey = "behaviors";
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Json::Value BehaviorDispatcherRerun::CreateConfig(BehaviorID newConfigID,
-                                                  BehaviorID delegateID,
-                                                  const int numRuns,
-                                                  bool presetConditions)
+Json::Value BehaviorDispatcherRerun::CreateConfig(BehaviorID newConfigID, BehaviorID delegateID, const int numRuns)
 {
   Json::Value config =  ICozmoBehavior::CreateDefaultBehaviorConfig(
     BEHAVIOR_CLASS(DispatcherRerun), newConfigID);
   config[kConfigKeyDelegateID] = BehaviorTypesWrapper::BehaviorIDToString(delegateID);
   config[kConfigKeyNumRuns] = numRuns;
-  config[kConfigKeyPresetConditions] = presetConditions;
   return config;
 }
 
@@ -72,8 +66,7 @@ BehaviorDispatcherRerun::BehaviorDispatcherRerun(const Json::Value& config)
                            "BehaviorDispatcherRerun.Constructor.NoDelegateID"));
   
   _iConfig.numRuns = JsonTools::ParseInt8(config, kConfigKeyNumRuns,
-                                          "BehaviorDispatcherRerun.Constructor.numRunsNotSpecified");
-  _iConfig.presetConditions = config.get(kConfigKeyPresetConditions, false).asBool();
+                                          "BehaviorDispatcherRerun.Constructor.numRunsNotSpecified");       
 }
 
 
@@ -90,7 +83,6 @@ void BehaviorDispatcherRerun::GetBehaviorJsonKeys(std::set<const char*>& expecte
     kBehaviorsKey,
     kConfigKeyDelegateID,
     kConfigKeyNumRuns,
-    kConfigKeyPresetConditions,
   };
   expectedKeys.insert( std::begin(list), std::end(list) );
 }
@@ -114,10 +106,8 @@ void BehaviorDispatcherRerun::OnBehaviorActivated()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorDispatcherRerun::BehaviorUpdate()
-{
-  if( IsActivated() ) {
-    CheckRerunState();
-  }
+{    
+  CheckRerunState();
 }
 
 
@@ -129,22 +119,17 @@ void BehaviorDispatcherRerun::CheckRerunState()
                  "")){
     auto& delegationComp = GetBEI().GetDelegationComponent();
     if(!delegationComp.IsControlDelegated(this)){
-      if(_dVars.numRunsRemaining != 0){
-        if(_iConfig.presetConditions && !_iConfig.delegatePtr->WantsToBeActivated()){
-          ApplyForceDelegationRequirements( _iConfig.delegatePtr.get(), GetBEI() );
+      if(_dVars.numRunsRemaining != 0 &&
+         _iConfig.delegatePtr->WantsToBeActivated() &&
+         ANKI_VERIFY(delegationComp.HasDelegator(this),
+                     "BehaviorDispatcherRerun.CheckRerunState.MissingDelegator",
+                     ""))
+      {
+        delegationComp.GetDelegator(this).Delegate(this, _iConfig.delegatePtr.get());
+        if(_dVars.numRunsRemaining > 0){
+          _dVars.numRunsRemaining--;
         }
-        if(_iConfig.delegatePtr->WantsToBeActivated() &&
-           ANKI_VERIFY(delegationComp.HasDelegator(this),
-                       "BehaviorDispatcherRerun.CheckRerunState.MissingDelegator",
-                       ""))
-        {
-          delegationComp.GetDelegator(this).Delegate(this, _iConfig.delegatePtr.get());
-          if(_dVars.numRunsRemaining > 0){
-            _dVars.numRunsRemaining--;
-          }
-          return;
-        }
-      } else { // _dVars.numRunsRemaining == 0
+      }else if(_dVars.numRunsRemaining == 0){
         delegationComp.CancelSelf(this);
       }
     } // end !IsControlDelegated
@@ -166,5 +151,5 @@ void BehaviorDispatcherRerun::GetAllDelegates(std::set<IBehavior*>& delegates) c
   }
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

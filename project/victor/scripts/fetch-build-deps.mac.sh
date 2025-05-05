@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -x
 set -u
 
 GIT=`which git`
@@ -16,6 +16,8 @@ function vlog()
 
 pushd "${TOPLEVEL}" > /dev/null 2>&1
 
+$GIT config --global url."git@github.com:".insteadOf https://github.com
+
 #vlog "Check brew installation."
 is_brew=`which brew`
 set -e
@@ -30,33 +32,22 @@ vlog "Check homebrew dependencies"
     -d python2 \
     ninja \
     python3 \
-    git-lfs \
     libsndfile \
-    node \
-    rsync \
-    openssl \
-    curl-openssl
+    graphviz \
+    --pip2 graphviz \
+    --pip3 graphviz
 
-vlog "vicos sdk"
-./tools/build/tools/ankibuild/vicos.py --install 1.1.0-r04
+vlog "Android SDK"
+./tools/build/tools/ankibuild/android.py --install-sdk r3
+
+vlog "Android NDK"
+./tools/build/tools/ankibuild/android.py --install-ndk r15b
 
 vlog "CMake"
 ./tools/build/tools/ankibuild/cmake.py
 
-vlog "git-lfs"
-$GIT lfs install
-$GIT lfs pull
-
-if [ -d "/Applications/Webots.app" ]; then
-  vlog "check webots version"
-  webotsVer=`cat /Applications/Webots.app/resources/version.txt`
-  supportedVerFile=./simulator/supportedWebotsVersions.txt
-  if ! grep -Fxq "$webotsVer" $supportedVerFile ; then
-    vlog "Webots version $webotsVer is unsupported. Here are the supported versions:"
-    cat $supportedVerFile
-    exit 1
-  fi
-fi
+vlog "Go"
+./tools/build/tools/ankibuild/go.py
 
 vlog "Build output dirs"
 mkdir -p generated

@@ -18,7 +18,7 @@
 #include "json/json-forwards.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionTrue : public IBEICondition
 {

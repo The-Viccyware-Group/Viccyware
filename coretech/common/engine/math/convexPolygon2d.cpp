@@ -11,7 +11,8 @@
  **/
 
 #include "coretech/common/engine/math/convexPolygon2d.h"
-#include "coretech/common/engine/math/polygon.h"
+#include "coretech/common/engine/math/point_impl.h"
+#include "coretech/common/engine/math/polygon_impl.h"
 #include "util/global/globalDefinitions.h"
 
 #include <cmath>
@@ -76,22 +77,6 @@ void ConvexPolygon::RadialExpand(f32 d) {
   } else {
     PRINT_NAMED_WARNING("ConvexPolygon.RadialExpand", "called expand with a negative distance.");
   }
-}
-
-// using https://en.wikipedia.org/wiki/Centroid implementation for polygons
-Point2f ConvexPolygon::ComputeCentroid() const {
-  Point2f retv(0.f);
-  float doubleArea = 0.f;
-  const size_t N = _points.size();
-  for (int i = 0; i < N; ++i ) {
-    const Point2f& a = _points[i];
-    const Point2f& b = _points[(i+1) % N];
-    const float det = a.x() * b.y() - b.x() * a.y();
-    doubleArea += det;
-    retv       += ((a + b) * det);
-  }
-
-  return (retv * ( 1 / (3*doubleArea) ));
 }
 
 // Given a set of points, computes the convex hull using Graham scan algorithm:

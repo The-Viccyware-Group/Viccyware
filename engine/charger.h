@@ -14,23 +14,19 @@
 #define ANKI_COZMO_BASESTATION_CHARGER_H
 
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/math/quad_fwd.h"
-#include "coretech/common/engine/robotTimeStamp.h"
+#include "coretech/common/engine/math/quad.h"
 
 #include "coretech/vision/engine/observableObject.h"
 
 #include "coretech/vision/shared/MarkerCodeDefinitions.h"
 
 #include "engine/actionableObject.h"
+#include "engine/activeObject.h"
 #include "engine/viz/vizManager.h"
 
 namespace Anki {
   
-  namespace Util {
-    class RandomGenerator;
-  }
-  
-  namespace Vector {
+  namespace Cozmo {
   
     class Robot;
     
@@ -50,34 +46,18 @@ namespace Anki {
     {
     public:
       
-      Charger();
+      Charger(ObjectType type = ObjectType::Charger_Basic);
       
       virtual const Point3f& GetSize() const override { return _size; }
+      
+      f32     GetHeight() const { return Height; }
       
       const Vision::KnownMarker* GetMarker() const { return _marker; }
       
       // Return pose of the robot when it's in the charger
       Pose3d GetRobotDockedPose()  const;
-      
-      // Return the pose of the robot when it has just rolled off the
-      // charger. It is roughly the first point at which the robot's
-      // bounding quad no longer intersects the charger's.
-      Pose3d GetRobotPostRollOffPose() const;
-      
       // Return pose of charger wrt robot when the robot is on the charger
       static Pose3d GetDockPoseRelativeToRobot(const Robot& robot);
-      
-      // Returns a quad describing the area in front of the charger
-      // that must be clear before the robot can dock with the charger.
-      Quad2f GetDockingAreaQuad() const;
-      
-      // Randomly generate some poses from which to observe the charger 
-      // for the purpose of verifying its position
-      // (e.g. before attempting to dock with it)
-      // NOTE: the poses are randomly sampled in a annulus around the charger
-      std::vector<Pose3d> GenerateObservationPoses( Util::RandomGenerator& rng, 
-                                                    const size_t nPoses,
-                                                    const float& span_rad) const;
       
       //
       // Inherited Virtual Methods
@@ -95,33 +75,32 @@ namespace Anki {
       virtual Point3f GetSameDistanceTolerance()  const override;
       
       
-      // Charger has no accelerometer so it should never be considered moving
-      virtual bool IsMoving(RobotTimeStamp_t* t = nullptr) const override { return false; }
-      virtual void SetIsMoving(bool isMoving, RobotTimeStamp_t t) override { }
+      // Charger has no accelerometer so it should never be considered moving nor used for localization
+      virtual bool IsMoving(TimeStamp_t* t = nullptr) const override { return false; }
+      virtual void SetIsMoving(bool isMoving, TimeStamp_t t) override { }
+      virtual bool CanBeUsedForLocalization() const override { return false; }
       
-      virtual f32 GetMaxObservationDistance_mm() const override;
       
-      constexpr static f32 GetLength() { return kLength; }
+      constexpr static f32 GetLength() { return Length; }
       
-      virtual const std::vector<Point3f>& GetCanonicalCorners() const override;
+    protected:
       
       // Model dimensions in mm (perhaps these should come from a configuration
       // file instead?)
-      constexpr static const f32 kWallWidth      = 12.f;
-      constexpr static const f32 kPlatformWidth  = 64.f;
-      constexpr static const f32 kWidth          = 2*kWallWidth + kPlatformWidth;
-      constexpr static const f32 kHeight         = 80.f;
-      constexpr static const f32 kSlopeLength    = 94.f;
-      constexpr static const f32 kPlatformLength = 0.f;
-      constexpr static const f32 kLength         = kSlopeLength + kPlatformLength + kWallWidth;
-      constexpr static const f32 kMarkerHeight   = 46.f;
-      constexpr static const f32 kMarkerWidth    = 46.f;
-      constexpr static const f32 kMarkerZPosition   = 48.5f;  // Middle of marker above ground
-      constexpr static const f32 kPreAscentDistance  = 100.f; // for ascending from bottom
-      constexpr static const f32 kRobotToChargerDistWhenDocked = 30.f;  // Distance from front of charger to robot origin when docked
-      constexpr static const f32 kRobotToChargerDistPostRollOff = 80.f;  // Distance from front of charger to robot origin after just having rolled off the charger
+      constexpr static const f32 WallWidth      = 12.f;
+      constexpr static const f32 PlatformWidth  = 64.f;
+      constexpr static const f32 Width          = 2*WallWidth + PlatformWidth;
+      constexpr static const f32 Height         = 80.f;
+      constexpr static const f32 SlopeLength    = 94.f;
+      constexpr static const f32 PlatformLength = 0.f;
+      constexpr static const f32 Length         = SlopeLength + PlatformLength + WallWidth;
+      constexpr static const f32 MarkerHeight   = 44.f;
+      constexpr static const f32 MarkerWidth    = 44.f;
+      constexpr static const f32 MarkerZPosition   = 48.5f;  // Middle of marker above ground
+      constexpr static const f32 PreAscentDistance  = 100.f; // for ascending from bottom
+      constexpr static const f32 RobotToChargerDistWhenDocked = 30.f;  // Distance from front of charger to robot origin when docked
       
-      protected:
+      virtual const std::vector<Point3f>& GetCanonicalCorners() const override;
       
       virtual void GeneratePreActionPoses(const PreActionPose::ActionType type,
                                           std::vector<PreActionPose>& preActionPoses) const override;
@@ -131,10 +110,15 @@ namespace Anki {
       const Vision::KnownMarker* _marker;
       
       mutable VizManager::Handle_t _vizHandle;
-
+      
+      virtual bool IsPreActionPoseValid(const PreActionPose& preActionPose,
+                                        const Pose3d* reachableFromPose,
+                                        const std::vector<std::pair<Quad2f,ObjectID> >& obstacles) const override;
+      
+      
     }; // class Charger
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_BASESTATION_CHARGER_H

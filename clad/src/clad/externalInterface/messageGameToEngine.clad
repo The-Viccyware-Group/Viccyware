@@ -8,32 +8,33 @@
 #include "clad/externalInterface/messageActions.clad"
 #include "clad/externalInterface/messageShared.clad"
 #include "clad/types/actionTypes.clad"
-#include "clad/types/behaviorSlot.clad"
 #include "clad/types/controllerChannels.clad"
-#include "clad/types/cubeAnimationTrigger.clad"
 #include "clad/types/customObjectMarkers.clad"
 #include "clad/types/debugConsoleTypes.clad"
 #include "clad/types/emotionTypes.clad"
 #include "clad/types/featureGateTypes.clad"
+#include "clad/types/firmwareTypes.clad"
 #include "clad/types/globalVizOrigin.clad"
-#include "clad/types/imageFormats.clad"
 #include "clad/types/imageTypes.clad"
 #include "clad/types/imu.clad"
+#include "clad/types/inventoryTypes.clad"
 #include "clad/types/ledTypes.clad"
+#include "clad/types/keepFaceAliveParameters.clad"
 #include "clad/types/objectTypes.clad"
-#include "clad/types/onboardingStages.clad"
+#include "clad/types/nvStorageTypes.clad"
 #include "clad/types/pathMotionProfile.clad"
 #include "clad/types/poseStructs.clad"
 #include "clad/types/proceduralFaceTypes.clad"
 #include "clad/types/robotTestModes.clad"
+#include "clad/types/sayTextStyles.clad"
 #include "clad/types/uiConnectionTypes.clad"
+#include "clad/types/unlockTypes.clad"
 #include "clad/types/visionModes.clad"
-#include "clad/types/switchboardToRobot.clad"
 #include "util/ankiLab/ankiLabDef.clad"
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace ExternalInterface {
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -50,6 +51,18 @@ message UiDeviceConnectionWrongVersion {
   string  buildVersion,
 }
 
+// this (and all subsequent) messages can change post-ship - it's only sent if versions match
+message UiDeviceConnectionSuccess {
+  UiConnectionType  connectionType,
+  uint_32 deviceID,
+  string  buildVersion,
+  string  sdkModuleVersion,
+  string  pythonVersion,
+  string  pythonImplementation,
+  string  osVersion,
+  string  cpuVersion
+}
+
 // ConnectToUiDevice
 message ConnectToUiDevice {
     UiConnectionType  connectionType,
@@ -62,14 +75,51 @@ message DisconnectFromUiDevice {
     uint_8 deviceID
 }
 
-// Message from switchboard when user is authorized
-message UserLoggedIn {
+// Request feature toggles from engine
+message RequestFeatureToggles {
 }
 
+// Set feature toggle changed in UI
+message SetFeatureToggle {
+  FeatureType feature,
+  bool value
+}
+
+message StartIdleTimeout {
+  float_32 faceOffTime_s = -1.0,
+  float_32 disconnectTime_s = -1.0
+}
+
+message CancelIdleTimeout {
+  
+}
+
+message SetGameBeingPaused {
+  bool isPaused = 1
+}
+
+message RequestLocale {
+}
+
+message RequestDataCollectionOption {
+  bool CollectionEnabled
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Low-level Robot Controls
 ///////////////////////////////////////////////////////////////////////////////
+
+// UpdateFirmware
+// Tell the engine to start updating the robot firmware to specific version
+message UpdateFirmware {
+  FirmwareType fwType,
+  int_32 version
+}
+
+// ResetFirmware
+// Tell the engine to kill robot body code and reset to factory defaults
+message ResetFirmware {
+}
 
 // DriveWheels
 message DriveWheels {
@@ -114,8 +164,16 @@ message EnableStopOnCliff {
     bool enable
 }
 
+message EnableBlockTapFilter {
+  bool enable
+}
+
+message GetBlockTapFilterStatus {
+}
+
 // StopAllMotors
 message StopAllMotors {
+
 }
 
 // ControllerGains
@@ -147,7 +205,42 @@ message SetRobotVolume {
   float_32 volume
 }
 
+
+// !!! Be sure to update RobotAudioOutputSource in robotAudioClient.h if this enum is updated. !!!
+enum uint_8 RobotAudioOutputSourceCLAD
+{
+  NoDevice,       // No audio
+  PlayOnDevice,   // Play on Device - This is not perfectly synced to animations
+  PlayOnRobot     // Play on Robot by using Hijack Audio plug-in to get audio stream from Wwise
+}
+
+message SetRobotAudioOutputSource
+{
+  RobotAudioOutputSourceCLAD source
+}
+
 message ForceDelocalizeRobot {
+}
+
+// Will restore the currently connected robot with either an automatically determined
+// backup file or from the specified one
+message RestoreRobotFromBackup {
+  uint_32 robotToRestoreFrom = 0
+}
+
+// Requests data about the backups we have and whether or not to prompt the user
+// to restore this robot
+message RequestRobotRestoreData {
+
+}
+
+// Wipes all game data on the robot
+message WipeRobotGameData {
+
+}
+
+message RequestUnlockDataFromBackup {
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -199,13 +292,20 @@ message ImageRequest {
     ImageSendMode mode
 }
 
+// SetRobotImageSendMode
+// NOTE: This can enable/disable streaming of images from the physical robot.
+//       It is intended for dev use since the robot will likely always stream
+//       its image in the product.
+message SetRobotImageSendMode {
+    ImageSendMode mode
+}
+
 // SaveImages (via VizController)
 message SaveImages {
-    ImageSendMode mode,                    // For single image vs. streaming (aka continuous saving)
-    int_8         qualityOnRobot,          // 0: disable on-robot saving, [1-100]:JPEG quality, -1: use PNG
-    bool          removeRadialDistortion = 0,
-    string        path                     // Relative to "<webotsControllersDir>/webotsCtrlViz/saved_images"
-                                           // (on robot, relative to "<reourceCacheDir>/camera/images")
+    ImageSendMode mode,            // For single image vs. streaming (aka continuous saving)
+    int_8         qualityOnRobot,  // 0: disable on-robot saving, [1-100]:JPEG quality, -1: use PNG
+    string        path             // Relative to "<webotsControllersDir>/webotsCtrlViz/saved_images"
+                                   // (on robot, relative to "<reourceCacheDir>/camera/images")
 }
 
 // Enable/disable the streaming of colored images
@@ -228,6 +328,11 @@ message EnableDisplay {
 message ExecuteTestPlan {
     PathMotionProfile motionProf
 }
+
+message PlannerRunMode {
+    bool isSync
+}
+
 
 // SelectNextObject
 message SelectNextObject {
@@ -404,10 +509,6 @@ message LoadFaceAlbumFromFile {
   bool   isRelativePath=1  // If true, use 'path' relative to internal album path
 }
 
-message SetCameraCaptureFormat {
-  Anki::Vision::ImageEncoding format,
-}
-
 message SetMemoryMapRenderEnabled {
   bool enabled
 }
@@ -435,16 +536,36 @@ message FakeUserIntent {
   string intent,
 }
 
+// ExecuteBehavior
+message ExecuteBehaviorByExecutableType {
+  string behaviorType,
+  int_32 numRuns = -1 // Number of times to run the behavior (-1 is infinite)
+}
+
 message ExecuteBehaviorByID {
   string behaviorID,
-  int_32 numRuns = -1, // Number of times to run the behavior (-1 is infinite)
-  bool presetConditions = 0, // If true, lets a behavior prepare for force activation
+  int_32 numRuns = -1 // Number of times to run the behavior (-1 is infinite)
 }
 
 // Special message to make BehaviorLiftLoadTest activatable.
 // Send this message before sending ExecuteBehaviorByName("LiftLoadTest")
 message SetLiftLoadTestAsActivatable {
 }
+
+
+// Enable/Disable Cozmo's ability to request a game
+message CanCozmoRequestGame {
+  bool canRequest
+}
+
+message SetOverrideGameRequestWeights {
+  bool useDefaults,
+  UnlockId unlockIDs[uint_8],
+  int_32 weights[uint_8],
+  bool resetDefaultsOnNextRequest = 0 // Allow the GameRequestSelector to reset defaults without
+                                      // waiting for another override message
+}
+
 
 // AbortPath
 message AbortPath {
@@ -463,6 +584,34 @@ message StartTestMode {
     TestMode mode
 }
 
+// request behaviors for chooser
+message RequestAllBehaviorsList {
+}
+
+
+// Engine will preserve the head and lift state between reactionary behaviors
+message SetDefaultHeadAndLiftState {
+  bool enable,
+  float_32 headAngle,
+  float_32 liftHeight
+}
+
+message SetSparkedMusicState{
+  AudioMetaData::SwitchState::Sparked sparkedMusicState
+}
+
+// A message for Game to inform Engine that Cozmo has been overfed and
+// should get the hiccups as a result
+message NotifyOverfeedingShouldTriggerHiccups{
+}
+
+// A message for Game to poll pyramid pre-reqs
+message RequestPyramidPreReqState{
+}
+
+// A message for Game to let engine know that Cozmo is waking up
+message NotifyCozmoWakeup{
+}
 
 // The app requests that the robot perform some non-instantaneous action, usually
 // an action with an associated voice command, such as "go to your charger"
@@ -475,6 +624,19 @@ message AppIntent {
   string param,
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// BlockWorld
+///////////////////////////////////////////////////////////////////////////////
+
+// request currently located instances of objects in the current origin
+// pose information can be trusted from this objects
+message RequestLocatedObjectStates {
+}
+
+// request currently connected objects, regardless of their pose state in current or any origin
+// pose information is not provided for this objects
+message RequestConnectedObjects {
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Visualization (Viz) Related
@@ -526,6 +688,10 @@ message EraseQuad {
 ///////////////////////////////////////////////////////////////////////////////
 
 
+// ReadFaceAnimationDir
+message ReadFaceAnimationDir {
+}
+
 // ReadAnimationFile
 message ReadAnimationFile {
   string full_path
@@ -539,6 +705,17 @@ message RequestAvailableAnimations{
 // RequestAvailableAnimationGroups
 message RequestAvailableAnimationGroups{
   
+}
+
+message EnableKeepFaceAlive {
+  uint_32 disableTimeout_ms,  // If enable == false, the amount of time to wait before actually disabling
+  bool    enable
+}
+
+message SetKeepFaceAliveParameters {
+  KeepFaceAliveParameter       paramNames[uint_8],
+  float_32                     paramValues[uint_8], // must be same length as paramNames
+  bool                         setUnspecifiedToDefault = 0
 }
 
 // PushDrivingAnimations
@@ -582,16 +759,6 @@ message DisplayFaceImageBinaryChunk {
     uint_8   faceData[1104],
     uint_8   imageId,
     uint_8   chunkIndex,
-    bool     interruptRunning
-}
-
-// Sends a chunk of oled data, to be later displayed using DisplayFaceImageRGB
-message DisplayFaceImageRGBChunk {
-    uint_16  faceData[600], // Splitting into chunks of 600 similar to the e2r layer
-    uint_16  numPixels,
-    uint_8   chunkIndex,
-    uint_8   numChunks,
-    uint_32  duration_ms,     // Use uint_32 max value to keep the image on the screen
     bool     interruptRunning
 }
 
@@ -651,6 +818,21 @@ message EnableLightStates {
   int_32 objectID = -1 // -1 is to enable/disable all cube light states
 }
 
+message EnableCubeSleep {
+  bool enable,
+  bool skipAnimation = 0 // If true will skip the fadeout part of the sleep anim
+}
+
+// Whether or not engine should be sending CubeLightsStateTransition messages to game
+message EnableCubeLightsStateTransitionMessages {
+  bool enable
+}
+
+// Makes the specified object flash its lights
+message FlashCurrentLightsState {
+  uint_32 objectID
+}
+
 // Plays a cube animation on the specified object
 message PlayCubeAnim {
   uint_32 objectID,
@@ -663,12 +845,17 @@ message StopCubeAnim {
   CubeAnimationTrigger trigger
 }
 
+message StreamObjectAccel
+{
+  uint_32 objectID,
+  bool enable
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Onboarding
 ///////////////////////////////////////////////////////////////////////////////
 
-message SetOnboardingStage {
-  OnboardingStages stage,
+message TransitionToNextOnboardingState {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -702,6 +889,41 @@ union MoodMessageUnion {
 
 message MoodMessage {
   MoodMessageUnion  MoodMessageUnion
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//
+///////////////////////////////////////////////////////////////////////////////
+
+// Progression unlocks
+message RequestSetUnlock {
+  UnlockId unlockID,
+  bool unlocked
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Inventory
+///////////////////////////////////////////////////////////////////////////////
+
+message InventoryRequestAdd {
+  InventoryType inventoryType,
+  int_32 delta
+}
+
+message InventoryRequestSet {
+  InventoryType inventoryType,
+  int_32 total
+}
+
+message InventoryRequestGet {
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+// Request engine to send data like device id, app run id, etc
+message RequestDeviceData {
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -755,41 +977,46 @@ message LogRawProxData {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Performance Metric
+///////////////////////////////////////////////////////////////////////////////
+
+enum uint_8 PerfMetricCommandType {
+  Reset,
+  Start,
+  Stop,
+  Dump,
+  DumpAll,
+  DumpFiles,
+}
+
+message PerfMetricCommand {
+  PerfMetricCommandType command,
+}
+
+message PerfMetricGetStatus {
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // BlockPool
 ///////////////////////////////////////////////////////////////////////////////
 
-// Attempt to connect to a cube. If a cube is currently connected,
-// this will do nothing.
-message ConnectToCube {
+message BlockPoolEnabledMessage {
+  float_32 discoveryTimeSecs,
+  bool enabled
 }
 
-// Requests a disconnection from the currently connected cube.
-// The connection will be held for gracePeriod_sec before actually
-// disconnecting. Any attempt to connect during this "grace period"
-// will succeed instantaneously, so this is useful if you are
-// frequently disconnecting/connecting to cubes. A grace period
-// of 0 will immediately disconnect the cube.
-message DisconnectFromCube {
-  float_32 gracePeriod_sec
-}
-
-// 'Forget' the robot's preferred cube. This will cause the robot to
-// connect to the cube with the highest RSSI (signal strength) next
-// time a connection is requested. Saves this preference to disk.
-// The next cube that the robot connects to will become its
-// preferred cube.
-message ForgetPreferredCube {
-}
-
-// Set the robot's preferred cube and save it to disk. The robot
-// will always attempt to connect to this cube if it is available.
-// This is only used in simulation (for now).
-message SetPreferredCube {
-  string factoryId
+// Query for E2GMessage: InitBlockPoolMessage
+message GetBlockPoolMessage {
 }
 
 message SendAvailableObjects {
   bool enable
+}
+
+// Resets blockpool
+message BlockPoolResetMessage {
+  bool enable = 1, // Enables/disables blockpool after resetting
+  bool maintainPersistentPool = 0 // If true prevents the PersistentPool from being cleared
 }
 
 
@@ -807,16 +1034,50 @@ message ComputeCameraCalibration {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Communicating UI interactions
+///////////////////////////////////////////////////////////////////////////////
+
+message ContinueFreeplayFromIdle{
+}
+
+message EnableDroneMode {
+  bool   isStarted
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // SDK Specific
 ///////////////////////////////////////////////////////////////////////////////
+
+message EnterSdkMode {
+  bool isExternalSdkMode = 1
+}
+
+message ExitSdkMode {
+bool isExternalSdkMode = 1
+}
+
+message SetStopRobotOnSdkDisconnect {
+  bool doStop = 1
+}
+
+message StopRobotForSdk {
+}
+
+message SetShouldAutoConnectToCubesAtStart {
+  bool doAutoConnect = 0
+}
+
+message SetShouldAutoDisconnectFromCubesAtEnd {
+  bool doAutoDisconnect = 0
+}
 
 // Upload animations
 enum uint_8 FileType {
   Animation,
-  FaceImg
+  FaceImg,
+  CodeLab
 }
 
-// Upload animations
 message TransferFile {
   uint_8   fileBytes[uint_16],
   uint_16  filePart,
@@ -826,8 +1087,59 @@ message TransferFile {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Robot settings
+// Robot flash (non-volatile storage)
 ///////////////////////////////////////////////////////////////////////////////
+
+// All non-volatile storage operations result in a NVStorageOpResult message
+// being sent back from engine upon completion except for single-blob reads.
+// Whether or not an entry is single blob or multi-blob entry is determined by
+// the NVEntryTag value.
+// NOTE: Do not follow one operation with another before acking the previous
+//       operation as the flash can only handle one at a time.
+//       The only exception is you can send multiple NVStorageWriteEntry messages
+//       for a multi-blob message since these don't actually get sent to robot
+//       until all blobs have been received by engine.
+
+// Erase an entry from non-volatile storage
+message NVStorageEraseEntry {
+  NVStorage::NVEntryTag tag
+}
+
+// Erase all entries from non-volatile storage
+// (not including factory partition)
+// NOTE: THIS MESSAGE FORCES A ROBOT REBOOT CAUSING DISCONNECT.
+message NVStorageWipeAll {
+  string key            // This must be "Yes I really want to do this!" otherwise the operation will fail.
+}
+
+// Multi-blob messages (numTotalBlobs > 1) are queued on engine
+// and sent out all at once only when all blobs have been received.
+// (This also means that writes won't be ackd with NVStorageOpResult until all
+// blobs have been sent to engine, unless there's a problem found before all the blobs
+// have been received in which case engine will send an NVStorageOpResult failure for
+// each problematic NVStorageWriteEntry received.)
+// This is to help make it harder to write junk to the robot.
+// Single-blob messages (numTotalBlobs == 1) are sent to robot immediately.
+message NVStorageWriteEntry {
+  NVStorage::NVEntryTag tag,
+  uint_8  data[uint_16],
+  uint_8  index,         // Starts at 0
+  uint_8  numTotalBlobs  // Total number of blobs expected
+}
+
+// Clears any queued data received by engine for a multi-blob entry via NVStorageWriteEntry.
+// Does not directly affect robot flash.
+// This should be called once before sending a sequence of NVStorageWriteEntry messages
+// for a mult-blob entry. It should only be necessary if something went wrong
+// with a previous write attempt, but doesn't hurt to call it every time.
+message NVStorageClearPartialPendingWriteEntry {
+}
+
+// Data is returned in NVStorageData messages.
+// If multi-blob entry, game will have to dechunk.
+message NVStorageReadEntry {
+  NVStorage::NVEntryTag tag
+}
 
 // Enable/disable auto exposure
 // If enableAutoExposure == false then exposure and gain are set to the specified values
@@ -842,49 +1154,16 @@ message SetCameraSettings {
 message RequestRobotSettings {
 }
 
-// Request a status history
-message RobotHistoryRequest {
-}
-
 // explicit autounion - this will force the values given, and then add every other messages in this file
 // if you do not want to include messages in this union, use the keyword "structure" instead of "message"
 // DO NOT CHANGE ANY EXPLICITLY DECLARED VALUES - they must be compatible across all versions so we can reliably
 // handshake between and App and SDK version combination
 autounion MessageGameToEngine
 {
-  UiDeviceConnectionWrongVersion     UiDeviceConnectionWrongVersion     = 0x00, // DO NOT CHANGE THIS VALUE
-  MoveHead                           MoveHead                           = 0x03,
-  MoveLift                           MoveLift                           = 0x04,
-  DriveArc                           DriveArc                           = 0x05,
-  RobotHistoryRequest                RobotHistoryRequest                = 0x06,
-  DisplayFaceImageRGBChunk           DisplayFaceImageRGBChunk           = 0x08,
-  AppIntent                          AppIntent                          = 0x09,
-  CancelFaceEnrollment               CancelFaceEnrollment               = 0x0A,
-  RequestEnrolledNames               RequestEnrolledNames               = 0x0B,
-  UpdateEnrolledFaceByID             UpdateEnrolledFaceByID             = 0x0C,
-  EraseEnrolledFaceByID              EraseEnrolledFaceByID              = 0x0D,
-  EraseAllEnrolledFaces              EraseAllEnrolledFaces              = 0x0E,
-  SetFaceToEnroll                    SetFaceToEnroll                    = 0x0F,
-  EnableVisionMode                   EnableVisionMode                   = 0x10,
-  RequestAvailableAnimations         RequestAvailableAnimations         = 0x11,
-  GotoPose                           GotoPose                           = 0x12,
-  DriveStraight                      DriveStraight                      = 0x13,
-  TurnInPlace                        TurnInPlace                        = 0x14,
-  SetHeadAngle                       SetHeadAngle                       = 0x15,
-  SetLiftHeight                      SetLiftHeight                      = 0x16,
-  AlignWithObject                    AlignWithObject                    = 0x18,
-  SetLiftAngle                       SetLiftAngle                       = 0x19,
-  DeleteCustomMarkerObjects          DeleteCustomMarkerObjects          = 0x1A,
-  DeleteFixedCustomObjects           DeleteFixedCustomObjects           = 0x1B,
-  UndefineAllCustomMarkerObjects     UndefineAllCustomMarkerObjects     = 0x1C,
-  CreateFixedCustomObject            CreateFixedCustomObject            = 0x1D,
-  DefineCustomBox                    DefineCustomBox                    = 0x1E,
-  DefineCustomCube                   DefineCustomCube                   = 0x1F,
-  DefineCustomWall                   DefineCustomWall                   = 0x20,
-  SetMemoryMapBroadcastFrequency_sec SetMemoryMapBroadcastFrequency_sec = 0x21,
+  UiDeviceConnectionWrongVersion          UiDeviceConnectionWrongVersion          = 0x00, // DO NOT CHANGE THIS VALUE
 }
 
 
 } // namespace U2G
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -17,7 +17,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace ExternalInterface {
 struct RobotCompletedAction;

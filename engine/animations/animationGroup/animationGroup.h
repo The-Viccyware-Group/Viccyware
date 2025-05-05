@@ -31,7 +31,7 @@ namespace Util {
   class RandomGenerator;
 }
   
-  namespace Vector {
+  namespace Cozmo {
     
     //Forward declaration
     class AnimationGroupContainer;
@@ -69,7 +69,7 @@ namespace Util {
                                           float headAngleRad=0.f,
                                           bool strictCooldown=false) const;
       
-      Util::RandomGenerator& _rng;
+      Util::RandomGenerator&  _rng;
       
       // Name of this animation
       std::string _name;
@@ -77,7 +77,7 @@ namespace Util {
       std::vector<AnimationGroupEntry> _animations;
       
     }; // class AnimationGroup
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_AnimationGroup_AnimationGroup_H__

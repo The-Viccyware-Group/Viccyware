@@ -4,5 +4,4 @@ dist
 staging
 generated
 node_modules
-package-lock.json
 crypto/*/*manifest*

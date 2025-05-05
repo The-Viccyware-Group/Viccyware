@@ -34,12 +34,15 @@ void handle_incoming_frame(struct BodyToHead* data)
    
    lastfc = data->framecounter;
    static uint8_t printcount=0;
-   if (1 || ( ++printcount & RATEMASK ) == 0) {
-      printf("%d: %d %d\n",
+   if (( ++printcount & RATEMASK ) == 0) {
+      printf("%d: %d %d %d %d \r",
              data->framecounter,
-             data->touchLevel[0],
-             data->touchHires[0]);
-      //fflush(stdout);
+             data->cliffSense[0],
+             data->cliffSense[1],
+             data->cliffSense[2],
+             data->cliffSense[3]);
+      fflush(stdout);
+
    }
 }
 

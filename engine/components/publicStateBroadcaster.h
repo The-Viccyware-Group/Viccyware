@@ -26,7 +26,7 @@
 #include <memory>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class Robot;
 
@@ -39,7 +39,7 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override {
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override {
     _robot = robot;
   };
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
@@ -58,8 +58,9 @@ public:
     dependencies.insert(RobotComponentID::Map);
     dependencies.insert(RobotComponentID::NVStorage);
     dependencies.insert(RobotComponentID::AIComponent);
+    dependencies.insert(RobotComponentID::ObjectPoseConfirmer);
     dependencies.insert(RobotComponentID::CubeLights);
-    dependencies.insert(RobotComponentID::BackpackLights);
+    dependencies.insert(RobotComponentID::BodyLights);
     dependencies.insert(RobotComponentID::CubeAccel);
     dependencies.insert(RobotComponentID::CubeComms);
     dependencies.insert(RobotComponentID::GyroDriftDetector);
@@ -71,9 +72,12 @@ public:
     dependencies.insert(RobotComponentID::TouchSensor);
     dependencies.insert(RobotComponentID::StateHistory);
     dependencies.insert(RobotComponentID::MoodManager);
+    dependencies.insert(RobotComponentID::Inventory);
+    dependencies.insert(RobotComponentID::ProgressionUnlock);
     dependencies.insert(RobotComponentID::BlockTapFilter);
     dependencies.insert(RobotComponentID::RobotToEngineImplMessaging);
-    dependencies.insert(RobotComponentID::MicComponent);
+    dependencies.insert(RobotComponentID::RobotIdleTimeout);
+    dependencies.insert(RobotComponentID::MicDirectionHistory);
   };
   
   virtual void UpdateDependent(const RobotCompMap& dependentComps) override;
@@ -106,7 +110,7 @@ private:
   
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_Basestation_Components_PublicStateBroadcaster_H__

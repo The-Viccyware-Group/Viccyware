@@ -29,7 +29,7 @@ RunningStat::RunningStat() :
 {
 
 }
-
+  
 // clear data
 void RunningStat::Clear()
 {
@@ -83,11 +83,11 @@ float RunningStat::StandardDeviation() const
 }
 
 // Logs collected data
-void RunningStat::LogStats(const char * statName)
+void RunningStat::LogStats(const char * eventName)
 {
-  #define SEND_STATS(statNameThird, stat) {                             \
-    std::string fullStatName (std::string(statName) + statNameThird); \
-    PRINT_NAMED_INFO(fullStatName.c_str(), "%f", stat);                        \
+  #define SEND_STATS(eventNameThird, stat) {                             \
+    std::string fullEventName (std::string(eventName) + eventNameThird); \
+    LOG_EVENT(fullEventName.c_str(), "%f", stat);                        \
   }
 
   float fData = NumDataValues();
@@ -105,7 +105,7 @@ void RunningStat::LogStats(const char * eventName, const IEntityLoggerComponent 
 {
   #define SEND_LOGGER_STATS(eventNameThird, stat) {                      \
     std::string fullEventName (std::string(eventName) + eventNameThird); \
-    logger->InfoF(fullEventName.c_str(), "%f", stat);                   \
+    logger->EventF(fullEventName.c_str(), "%f", stat);                   \
   }
 
   float fData = NumDataValues();
@@ -121,3 +121,4 @@ void RunningStat::LogStats(const char * eventName, const IEntityLoggerComponent 
 } // end namespace Stats
 } // end namespace Util
 } // end namespace Anki
+

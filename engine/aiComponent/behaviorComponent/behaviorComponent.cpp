@@ -13,35 +13,22 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviorComponent.h"
 
-#include "engine/moodSystem/moodManager.h"
 #include "engine/aiComponent/aiComponent.h"
-#include "engine/aiComponent/behaviorComponent/activeBehaviorIterator.h"
-#include "engine/aiComponent/behaviorComponent/activeFeatureComponent.h"
-#include "engine/aiComponent/behaviorComponent/attentionTransferComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorComponentMessageHandler.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorAudioComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorEventComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
+#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorEventComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorSystemManager.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTimers.h"
-#include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/aiComponent/behaviorComponent/behaviorsBootLoader.h"
-#include "engine/aiComponent/behaviorComponent/heldInPalmTracker.h"
-#include "engine/aiComponent/behaviorComponent/onboardingMessageHandler.h"
-#include "engine/aiComponent/behaviorComponent/sleepTracker.h"
-#include "engine/aiComponent/behaviorComponent/userDefinedBehaviorTreeComponent/userDefinedBehaviorTreeComponent.h"
+#include "engine/aiComponent/behaviorComponent/devBehaviorComponentMessageHandler.h"
 #include "engine/aiComponent/behaviorComponent/userIntentComponent.h"
-#include "engine/audio/engineRobotAudioClient.h"
+#include "engine/aiComponent/behaviorEventAnimResponseDirector.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/components/powerStateManager.h"
-#include "engine/components/robotStatsTracker.h"
 #include "engine/faceWorld.h"
-
-#include "clad/externalInterface/messageEngineToGame.h"
-#include "clad/externalInterface/messageGameToEngine.h"
+#include "engine/audio/engineRobotAudioClient.h"
 
 #include "engine/cozmoContext.h"
 #include "engine/robot.h"
@@ -50,7 +37,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorComponent::BehaviorComponent()
@@ -79,33 +66,18 @@ void BehaviorComponent::GenerateManagedComponents(Robot& robot,
 
   // AIComponent
   {
-    DEV_ASSERT(entity->HasComponent<AIComponent>(), "BehaviorComponent.GenerateManagedComponents.NoAIComponentProvided");
+    DEV_ASSERT(entity->HasComponent(BCComponentID::AIComponent), "BehaviorComponent.GenerateManagedComponents.NoAIComponentProvided");
   }
   // Face World
-  if(!entity->HasComponent<FaceWorld>()){
+  if(!entity->HasComponent(BCComponentID::FaceWorld)){
     entity->AddDependentComponent(BCComponentID::FaceWorld,
       robot.GetComponentPtr<FaceWorld>(), false);
   }
 
   // Block World
-  if(!entity->HasComponent<BlockWorld>()){
+  if(!entity->HasComponent(BCComponentID::BlockWorld)){
     entity->AddDependentComponent(BCComponentID::BlockWorld,
       robot.GetComponentPtr<BlockWorld>(), false);
-  }
-
-  if(!entity->HasComponent<RobotStatsTracker>()) {
-    entity->AddDependentComponent(BCComponentID::RobotStatsTracker,
-      robot.GetComponentPtr<RobotStatsTracker>(), false);
-  }
-
-  if(!entity->HasComponent<PowerStateManager>()) {
-    entity->AddDependentComponent(BCComponentID::PowerStateManager,
-      robot.GetComponentPtr<PowerStateManager>(), false);
-  }
-
-  if(!entity->HasComponent<MoodManager>()) {
-    entity->AddDependentComponent(BCComponentID::MoodManager,
-      robot.GetComponentPtr<MoodManager>(), false);
   }
 
   //////
@@ -113,28 +85,27 @@ void BehaviorComponent::GenerateManagedComponents(Robot& robot,
   /////
 
   // Async Message Component
-  if(!entity->HasComponent<AsyncMessageGateComponent>()){
+  if(!entity->HasComponent(BCComponentID::AsyncMessageComponent)){
     auto messagePtr = new AsyncMessageGateComponent(robot.HasExternalInterface() ? robot.GetExternalInterface() : nullptr,
-                                                    robot.HasGatewayInterface() ? robot.GetGatewayInterface() : nullptr,
                                                                   robot.GetRobotMessageHandler());
     entity->AddDependentComponent(BCComponentID::AsyncMessageComponent, std::move(messagePtr));
   }
 
   // Behavior Audio Component
-  if(!entity->HasComponent<Audio::BehaviorAudioComponent>()){
+  if(!entity->HasComponent(BCComponentID::BehaviorAudioComponent)){
     auto audioPtr = new Audio::BehaviorAudioComponent(robot.GetAudioClient());
     entity->AddDependentComponent(BCComponentID::BehaviorAudioComponent,
                                   std::move(audioPtr));
   }
 
   // User intent component (and receiver of cloud intents)
-  if(!entity->HasComponent<UserIntentComponent>()){
+  if(!entity->HasComponent(BCComponentID::UserIntentComponent)){
     entity->AddDependentComponent(BCComponentID::UserIntentComponent,
                                   new UserIntentComponent(robot, robot.GetContext()->GetDataLoader()->GetUserIntentConfig()));
   }
 
   // Behavior Container
-  if(!entity->HasComponent<BehaviorContainer>()){
+  if(!entity->HasComponent(BCComponentID::BehaviorContainer)){
     if(robot.GetContext() != nullptr){
       auto bcPtr = new BehaviorContainer(robot.GetContext()->GetDataLoader()->GetBehaviorJsons());
       entity->AddDependentComponent(BCComponentID::BehaviorContainer, std::move(bcPtr));
@@ -145,79 +116,10 @@ void BehaviorComponent::GenerateManagedComponents(Robot& robot,
     }
   }
 
-  // Behavior Event Component
-  if(!entity->HasComponent<BehaviorEventComponent>()){
-    entity->AddDependentComponent(BCComponentID::BehaviorEventComponent,
-                                  new BehaviorEventComponent());
-  }
+  // BaseBehavior Wrapper
+  if(!entity->HasComponent(BCComponentID::BaseBehaviorWrapper)){
+    ICozmoBehaviorPtr baseBehavior;
 
-  // Behavior External Interface
-  if(!entity->HasComponent<BehaviorExternalInterface>()){
-    entity->AddDependentComponent(BCComponentID::BehaviorExternalInterface,
-                                  new BehaviorExternalInterface());
-  }
-
-  // Behavior System Manager
-  if(!entity->HasComponent<BehaviorSystemManager>()){
-    entity->AddDependentComponent(BCComponentID::BehaviorSystemManager,
-                                  new BehaviorSystemManager());
-  }
-
-  // Behavior timers
-  if(!entity->HasComponent<BehaviorTimerManager>()){
-    entity->AddDependentComponent(BCComponentID::BehaviorTimerManager,
-                                  new BehaviorTimerManager());
-  }
-
-  // Delegation Component
-  if(!entity->HasComponent<DelegationComponent>()){
-    entity->AddDependentComponent(BCComponentID::DelegationComponent,
-                                  new DelegationComponent());
-  }
-
-  // Dev Behavior Component Message Handler
-  if(!entity->HasComponent<BehaviorComponentMessageHandler>()){
-    entity->AddDependentComponent(BCComponentID::BehaviorComponentMessageHandler,
-                                  new BehaviorComponentMessageHandler(robot));
-  }
-
-  // Robot Info
-  if(!entity->HasComponent<BEIRobotInfo>()){
-    entity->AddDependentComponent(BCComponentID::RobotInfo,
-                                  new BEIRobotInfo(robot));
-  }
-
-  // Robot Info
-  if(!entity->HasComponent<UserDefinedBehaviorTreeComponent>()){
-    entity->AddDependentComponent(BCComponentID::UserDefinedBehaviorTreeComponent,
-                                  new UserDefinedBehaviorTreeComponent());
-  }
-
-  if(!entity->HasComponent<ActiveFeatureComponent>()) {
-    entity->AddDependentComponent(BCComponentID::ActiveFeature, new ActiveFeatureComponent);
-  }
-
-  if(!entity->HasComponent<ActiveBehaviorIterator>()) {
-    entity->AddDependentComponent(BCComponentID::ActiveBehaviorIterator, new ActiveBehaviorIterator);
-  }
-
-  if(!entity->HasComponent<AttentionTransferComponent>()) {
-    entity->AddDependentComponent(BCComponentID::AttentionTransferComponent, new AttentionTransferComponent);
-  }
-
-  if(!entity->HasComponent<SleepTracker>()) {
-    entity->AddDependentComponent(BCComponentID::SleepTracker, new SleepTracker);
-  }
-
-  if(!entity->HasComponent<OnboardingMessageHandler>()) {
-    entity->AddDependentComponent(BCComponentID::OnboardingMessageHandler, new OnboardingMessageHandler);
-  }
-  
-  if(!entity->HasComponent<HeldInPalmTracker>()) {
-    entity->AddDependentComponent(BCComponentID::HeldInPalmTracker, new HeldInPalmTracker);
-  }
-
-  if(!entity->HasComponent<BehaviorsBootLoader>()) {
     const CozmoContext* context = robot.GetContext();
     RobotDataLoader* dataLoader = nullptr;
     if(context == nullptr){
@@ -227,11 +129,75 @@ void BehaviorComponent::GenerateManagedComponents(Robot& robot,
       dataLoader = context->GetDataLoader();
     }
     Json::Value blankActivitiesConfig;
-    const Json::Value& behaviorSystemConfig = (dataLoader != nullptr)
-                                              ? dataLoader->GetVictorFreeplayBehaviorConfig()
-                                              : blankActivitiesConfig;
-    
-    entity->AddDependentComponent(BCComponentID::BehaviorsBootLoader, new BehaviorsBootLoader{behaviorSystemConfig});    
+    const Json::Value& behaviorSystemConfig = (dataLoader != nullptr) ?
+      dataLoader->GetVictorFreeplayBehaviorConfig() : blankActivitiesConfig;
+
+
+    BehaviorContainer& bc = entity->GetValue<BehaviorContainer>();
+    if(!behaviorSystemConfig.empty()){
+      BehaviorID baseBehaviorID = ICozmoBehavior::ExtractBehaviorIDFromConfig(behaviorSystemConfig);
+      baseBehavior = bc.FindBehaviorByID(baseBehaviorID);
+      DEV_ASSERT(baseBehavior != nullptr,
+                 "BehaviorComponent.Init.InvalidbaseBehavior");
+    }else{
+      // Need a base behavior, so make it base behavior wait
+      Json::Value config = ICozmoBehavior::CreateDefaultBehaviorConfig(BEHAVIOR_CLASS(Wait), BEHAVIOR_ID(Wait));
+      const bool ret = bc.CreateAndStoreBehavior(config);
+      DEV_ASSERT(ret, "BehaviorComponent.CreateWaitBehavior.Failed");
+      baseBehavior = bc.FindBehaviorByID(BEHAVIOR_ID(Wait));
+      DEV_ASSERT(baseBehavior != nullptr, "BehaviorComponent.CreateWaitBehavior.WaitNotInContainers");
+    }
+    entity->AddDependentComponent(BCComponentID::BaseBehaviorWrapper,
+                                  new BaseBehaviorWrapper(baseBehavior.get()));
+  }
+
+  // Behavior Event Anim Response Director
+  if(!entity->HasComponent(BCComponentID::BehaviorEventAnimResponseDirector)){
+    BehaviorEventAnimResponseDirector animDirector;
+    entity->AddDependentComponent(BCComponentID::BehaviorEventAnimResponseDirector,
+                                  new BehaviorEventAnimResponseDirector());
+  }
+
+  // Behavior Event Component
+  if(!entity->HasComponent(BCComponentID::BehaviorEventComponent)){
+    entity->AddDependentComponent(BCComponentID::BehaviorEventComponent,
+                                  new BehaviorEventComponent());
+  }
+
+  // Behavior External Interface
+  if(!entity->HasComponent(BCComponentID::BehaviorExternalInterface)){
+    entity->AddDependentComponent(BCComponentID::BehaviorExternalInterface,
+                                  new BehaviorExternalInterface());
+  }
+
+  // Behavior System Manager
+  if(!entity->HasComponent(BCComponentID::BehaviorSystemManager)){
+    entity->AddDependentComponent(BCComponentID::BehaviorSystemManager,
+                                  new BehaviorSystemManager());
+  }
+
+  // Behavior timers
+  if(!entity->HasComponent(BCComponentID::BehaviorTimerManager)){
+    entity->AddDependentComponent(BCComponentID::BehaviorTimerManager,
+                                  new BehaviorTimerManager());
+  }
+
+  // Delegation Component
+  if(!entity->HasComponent(BCComponentID::DelegationComponent)){
+    entity->AddDependentComponent(BCComponentID::DelegationComponent,
+                                  new DelegationComponent());
+  }
+
+  // Dev Behavior Component Message Handler
+  if(!entity->HasComponent(BCComponentID::DevBehaviorComponentMessageHandler)){
+    entity->AddDependentComponent(BCComponentID::DevBehaviorComponentMessageHandler,
+                                  new DevBehaviorComponentMessageHandler(robot));
+  }
+
+  // Robot Info
+  if(!entity->HasComponent(BCComponentID::RobotInfo)){
+    entity->AddDependentComponent(BCComponentID::RobotInfo,
+                                  new BEIRobotInfo(robot));
   }
 }
 
@@ -244,7 +210,7 @@ void BehaviorComponent::SetComponents(ComponentPtr&& components)
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorComponent::InitDependent(Robot* robot, const AICompMap& dependentComps)
+void BehaviorComponent::InitDependent(Robot* robot, const AICompMap& dependentComponents)
 {
   if(_comps == nullptr){
     _comps = std::make_unique<EntityType>();
@@ -285,12 +251,6 @@ void BehaviorComponent::SubscribeToTags(IBehavior* subscriber, std::set<RobotInt
   gateComp.SubscribeToTags(subscriber, std::move(tags));
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorComponent::SubscribeToTags(IBehavior* subscriber, std::set<AppToEngineTag>&& tags) const
-{
-  AsyncMessageGateComponent& gateComp = GetComponent<AsyncMessageGateComponent>();
-  gateComp.SubscribeToTags(subscriber, std::move(tags));
-}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorContainer& BehaviorComponent::GetBehaviorContainer()
@@ -299,5 +259,5 @@ BehaviorContainer& BehaviorComponent::GetBehaviorContainer()
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

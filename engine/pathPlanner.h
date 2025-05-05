@@ -15,6 +15,7 @@
 #include "coretech/common/engine/objectIDs.h"
 #include "coretech/planning/shared/path.h"
 #include "coretech/planning/shared/goalDefs.h"
+#include "clad/types/objectFamilies.h"
 #include "clad/types/objectTypes.h"
 #include "clad/types/pathMotionProfile.h"
 #include <set>
@@ -24,12 +25,12 @@ namespace Anki {
 
 class Pose3d;
 
-namespace Vector {
+namespace Cozmo {
 
 enum class EComputePathStatus {
   Error, // Could not create path as requested
   Running, // Signifies that planning has successfully begun (may also be finished already)
-  NoPlanNeeded, // Signifies that planning is not necessary, useful in the replanning case
+  NoPlanNeeded, // Signifies that planning is not nessecary, useful in the replanning case
 };
 
 enum class EPlannerStatus {
@@ -37,13 +38,6 @@ enum class EPlannerStatus {
   Running, // Planner is still thinking
   CompleteWithPlan, // Planner has finished, and has a valid plan
   CompleteNoPlan, // Planner has finished, but has no plan (either encountered an error, or stopped early)
-};
-  
-enum class EPlannerErrorType {
-  None=0,
-  PlannerFailed,
-  TooFarFromPlan,
-  InvalidAppendant
 };
 
 class IPathPlanner
@@ -60,7 +54,7 @@ public:
   // compute immediately in the calling thread.
   // 
   // There are two versions of the function. They both take a single start pose, one takes multiple possible
-  // target poses, and one takes a single target pose. The one with multiple poses allows the planner to choose
+  // target poses, and one takes a single target pose. The one with multiple poses allows the planner to chose
   // which pose to drive to on its own. If the multiple goal poses version is not implemented, the single goal
   // will be selected which is the closest according to ComputeClosestGoalPose. The single pose function is
   // protected to simplify the external interface (simply pass a vector of one element if that is desired)
@@ -82,14 +76,11 @@ public:
   // used
   // Default implementation never plans (just gives you the same path as last time)
   virtual EComputePathStatus ComputeNewPathIfNeeded(const Pose3d& startPose,
-                                                    bool forceReplanFromScratch = false,
-                                                    bool allowGoalChange = true);
+                                                    bool forceReplanFromScratch = false);
 
   virtual void StopPlanning() {}
 
   virtual EPlannerStatus CheckPlanningStatus() const;
-  
-  virtual EPlannerErrorType GetErrorType() const;
   
   // Returns true if the path avoids obstacles. Some planners don't know about obstacles, so the default is always true.
   // If provided, clears and fills validPath to be that portion of path that is below the max obstacle penalty.
@@ -105,21 +96,41 @@ public:
   // recent ComputePlan call. If the robot has moved significantly between computing the path and getting the
   // complete path, the path may trim the first few actions removed to account for the robots motion, based on
   // the passed in position
-  bool HasCompletePath() const { return _hasValidPath; }
-  const Planning::Path& GetCompletePath() const { return _path; }
-  const Planning::GoalID& GetPathSelectedTargetIndex() const { return _selectedTargetIdx; }
+  bool GetCompletePath(const Pose3d& currentRobotPose,
+                       Planning::Path &path,
+                       const PathMotionProfile* motionProfile = nullptr);
+  bool GetCompletePath(const Pose3d& currentRobotPose,
+                       Planning::Path &path,
+                       Planning::GoalID& selectedTargetIndex,
+                       const PathMotionProfile* motionProfile = nullptr);
+  
+  // If this planner considers obstacles, it will likely preload those obstacles (if needed)
+  // when computing a path. But if you need to use those obstacles without computing a path,
+  // call this to do whatever importing is needed. If this planner does not consider obstacles,
+  // this should do nothing. Returns true if the planner does something with obstacles (e.g., loads
+  // them or starts them loading in a thread).
+  virtual bool PreloadObstacles() { return false; }
 
   // return a test path
   virtual void GetTestPath(const Pose3d& startPose, Planning::Path &path, const PathMotionProfile* motionProfile = nullptr) {}
-
-  // Modifies in path according to `motionProfile` to produce output path.
-  // Takes deceleration into account in order to produce a path with smooth deceleration
-  // over multiple path segments
-  // TODO: This is where Cozmo mood/skill-based path wonkification would occur,
-  //       but currently it just changes speeds and accel on each segment.
-  static Planning::Path ApplyMotionProfile(const Planning::Path &in, const PathMotionProfile& motionProfile);
+      
+  void AddIgnoreFamily(const ObjectFamily objFamily)    { _ignoreFamilies.insert(objFamily); }
+  void RemoveIgnoreFamily(const ObjectFamily objFamily) { _ignoreFamilies.erase(objFamily); }
+  void ClearIgnoreFamilies()                                          { _ignoreFamilies.clear(); }
+      
+  void AddIgnoreType(const ObjectType objType)    { _ignoreTypes.insert(objType); }
+  void RemoveIgnoreType(const ObjectType objType) { _ignoreTypes.erase(objType); }
+  void ClearIgnoreTypes()                           { _ignoreTypes.clear(); }
+      
+  void AddIgnoreID(const ObjectID objID)          { _ignoreIDs.insert(objID); }
+  void RemoveIgnoreID(const ObjectID objID)       { _ignoreIDs.erase(objID); }
+  void ClearIgnoreIDs()                             { _ignoreIDs.clear(); }
   
 protected:
+      
+  std::set<ObjectFamily>             _ignoreFamilies;
+  std::set<ObjectType>               _ignoreTypes;
+  std::set<ObjectID>                 _ignoreIDs;
 
   bool _hasValidPath;
   bool _planningError;
@@ -133,27 +144,42 @@ protected:
   virtual EComputePathStatus ComputePath(const Pose3d& startPose,
                                          const Pose3d& targetPose) = 0;
 
+  
+  virtual bool GetCompletePath_Internal(const Pose3d& currentRobotPose,
+                                        Planning::Path &path);
+  virtual bool GetCompletePath_Internal(const Pose3d& currentRobotPose,
+                                        Planning::Path &path,
+                                        Planning::GoalID& selectedTargetIndex);
+  
+  // Modifies in path according to _pathMotionProfile to produce out path.
+  // Takes deceleration into account in order to produce a path with smooth deceleration
+  // over multiple path segments
+  // TODO: This is where Cozmo mood/skill-based path wonkification would occur,
+  //       but currently it just changes speeds and accel on each segment.
+  static bool ApplyMotionProfile(const Planning::Path &in,
+                                 const PathMotionProfile& motionProfile,
+                                 Planning::Path &out);
 private:
 
   std::string _name;
 
   
 }; // Interface IPathPlanner
-  
-constexpr const char* EPlannerStatusToString(EPlannerStatus status)
+
+// A stub class that never plans
+class PathPlannerStub : public IPathPlanner
 {
-#define HANDLE_EPS_CASE(v) case EPlannerStatus::v: return #v
-  switch(status) {
-    HANDLE_EPS_CASE(Error);
-    HANDLE_EPS_CASE(Running);
-    HANDLE_EPS_CASE(CompleteWithPlan);
-    HANDLE_EPS_CASE(CompleteNoPlan);
+public:
+  PathPlannerStub() : IPathPlanner("Stub") { }
+
+  virtual EComputePathStatus ComputePath(const Pose3d& startPose,
+                                         const Pose3d& targetPose) override {
+    return EComputePathStatus::Error;
   }
-#undef HANDLE_ETDTPS_CASE
-}
+};
     
     
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

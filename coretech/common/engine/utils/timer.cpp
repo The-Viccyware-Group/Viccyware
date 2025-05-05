@@ -49,8 +49,7 @@ BaseStationTimer::BaseStationTimer()
 : currTimeSecondsDouble_(0.0)
 , currTimeSecondsFloat_(0.0f)
 , currTimeNanoSeconds_(0)
-, currTimeStamp_(0)
-, tickCount_(0)
+, elapsedTimeSecondsFloat_(0.0f)
 {
 }
 
@@ -61,14 +60,17 @@ BaseStationTimer::~BaseStationTimer()
 
 // Updates the current system time used for tracking
 
-void BaseStationTimer::UpdateTime(const BaseStationTime_t currTime_NS)
+void BaseStationTimer::UpdateTime(BaseStationTime_t currTime_NS)
 {
-  // Store the current time in different convenient formats
-  currTimeNanoSeconds_ = currTime_NS;
-  currTimeSecondsDouble_ = Util::numeric_cast<double>(Util::NanoSecToSec(currTime_NS));
-  currTimeSecondsFloat_ = Util::numeric_cast<float>(currTimeSecondsDouble_);
-  currTimeStamp_ = Util::numeric_cast<TimeStamp_t>(Util::SecToMilliSec(currTimeSecondsDouble_));
+  // Calculate time since last tick and store as a float
+  auto elapsedNanoSecs = currTime_NS - currTimeNanoSeconds_;
+  elapsedTimeSecondsFloat_ = Util::numeric_cast<float>(Util::NanoSecToSec(elapsedNanoSecs));
 
+  // Store the current time in three different convenient formats
+  currTimeNanoSeconds_ = currTime_NS;
+  currTimeSecondsDouble_ = Util::NanoSecToSec(currTime_NS);
+  currTimeSecondsFloat_ = Util::numeric_cast<float>(currTimeSecondsDouble_);
+  
   ++tickCount_;
 }
 
@@ -88,9 +90,14 @@ BaseStationTime_t BaseStationTimer::GetCurrentTimeInNanoSeconds() const
   return currTimeNanoSeconds_;
 }
 
+float BaseStationTimer::GetTimeSinceLastTickInSeconds() const
+{
+  return elapsedTimeSecondsFloat_;
+}
+
 TimeStamp_t BaseStationTimer::GetCurrentTimeStamp() const
 {
-  return currTimeStamp_;
+  return Util::numeric_cast<TimeStamp_t>(Util::SecToMilliSec(currTimeSecondsDouble_));
 }
 
 const size_t BaseStationTimer::GetTickCount() const

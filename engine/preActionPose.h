@@ -25,7 +25,7 @@ namespace Anki {
     class KnownMarker;
   }
   
-  namespace Vector {
+  namespace Cozmo {
     
     class PreActionPose
     {
@@ -136,7 +136,7 @@ namespace Anki {
     }
     
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_BASESTATION_PREACTIONPOSE_H

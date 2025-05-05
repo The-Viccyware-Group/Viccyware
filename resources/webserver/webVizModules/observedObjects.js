@@ -55,10 +55,9 @@
         faceElem.empty();
       }
       faceElem.append('<p>id: ' + data["faceID"] + '</p>')
-              .append('<p>t: ' + data["timestamp"] + '</p>')
-              .append('<p>origin: ' + data["originID"] + '</p>')
+              .append('<p>t: ' + data["timestamp"] + '</p>');
       if( typeof data.name !== 'undefined' ) {
-        faceElem.append('<p>name: ' + data["name"] + '</p>');
+        faceElem.append('<p>t: ' + data["name"] + '</p>');
       }
       if( shouldSort ) {
         sortListById( faceList );
@@ -82,7 +81,7 @@
       }
       cubeElem.append('<p>id: ' + data["objectID"] + '</p>')
               .append('<p>t: ' + data["timestamp"] + '</p>')
-              .append('<p>type: ' + data["objectType"] + '</p>')
+              .append('<p>type: ' + data["objectFamily"] + ' ' + data["objectType"] + '</p>')
               .append('<p>active: ' + data["isActive"] + '</p>');
       if( shouldSort ) {
         sortListById( cubeList );

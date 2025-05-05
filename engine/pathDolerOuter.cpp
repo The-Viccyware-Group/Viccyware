@@ -12,16 +12,16 @@
  *
  **/
 
+#include <assert.h>
+
 #include "util/logging/logging.h"
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "engine/robotInterface/messageHandler.h"
 #include "util/math/numericCast.h"
 #include "pathDolerOuter.h"
 
-#define LOG_CHANNEL "Planner"
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 PathDolerOuter::PathDolerOuter(RobotInterface::MessageHandler* msgHandler)
   : pathSizeOnBasestation_(0)
@@ -55,40 +55,39 @@ void PathDolerOuter::ClearPath()
 
 void PathDolerOuter::Dole(size_t numToDole)
 {
-  DEV_ASSERT(msgHandler_ != nullptr, "PathDolerOuter.Dole.InvalidMessageHandler");
+  assert(msgHandler_);
 
   size_t endIdx = lastDoledSegmentIdx_ + numToDole;
-  if (endIdx >= pathSizeOnBasestation_) {
+  if(endIdx >= pathSizeOnBasestation_)
     endIdx = pathSizeOnBasestation_ - 1;
-  }
 
-  LOG_DEBUG("PathDolerOuter.Dole", "Should dole from %d to %zu (totalSegments = %zu)",
-            lastDoledSegmentIdx_ + 1,
-            endIdx,
-            pathSizeOnBasestation_);
+  PRINT_NAMED_DEBUG("PathDolerOuter", "should dole from %d to %lu (totalSegments = %lu)",
+         lastDoledSegmentIdx_ + 1,
+         (unsigned long)endIdx,
+         (unsigned long)pathSizeOnBasestation_);
 
-  for (size_t i = (size_t)lastDoledSegmentIdx_ + 1; i <= endIdx; ++i) {
-    // Get reference to current segment
-    const auto & segment = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i));
+  for(size_t i = (size_t)lastDoledSegmentIdx_ + 1; i <= endIdx; ++i) {
 
-    LOG_DEBUG("PathDolerOuter.Dole", "Doling out basestation idx %zu : %s", i, segment.ToString().c_str());
+    PRINT_NAMED_DEBUG("PathDolerOuter", "doling out basestation idx %zu :  ", i);
+    path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).Print();
 
-    switch (segment.GetType()) {
+    switch(path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetType()) {
+
     case Planning::PST_LINE:
     {
       RobotInterface::AppendPathSegmentLine m;
-      const auto * l = &(segment.GetDef().line);
+      const Planning::PathSegmentDef::s_line* l = &(path_.GetSegmentConstRef(i).GetDef().line);
       m.x_start_mm = l->startPt_x;
       m.y_start_mm = l->startPt_y;
       m.x_end_mm = l->endPt_x;
       m.y_end_mm = l->endPt_y;
-
-      m.speed.target = segment.GetTargetSpeed();
-      m.speed.accel = segment.GetAccel();
-      m.speed.decel = segment.GetDecel();
-
+            
+      m.speed.target = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetTargetSpeed();
+      m.speed.accel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetAccel();
+      m.speed.decel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetDecel();
+            
       if (msgHandler_->SendMessage(RobotInterface::EngineToRobot(std::move(m))) == RESULT_FAIL) {
-        LOG_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
+        PRINT_NAMED_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
         return;
       }
       break;
@@ -96,19 +95,19 @@ void PathDolerOuter::Dole(size_t numToDole)
     case Planning::PST_ARC:
     {
       RobotInterface::AppendPathSegmentArc m;
-      const auto * a = &(segment.GetDef().arc);
+      const Planning::PathSegmentDef::s_arc* a = &(path_.GetSegmentConstRef(i).GetDef().arc);
       m.x_center_mm = a->centerPt_x;
       m.y_center_mm = a->centerPt_y;
       m.radius_mm = a->radius;
       m.startRad = a->startRad;
       m.sweepRad = a->sweepRad;
-
-      m.speed.target = segment.GetTargetSpeed();
-      m.speed.accel = segment.GetAccel();
-      m.speed.decel = segment.GetDecel();
-
+            
+      m.speed.target = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetTargetSpeed();
+      m.speed.accel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetAccel();
+      m.speed.decel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetDecel();
+            
       if (msgHandler_->SendMessage(RobotInterface::EngineToRobot(std::move(m))) == RESULT_FAIL) {
-        LOG_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
+        PRINT_NAMED_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
         return;
       }
       break;
@@ -116,28 +115,29 @@ void PathDolerOuter::Dole(size_t numToDole)
     case Planning::PST_POINT_TURN:
     {
       RobotInterface::AppendPathSegmentPointTurn m;
-      const auto * t = &(segment.GetDef().turn);
+      const Planning::PathSegmentDef::s_turn* t = &(path_.GetSegmentConstRef(i).GetDef().turn);
       m.x_center_mm = t->x;
       m.y_center_mm = t->y;
       m.startRad  = t->startAngle;
       m.targetRad = t->targetAngle;
       m.angleTolerance = t->angleTolerance;
-      m.speed.target = segment.GetTargetSpeed();
-      m.speed.accel = segment.GetAccel();
-      m.speed.decel = segment.GetDecel();
+      m.speed.target = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetTargetSpeed();
+      m.speed.accel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetAccel();
+      m.speed.decel = path_.GetSegmentConstRef(Util::numeric_cast<uint8_t>(i)).GetDecel();
       m.useShortestDir = t->useShortestDir;
 
       if (msgHandler_->SendMessage(RobotInterface::EngineToRobot(std::move(m))) == RESULT_FAIL) {
-        LOG_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
+        PRINT_NAMED_ERROR("PathDolerOuter.Dole", "ERROR: failed to send message!");
         return;
       }
       break;
     }
     default:
-      LOG_ERROR("PathDolerOuter.Dole", "Invalid path segment - unknown type");
+      PRINT_NAMED_ERROR("Invalid path segment", "Can't send path segment of unknown type");
       return;
+            
     }
-
+    
     lastDoledSegmentIdx_ = Util::numeric_cast<int16_t>(i);
   }
 
@@ -147,11 +147,15 @@ void PathDolerOuter::Update(const s8 currPathIdx)
 {
   // If there is a free slot on the robot and there are segments left to dole, then dole
   const int numFreeSlots = MAX_NUM_PATH_SEGMENTS_ROBOT - (lastDoledSegmentIdx_ - currPathIdx) - 1;
-
-  if ((numFreeSlots > 0) && (pathSizeOnBasestation_ > 0) && (lastDoledSegmentIdx_ < pathSizeOnBasestation_-1)) {
+  
+  if((numFreeSlots > 0) && (lastDoledSegmentIdx_ < pathSizeOnBasestation_-1)) {
+    PRINT_NAMED_DEBUG("PathDolerOuter.Update.Doling",
+                      "currPathIdx: %i, doling upto %d path segments",
+                      currPathIdx, numFreeSlots);
     Dole(numFreeSlots);
   }
 }
+
 
 }
 }

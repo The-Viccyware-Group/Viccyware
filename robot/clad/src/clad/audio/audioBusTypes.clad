@@ -6,29 +6,18 @@ namespace Bus {
 
 enum uint_32 BusType
 {
-  Alexa_Robot = 3848958671,
   Dev_Bus = 2403041217,
-  Dev_General_Bus = 948416556,
-  Dev_Squawk_Bus = 3005198374,
   Invalid = 0,
   Master_Audio_Bus = 3803692087,
   Master_Secondary_Bus = 805203703,
-  Victor_Alexa_External_Alerts = 3090461196,
-  Victor_Alexa_External_Media = 2178320975,
-  Victor_Alexa_External_Notifications = 1729380023,
-  Victor_Alexa_External_Voice = 2885659541,
-  Victor_Alexa_Sfx = 2919936160,
+  Music = 3991942870,
+  Priority_Sfx = 2459405053,
+  Sfx = 393239870,
+  Sfx_Anim = 3482447746,
+  Sfx_Procedural = 3327772596,
+  Ui = 1551306167,
   Victor_Robot = 3435543205,
   Victor_Robot_External = 1731724381,
-  Victor_Robot_Sfx_Character_Buses = 2278572386,
-  Victor_Robot_Sfx_Head_Lift = 1159259262,
-  Victor_Robot_Sfx_High_Priority = 856163231,
-  Victor_Robot_Sfx_High_Priority_Earcon = 2008796406,
-  Victor_Robot_Sfx_High_Priority_Petting = 3273300089,
-  Victor_Robot_Sfx_No_Stim = 4255101287,
-  Victor_Robot_Sfx_Procedural = 4089178613,
-  Victor_Robot_Sfx_Screen = 121641772,
-  Victor_Robot_Sfx_Stim = 2205252327,
 }
 
 } // Bus

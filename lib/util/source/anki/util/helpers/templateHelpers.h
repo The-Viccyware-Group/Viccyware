@@ -55,36 +55,6 @@ constexpr auto EnumToUnderlying(EnumClass e) -> typename std::underlying_type<En
 {
    return static_cast<typename std::underlying_type<EnumClass>::type>(e);
 }
- 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// is_explicitly_constructible: has ::value == true if T{U} names an explicit constructor
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  
-// included in C++17, but for now:
-template <bool B>
-using bool_constant = std::integral_constant<bool, B>;
-
-template <typename T, typename U>
-struct is_explicitly_constructible : bool_constant< std::is_constructible<T, U>::value &&
-                                                   !std::is_convertible<U, T>::value >
-{ };
-  
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// A struct containing one of two types based on the bool template param
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-template< bool B, class TIfTrue, class TIfFalse >
-struct type_from_bool
-{
-  typedef TIfFalse type;
-};
-
-template<class TIfTrue, class TIfFalse >
-struct type_from_bool<true, TIfTrue, TIfFalse>
-{
-  typedef TIfTrue type;
-};
 
 }; // namespace
 }; // namespace

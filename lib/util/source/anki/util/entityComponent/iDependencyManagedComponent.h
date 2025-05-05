@@ -22,7 +22,7 @@
 namespace Anki {
 
 // forward declaration - TMP
-namespace Vector{
+namespace Cozmo{
 class Robot;
 }
 template<typename EnumType>
@@ -32,14 +32,13 @@ class DependencyManagedEntity;
 // Interface for components that have their dependencies managed
 ////////
 template<typename EnumType>
-class IDependencyManagedComponent 
-{
+class IDependencyManagedComponent {
 protected:
   // To avoid bizarre memory bugs that can arise from converting back and forth
   // from void* to base vs derived classes (particularly when multiple inheritance is involved)
   // this class stores two versions of the ptr passed in
   // 1) the void* ptr comes directly from the templated type T and is returned directly
-  // through a static cast to T in GetComponent - so long as the base class is used in both cases all memory should be fine
+  // through a static cast to T in GetValue - so long as the base class is used in both cases all memory should be fine
   // 2) A ptr to the up-cast IDependencyManagedComponent. For simplicity this is always stored as a shared ptr
   // and a null deleter is passed in if the class has specified it doesn't want its memory managed.
   // Having an explicit up cast means a) a compile time failure if the component being passed in is not a valid
@@ -75,7 +74,7 @@ public:
 
   // TMP - add in robot to make transition to new system easier for comps that previously
   // received robot - theoretically only dependent components should be necessary in the future
-  virtual void InitDependent(Vector::Robot* robot, 
+  virtual void InitDependent(Cozmo::Robot* robot, 
                              const DependencyManagedEntity<EnumType>& dependentComps) {};
 
   // Update dependencies are guaranteed to be updated before this component
@@ -87,29 +86,29 @@ public:
   virtual void UpdateDependent(const DependencyManagedEntity<EnumType>& dependentComps) {};
 
   template<typename T>
-  T& GetComponent() const {
+  T& GetValue() const {
     EnumType enumID = EnumType::Count;
     GetComponentIDForType<EnumType,T>(enumID);
     ANKI_VERIFY(enumID == _type, 
-                "DependencyManagedComponentWrapper.GetComponent.CastingToIncorrectType", "");
-    ANKI_VERIFY(IsComponentValid(),"DependencyManagedComponentWrapper.GetComponent.ValueIsNotValid",""); 
+                "DependencyManagedComponentWrapper.GetValue.CastingToIncorrectType", "");
+    ANKI_VERIFY(IsValueValid(),"DependencyManagedComponentWrapper.GetValue.ValueIsNotValid",""); 
     auto* castPtr = static_cast<T*>(_derivedPtr);
     return *castPtr;
   }
 
   template<typename T>
-  T* GetComponentPtr() const {
+  T* GetBasePtr() const {
     EnumType enumID = EnumType::Count;
     GetComponentIDForType<EnumType,T>(enumID);
     ANKI_VERIFY(enumID == _type, 
-                "DependencyManagedComponentWrapper.GetComponentPtr.CastingToIncorrectType", "");
-    ANKI_VERIFY(IsComponentValid(),"DependencyManagedComponentWrapper.GetComponentPtr.ValueIsNotValid",""); 
+                "DependencyManagedComponentWrapper.GetBasePtr.CastingToIncorrectType", "");
+    ANKI_VERIFY(IsValueValid(),"DependencyManagedComponentWrapper.GetBasePtr.ValueIsNotValid",""); 
     auto* castPtr = static_cast<T*>(_derivedPtr);
     return castPtr;
   }
 
-  bool IsComponentValid() const {return (_derivedPtr != nullptr) && IsComponentValidInternal(); }
-  virtual bool IsComponentValidInternal() const {return true;}
+  bool IsValueValid() const {return (_derivedPtr != nullptr) && IsValueValidInternal(); }
+  virtual bool IsValueValidInternal() const {return true;}
 
 
 private:
@@ -132,7 +131,7 @@ public:
   virtual bool IsUnreliableComponent() const override final { return true;}
   virtual void GetInitDependencies(std::set<EnumType>& dependencies) const override final {}
   virtual void AdditionalInitAccessibleComponents(std::set<EnumType>& components) const override final {};
-  virtual void InitDependent(Vector::Robot* robot, 
+  virtual void InitDependent(Cozmo::Robot* robot, 
                              const DependencyManagedEntity<EnumType>& dependentComps) override final {};
   virtual void GetUpdateDependencies(std::set<EnumType>& dependencies) const override final {};
   virtual void AdditionalUpdateAccessibleComponents(std::set<EnumType>& components) const override final {};

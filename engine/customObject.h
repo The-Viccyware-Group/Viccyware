@@ -19,13 +19,14 @@
 
 #include "clad/types/customObjectMarkers.h"
 #include "clad/types/objectTypes.h"
+#include "clad/types/objectFamilies.h"
 
 #include "coretech/vision/shared/MarkerCodeDefinitions.h"
 
 #include "util/enums/enumOperators.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 DECLARE_ENUM_INCREMENT_OPERATORS(CustomObjectMarker);
   
@@ -156,7 +157,7 @@ inline CustomObject* CustomObject::CloneType() const
                           _customShape);
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_CustomObject_H__

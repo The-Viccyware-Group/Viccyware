@@ -16,12 +16,11 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/actions/basicActions.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/blockWorld/blockWorldFilter.h"
 
 #include "coretech/common/engine/jsonTools.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace {
 const char* kObjectTypeKey = "objectType";
@@ -71,15 +70,13 @@ void BehaviorAnimSequenceWithObject::OnBehaviorActivated()
 {
   const auto* obj = GetLocatedObject();
   
-  if( obj != nullptr ) {
+  if (ANKI_VERIFY(obj != nullptr,
+                  "BehaviorAnimSequenceWithObject.OnBehaviorActivated.NullObject",
+                  "Null object!")) {
     // Attempt to turn toward the specified object, and even if fails, move on to the animations
     DelegateIfInControl(new TurnTowardsObjectAction(obj->GetID()), [this]() {
       BaseClass::StartPlayingAnimations();
     });
-  } else {
-    // can occur in unit tests
-    PRINT_NAMED_WARNING( "BehaviorAnimSequenceWithObject.OnBehaviorActivated.NullObject",
-                         "Null object!" );
   }
 }
   
@@ -98,5 +95,5 @@ const ObservableObject* BehaviorAnimSequenceWithObject::GetLocatedObject() const
   return object;
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

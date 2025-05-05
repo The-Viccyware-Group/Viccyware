@@ -14,17 +14,13 @@ then
 fi
 TOPLEVEL=`$GIT rev-parse --show-toplevel`
 
-source ${SCRIPT_PATH}/victor_env.sh
-
-source ${SCRIPT_PATH}/host_robot_ip_override.sh
-
-robot_set_host
+source ${SCRIPT_PATH}/android_env.sh
 
 while true; do 
   # Get frequency and temperature
   # (Remove trailing newline from cat output)
-  FREQ="$(robot_sh "cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq | xargs echo -n")"
-  TEMP="$(robot_sh "cat /sys/devices/virtual/thermal/thermal_zone3/temp")"
+  FREQ="$(adb shell "cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq | xargs echo -n")"
+  TEMP="$(adb shell "cat /sys/devices/virtual/thermal/thermal_zone7/temp")"
 
   echo "Freq_kHz: ${FREQ}, Temp_C: ${TEMP}"
   sleep 1

@@ -7,12 +7,11 @@ PROTO WebotsKeyboardController [
   # Animation to send
   field SFString animationToSendName "anim_neutral_eyes_01"
   field SFInt32  animationNumLoops 1
-  field SFString idleAnimationName ""
+  field SFString idleAnimationName "ProceduralLive"
   field SFFloat  faceHue 0.566  # should be 0-1 
-  
-  # Should we enter 'freeplay' mode immediately upon startup?
-  # Note: This is for simulated robots only
-  field SFBool startFreeplayModeImmediately FALSE
+
+  # Test Animations to send
+  field SFString DEV_AnimationName "ANIM_NAME"
   
   # Behavior to send
   #  Use default "Wait" to put robot into standby
@@ -23,9 +22,8 @@ PROTO WebotsKeyboardController [
   # Send a fake intent to respond to. 
   field SFString intent ""
 
-  field SFString emotionName "Stimulated"
+  field SFString emotionName "WantToPlay"
   field SFFloat emotionVal 1.0
-  field SFString emotionEvent "LookAtFaceVerified"
 
   # Name to assign to current faceID
   field SFString userName ""
@@ -41,6 +39,9 @@ PROTO WebotsKeyboardController [
   
   # String to say when using SayText
   field SFString sayString "Hello"
+
+  # Unlock ID to unlock / lock
+  field SFString unlockName "BuildPyramid"
   
   # Console name/value pair
   field SFString consoleVarName ""
@@ -153,7 +154,6 @@ PROTO WebotsKeyboardController [
 
   field SFFloat liftSpeedDegPerSec 120
   field SFFloat liftAccelDegPerSec2 600
-  field SFFloat liftTargetAngleDeg 0
 
   # If non-zero, this is how much time it will take for the lift to move
   # to a commanded height (via keys '1', '2', and '3')
@@ -163,6 +163,18 @@ PROTO WebotsKeyboardController [
   field SFFloat steerK2 12
   field SFFloat steerDistOffsetCap_mm 20
   field SFFloat steerAngOffsetCap_rad 0.5
+
+  # KeepFaceAliveParameters to send
+  field SFFloat BlinkSpacingMinTime_ms 29999
+  field SFFloat BlinkSpacingMaxTime_ms 30000
+  field SFFloat EyeDartSpacingMinTime_ms 1000000000
+  field SFFloat EyeDartSpacingMaxTime_ms 1000000001
+  field SFFloat EyeDartMaxDistance_pix 6
+  field SFFloat EyeDartMinDuration_ms 50
+  field SFFloat EyeDartMaxDuration_ms 200
+  field SFFloat EyeDartOuterEyeScaleIncrease 0.1
+  field SFFloat EyeDartUpMaxScale 1.1
+  field SFFloat EyeDartDownMinScale 0.85
 
   # Camera display params
   # Note that camera display is OFF by default.
@@ -190,6 +202,8 @@ PROTO WebotsKeyboardController [
   field SFInt32 headTest_nodCycleTimeMS 2000  
   field SFInt32 headTest_powerPercent 0             # 0-100: If 0 then cycles through increasing power levels
 
+  field SFInt32 nvTag 100
+
   field SFString drivingStartAnim ""
   field SFString drivingLoopAnim ""
   field SFString drivingEndAnim ""
@@ -207,9 +221,19 @@ PROTO WebotsKeyboardController [
   # Cozmo engine locale
   field SFString locale "en-US"
 
+  # UI device ID 
+  # TODO: Get rid of this. The UI should not be assigning it's own ID.
+  field SFInt32  deviceID 1
+
   # if false, wait until the user pressed Shift+Enter to connect and start the engine
   # (this gives another thing, e.g. Unity, a chance to connect first)
   field SFBool autoConnect TRUE
+
+  # Whether or not to enable automatic block pool
+  field SFBool doAutoBlockpool TRUE
+
+  # Which object to stream accelerometer data from when streaming is enabled
+  field SFInt32 streamObjectID 0
   
   # Engine's RNG seed
   field SFInt32  randomSeed 0

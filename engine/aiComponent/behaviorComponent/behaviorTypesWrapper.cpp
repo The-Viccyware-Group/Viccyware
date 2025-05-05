@@ -14,60 +14,67 @@
  *
  **/
 
-#include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
-#include "util/logging/logging.h"
+// only include this here in the cpp
+#include "clad/types/behaviorComponent/behaviorTypes.h"
 
-#include "clad/types/behaviorComponent/behaviorClasses.h"
-#include "clad/types/behaviorComponent/behaviorIDs.h"
+#include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace BehaviorTypesWrapper {
 
 BehaviorID BehaviorIDFromString(const std::string& name)
 {
-  BehaviorID id;
-  const bool success = Anki::Vector::BehaviorIDFromString(name, id);
-  ANKI_VERIFY(success, 
-              "BehaviorTypesWrapper.BehaviorIDFromString.FailedToParse",
-              "Unable to find behaviorID for %s",
-              name.c_str());
-  return id;
+  return Anki::Cozmo::BehaviorIDFromString(name);
 }
 
 BehaviorClass BehaviorClassFromString(const std::string& name)
 {
-  return Anki::Vector::BehaviorClassFromString(name);
+  return Anki::Cozmo::BehaviorClassFromString(name);
 }
 
 bool BehaviorIDFromString(const std::string& name, BehaviorID& id)
 {
-  return Anki::Vector::BehaviorIDFromString(name, id);
+  return Anki::Cozmo::BehaviorIDFromString(name, id);
 }
 
 bool IsValidBehaviorID(const std::string& name)
 {
   BehaviorID waste;
-  return Anki::Vector::BehaviorIDFromString(name, waste);
+  return Anki::Cozmo::BehaviorIDFromString(name, waste);
+}
+
+ExecutableBehaviorType ExecutableBehaviorTypeFromString(const std::string& name)
+{
+  return Anki::Cozmo::ExecutableBehaviorTypeFromString(name);
 }
 
 const char* BehaviorIDToString(const BehaviorID in)
 {
-  return Anki::Vector::BehaviorIDToString(in);
+  return Anki::Cozmo::BehaviorIDToString(in);
 }
     
 const char* BehaviorClassToString(const BehaviorClass in)
 {
-  return Anki::Vector::BehaviorClassToString(in);
+  return Anki::Cozmo::BehaviorClassToString(in);
+}
+
+const char* ExecutableBehaviorTypeToString(const ExecutableBehaviorType in)
+{
+  return Anki::Cozmo::ExecutableBehaviorTypeToString(in);
 }
   
 #if BEHAVIOR_ID_DEV_MODE
-uint16_t GetBehaviorIDNumEntries()
+uint8_t GetBehaviorIDNumEntries()
 {
   return BehaviorIDNumEntries;
 }
 #endif
 
+ExecutableBehaviorType GetDefaultExecutableBehaviorType()
+{
+  return ExecutableBehaviorType::Count;
+}
 
 }
 }

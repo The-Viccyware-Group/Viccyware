@@ -16,7 +16,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorSleeping : public ICozmoBehavior
 {
@@ -25,8 +25,8 @@ protected:
   friend class BehaviorFactory;  
   BehaviorSleeping(const Json::Value& config);
 
-  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override;
-  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
+  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{}
+  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override {}
 
   virtual bool CanBeGentlyInterruptedNow() const override;
 
@@ -45,26 +45,13 @@ private:
   // helper to "wait" without doing procedural face motions and then run a callback
   void HoldFaceForTime(const float waitTime_s,
                        void(BehaviorSleeping::*callback)());
+  void LoopHoldFace(void(BehaviorSleeping::*callback)());
 
+  bool _animIsPlaying = false;
 
-  struct InstanceConfig {
-    bool shouldEnterPowerSave = true;
-    bool shouldPlayEmergencyGetOut = true;
-    bool canActivateOffTreads = false;
-  };
+  int _numRemainingInBout = 0;
 
-  struct DynamicVariables {
-    DynamicVariables() = default;
-    
-    bool animIsPlaying = false;
-    int numRemainingInBout = 0;
-    float stopHoldingFaceAtTime_s = 0.0f;
-  };
-
-  InstanceConfig   _iConfig;
-  DynamicVariables _dVars;
-
-
+  float _stopHoldingFaceAtTime_s = 0.0f;
 };
 
 }

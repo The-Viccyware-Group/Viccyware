@@ -3,7 +3,7 @@
 // and re-run ./tools/ai/generateBehavior.py
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // BehaviorClass identifies the ICozmoBehavior child class which the behavior is
 // an instance of. The names of the BehaviorClass, the code file, and the actual C++ class
@@ -13,117 +13,60 @@ namespace Vector {
 enum uint_8 BehaviorClass {
 
   // <root>
-  GreetAfterLongTime,
   HighLevelAI,
-  LookAroundInPlace,
-  ResetState,
-  SimpleVoiceResponse,
-  StayOnChargerUntilCharged,
   Wait,
-
-  // alexa
-  Alexa,
-  AlexaSignInOut,
 
   // animationWrappers
   AnimGetInLoop,
   AnimSequence,
   AnimSequenceWithFace,
   AnimSequenceWithObject,
-  CountingAnimation,
-  TextToSpeechLoop,
-
-  // appBehaviors
-  EyeColor,
-
-  // attentionTransfer
-  AttentionTransferIfNeeded,
 
   // basicCubeInteractions
   PickUpCube,
   PutDownBlock,
-  PutDownBlockAtPose,
   RollBlock,
 
   // basicWorldInteractions
-  BumpObject,
-  ClearChargerArea,
   DriveOffCharger,
-  FetchCube,
-  FindCube,
-  FindCubeAndThen,
   FindFaces,
   FindHome,
   GoHome,
   InteractWithFaces,
-  LookAtFaceInFront,
-  MoveHeadToAngle,
-  PlaceCubeByCharger,
+  LookAround,
   PopAWheelie,
   RequestToGoHome,
+  SearchForFace,
+  StackBlocks,
   Turn,
   TurnToFace,
-  WiggleOntoChargerContacts,
-
-  // blackjack
-  BlackJack,
-
-  // character/howOldAreYou
-  HowOldAreYou,
 
   // coordinators
   CoordinateGlobalInterrupts,
-  CoordinateInHabitat,
-  CoordinateWhileHeldInPalm,
-  CoordinateWhileInAir,
-  QuietModeCoordinator,
-
-  // cubeSpinner
-  VectorPlaysCubeSpinner,
-
-  // danceToTheBeat
-  DanceToTheBeat,
-  DanceToTheBeatCoordinator,
-  ListenForBeats,
 
   // devBehaviors
-  CubeDrive,
-  DevBatteryLogging,
-  DevCubeSpinnerConsole,
-  DevDesignCubeLights,
   DevDisplayReadingsOnFace,
-  DevEventSequenceCapture,
   DevImageCapture,
-  DevSquawkBoxTest,
-  DevTestBlackjackViz,
-  DevTestSpriteBoxRemaps,
   DevTouchDataCollection,
   DevTurnInPlaceTest,
-  DevViewCubeBackpackLights,
   DispatchAfterShake,
   DockingTestSimple,
   FactoryCentroidExtractor,
   LiftLoadTest,
-  PlannerTest,
-  PowerSaveStressTest,
-  PowerSaveTest,
-  ReactToBody,
-  ReactToGazeDirection,
 
-  // devBehaviors/selfTest
-  SelfTest,
-  SelfTestButton,
-  SelfTestDockWithCharger,
-  SelfTestDriftCheck,
-  SelfTestDriveForwards,
-  SelfTestInitChecks,
-  SelfTestLookAtCharger,
-  SelfTestMotorCalibration,
-  SelfTestPickup,
-  SelfTestPutOnCharger,
-  SelfTestScreenAndBackpack,
-  SelfTestSoundCheck,
-  SelfTestTouch,
+  // devBehaviors/playpen
+  PlaypenCameraCalibration,
+  PlaypenDistanceSensor,
+  PlaypenDriftCheck,
+  PlaypenDriveForwards,
+  PlaypenEndChecks,
+  PlaypenInitChecks,
+  PlaypenMotorCalibration,
+  PlaypenPickupCube,
+  PlaypenReadToolCode,
+  PlaypenSoundCheck,
+  PlaypenTest,
+  PlaypenWaitToStart,
 
   // dispatch
   DispatcherPassThrough,
@@ -134,143 +77,75 @@ enum uint_8 BehaviorClass {
   DispatcherStrictPriority,
   DispatcherStrictPriorityWithCooldown,
 
-  // exploring
-  Exploring,
-  ExploringExamineObstacle,
+  // feeding
+  FeedingEat,
 
-  // eyeColor
-  EyeColorVoiceCommand,
+  // freeplay
+  DriveToFace,
+
+  // freeplay/exploration
+  ExploreBringCubeToBeacon,
+  ExploreLookAroundInPlace,
+  ExploreVisitPossibleMarker,
+  LookInPlaceMemoryMap,
+  ThinkAboutBeacons,
+  VisitInterestingEdge,
+
+  // freeplay/oneShots
+  Dance,
+  Singing,
 
   // freeplay/putDownDispatch
   LookForFaceAndCube,
 
   // freeplay/userInteractive
   FistBump,
-  InspectCube,
   Keepaway,
   PounceWithProx,
   PuzzleMaze,
-
-  // freeplay/oneShots
-  Singing,
-
-  // gateBehaviors
-  ConnectToCube,
-
-  // habitat
-  ConfirmHabitat,
-
-  // heldInPalm
-  InitialHeldInPalmReaction,
-  ReactToPalmEdge,
-
-  // knowledgeGraph
-  KnowledgeGraphQuestion,
+  TrackLaser,
 
   // meetCozmo
   EnrollFace,
   RespondToRenameFace,
 
-  // messaging
-  LeaveAMessage,
-  PlaybackMessage,
-
   // observing
   ObservingLookAtFaces,
-  ObservingWithoutTurn,
-
-  // onboarding
-  OnboardingCoordinator,
-
-  // onboarding/phases
-  OnboardingEmulate1p0WaitForVC,
-  OnboardingLookAtPhone,
-  OnboardingLookAtUser,
-  OnboardingTeachWakeWord,
-  OnboardingWakeUp,
-
-  // performaces
-  PossiblePerformance,
-
-  // photoTaking
-  AestheticallyCenterFaces,
-  TakeAPhotoCoordinator,
-
-  // prDemo
-  PRDemo,
-  PRDemoBase,
+  ObservingOnCharger,
 
   // proxBehaviors
   ProxGetToDistance,
 
   // reactions
-  AskForHelp,
-  CheckForAndReactToSalientPoint,
+  AcknowledgeCubeMoved,
+  AcknowledgeFace,
+  AcknowledgeObject,
   ReactToCliff,
-  ReactToCubeTap,
-  ReactToDarkness,
   ReactToFrustration,
-  ReactToHand,
   ReactToMicDirection,
-  ReactToMotion,
   ReactToMotorCalibration,
+  ReactToPet,
   ReactToPlacedOnSlope,
-  ReactToPutDown,
+  ReactToReturnedToTreads,
   ReactToRobotOnBack,
   ReactToRobotOnFace,
   ReactToRobotOnSide,
   ReactToRobotShaken,
   ReactToSound,
-  ReactToUncalibratedHeadAndLift,
   ReactToUnexpectedMovement,
   ReactToVoiceCommand,
 
-  // robotDrivenDialog
-  PromptUserForVoiceCommand,
-
-  // sdkBehaviors
-  SDKInterface,
-  SDKLock,
-
-  // simpleFaceBehaviors
-  DriveToFace,
-  FindFaceAndThen,
-  LookAtMe,
-  SayName,
-  SearchWithinBoundingBox,
-
   // sleeping
-  SleepCycle,
   Sleeping,
 
   // timer
-  AdvanceClock,
-  DisplayWallTime,
   ProceduralClock,
   TimerUtilityCoordinator,
-  WallTimeCoordinator,
-
-  // userDefinedBehaviorTree
-  UserDefinedBehaviorSelector,
-  UserDefinedBehaviorTreeRouter,
 
   // victor
-  ConfirmObject,
-  PoweringRobotOff,
+  ComeHere,
   ReactToTouchPetting,
   ReactToUnclaimedIntent,
-  RobustChargerObservation,
-  SnakeGame,
-  TrackCube,
-  TrackFace,
-  WireTest,
-
-  // volume
-  Volume,
-
-  // weather
-  CoordinateWeather,
-  DisplayWeather,
 }
 
 }

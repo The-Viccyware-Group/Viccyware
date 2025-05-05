@@ -16,10 +16,9 @@
 #include "util/helpers/templateHelpers.h"
 
 #define DEBUG_ACTION_WATCHER 0
-#define LOG_CHANNEL "Actions"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 ActionWatcher::ActionWatcher()
 {
@@ -84,7 +83,7 @@ void ActionWatcher::ParentActionUpdating(const IActionRunner* action)
 
   // All of the updating action stacks should be empty since no actions besides the parent action are
   // currently updating
-  #if ANKI_DEV_ASSERT_ENABLED
+  #if DEV_ASSERT_ENABLED
   for (const auto& i : _parentToUpdatingActions)
   {
     DEV_ASSERT(i.second.empty(), "ActionWatcher.ParentActionUpdating.ParentToUpdatingActionsNotEmpty");
@@ -279,7 +278,7 @@ void ActionWatcher::Print(const ActionTag tag)
   
   ss << " with a total of " << numLeaves << " leaf actions";
   
-  LOG_DEBUG("ActionWatcher.Print", "%s", ss.str().c_str());
+  PRINT_CH_DEBUG("Actions", "ActionWatcher.Print", "%s", ss.str().c_str());
 }
 
 void ActionWatcher::PrintHelper(const Node* node, int level, int child, int& numLeaves)
@@ -300,7 +299,7 @@ void ActionWatcher::PrintHelper(const Node* node, int level, int child, int& num
     PrintHelper(node, level + 1, c, numLeaves);
     c++;
   }
-  LOG_DEBUG("ActionWatcher.Print", "%s", ss.str().c_str());
+  PRINT_CH_DEBUG("Actions", "ActionWatcher.Print", "%s", ss.str().c_str());
 }
   
   

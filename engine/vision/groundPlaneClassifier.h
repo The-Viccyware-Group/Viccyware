@@ -14,16 +14,16 @@
 #ifndef __Anki_Cozmo_Basestation_GroundplaneClassifier_H__
 #define __Anki_Cozmo_Basestation_GroundplaneClassifier_H__
 
-#include "coretech/common/engine/math/polygon_fwd.h"
+#include "coretech/common/engine/math/polygon.h"
 #include "coretech/common/shared/types.h"
-#include "coretech/vision/engine/debugImageList.h"
 #include "coretech/vision/engine/image.h"
 #include "coretech/vision/engine/profiler.h"
+#include "engine/debugImageList.h"
 #include "engine/vision/rawPixelsClassifier.h"
 #include "engine/vision/visionPoseData.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declaration
 class CozmoContext;
@@ -98,7 +98,7 @@ public:
  *                     Helper Functions                         *
  ****************************************************************/
 
-void ClassifyImage(const RawPixelsClassifier& clf, const Anki::Vector::IFeaturesExtractor& extractor,
+void ClassifyImage(const RawPixelsClassifier& clf, const Anki::Cozmo::IFeaturesExtractor& extractor,
                    const Vision::ImageRGB& image, Vision::Image& outputMask);
 
 
@@ -155,7 +155,7 @@ public:
   GroundPlaneClassifier(const Json::Value& config, const CozmoContext *context);
 
   Result Update(const Vision::ImageRGB& image, const VisionPoseData& poseData,
-                Vision::DebugImageList<Vision::CompressedImage>& debugImages,
+                DebugImageList <Vision::ImageRGB>& debugImageRGBs,
                 std::list<OverheadEdgeFrame>& outEdges);
 
   bool IsInitialized() const {
@@ -182,7 +182,7 @@ protected:
 };
 
 } // namespace Anki
-} // namespace Vector
+} // namespace Cozmo
 
 
 #endif //__Anki_Cozmo_Basestation_GroundplaneClassifier_h

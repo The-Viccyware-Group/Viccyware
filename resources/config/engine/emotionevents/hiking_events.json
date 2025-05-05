@@ -1,0 +1,32 @@
+{
+  "emotionEvents": [
+    {
+      "name": "HikingBroughtLastCubeToBeacon",
+      "emotionAffectors": [										  
+        {
+          "emotionType" : "Happy",
+          "value" : 0.36
+        }
+      ]
+    },
+    {
+      "name": "HikingBroughtCubeToBeacon",
+      "emotionAffectors": [										  
+        {
+          "emotionType" : "Happy",
+          "value" : 0.12
+        }
+      ]
+    },
+    {
+      "name": "HikingNoLocationAtBeacon",
+      "emotionAffectors": [
+        {
+          "emotionType" : "Happy",
+          "value" : -0.16
+        }
+      ]
+    }
+  ]
+}
+

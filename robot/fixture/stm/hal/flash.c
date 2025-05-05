@@ -2,9 +2,12 @@
 #include "app.h"
 #include "console.h"
 #include "crypto/crypto.h"
+#include "display.h"
 #include "flash.h"
 #include "fixture.h"
+#include "testport.h"
 #include "timer.h"
+#include "uart.h"
 
 FlashParams g_flashParams;
 
@@ -15,6 +18,9 @@ static u32 m_blocksDone = 0;
 
 void FlashProgress(int percent)
 {
+  DisplayClear();
+  DisplayBigCenteredText("%d%%", percent);
+  DisplayFlip();
 }
 
 void DecodeAndFlash(void)
@@ -76,9 +82,7 @@ void DecodeAndFlash(void)
       __enable_irq();
       
       FlashProgress(100);
-      //SlowPutString("Resetting\n\n");
-      
-      Timer::wait(1000);
+      SlowPutString("Resetting\n\n");
       
       // Force reset
       SCB->VTOR = FLASH_BOOTLOADER;
@@ -87,6 +91,6 @@ void DecodeAndFlash(void)
     m_bitMap[blockIndex] = 1;
     m_blocksDone++;
   } else {
-    //SlowPutString("Bad flash block\n");
+    SlowPutString("Bad flash block\n");
   }
 }

@@ -4,16 +4,11 @@
 * Author: damjan stulic
 * Created: 4/27/15
 *
-* Description:
+* Description: 
 *
 * Copyright: Anki, inc. 2015
 *
 */
-
-//
-// This file is not used on victor. Contents are preserved for reference.
-//
-#if !defined(VICOS)
 
 #ifndef __DasSystemLoggerProvider_H_
 #define __DasSystemLoggerProvider_H_
@@ -56,7 +51,7 @@ public:
     const char* eventValue) override {
     _DAS_LogKv(DASLogLevel_Debug, eventName, eventValue, keyValues);
   }
-
+ 
   inline void Flush() override {
     DASForceFlushNow();
   }
@@ -68,7 +63,7 @@ public:
     _DAS_GetGlobalsForThisRun(dasGlobals);
   }
 
-
+  
   inline void EnableNetwork(int reason) override {
     DASEnableNetwork((DASDisableNetworkReason)reason);
   }
@@ -82,5 +77,3 @@ public:
 
 
 #endif //__DasSystemLoggerProvider_H_
-
-#endif

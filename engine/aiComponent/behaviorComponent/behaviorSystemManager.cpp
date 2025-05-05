@@ -12,47 +12,32 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviorSystemManager.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "engine/actions/actionContainers.h"
 #include "engine/aiComponent/behaviorComponent/asyncMessageGateComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorsBootLoader.h"
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
-#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
-#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorEventComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
+#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorEventComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/aiComponent/behaviorComponent/behaviorStack.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
 #include "engine/aiComponent/behaviorComponent/iBehavior.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/robot.h"
+#include "engine/robotDataLoader.h"
 #include "engine/viz/vizManager.h"
 
-#include "coretech/common/engine/utils/timer.h"
-
-#include "util/console/consoleInterface.h"
 #include "util/cpuProfiler/cpuProfiler.h"
 #include "util/helpers/boundedWhile.h"
 #include "util/logging/logging.h"
 
-#if FACTORY_TEST
-#include "anki/cozmo/shared/factory/emrHelper.h"
-#endif
-
-#define LOG_CHANNEL "BehaviorSystem"
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declaration
 class IReactionTriggerStrategy;
 
-namespace {
-  const int kArbitrarilyLargeCancelBound = 1000;
-
-  #define CONSOLE_GROUP "Behaviors.BehaviorSystemManager"
-  CONSOLE_VAR(bool, kDebugBehaviorStack, CONSOLE_GROUP, false);
+namespace{
+const int kArbitrarilyLargeCancelBound = 1000000;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -72,14 +57,14 @@ BehaviorSystemManager::~BehaviorSystemManager()
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorSystemManager::InitDependent(Robot* robot, const BCCompMap& dependentComps)
+void BehaviorSystemManager::InitDependent(Robot* robot, const BCCompMap& dependentComponents)
 {
-  auto& behaviorsBootloader = dependentComps.GetComponent<BehaviorsBootLoader>();
-  auto& bei = dependentComps.GetComponent<BehaviorExternalInterface>();
-  auto& async = dependentComps.GetComponent<AsyncMessageGateComponent>();
+  auto& baseBehaviorWrapper = dependentComponents.GetValue<BaseBehaviorWrapper>();
+  auto& bei = dependentComponents.GetValue<BehaviorExternalInterface>();
+  auto& async = dependentComponents.GetValue<AsyncMessageGateComponent>();
 
   InitConfiguration(*robot,
-                    behaviorsBootloader.GetBootBehavior(),
+                    baseBehaviorWrapper._baseBehavior,
                     bei,
                     &async);
 }
@@ -98,12 +83,19 @@ Result BehaviorSystemManager::InitConfiguration(Robot& robot,
              baseBehavior != nullptr,
              "BehaviorSystemManager.InitConfiguration.AlreadyInitialized");
 
-  // Assumes there's only one instance of the behavior external interface
+  // If this is the factory test forcibly set baseBehavior as playpen
+  if(FACTORY_TEST)
+  {
+    baseBehavior = behaviorExternalInterface.GetBehaviorContainer().FindBehaviorByID(BEHAVIOR_ID(PlaypenTest)).get();
+    DEV_ASSERT(baseBehavior != nullptr, "BehaviorSystemManager.InitConfiguration.ForcingPlaypen.Null");
+  }
+
+  // Assumes there's only one instance of the behavior external Intarfec
   _behaviorExternalInterface = &behaviorExternalInterface;
   _asyncMessageComponent = asyncMessageComponent;
   ResetBehaviorStack(baseBehavior);
-
-  if (robot.HasExternalInterface()) {
+  
+  if(robot.HasExternalInterface()){
     _eventHandles.push_back(robot.GetExternalInterface()->Subscribe(EngineToGameTag::RobotCompletedAction,
                                             [this](const EngineToGameEvent& event) {
                                               DEV_ASSERT(event.GetData().GetTag() == EngineToGameTag::RobotCompletedAction,
@@ -111,22 +103,17 @@ Result BehaviorSystemManager::InitConfiguration(Robot& robot,
                                               _actionsCompletedThisTick.push_back(event.GetData().Get_RobotCompletedAction());
                                             }));
   }
-
+  
   return RESULT_OK;
 }
 
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorSystemManager::ResetBehaviorStack(IBehavior* baseBehavior, bool waitUntilNextTick)
+void BehaviorSystemManager::ResetBehaviorStack(IBehavior* baseBehavior)
 {
-  if (waitUntilNextTick) {
-    _baseBehaviorOnNextTick = baseBehavior;
-    return;
-  }
-
   _initializationStage = InitializationStage::StackNotInitialized;
   _baseBehaviorTmp = baseBehavior;
-  if (_behaviorStack != nullptr) {
+  if(_behaviorStack != nullptr){
     _behaviorStack->ClearStack();
   }
   _behaviorStack.reset(new BehaviorStack());
@@ -134,39 +121,34 @@ void BehaviorSystemManager::ResetBehaviorStack(IBehavior* baseBehavior, bool wai
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorSystemManager::UpdateDependent(const BCCompMap& dependentComps)
+void BehaviorSystemManager::UpdateDependent(const BCCompMap& dependentComponents)
 {
-  if (_baseBehaviorOnNextTick != nullptr) {
-    ResetBehaviorStack(_baseBehaviorOnNextTick);
-    _baseBehaviorOnNextTick = nullptr;
-  }
-
-  auto& bei = dependentComps.GetComponent<BehaviorExternalInterface>();
+  auto& bei = dependentComponents.GetValue<BehaviorExternalInterface>();
   ANKI_CPU_PROFILE("BehaviorSystemManager::Update");
-
-  if (_initializationStage == InitializationStage::SystemNotInitialized) {
-    LOG_ERROR("BehaviorSystemManager.Update.NotInitialized", "");
+  
+  if(_initializationStage == InitializationStage::SystemNotInitialized) {
+    PRINT_NAMED_ERROR("BehaviorSystemManager.Update.NotInitialized", "");
     return;
   }
-
+  
   // There's a delay between init and first robot update tick - this messes with
   // time checks in IBehavior, so Activate the base here instead of in init
-  if (_initializationStage == InitializationStage::StackNotInitialized) {
+  if(_initializationStage == InitializationStage::StackNotInitialized){
     _initializationStage = InitializationStage::Initialized;
 
-    IBehavior* baseBehavior = _baseBehaviorTmp;
 
-    _behaviorStack->InitBehaviorStack(baseBehavior, bei.GetRobotInfo().GetExternalInterface());
+    IBehavior* baseBehavior = _baseBehaviorTmp;
+    
+    _behaviorStack->InitBehaviorStack(baseBehavior);
     _baseBehaviorTmp = nullptr;
   }
 
-  auto & delegationComponent = bei.GetDelegationComponent();
-  for (const auto& completionMsg : _actionsCompletedThisTick) {
-    delegationComponent.HandleActionComplete(completionMsg.idTag);
+  for( const auto& completionMsg : _actionsCompletedThisTick ) {
+    bei.GetDelegationComponent().HandleActionComplete( completionMsg.idTag );
   }
-
+  
   _asyncMessageComponent->PrepareCache();
-
+  
   std::set<IBehavior*> behaviorsUpdatesTickedInStack;
   // First update the behavior stack and allow it to make any delegation/canceling
   // decisions that it needs to make
@@ -178,7 +160,7 @@ void BehaviorSystemManager::UpdateDependent(const BCCompMap& dependentComps)
   // Then once all of that's done, update anything that's in activatable scope
   // but isn't currently on the behavior stack
   UpdateInActivatableScope(bei, behaviorsUpdatesTickedInStack);
-
+  
   _asyncMessageComponent->ClearCache();
 } // Update()
 
@@ -186,25 +168,27 @@ void BehaviorSystemManager::UpdateDependent(const BCCompMap& dependentComps)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSystemManager::UpdateInActivatableScope(BehaviorExternalInterface& behaviorExternalInterface, const std::set<IBehavior*>& tickedInStack)
 {
-  // This is inefficient and should be replaced, but not overengineering right now
-  const auto& allInActivatableScope = _behaviorStack->GetBehaviorsInActivatableScope();
+  // This is innefficient and should be replaced, but not overengineering right now
+  const auto& allInActivatableScope = _behaviorStack->GetBehaviorsInActivatableScope();;
 
-  for (auto& entry: allInActivatableScope) {
-    if (tickedInStack.find(entry) != tickedInStack.end()) {
+  for(auto& entry: allInActivatableScope){
+    if(tickedInStack.find(entry) != tickedInStack.end()){
       continue;
     }
+    
+    behaviorExternalInterface.GetBehaviorEventComponent()._gameToEngineEvents.clear();
+    behaviorExternalInterface.GetBehaviorEventComponent()._engineToGameEvents.clear();
+    behaviorExternalInterface.GetBehaviorEventComponent()._robotToEngineEvents.clear();
 
-    auto & eventComponent = behaviorExternalInterface.GetBehaviorEventComponent();
-
-    eventComponent._gameToEngineEvents.clear();
-    eventComponent._engineToGameEvents.clear();
-    eventComponent._robotToEngineEvents.clear();
-    eventComponent._appToEngineEvents.clear();
-
-    _asyncMessageComponent->GetEventsForBehavior(entry, eventComponent._gameToEngineEvents);
-    _asyncMessageComponent->GetEventsForBehavior(entry, eventComponent._engineToGameEvents);
-    _asyncMessageComponent->GetEventsForBehavior(entry, eventComponent._robotToEngineEvents);
-    _asyncMessageComponent->GetEventsForBehavior(entry, eventComponent._appToEngineEvents);
+    _asyncMessageComponent->GetEventsForBehavior(
+       entry,
+       behaviorExternalInterface.GetBehaviorEventComponent()._gameToEngineEvents);
+    _asyncMessageComponent->GetEventsForBehavior(
+       entry,
+       behaviorExternalInterface.GetBehaviorEventComponent()._engineToGameEvents);
+    _asyncMessageComponent->GetEventsForBehavior(
+       entry,
+       behaviorExternalInterface.GetBehaviorEventComponent()._robotToEngineEvents);
 
     entry->Update();
   }
@@ -225,49 +209,13 @@ const IBehavior* BehaviorSystemManager::GetBehaviorDelegatedTo(const IBehavior* 
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const IBehavior* BehaviorSystemManager::GetBehaviorDelegatedFrom(const IBehavior* behavior) const
-{
-  return _behaviorStack->GetBehaviorInStackBelow(behavior);
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const IBehavior* BehaviorSystemManager::GetBaseBehavior() const
-{
-  if (_behaviorStack != nullptr) {
-    return _behaviorStack->GetBottomOfStack();
-  }
-  return nullptr;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const IBehavior* BehaviorSystemManager::GetTopBehavior() const
-{
-  if (_behaviorStack != nullptr) {
-    return _behaviorStack->GetTopOfStack();
-  }
-  return nullptr;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const std::string& BehaviorSystemManager::GetTopBehaviorDebugLabel() const
-{
-  if (_behaviorStack != nullptr) {
-    const IBehavior* behavior = _behaviorStack->GetTopOfStack();
-    if (behavior != nullptr) {
-      return behavior->GetDebugLabel();
-    }
-  }
-  static const std::string sEmpty = "";
-  return sEmpty;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Json::Value BehaviorSystemManager::BuildDebugBehaviorTree(BehaviorExternalInterface& bei) const
 {
-  if (_behaviorStack != nullptr) {
-    return _behaviorStack->BuildDebugBehaviorTree(bei);
+  if( _behaviorStack != nullptr ) {
+    return _behaviorStack->BuildDebugBehaviorTree( bei );
+  } else {
+    return {};
   }
-  return {};
 }
 
 
@@ -282,104 +230,86 @@ bool BehaviorSystemManager::CanDelegate(IBehavior* delegator)
 bool BehaviorSystemManager::Delegate(IBehavior* delegator, IBehavior* delegated)
 {
   // Ensure that the delegator is on top of the stack
-  if (!ANKI_VERIFY(delegator == _behaviorStack->GetTopOfStack(),
+  if(!ANKI_VERIFY(delegator == _behaviorStack->GetTopOfStack(),
                   "BehaviorSystemManager.Delegate.DelegatorNotOnTopOfStack",
-                  "")) {
+                  "")){
     return false;
   }
-
-  if (!ANKI_VERIFY(delegated != nullptr,
-                  "BehaviorSystemManager.Delegate.DelegatingToNullptr", "")) {
+  
+  if(!ANKI_VERIFY(delegated != nullptr,
+                  "BehaviorSystemManager.Delegate.DelegatingToNullptr", "")){
     return false;
   }
-
+  
+  
   {
     // Ensure that the delegated behavior is in the delegates map
-    if (!ANKI_VERIFY(_behaviorStack->IsValidDelegation(delegator, delegated),
-                    "BehaviorSystemManager.Delegate.DelegateNotInAvailableDelegateMap",
-                    "Delegator %s asked to delegate to %s which is not in available delegates map",
-                    delegator->GetDebugLabel().c_str(),
-                    delegated->GetDebugLabel().c_str())) {
+    if(!ANKI_VERIFY(_behaviorStack->IsValidDelegation(delegator, delegated),
+                   "BehaviorSystemManager.Delegate.DelegateNotInAvailableDelegateMap",
+                   "Delegator %s asked to delegate to %s which is not in available delegates map",
+                   delegator->GetDebugLabel().c_str(),
+                   delegated->GetDebugLabel().c_str())){
       return false;
     }
   }
-
-  LOG_DEBUG("BehaviorSystemManager.Delegate.ToBehavior",
-            "'%s' will delegate to '%s'",
-            delegator != nullptr ? delegator->GetDebugLabel().c_str() : "Empty Stack",
-            delegated->GetDebugLabel().c_str());
+  
+  PRINT_CH_INFO("BehaviorSystem", "BehaviorSystemManager.Delegate.ToBehavior",
+                "'%s' will delegate to '%s'",
+                delegator != nullptr ? delegator->GetDebugLabel().c_str() : "Empty Stack",
+                delegated->GetDebugLabel().c_str());
 
   // Activate the new behavior and add it to the top of the stack
   _behaviorStack->PushOntoStack(delegated);
-
-  if (kDebugBehaviorStack) {
-    _behaviorStack->DebugPrintStack("AfterDelegation");
-  }
-
-  _lastBehaviorStackUpdateTick = BaseStationTimer::getInstance()->GetTickCount();
-
+  
+  _behaviorStack->DebugPrintStack("AfterDelegation");
+  
   return true;
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool BehaviorSystemManager::CancelDelegates(IBehavior* delegator)
+void BehaviorSystemManager::CancelDelegates(IBehavior* delegator)
 {
-  bool anyPopped = false;
-
-  if (_behaviorStack->IsInStack(delegator)) {
+  if(_behaviorStack->IsInStack(delegator)){
     BOUNDED_WHILE(kArbitrarilyLargeCancelBound,
                   _behaviorStack->GetTopOfStack() != delegator){
       _behaviorStack->PopStack();
-      anyPopped = true;
     }
   }
 
-  if (anyPopped) {
-    LOG_DEBUG("BehaviorSystemManager.CancelDelegates",
-              "'%s' canceled its delegates",
-              delegator->GetDebugLabel().c_str());
+  PRINT_CH_INFO("BehaviorSystem", "BehaviorSystemManager.CancelDelegates",
+                "'%s' canceled its delegates",
+                delegator->GetDebugLabel().c_str());
 
-    if (kDebugBehaviorStack) {
-      _behaviorStack->DebugPrintStack("AfterCancelDelegates");
-    }
-
-    _lastBehaviorStackUpdateTick = BaseStationTimer::getInstance()->GetTickCount();
-  }
-
-  return anyPopped;
+  _behaviorStack->DebugPrintStack("AfterCancelDelgates");
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// TODO:(bn) kevink: consider rename to "stop" rather than cancel
 void BehaviorSystemManager::CancelSelf(IBehavior* delegator)
 {
-  if (!ANKI_VERIFY(_behaviorStack->IsInStack(delegator),
-                   "BehaviorSystemManager.CancelSelf.NotINStack",
-                   "%s is not in stack",
-                   delegator->GetDebugLabel().c_str())){
+  if(!ANKI_VERIFY(_behaviorStack->IsInStack(delegator),
+                  "BehaviorSystemManager.CancelSelf.NotINStack",
+                  "%s is not in stack",
+                  delegator->GetDebugLabel().c_str())){
     return;
   }
-
+  
   CancelDelegates(delegator);
-
-  if (ANKI_VERIFY(!IsControlDelegated(delegator),
-                  "BehaviorSystemManager.CancelSelf.ControlStillDelegated",
-                  "CancelDelegates was called, but the delegator is not on the top of the stack")) {
+  
+  if(ANKI_VERIFY(!IsControlDelegated(delegator),
+                 "BehaviorSystemManager.CancelSelf.ControlStillDelegated",
+                 "CancelDelegates was called, but the delegator is not on the top of the stack")){
     _behaviorStack->PopStack();
   }
 
-  LOG_DEBUG("BehaviorSystemManager.CancelSelf",
-            "'%s' canceled itself",
-            delegator->GetDebugLabel().c_str());
+  PRINT_CH_INFO("BehaviorSystem", "BehaviorSystemManager.CancelSelf",
+                "'%s' canceled itself",
+                delegator->GetDebugLabel().c_str());
 
-  if (kDebugBehaviorStack) {
-    _behaviorStack->DebugPrintStack("AfterCancelSelf");
-  }
-
-  _lastBehaviorStackUpdateTick = BaseStationTimer::getInstance()->GetTickCount();
-
+  _behaviorStack->DebugPrintStack("AfterCancelSelf");
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

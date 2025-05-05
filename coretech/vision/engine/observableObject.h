@@ -26,6 +26,7 @@
 
 #include "coretech/common/engine/colorRGBA.h"
 
+#include "coretech/common/engine/math/point_impl.h"
 #include "coretech/common/engine/math/pose.h"
 
 #include "clad/types/poseStructs.h"
@@ -106,7 +107,16 @@ namespace Anki {
       
       // Set the moving state of the object and when it either started or stopped moving.
       virtual void SetIsMoving(bool isMoving, TimeStamp_t t) {};
-  
+      
+      // Override for objects that can be used for localization (e.g., mats
+      // or active blocks that have not moved since last localization)
+      // Note that true means the object can be used for localization *now*, in its current state,
+      // (not whether this object is of a type that might ever be suitable for localization).
+      virtual bool CanBeUsedForLocalization() const { return false; }
+      
+      // How flat an object must be to be used for localization (override if different
+      // objects have different tolerances)
+      virtual f32 GetRestingFlatTolForLocalization_deg() const { return 5.f; }
 
       virtual bool IsMoveable()               const { return true; }
       
@@ -174,8 +184,6 @@ namespace Anki {
       void CopyID(const ObservableObject* fromOther);
             
       void SetColor(const ColorRGBA& color);
-      
-      // Set the object's pose. newPose should be with respect to world origin.
       virtual void SetPose(const Pose3d& newPose,
                            f32 fromDistance = -1.f,
                            PoseState newPoseState = PoseState::Known);
@@ -294,10 +302,6 @@ namespace Anki {
       bool IsPoseTooHigh(const Pose3d& poseWrtRobot, float heightMultiplier,
                          float heightTol, float offsetFraction) const;
       
-      // Canonical corners are properties of each derived class and define the
-      // objects' shape, in a canonical (unrotated, untranslated) state.
-      virtual const std::vector<Point3f>& GetCanonicalCorners() const = 0;
-      
     private:
       // NOTE: Declaring pose _first_ because markers use it as a parent and
       //       therefore it needs to be destroyed _after_ the markers whose
@@ -313,6 +317,9 @@ namespace Anki {
       
     protected:
       
+      // Canonical corners are properties of each derived class and define the
+      // objects' shape, in a canonical (unrotated, untranslated) state.
+      virtual const std::vector<Point3f>& GetCanonicalCorners() const = 0;
       
       ObjectID     _ID;
       TimeStamp_t  _lastObservedTime = 0;

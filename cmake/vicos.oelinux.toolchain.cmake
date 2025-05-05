@@ -38,6 +38,7 @@ set(VICOS_CPP_FEATURES rtti exceptions)
 file(TO_CMAKE_PATH "${VICOS_SDK}" VICOS_SDK)
 
 # Standard cross-compiling stuff.
+set(VICOS_LE TRUE)
 set(VICOS TRUE)
 
 set(CMAKE_SYSTEM_NAME Linux)
@@ -63,8 +64,6 @@ set(VICOS_TOOLCHAIN_ROOT arm-oe-linux-gnueabi)
 
 # uname -p on vicos returns unknown
 set(CMAKE_SYSTEM_PROCESSOR arm)
-
-set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 set(VICOS_LLVM_TRIPLE arm-oe-linux-gnueabi)
 
@@ -97,38 +96,23 @@ set(VICOS_LINKER_FLAGS_EXE)
 
 # Generic flags.
 list(APPEND VICOS_COMPILER_FLAGS
+	-gsplit-dwarf
     -DVICOS
-    -Qunused-arguments
 	-ffunction-sections
 	-fdata-sections
 	-funwind-tables
 	-fstack-protector-strong
-	-Wno-nonportable-include-path
-	-Wno-delete-non-virtual-dtor
-#  -flto
-#  -fvisibility=hidden
-#  -fsanitize=cfi
 	-no-canonical-prefixes)
 list(APPEND VICOS_COMPILER_FLAGS_CXX
-    -Qunused-arguments
 	-fno-exceptions
-	-Wno-nonportable-include-path
-	-Wno-delete-non-virtual-dtor
-	-Wgnu-include-next
 	-fno-rtti)
-list(APPEND VICOS_COMPILER_FLAGS_RELEASE
-  -D_FORTIFY_SOURCE=2)
 list(APPEND VICOS_LINKER_FLAGS
 	-Wl,--build-id
-	#-Wl,--gdb-index
+	-Wl,--gdb-index
 	-Wl,--warn-shared-textrel
 	-Wl,--gc-sections
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
-#	-Wl,--fatal-warnings)
+	-Wl,--fatal-warnings)
 list(APPEND VICOS_LINKER_FLAGS_EXE
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
 	-Wl,-z,nocopyreloc)
 
 # Debug and release flags.
@@ -136,16 +120,8 @@ list(APPEND VICOS_COMPILER_FLAGS_DEBUG
 	-O0
         -fno-limit-debug-info)
 list(APPEND VICOS_COMPILER_FLAGS_RELEASE
-	-O2 -fmath-errno
+	-Os
         -DNDEBUG)
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    list(APPEND VICOS_LINKER_FLAGS_EXE
-        -Wl,-rpath-link,${CMAKE_SOURCE_DIR}/_build/vicos/Debug/lib)
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    list(APPEND VICOS_LINKER_FLAGS_EXE
-        -Wl,-rpath-link,${CMAKE_SOURCE_DIR}/_build/vicos/Release/lib)
-endif()
 
 # Toolchain and ABI specific flags.
 list(APPEND VICOS_COMPILER_FLAGS
@@ -210,8 +186,8 @@ list(APPEND VICOS_COMPILER_FLAGS -mthumb)
 
 list(APPEND VICOS_COMPILER_FLAGS
     -mfpu=neon)
-#list(APPEND VICOS_COMPILER_FLAGS
-#    -Wa,--noexecstack)
+list(APPEND VICOS_COMPILER_FLAGS
+    -Wa,--noexecstack)
 list(APPEND VICOS_LINKER_FLAGS
     -Wl,-z,noexecstack)
 
@@ -224,7 +200,7 @@ list(APPEND VICOS_LINKER_FLAGS
 list(APPEND VICOS_LINKER_FLAGS
     -Wl,-z,relro -Wl,-z,now)
 list(APPEND VICOS_COMPILER_FLAGS
-    -Wformat)
+    -Wformat -Werror=format-security)
 
 # Convert these lists into strings.
 string(REPLACE ";" " " VICOS_COMPILER_FLAGS         "${VICOS_COMPILER_FLAGS}")
@@ -284,8 +260,6 @@ set(CMAKE_SHARED_LINKER_FLAGS "${VICOS_LINKER_FLAGS} ${CMAKE_SHARED_LINKER_FLAGS
 set(CMAKE_MODULE_LINKER_FLAGS "${VICOS_LINKER_FLAGS} ${CMAKE_MODULE_LINKER_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS    "${VICOS_LINKER_FLAGS} ${VICOS_LINKER_FLAGS_EXE} ${CMAKE_EXE_LINKER_FLAGS}")
 
-set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
-
 # <anki>
 # Work around missing CMAKE_SIZEOF_VOID_P
 #
@@ -300,31 +274,3 @@ set(CMAKE_SIZEOF_VOID_P 4)
 message(STATUS "CMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
 message(STATUS "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
 message(STATUS "CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES=${CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES}")
-
-option(USE_ANKIASAN "Enable address sanitizer" OFF)
-if (USE_ANKIASAN)
-  # Depends on -shared-libasan, convert to OPTION
-  set(ASAN_CXX_FLAGS           PUBLIC
-                               -fsanitize=address
-                               -fno-omit-frame-pointer
-  )
-
-  set(ASAN_LINKER_FLAGS        PUBLIC
-                               -fsanitize=address
-  )
-
-  set(ASAN_SHARED_LINKER_FLAGS PUBLIC
-                               -fsanitize=address
-                               # requires SDK support -shared-libasan
-                               -ldl
-                               -lrt
-                               -l${VICOS_SDK}/prebuilt/lib/clang/5.0.0/lib/linux/libclang_rt.asan-arm.a
-  )
-
-  set(ASAN_EXE_LINKER_FLAGS    PUBLIC
-                               -fsanitize=address
-                               -ldl
-                               -lrt
-                               -l${VICOS_SDK}/prebuilt/lib/clang/5.0.0/lib/linux/libclang_rt.asan-arm.a
-  )
-endif()

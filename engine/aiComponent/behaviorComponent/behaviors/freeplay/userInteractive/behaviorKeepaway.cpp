@@ -11,49 +11,34 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/freeplay/userInteractive/behaviorKeepaway.h"
 
-#include "clad/types/behaviorComponent/behaviorStats.h"
-#include "clad/types/featureGateTypes.h"
 #include "coretech/common/engine/jsonTools.h"
-#include "coretech/common/engine/utils/timer.h"
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
+#include "engine/activeObject.h"
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/components/cubes/cubeInteractionTracker.h"
-#include "engine/components/robotStatsTracker.h"
 #include "engine/components/sensors/proxSensorComponent.h"
 #include "engine/components/visionComponent.h"
-#include "engine/cozmoContext.h"
-#include "engine/cozmoObservableObject.h"
-#include "engine/drivingAnimationHandler.h"
-#include "engine/moodSystem/moodManager.h"
-#include "engine/utils/cozmoFeatureGate.h"
-#include "util/helpers/quoteMacro.h"
+
+#include "coretech/common/engine/utils/timer.h"
 #include "util/math/math.h"
 
-#define SET_STATE(s) do{ \
-                          _dVars.state = KeepawayState::s; \
-                          SetDebugStateName(#s); \
-                        } while(0);
+#define SET_STATE(s) SetState_internal(s, #s)
 
 namespace Anki{
-namespace Vector{
+namespace Cozmo{
 
 namespace{
-static const DrivingAnimationHandler::DrivingAnimations kKeepawayDrivingAnims { AnimationTrigger::CubePounceDriveGetIn,
-                                                                                AnimationTrigger::CubePounceDriveLoop,
-                                                                                AnimationTrigger::CubePounceDriveGetOut };
-const char* kMinPouncesForSoloPlayKey = "minPouncesForSoloPlay";
-const char* kMaxPouncesForSoloPlayKey = "maxPouncesForSoloPlay";
 const char* kDebugName = "BehaviorKeepaway";
 const char* kLogChannelName = "Behaviors";
 // Distance past nominalPounceDist that we allow victor to creep. Helps ensure he eventually pounces.
-const float kCreepOverlapDist_mm = 8.0f;
+const float kCreepOverlapDist_mm = 3.0f;
+const char* kPointsToWinKey = "pointsToWin";
 const char* kUseProxForDistance = "useProxForDistance";
+const bool kAllowCallback = false;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorKeepaway::InstanceConfig::InstanceConfig(const Json::Value& config)
 {
   // Helper macro to grab the key with the same name as the param struct member from the Json and
@@ -64,15 +49,18 @@ BehaviorKeepaway::InstanceConfig::InstanceConfig(const Json::Value& config)
       floatNames.emplace_back( QUOTE(__name__) );\
     }\
   } while(0)
-
-  minPouncesForSoloPlay = JsonTools::ParseInt8(config, kMinPouncesForSoloPlayKey, kDebugName);
-  maxPouncesForSoloPlay = JsonTools::ParseInt8(config, kMaxPouncesForSoloPlayKey, kDebugName);
-
+  
+  // Set up a filter for finding Keepaway-able items
+  keepawayTargetFilter = std::make_unique<BlockWorldFilter>();
+  keepawayTargetFilter->AddAllowedFamily(ObjectFamily::Block);
+  keepawayTargetFilter->AddAllowedFamily(ObjectFamily::LightCube);
+  keepawayTargetFilter->AddAllowedFamily(ObjectFamily::CustomObject);
+  SET_FLOAT_HELPER(naturalGameEndTimeout_s);
   SET_FLOAT_HELPER(targetUnmovedGameEndTimeout_s);
   SET_FLOAT_HELPER(noVisibleTargetGameEndTimeout_s);
-  SET_FLOAT_HELPER(outOfPlayGameEndTimeout_s);
+  SET_FLOAT_HELPER(noPointsEarnedTimeout_s);
   SET_FLOAT_HELPER(targetVisibleTimeout_s);
-  SET_FLOAT_HELPER(globalOffsetDist_mm);
+  SET_FLOAT_HELPER(animDistanceOffset_mm);
   SET_FLOAT_HELPER(inPlayDistance_mm);
   SET_FLOAT_HELPER(outOfPlayDistance_mm);
   SET_FLOAT_HELPER(allowablePointingError_deg);
@@ -88,327 +76,226 @@ BehaviorKeepaway::InstanceConfig::InstanceConfig(const Json::Value& config)
   SET_FLOAT_HELPER(basePounceChance);
   SET_FLOAT_HELPER(pounceChanceIncrement);
   SET_FLOAT_HELPER(nominalPounceDistance_mm);
-  SET_FLOAT_HELPER(mousetrapPounceDistance_mm);
-  SET_FLOAT_HELPER(probBackupInsteadOfMousetrap);
+  SET_FLOAT_HELPER(instaPounceDistance_mm);
   SET_FLOAT_HELPER(pounceSuccessPitchDiff_deg);
-
-  SET_FLOAT_HELPER(excitementIncPerHit);
-  SET_FLOAT_HELPER(maxProbExitExcited);
-  SET_FLOAT_HELPER(frustrationIncPerMiss);
-  SET_FLOAT_HELPER(maxProbExitFrustrated);
-  SET_FLOAT_HELPER(minProbToExit);
-
-  SET_FLOAT_HELPER(baseProbReact);
-  SET_FLOAT_HELPER(minProbToReact);
-  SET_FLOAT_HELPER(probReactIncrement);
-  SET_FLOAT_HELPER(probReactMax);
-
   useProxForDistance = JsonTools::ParseBool(config, kUseProxForDistance, kDebugName);
+  pointsToWin = JsonTools::ParseUint8(config, kPointsToWinKey, kDebugName);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorKeepaway::DynamicVariables::DynamicVariables(const InstanceConfig& iConfig)
 : state(KeepawayState::GetIn)
 , targetID(ObjectID())
-, target(KeepawayTarget())
+, target(TargetStatus())
 , pounceReadyState(PounceReadyState::Unready)
 , gameStartTime_s(0.0f)
-, outOfPlayExitTime_s(0.0f)
+, targetLastValidTime_s(0.0f)
+, targetLastObservedTime_s(0.0f)
+, targetLastMovedTime_s(0.0f)
+, targetPrevPose(Pose3d())
+, targetDistance(0.0f)
 , creepTime(0.0f)
 , pounceChance(iConfig.basePounceChance)
 , pounceTime(0.0f)
 , pounceSuccessPitch_deg(0.0f)
-, frustrationExcitementScale(1.0f)
-, probReactToHit(0.0f)
-, probReactToMiss(0.0f)
-, pounceCount(0)
-, pounceCountToExit(1)
+, victorPoints(0)
+, userPoints(0)
 , isIdling(0)
 , victorGotLastPoint(false)
 , gameOver(false)
-, soloExitAfterNextPounce(false)
+, victorIsBored(false)
 {
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorKeepaway::BehaviorKeepaway(const Json::Value& config)
 : ICozmoBehavior(config)
 , _iConfig(config)
 , _dVars(_iConfig)
 {
   // Add configurable params as ConsoleVars
-  MakeMemberTunable(_iConfig.minPouncesForSoloPlay, "minPouncesForSoloPlay", kDebugName);
-  MakeMemberTunable(_iConfig.maxPouncesForSoloPlay, "maxPouncesForSoloPlay", kDebugName);
-  MakeMemberTunable(_iConfig.targetUnmovedGameEndTimeout_s, "targetUnmovedGameEndTimeout_s", kDebugName);
-  MakeMemberTunable(_iConfig.noVisibleTargetGameEndTimeout_s, "noVisibleTargetGameEndTimeout_s", kDebugName);
-  MakeMemberTunable(_iConfig.outOfPlayGameEndTimeout_s, "outOfPlayGameEndTimeout_s", kDebugName);
-  MakeMemberTunable(_iConfig.targetVisibleTimeout_s, "targetVisibleTimeout_s", kDebugName);
-  MakeMemberTunable(_iConfig.globalOffsetDist_mm, "globalOffsetDist_mm", kDebugName);
-  MakeMemberTunable(_iConfig.inPlayDistance_mm, "inPlayDistance_mm", kDebugName);
-  MakeMemberTunable(_iConfig.outOfPlayDistance_mm, "outOfPlayDistance_mm", kDebugName);
-  MakeMemberTunable(_iConfig.allowablePointingError_deg, "allowablePointingError_deg", kDebugName);
-  MakeMemberTunable(_iConfig.targetUnmovedCreepTimeout_s, "targetUnmovedCreepTimeout_s", kDebugName);
-  MakeMemberTunable(_iConfig.creepDistanceMin_mm, "creepDistanceMin_mm", kDebugName);
-  MakeMemberTunable(_iConfig.creepDistanceMax_mm, "creepDistanceMax_mm", kDebugName);
-  MakeMemberTunable(_iConfig.creepDelayTimeMin_s, "creepDelayTimeMin_s", kDebugName);
-  MakeMemberTunable(_iConfig.creepDelayTimeMax_s, "creepDelayTimeMax_s", kDebugName);
-  MakeMemberTunable(_iConfig.pounceDelayTimeMin_s, "pounceDelayTimeMin_s", kDebugName);
-  MakeMemberTunable(_iConfig.pounceDelayTimeMax_s, "pounceDelayTimeMax_s", kDebugName);
-  MakeMemberTunable(_iConfig.basePounceChance, "basePounceChance", kDebugName);
-  MakeMemberTunable(_iConfig.pounceChanceIncrement, "pounceChanceIncrement", kDebugName);
-  MakeMemberTunable(_iConfig.nominalPounceDistance_mm, "nominalPounceDistance_mm", kDebugName);
-  MakeMemberTunable(_iConfig.mousetrapPounceDistance_mm, "mousetrapPounceDistance_mm", kDebugName);
-  MakeMemberTunable(_iConfig.probBackupInsteadOfMousetrap, "probBackupInsteadOfMousetrap", kDebugName);
-  MakeMemberTunable(_iConfig.pounceSuccessPitchDiff_deg, "pounceSuccessPitchDiff_deg", kDebugName);
-  MakeMemberTunable(_iConfig.excitementIncPerHit, "excitementIncPerHit", kDebugName);
-  MakeMemberTunable(_iConfig.maxProbExitExcited, "maxProbExitExcited", kDebugName);
-  MakeMemberTunable(_iConfig.frustrationIncPerMiss, "frustrationIncPerMiss", kDebugName);
-  MakeMemberTunable(_iConfig.maxProbExitFrustrated, "maxProbExitFrustrated", kDebugName);
-  MakeMemberTunable(_iConfig.minProbToExit, "minProbToExit", kDebugName);
-  MakeMemberTunable(_iConfig.baseProbReact, "baseProbReact", kDebugName);
-  MakeMemberTunable(_iConfig.minProbToReact, "minProbToReact", kDebugName);
-  MakeMemberTunable(_iConfig.probReactIncrement, "probReactIncrement", kDebugName);
-  MakeMemberTunable(_iConfig.probReactMax, "probReactMax", kDebugName);
-  MakeMemberTunable(_iConfig.useProxForDistance, "useProxForDistance", kDebugName);
+  MakeMemberTunable(_iConfig.naturalGameEndTimeout_s, "naturalGameEndTimeout_s");
+  MakeMemberTunable(_iConfig.targetUnmovedGameEndTimeout_s, "targetUnmovedGameEndTimeout_s");
+  MakeMemberTunable(_iConfig.noVisibleTargetGameEndTimeout_s, "noVisibleTargetGameEndTimeout_s");
+  MakeMemberTunable(_iConfig.noPointsEarnedTimeout_s, "noPointsEarnedTimeout_s");
+  MakeMemberTunable(_iConfig.targetVisibleTimeout_s, "targetVisibleTimeout_s");
+  MakeMemberTunable(_iConfig.animDistanceOffset_mm, "animDistanceOffset_mm");
+  MakeMemberTunable(_iConfig.inPlayDistance_mm, "inPlayDistance_mm");
+  MakeMemberTunable(_iConfig.outOfPlayDistance_mm, "outOfPlayDistance_mm");
+  MakeMemberTunable(_iConfig.allowablePointingError_deg, "allowablePointingError_deg");
+  MakeMemberTunable(_iConfig.targetUnmovedCreepTimeout_s, "targetUnmovedCreepTimeout_s");
+  MakeMemberTunable(_iConfig.creepDistanceMin_mm, "creepDistanceMin_mm");
+  MakeMemberTunable(_iConfig.creepDistanceMax_mm, "creepDistanceMax_mm");
+  MakeMemberTunable(_iConfig.creepDelayTimeMin_s, "creepDelayTimeMin_s");
+  MakeMemberTunable(_iConfig.creepDelayTimeMax_s, "creepDelayTimeMax_s");
+  MakeMemberTunable(_iConfig.pounceDelayTimeMin_s, "pounceDelayTimeMin_s");
+  MakeMemberTunable(_iConfig.pounceDelayTimeMax_s, "pounceDelayTimeMax_s");
+  MakeMemberTunable(_iConfig.basePounceChance, "basePounceChance");
+  MakeMemberTunable(_iConfig.pounceChanceIncrement, "pounceChanceIncrement");
+  MakeMemberTunable(_iConfig.nominalPounceDistance_mm, "nominalPounceDistance_mm");
+  MakeMemberTunable(_iConfig.instaPounceDistance_mm, "instaPounceDistance_mm");
+  MakeMemberTunable(_iConfig.pounceSuccessPitchDiff_deg, "pounceSuccessPitchDiff_deg");
+  MakeMemberTunable(_iConfig.useProxForDistance, "useProxForDistance");
+  MakeMemberTunable(_iConfig.pointsToWin, "pointsToWin");
 }
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
 {
-  expectedKeys.insert( kMinPouncesForSoloPlayKey );
-  expectedKeys.insert( kMaxPouncesForSoloPlayKey );
+  expectedKeys.insert( kPointsToWinKey );
   expectedKeys.insert( kUseProxForDistance );
   for( const auto& str : _iConfig.floatNames ) {
     expectedKeys.insert( str.c_str() );
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool BehaviorKeepaway::WantsToBeActivatedBehavior() const
+bool BehaviorKeepaway::WantsToBeActivatedBehavior() const 
 {
   return true;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::OnBehaviorActivated()
 {
   // reset state for new game
   _dVars = DynamicVariables(_iConfig);
-  _dVars.probReactToHit = _iConfig.baseProbReact;
-  _dVars.probReactToMiss = _iConfig.baseProbReact;
-  _dVars.pounceCountToExit = GetRNG().RandIntInRange(_iConfig.minPouncesForSoloPlay, _iConfig.maxPouncesForSoloPlay);
 
   // Initialize time stamps for various timeouts
   _dVars.gameStartTime_s = GetCurrentTimeInSeconds();
-
-  GetBEI().GetMoodManager().TriggerEmotionEvent("KeepawayStarted");
-
-  // push driving animations for creeping
-  auto& robotInfo = GetBEI().GetRobotInfo();
-  robotInfo.GetDrivingAnimationHandler().PushDrivingAnimations(kKeepawayDrivingAnims, GetDebugLabel());
-
-  TransitionToGetIn();
+  _dVars.targetLastValidTime_s = GetCurrentTimeInSeconds();
+  _dVars.targetLastObservedTime_s = GetCurrentTimeInSeconds();
+  _dVars.targetLastMovedTime_s = GetCurrentTimeInSeconds();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::OnBehaviorDeactivated()
-{
-  auto& robotInfo = GetBEI().GetRobotInfo();
-  robotInfo.GetDrivingAnimationHandler().RemoveDrivingAnimations(GetDebugLabel());
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::BehaviorUpdate()
 {
   if(!IsActivated()){
     return;
   }
 
-  if(KeepawayState::GetOut != _dVars.state ||
-     KeepawayState::GetOutSolo != _dVars.state){
-    UpdateTargetStatus();
-  }
+  if(!_dVars.gameOver && !_dVars.victorIsBored){
+    CheckTargetStatus();
 
-  if( (KeepawayState::Searching == _dVars.state) ||
-      (KeepawayState::Stalking == _dVars.state) ) {
-      CheckGetOutTimeOuts();
-  }
-
-  if(KeepawayState::Searching == _dVars.state){
-    if(_dVars.target.isVisible){
-      bool allowCallback = false;
-      CancelDelegates(allowCallback);
-      TransitionToStalking();
-      return;
+    if((!_dVars.victorPoints && !_dVars.userPoints) && 
+      (_iConfig.noPointsEarnedTimeout_s > 0.0f) &&
+      (GetCurrentTimeInSeconds() - _dVars.gameStartTime_s > _iConfig.noPointsEarnedTimeout_s)){
+      _dVars.victorIsBored = true;
+      PRINT_CH_INFO(kLogChannelName,
+                    "BehaviorKeepaway.GameEndTimeout", 
+                    "Victor got bored and quit because no-one was scoring...");
     }
   }
-  else if(KeepawayState::Stalking == _dVars.state){
-    UpdateStalking();
+
+  if(_dVars.victorIsBored){
+    StopIdleAnimation();
+    if(!IsControlDelegated()){
+      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetOutBored),
+                          [this](){
+                            BehaviorObjectiveAchieved(BehaviorObjective::KeepawayQuitBored);
+                            CancelSelf();
+                          });
+    } 
+    return;
   }
-  else if(KeepawayState::Pouncing == _dVars.state ){
-    // Check whether we've hit anything throughout the pounce
-    if(!_dVars.victorGotLastPoint && PitchIndicatesPounceSuccess()){
-      _dVars.victorGotLastPoint = true;
-    }
-  }
-}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::UpdateTargetStatus()
-{
-  TargetStatus status = GetBEI().GetCubeInteractionTracker().GetTargetStatus();
-
-  // Parse out target info into Keepaway context
-  _dVars.target.isValid = (nullptr != status.observableObject);
-  if(_dVars.target.isValid){
-    _dVars.targetID = status.observableObject->GetID();
-  }
-  _dVars.target.isVisible = (GetCurrentTimeInSeconds() - status.lastObservedTime_s) < _iConfig.targetVisibleTimeout_s;
-  _dVars.target.isInPlay = status.distance_mm < (_iConfig.globalOffsetDist_mm + _iConfig.outOfPlayDistance_mm) ;
-  _dVars.target.isOffCenter = ABS(status.angleFromRobotFwd_deg) > _iConfig.allowablePointingError_deg;
-  _dVars.target.isInMousetrapRange = status.distance_mm < (_iConfig.globalOffsetDist_mm + _iConfig.mousetrapPounceDistance_mm);
-
-  // Handle pertinent state changes
-  bool isNotMoving = (GetCurrentTimeInSeconds() - status.lastMovedTime_s) > _iConfig.targetUnmovedCreepTimeout_s;
-  bool isInPounceRange = status.distance_mm < (_iConfig.globalOffsetDist_mm + _iConfig.nominalPounceDistance_mm);
-
-  // If the target just stopped moving
-  if(!_dVars.target.isNotMoving && isNotMoving){
-    float creepDelay = GetRNG().RandDblInRange(_iConfig.creepDelayTimeMin_s, _iConfig.creepDelayTimeMax_s);
-    _dVars.creepTime = GetCurrentTimeInSeconds() + creepDelay;
-  }
-  _dVars.target.isNotMoving = isNotMoving;
-
-  // If the target just entered pounce range
-  if(!_dVars.target.isInPounceRange && isInPounceRange){
-    float pounceDelay = GetRNG().RandDblInRange(_iConfig.pounceDelayTimeMin_s, _iConfig.pounceDelayTimeMax_s);
-    _dVars.pounceTime = GetCurrentTimeInSeconds() + pounceDelay;
-  }
-  _dVars.target.isInPounceRange = isInPounceRange;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::CheckGetOutTimeOuts()
-{
-  TargetStatus status = GetBEI().GetCubeInteractionTracker().GetTargetStatus();
-  bool victorIsBored = false;
-
-  if(status.visibleRecently){
-    // Don't end on a move timeout if the target is not visible
-    float timeSinceMoved = GetCurrentTimeInSeconds() - status.lastMovedTime_s;
-    float timeSinceGameStart = GetCurrentTimeInSeconds() - _dVars.gameStartTime_s;
-
-    // Don't do a movement timeout if the cube hasn't moved since starting. This typically indicates that he is
-    // pouncing on a cube without an opponent
-    if(timeSinceMoved > timeSinceGameStart){
-      // just keep playing until we exit from too much success, or someone engages
-      if(_dVars.pounceCount == _dVars.pounceCountToExit - 1){
-        _dVars.soloExitAfterNextPounce = true;
-        return;
+  switch(_dVars.state){
+    case KeepawayState::GetIn:
+    {
+      if(!IsControlDelegated()){
+        DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetIn),
+                            &BehaviorKeepaway::TransitionToSearching);
       }
+      break;
     }
-    else if( ( _iConfig.targetUnmovedGameEndTimeout_s > 0.0f ) &&
-           ( timeSinceMoved > _iConfig.targetUnmovedGameEndTimeout_s) ){
-      victorIsBored = true;
-      PRINT_CH_INFO(kLogChannelName,
-                    "BehaviorKeepaway.GameEndTimeout",
-                    "Victor got bored and quit because the cube didn't move for %f seconds",
-                    _iConfig.targetUnmovedGameEndTimeout_s);
+    case KeepawayState::Searching:
+    {
+      UpdateSearching();
+      break;
+    }
+    case KeepawayState::Stalking:
+    {
+      UpdateStalking();
+      break;
+    }
+    case KeepawayState::Pouncing:
+    {
+      // Check whether we've hit anything throughout the pounce
+      if(!_dVars.victorGotLastPoint && PitchIndicatesPounceSuccess()){
+        _dVars.victorGotLastPoint = true;
+      }
+      break;
+    }
+    case KeepawayState::Creeping:
+    case KeepawayState::FakeOut:
+    case KeepawayState::Reacting:
+    case KeepawayState::GetOut:
+    {
+      break;
+    }
+    default:
+    {
+      PRINT_NAMED_ERROR("BehaviorKeepaway.InvalidKeepawayState", "Received an undefined KeepawayState, aborting.");
+      CancelSelf();
     }
   }
-  else{
-    if( (_iConfig.noVisibleTargetGameEndTimeout_s > 0.0f) &&
-        (GetCurrentTimeInSeconds() - status.lastObservedTime_s) > _iConfig.noVisibleTargetGameEndTimeout_s){
-      victorIsBored = true;
-      PRINT_CH_INFO(kLogChannelName,
-                    "BehaviorKeepaway.GameEndTimeout",
-                    "Victor got bored and quit because his cube was hidden for %f seconds",
-                    _iConfig.noVisibleTargetGameEndTimeout_s);
-    }
-  }
-
-  if( KeepawayState::Stalking == _dVars.state &&
-      _dVars.outOfPlayExitTime_s != 0.0f &&
-      GetCurrentTimeInSeconds() > _dVars.outOfPlayExitTime_s ){
-    PRINT_CH_INFO(kLogChannelName,
-                  "BehaviorKeepaway.OutOfPlayTimeout",
-                  "Victor got bored and quit because his cube was out of play for %f seconds",
-                  _iConfig.outOfPlayGameEndTimeout_s);
-    victorIsBored = true;
-  }
-
-  if(victorIsBored){
-    TransitionToGetOutBored();
-  }
-  return;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::TransitionToGetIn()
+void BehaviorKeepaway::OnBehaviorDeactivated()
 {
-  SET_STATE(GetIn);
 
-  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetIn),
-                      &BehaviorKeepaway::TransitionToSearching);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorKeepaway::SetState_internal(KeepawayState state, const std::string& stateName)
+{
+  _dVars.state = state;
+  SetDebugStateName(stateName);
+}
+
 void BehaviorKeepaway::TransitionToSearching()
 {
-  if(KeepawayState::Searching != _dVars.state){
-    SET_STATE(Searching);
-    StopIdleAnimation();
-    CancelDelegates(false);
+  SET_STATE(KeepawayState::Searching);
+}
+
+void BehaviorKeepaway::UpdateSearching(){
+  if(_dVars.target.isVisible){
+    CancelDelegates();
+    TransitionToStalking();
+    return;
   }
 
-  if(_dVars.target.isValid){
-    DelegateIfInControl(new SearchForNearbyObjectAction(_dVars.targetID),
-                        &BehaviorKeepaway::TransitionToSearching);
-  } else {
-    DelegateIfInControl(new SearchForNearbyObjectAction(),
-                        &BehaviorKeepaway::TransitionToSearching);
+  if(!IsControlDelegated()) {
+    if(_dVars.target.isValid){
+      DelegateIfInControl(new SearchForNearbyObjectAction(_dVars.targetID));
+    } else {
+      DelegateIfInControl(new SearchForNearbyObjectAction());
+    }
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::TransitionToStalking()
 {
-  SET_STATE(Stalking);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
   // Recompute the next creep and pounce times here as the SOONEST we will execute these actions
-  // creepTime will get overwritten from UpdateTargetStatus() if the target moves
+  // creepTime will get overwritten from UpdateTargetMotion() if the target moves
   float creepDelay = GetRNG().RandDblInRange(_iConfig.creepDelayTimeMin_s, _iConfig.creepDelayTimeMax_s);
   _dVars.creepTime = GetCurrentTimeInSeconds() + creepDelay;
-  // pounceTime will get overwritten from UpdateTargetStatus() if the target enters pounce range
+  // pounceTime will get overwritten from UpdateTargetDistance() if the target enters pounce range
   float pounceDelay = GetRNG().RandDblInRange(_iConfig.pounceDelayTimeMin_s, _iConfig.pounceDelayTimeMax_s);
   _dVars.pounceTime = GetCurrentTimeInSeconds() + pounceDelay;
-
-  _dVars.outOfPlayExitTime_s = GetCurrentTimeInSeconds() + _iConfig.outOfPlayGameEndTimeout_s;
-
-  StartIdleAnimation();
+  
+  SET_STATE(KeepawayState::Stalking);  
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::UpdateStalking()
 {
   if(!IsControlDelegated() || _dVars.isIdling){
 
-    if(!_dVars.target.isVisible){
+    if(!_dVars.target.isValid || !_dVars.target.isVisible){
       // If the target goes out of sight, don't change the ready state
+      StopIdleAnimation();
       TransitionToSearching();
       return;
     }
 
     if(_dVars.target.isOffCenter){
       StopIdleAnimation();
-      SmartDisableKeepFaceAlive();
-      DelegateIfInControl(new TurnTowardsObjectAction(_dVars.targetID),
-        [this](){
-          SmartReEnableKeepFaceAlive();
-          StartIdleAnimation();
-        });
+      DelegateIfInControl(new TurnTowardsObjectAction(_dVars.targetID));
       return;
     }
 
@@ -419,32 +306,24 @@ void BehaviorKeepaway::UpdateStalking()
           // If the target goes outOfPlay but not outOfSight, TransitionToUnready
           StopIdleAnimation();
           DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetUnready),
-            [this](){
-              _dVars.pounceReadyState = PounceReadyState::Unready;
-              _dVars.outOfPlayExitTime_s = GetCurrentTimeInSeconds() + _iConfig.outOfPlayGameEndTimeout_s;
-              StartIdleAnimation();
-            });
-        } else if(_dVars.target.isInMousetrapRange){
-          if(GetRNG().RandDbl() < _iConfig.probBackupInsteadOfMousetrap){
-            PRINT_CH_INFO("Behaviors", "BehaviorKeepaway.BackupInsteadOfPounce","");
-            StopIdleAnimation();
-            DelegateIfInControl(new TriggerLiftSafeAnimationAction(AnimationTrigger::CubePounceBackup),
-                                &BehaviorKeepaway::StartIdleAnimation);
-          } else {
-            if(GetRNG().RandDbl() < _dVars.pounceChance){
-              TransitionToPouncing();
-            } else {
-              TransitionToFakeOut();
-            }
-          }
+                              [this](){
+                                _dVars.pounceReadyState = PounceReadyState::Unready;
+                              });
+        } else if(_dVars.target.isInInstaPounceRange){
+          StopIdleAnimation();
+          TransitionToPouncing();
         } else if(_dVars.target.isInPounceRange && (GetCurrentTimeInSeconds() > _dVars.pounceTime)){
+          StopIdleAnimation();
           if(GetRNG().RandDbl() < _dVars.pounceChance){
             TransitionToPouncing();
           } else {
             TransitionToFakeOut();
           }
-        } else if (!_dVars.target.isInPounceRange && _dVars.target.isNotMoving && (GetCurrentTimeInSeconds() > _dVars.creepTime)){
+        } else if (_dVars.target.isNotMoving && (GetCurrentTimeInSeconds() > _dVars.creepTime)){
+          StopIdleAnimation();
           TransitionToCreeping();
+        } else if(!_dVars.isIdling){
+          StartIdleAnimation(AnimationTrigger::CubePounceIdleLiftUp);
         }
         break;
       }
@@ -453,12 +332,12 @@ void BehaviorKeepaway::UpdateStalking()
         if(_dVars.target.isInPlay){
           // When the target comes back into play, TransitionToReady
           StopIdleAnimation();
-          _dVars.outOfPlayExitTime_s = 0.0f;
           DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetReady),
                               [this](){
                                 _dVars.pounceReadyState = PounceReadyState::Ready;
-                                StartIdleAnimation();
                               });
+        } else if (!_dVars.isIdling){
+          StartIdleAnimation(AnimationTrigger::CubePounceIdleLiftDown);
         }
         break;
       }
@@ -466,20 +345,13 @@ void BehaviorKeepaway::UpdateStalking()
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::TransitionToCreeping()
 {
-  SET_STATE(Creeping);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
-  TargetStatus status = GetBEI().GetCubeInteractionTracker().GetTargetStatus();
-
-  float maxCreepDistance = status.distance_mm - _iConfig.nominalPounceDistance_mm + kCreepOverlapDist_mm;
+  float maxCreepDistance = _dVars.targetDistance - _iConfig.nominalPounceDistance_mm + kCreepOverlapDist_mm;
   float creepDistance = 0.0f;
   if(maxCreepDistance <= 0.0f){
     TransitionToStalking();
-    return;
+    return; 
   } else if(maxCreepDistance < _iConfig.creepDistanceMin_mm){
     creepDistance = maxCreepDistance;
   } else {
@@ -489,150 +361,261 @@ void BehaviorKeepaway::TransitionToCreeping()
   }
 
   DelegateIfInControl(new DriveStraightAction(creepDistance), &BehaviorKeepaway::TransitionToStalking);
+  SET_STATE(KeepawayState::Creeping);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::TransitionToPouncing()
 {
-  SET_STATE(Pouncing);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
-  GetBEI().GetMoodManager().TriggerEmotionEvent("KeepawayPounce");
-
-  GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::AttemptedPounceOnCube);
-
   _dVars.victorGotLastPoint = false;
   float startingPitch = GetBEI().GetRobotInfo().GetPitchAngle().getDegrees();
   _dVars.pounceSuccessPitch_deg = startingPitch + _iConfig.pounceSuccessPitchDiff_deg;
   _dVars.pounceChance = _iConfig.basePounceChance;
-  AnimationTrigger pounceTrigger = _dVars.target.isInMousetrapRange ?
+  SET_STATE(KeepawayState::Pouncing);
+  AnimationTrigger pounceTrigger = _dVars.target.isInInstaPounceRange ? 
                                    AnimationTrigger::CubePouncePounceClose :
                                    AnimationTrigger::CubePouncePounceNormal;
-  ++_dVars.pounceCount;
   DelegateIfInControl(new TriggerAnimationAction(pounceTrigger), &BehaviorKeepaway::TransitionToReacting);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::TransitionToFakeOut()
 {
-  SET_STATE(FakeOut);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
   _dVars.pounceChance = Util::Clamp((_dVars.pounceChance + _iConfig.pounceChanceIncrement), 0.0f, 1.0f);
-  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceFake),
+  SET_STATE(KeepawayState::FakeOut);
+  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceFake), 
                       &BehaviorKeepaway::TransitionToStalking);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::TransitionToReacting()
 {
-  SET_STATE(Reacting);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
-  // Watch for a solo play exit signal
-  if(_dVars.soloExitAfterNextPounce){
-    TransitionToSoloGetOut();
-    // Bypass the usual reactions
-    return;
-  }
-
-  // Based on the pounce outcome, accrue frustration or excitement
-  float probExit = 0.0f;
+  // Assess points based on outcome of pounce 
   if(_dVars.victorGotLastPoint){
-    GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::PounceOnCubeSuccess);
-
-    float max = 1.0f + _iConfig.maxProbExitExcited;
-    float newVal = _dVars.frustrationExcitementScale + _iConfig.excitementIncPerHit;
-    _dVars.frustrationExcitementScale = Anki::Util::Min(newVal, max);
-    probExit = Anki::Util::Max(0.0f, _dVars.frustrationExcitementScale - 1.0f);
-    PRINT_CH_INFO("Behaviors", "BehaviorKeepaway.Hit",
-                     "Successful pounce! Scale value: %f. Exit probability: %f",
-                     _dVars.frustrationExcitementScale,
-                     probExit);
-  }
-  else {
-    float min = 1.0f - _iConfig.maxProbExitFrustrated;
-    float newVal = _dVars.frustrationExcitementScale - _iConfig.frustrationIncPerMiss;
-    _dVars.frustrationExcitementScale = Anki::Util::Max( newVal, min);
-    probExit = Anki::Util::Max(0.0f, 1.0f - _dVars.frustrationExcitementScale);
-    PRINT_CH_INFO("Behaviors", "BehaviorKeepaway.Miss",
-                     "Missed pounce. Scale value: %f. Exit probability: %f",
-                     _dVars.frustrationExcitementScale,
-                     probExit);
+    ++_dVars.victorPoints;
+  } else {
+    ++_dVars.userPoints;
   }
 
-  float exitRoll = GetRNG().RandDblInRange(0.0f, 1.0f);
-  if(exitRoll < _iConfig.minProbToExit){
-    exitRoll = _iConfig.minProbToExit;
-    PRINT_CH_INFO("Behaviors", "BehaviorKeepaway.ClampedExitProbability",
-                     "Exit roll of: %f clamped to: %f",
-                     exitRoll, _iConfig.minProbToExit);
-  }
+  // Check whether the game should end due to a natural(between points) timeout or a point limit
+  float gameRunTime = GetCurrentTimeInSeconds() - _dVars.gameStartTime_s;
+  bool gameEndByTime = gameRunTime >= _iConfig.naturalGameEndTimeout_s;
+  bool gameEndByPoints = (_dVars.userPoints >= _iConfig.pointsToWin) || (_dVars.victorPoints >= _iConfig.pointsToWin);
+  if((gameEndByTime && (_iConfig.naturalGameEndTimeout_s > 0.0f)) ||
+     (gameEndByPoints && (_iConfig.pointsToWin > 0))){
+    _dVars.gameOver = true;
+  } 
 
-  if(exitRoll < probExit){
-    PRINT_CH_INFO("Behaviors", "BehaviorKeepaway.EmotionalExit",
-                     "Exiting keepaway due to excessive excitement/frustration. prob: %f. rand: %f.",
-                     probExit, exitRoll);
-
-    AnimationTrigger winResponseAnim = _dVars.victorGotLastPoint ?
+  SET_STATE(KeepawayState::Reacting);
+  if(_dVars.gameOver){
+    AnimationTrigger winResponseAnim = _dVars.victorGotLastPoint ? 
                                         AnimationTrigger::CubePounceWinSession :
                                         AnimationTrigger::CubePounceLoseSession;
-    // No Delegation. Behavior will end after winResponse.
-    DelegateIfInControl(new TriggerAnimationAction(winResponseAnim));
+    DelegateIfInControl(new TriggerAnimationAction(winResponseAnim), &BehaviorKeepaway::TransitionToGetOut);
   } else {
-    if(_dVars.victorGotLastPoint){
-      if(GetRNG().RandDblInRange(_iConfig.minProbToReact, 1.0f) < _dVars.probReactToHit){
-        _dVars.probReactToHit = _iConfig.baseProbReact;
-        DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceWinHand),
-                            &BehaviorKeepaway::TransitionToStalking);
-      }
-      else{
-        _dVars.probReactToHit = Anki::Util::Min(_dVars.probReactToHit + _iConfig.probReactIncrement,
-                                                _iConfig.probReactMax);
-        DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetReady),
-                            &BehaviorKeepaway::TransitionToStalking);
-      }
+    AnimationTrigger pointResponseAnim = _dVars.victorGotLastPoint ? 
+                                          AnimationTrigger::CubePounceWinHand :
+                                          AnimationTrigger::CubePounceLoseHand;
+    DelegateIfInControl(new TriggerAnimationAction(pointResponseAnim), &BehaviorKeepaway::TransitionToStalking);
+  }
+}
+
+void BehaviorKeepaway::TransitionToGetOut()
+{
+  SET_STATE(KeepawayState::GetOut);
+  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetOut),
+                      [this](){
+                        BehaviorObjective objectiveOutcome = _dVars.victorGotLastPoint ? 
+                                                              BehaviorObjective::KeepawayWon :
+                                                              BehaviorObjective::KeepawayLost; 
+                        BehaviorObjectiveAchieved(objectiveOutcome);
+                        CancelSelf();
+                      });
+}
+
+bool BehaviorKeepaway::CheckTargetStatus()
+{
+  if(CheckTargetObject()){
+    UpdateTargetVisibility();
+    UpdateTargetAngle();
+    UpdateTargetDistance();
+    UpdateTargetMotion();
+    return true;
+  }
+
+  return false;
+}
+
+bool BehaviorKeepaway::CheckTargetObject()
+{
+  const ObservableObject* targetObject;
+
+  if(!_dVars.targetID.IsSet()){
+    // If we don't yet have a target, see whether we have a recently observed cube
+    targetObject = GetBEI().GetBlockWorld().FindMostRecentlyObservedObject(*_iConfig.keepawayTargetFilter);
+  } else {
+    // We do already have a target selected, see if blockworld knows where it is
+    targetObject = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
+  }
+
+  if(nullptr == targetObject){
+    _dVars.target = TargetStatus();
+
+    // If we haven't had a valid target for too long, end the game bored
+    float timeSinceTargetValid = GetCurrentTimeInSeconds() - _dVars.targetLastValidTime_s;
+    if(timeSinceTargetValid > _iConfig.noVisibleTargetGameEndTimeout_s &&
+       _iConfig.noVisibleTargetGameEndTimeout_s > 0.0f){
+      PRINT_CH_INFO(kLogChannelName,
+                    "BehaviorKeepaway.GameEndTimeout", 
+                    "Victor got bored and quit because he coudn't find a cube...");
+      _dVars.victorIsBored = true;
     }
-    else{
-      if(GetRNG().RandDblInRange(_iConfig.minProbToReact, 1.0f) < _dVars.probReactToMiss){
-        _dVars.probReactToMiss = _iConfig.baseProbReact;
-        DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceLoseHand),
-                            &BehaviorKeepaway::TransitionToStalking);
-      }
-      else{
-        _dVars.probReactToMiss = Anki::Util::Min(_dVars.probReactToMiss + _iConfig.probReactIncrement,
-                                                 _iConfig.probReactMax);
-        DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetReady),
-                            &BehaviorKeepaway::TransitionToStalking);
-      }
+    return false;
+  } else if(!_dVars.targetID.IsSet()){
+    _dVars.targetID = targetObject->GetID();
+  }
+
+  _dVars.targetLastValidTime_s = GetCurrentTimeInSeconds();
+
+  if(!_dVars.target.isValid){
+    // It is possible that visible or movement timeouts are shorter than validTarget timeout. In that case,
+    // we will instantly timeout on them upon recovering a valid target unless we reset their timers.
+    _dVars.targetLastMovedTime_s = GetCurrentTimeInSeconds();
+    _dVars.targetLastObservedTime_s = GetCurrentTimeInSeconds();    
+    _dVars.target.isValid = true;
+  }
+  return true;
+}
+
+void BehaviorKeepaway::UpdateTargetVisibility()
+{
+  const ObservableObject* targetObject = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
+
+  if(targetObject->GetLastObservedTime() >= GetBEI().GetRobotInfo().GetLastImageTimeStamp()){
+    _dVars.targetLastObservedTime_s = GetCurrentTimeInSeconds();
+    _dVars.target.isVisible = true;
+
+  } else{
+    float timeSinceTargetObserved_s = GetCurrentTimeInSeconds() - _dVars.targetLastObservedTime_s;
+    _dVars.target.isVisible = timeSinceTargetObserved_s < _iConfig.targetVisibleTimeout_s;
+
+    if(timeSinceTargetObserved_s > _iConfig.noVisibleTargetGameEndTimeout_s){
+      _dVars.victorIsBored = _iConfig.noVisibleTargetGameEndTimeout_s > 0.0f;
+      PRINT_CH_INFO(kLogChannelName,
+                    "BehaviorKeepaway.GameEndTimeout", 
+                    "Victor got bored and quit because his cube was hidden too long...");
     }
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::TransitionToGetOutBored()
+void BehaviorKeepaway::UpdateTargetAngle()
 {
-  SET_STATE(GetOut);
-  StopIdleAnimation();
-  CancelDelegates(false);
-
-  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceGetOutBored));
+  // Use the center of the cube for AngleToTarget computation 
+  const ObservableObject* targetObject = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
+  Pose3d targetWRTRobot;
+  targetObject->GetPose().GetWithRespectTo(GetBEI().GetRobotInfo().GetPose(), targetWRTRobot);
+  Pose2d robotToTargetFlat(targetWRTRobot);
+  Radians angleToTarget(atan2f(robotToTargetFlat.GetY(), robotToTargetFlat.GetX()));
+  _dVars.target.isOffCenter = ABS(angleToTarget.getDegrees()) > _iConfig.allowablePointingError_deg;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::TransitionToSoloGetOut()
+void BehaviorKeepaway::UpdateTargetDistance()
 {
-  SET_STATE(GetOutSolo);
-  StopIdleAnimation();
-  CancelDelegates(false);
+  const ObservableObject* targetObject = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
 
-  DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::CubePounceWinSession));
+  bool usingProx = false;
+  if(_iConfig.useProxForDistance){
+    auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
+    bool targetIsInProxFOV = false;
+    proxSensor.IsInFOV(targetObject->GetPose(), targetIsInProxFOV);
+    u16 proxDist_mm = 0;
+
+    // If we can see the cube (or have seen it recently enough) to verify its in prox range, use prox
+    if(_dVars.target.isVisible && targetIsInProxFOV && proxSensor.GetLatestDistance_mm(proxDist_mm)){
+      _dVars.targetDistance = proxDist_mm;
+      usingProx = true;
+    }
+  } 
+  
+  if(!usingProx){
+    // Otherwise, use ClosestMarker for VisionBased distance checks
+    Pose3d closestMarkerPose;
+    targetObject->GetClosestMarkerPose(GetBEI().GetRobotInfo().GetPose(), true, closestMarkerPose);
+    _dVars.targetDistance = Point2f(closestMarkerPose.GetTranslation()).Length();
+  }
+
+  if(_dVars.targetDistance > _iConfig.animDistanceOffset_mm + _iConfig.outOfPlayDistance_mm){
+    _dVars.target.isInPlay = false;
+  } else if(_dVars.targetDistance < _iConfig.animDistanceOffset_mm + _iConfig.inPlayDistance_mm){
+    _dVars.target.isInPlay = true;
+  }
+
+  if((_dVars.targetDistance < _iConfig.animDistanceOffset_mm + _iConfig.nominalPounceDistance_mm) &&
+     (!_dVars.target.isInPounceRange)){
+    _dVars.target.isInPounceRange = true;
+    float pounceDelay = GetRNG().RandDblInRange(_iConfig.pounceDelayTimeMin_s, _iConfig.pounceDelayTimeMax_s);
+    _dVars.pounceTime = GetCurrentTimeInSeconds() + pounceDelay;
+  } else {
+    _dVars.target.isInPounceRange = false;
+  }
+
+  _dVars.target.isInInstaPounceRange = 
+    _dVars.targetDistance < _iConfig.animDistanceOffset_mm + _iConfig.instaPounceDistance_mm;
+
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorKeepaway::UpdateTargetMotion()
+{
+  const ObservableObject* targetObject = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
+
+  if(TargetHasMoved(targetObject)){
+    _dVars.targetLastMovedTime_s = GetCurrentTimeInSeconds();
+    _dVars.target.isNotMoving = false;
+
+  } else {
+    float timeSinceTargetMoved = GetCurrentTimeInSeconds() - _dVars.targetLastMovedTime_s;
+    _dVars.target.isNotMoving = timeSinceTargetMoved > _iConfig.targetUnmovedCreepTimeout_s;
+
+    // If the target just stopped moving, computed a random creep delay to drive the transition from Stalking 
+    if((timeSinceTargetMoved > _iConfig.targetUnmovedCreepTimeout_s) &&
+       (false == _dVars.target.isNotMoving)){
+      _dVars.target.isNotMoving = true;
+      float creepDelay = GetRNG().RandDblInRange(_iConfig.creepDelayTimeMin_s, _iConfig.creepDelayTimeMax_s);
+      _dVars.creepTime = GetCurrentTimeInSeconds() + creepDelay;
+    }
+
+    // Also check if we want to end the game due to player inactivity
+    if((_dVars.target.isNotMoving) && 
+       (_iConfig.targetUnmovedGameEndTimeout_s > 0.0f) &&
+       (timeSinceTargetMoved > _iConfig.targetUnmovedGameEndTimeout_s)){
+      PRINT_CH_INFO(kLogChannelName,
+                    "BehaviorKeepaway.GameEndTimeout", 
+                    "Victor got bored and quit because no one was playing with him...");
+      _dVars.victorIsBored = true;
+    }
+  }
+}
+
+bool BehaviorKeepaway::TargetHasMoved(const ObservableObject* targetObject)
+{
+  // See if we can check this as an active object first
+  ActiveObject* targetActiveObject = GetBEI().GetBlockWorld().GetConnectedActiveObjectByID(targetObject->GetID());
+  if(nullptr != targetActiveObject){
+    // See if its reporting movement
+    return targetActiveObject->IsMoving();
+  }
+
+  // Target is not connected, lets see if we can check for movement by pose
+  // If we can't validate that it has moved due to pose parenting changes, assume it hasn't moved
+  bool hasMoved = false;
+  Pose3d throwaway;
+  Radians angleThreshold;
+  angleThreshold.setDegrees(_iConfig.targetUnmovedAngle_deg);
+  hasMoved = !targetObject->GetPose().IsSameAs(_dVars.targetPrevPose, 
+                                        _iConfig.targetUnmovedDistance_mm,
+                                        angleThreshold);
+  _dVars.targetPrevPose = targetObject->GetPose();
+
+  return hasMoved;
+}
+
 bool BehaviorKeepaway::PitchIndicatesPounceSuccess() const
 {
   if (GetBEI().GetRobotInfo().GetPitchAngle().getDegrees() > _dVars.pounceSuccessPitch_deg){
@@ -641,13 +624,8 @@ bool BehaviorKeepaway::PitchIndicatesPounceSuccess() const
   return false;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorKeepaway::StartIdleAnimation()
+void BehaviorKeepaway::StartIdleAnimation(const AnimationTrigger& idleAnimationTrigger)
 {
-  AnimationTrigger idleAnimationTrigger = (PounceReadyState::Ready == _dVars.pounceReadyState) ?
-                                          AnimationTrigger::CubePounceIdleLiftUp :
-                                          AnimationTrigger::CubePounceIdleLiftDown;
-
   if(IsControlDelegated()){
     PRINT_NAMED_ERROR("BehaviorKeepaway.InvalidStartIdleAnimationCall",
                       "Attempted to loop an idle animation while the behavior had already delegated control");
@@ -655,25 +633,26 @@ void BehaviorKeepaway::StartIdleAnimation()
     return;
   }
   DelegateIfInControl(new TriggerAnimationAction(idleAnimationTrigger),
-                      &BehaviorKeepaway::StartIdleAnimation);
+                      [this, idleAnimationTrigger](){
+                        if(!IsControlDelegated()){
+                          StartIdleAnimation(idleAnimationTrigger);
+                        }
+                      });
   _dVars.isIdling = true;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorKeepaway::StopIdleAnimation()
 {
   if(_dVars.isIdling){
-    bool allowCallback = false;
-    CancelDelegates(allowCallback);
+    CancelDelegates(kAllowCallback);
     _dVars.isIdling = false;
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 float BehaviorKeepaway::GetCurrentTimeInSeconds() const
 {
   return BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -16,8 +16,7 @@
 #include "util/helpers/boundedWhile.h"
 
 namespace Anki {
-namespace Vector {
-namespace Anim {
+namespace Cozmo {
 
 // How long to wait before the lights should start glitching
 CONSOLE_VAR(u32, kGlitchLightDelay_ms,    "GlitchLights", 200);
@@ -43,13 +42,13 @@ void BackpackLayerManager::GenerateGlitchLights(Animations::Track<BackpackLights
   BackpackLightsKeyFrame frame;
   frame.SetLights(lights);
   frame.SetDuration(kGlitchLightDelay_ms);
-  frame.SetTriggerTime_ms(0);
+  frame.SetTriggerTime(0);
   track.AddKeyFrameToBack(frame);
   
   // Turn middle light on
   lights.colors[(int)LEDId::LED_BACKPACK_MIDDLE] = NamedColors::RED;
   frame.SetLights(lights);
-  frame.SetTriggerTime_ms(kGlitchLightDelay_ms);
+  frame.SetTriggerTime(kGlitchLightDelay_ms);
   frame.SetDuration(kGlitchLightDuration_ms);
   track.AddKeyFrameToBack(frame);
   
@@ -65,7 +64,7 @@ void BackpackLayerManager::GenerateGlitchLights(Animations::Track<BackpackLights
   int rand = GetRNG().RandInt((int)backpackLightsToPickFrom.size());
   lights.colors[backpackLightsToPickFrom[rand]] = NamedColors::RED;
   frame.SetLights(lights);
-  frame.SetTriggerTime_ms(kGlitchLightDuration_ms + kGlitchLightDelay_ms);
+  frame.SetTriggerTime(kGlitchLightDuration_ms + kGlitchLightDelay_ms);
   track.AddKeyFrameToBack(frame);
   
   // Remove the random light from the set of lights we can pick so we don't pick it again
@@ -78,17 +77,16 @@ void BackpackLayerManager::GenerateGlitchLights(Animations::Track<BackpackLights
   rand = GetRNG().RandInt((int)backpackLightsToPickFrom.size());
   lights.colors[backpackLightsToPickFrom[rand]] = NamedColors::RED;
   frame.SetLights(lights);
-  frame.SetTriggerTime_ms((kGlitchLightDuration_ms*2) + kGlitchLightDelay_ms);
+  frame.SetTriggerTime((kGlitchLightDuration_ms*2) + kGlitchLightDelay_ms);
   track.AddKeyFrameToBack(frame);
   
   // Off lights
   lights.colors.fill(0);
   frame.SetLights(lights);
-  frame.SetTriggerTime_ms((kGlitchLightDuration_ms*3) + kGlitchLightDelay_ms);
+  frame.SetTriggerTime((kGlitchLightDuration_ms*3) + kGlitchLightDelay_ms);
   track.AddKeyFrameToBack(frame);
    */
 }
-
-}  
+  
 }
 }

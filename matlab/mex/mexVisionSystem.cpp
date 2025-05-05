@@ -5,7 +5,7 @@
 
 using namespace Anki;
 
-static Vector::VisionSystem* visionSystem = nullptr;
+static Cozmo::VisionSystem* visionSystem = nullptr;
 
 void Clear()
 {
@@ -21,7 +21,7 @@ Result Update(const mxArray* mxImg)
   mxArray2cvMatScalar(mxImg, cvImg);
   
   // Using bogus robot state
-  Vector::MessageRobotState robotState;
+  Cozmo::MessageRobotState robotState;
   
   Vision::Image img(cvImg);
   
@@ -53,7 +53,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mxGetString(prhs[1], modelPathBuf, modelPathLen);
     
     Clear();
-    visionSystem = new Vector::VisionSystem(modelPathBuf);
+    visionSystem = new Cozmo::VisionSystem(modelPathBuf);
     
     mexMakeMemoryPersistent(visionSystem);
 

@@ -6,88 +6,96 @@
   "socializeKnownFaceCooldown_s": 1800.0,
   "playWithCubeCooldown_s": 600.0,
   "playWithCubeOnChargerCooldown_s": 2400.0,
-  "maxFaceDistanceToSocialize_mm": 1000.0,
+  "goToSleepTimeout_s": 1200.0,
+  "minFaceTimeToAllowSleep_s": 600.0,
+  "maxFaceDistanceToSocialize_mm": 500.0,
 
   "initialState": "ObservingOnCharger",
 
   "resumeReplacements": {
-  },
-  // these are evaluated after resumeReplacements and override them
-  "postBehaviorSuggestionResumeOverrides": {
-    "Socialize": "Socializing",
-    "PlayWithCube": "PlayingWithCube",
-    "Nothing": "Observing",
-
-    // should be handled higher up the tree, but in case we get stuck down here with one of these, just go to
-    // observing
-    "Sleep": "Observing",
-    "SleepOnCharger": "ObservingOnCharger"
+    "Napping" : "ObservingOnCharger"
   },
 
   "states": [
     {
       "name": "ObservingOnCharger",
-      "behavior": "ObservingOnCharger"
+      "behavior": "ObservingOnCharger",
+      "debugColor": "ORANGE"
     },
     {
       "name": "ObservingOnChargerRecentlyPlaced",
       "behavior": "ObservingOnCharger",
-      "getInBehavior": "ObservingOnChargerGetIn",
-      "resetBehaviorTimer": "ObservingOnCharger"
+      "debugColor": "RED"
     },
     {
-      "name": "ObservingDriveOffCharger",
-      "behavior": "ObservingDriveOffCharger",
-      "getInBehavior": "ObservingOnChargerGetOut"
+      "name": "DriveOffChargerIntoObserving",
+      "behavior": "DriveOffChargerIntoObserving"
     },
     {
       "name": "DriveOffChargerIntoSocializing",
-      "behavior": "DriveOffChargerIntoSocializing",
-      "getInBehavior": "ObservingOnChargerGetOut"
-    },    
+      "behavior": "DriveOffChargerIntoSocializing"
+    },
+    {
+      "name": "DriveOffChargerIntoPlay",
+      "behavior": "DriveOffChargerIntoPlay"
+    },
     {
       "name": "Observing",
       "behavior": "Observing",
-      "resetBehaviorTimer": "ObservingOffCharger"
-    },
-    {
-      "name": "Exploring",
-      "behavior": "Exploring",
-      "getInBehavior": "ExploringGetIn",
-      "ensureMinStimValue": 0.5 // will bring stim up to this value if it's below when this state starts
-    },
-    {
-      "name": "ExploringVoiceCommand",
-      "behavior": "ExploringVoiceCommand",
-      "getInBehavior": "ExploringGetIn",
-      "activateIntent": "explore_start"
-    },
-    {
-      "name": "InvestigateHeldCube",
-      "behavior": "InvestigateHeldCube"
+      "debugColor": "BLUE"
     },
     {
       "name": "Socializing",
-      "behavior": "Socialize"
+      "behavior": "Socialize",
+      "debugColor": "MAGENTA"
     },
     {
       "name": "PlayingWithCube",
-      "behavior": "PlayWithCube"
-    }
-  ],
-
-  "stateTimerConditions": [
-    {
-      "name": "BoredOfObserving",
-      "begin_s": 1100.0
+      "behavior": "PlayWithCube",
+      "debugColor": "DARKGREEN"
     },
     {
-      "name": "BoredOfExploring",
-      "begin_s": 600.0
+      "name": "RollCube",
+      "behavior": "RollCubeVoiceCommand",
+      "clearIntent": "play_specific"
     },
     {
-      "name": "NoLongerRecentlyPlaced",
-      "begin_s": 150.0
+      "name": "Napping",
+      "behavior": "Sleeping",
+      "debugColor": "GREEN",
+      "clearIntent": "system_sleep"
+    },
+    {
+      "name": "NappingOnCharger",
+      "behavior": "Sleeping",
+      "debugColor": "GREEN",
+      "clearIntent": "system_sleep"
+    },
+    {
+      "name": "WakingUp",
+      "behavior": "SleepingWakeUp"
+    },
+    {
+      "name": "ReturningToCharger",
+      "behavior": "FindAndGoToHome",
+      "debugColor": "WHITE",
+      "clearIntent": "system_charger"
+    },
+    {
+      "name": "FailedToFindCharger",
+      "behavior": "ObservingFailedToFindCharger"
+    },
+    {
+      "name": "FistBump",
+      "behavior": "FistBumpVoiceCommand",
+      "debugColor": "WHITE",
+      "clearIntent": "play_specific"
+    },
+    {
+      "name": "Keepaway",
+      "behavior": "KeepawayVoiceCommand",
+      "debugColor": "YELLOW",
+      "clearIntent": "play_specific"
     }
   ],
 
@@ -100,119 +108,33 @@
         {
           "to": "Observing",
           "condition": {
-            "conditionType": "Compound",
-            "not": {
-              "conditionType": "OnChargerPlatform"
+            "conditionType": "Negate",
+            "operand": {
+              "conditionType": "OnCharger"
             }
           }
-        },
+        },        
         {
           "to": "DriveOffChargerIntoSocializing",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "CloseFaceForSocializing"
-              },
-              {
-                "conditionType": "Emotion",
-                "emotion": "Stimulated",
-                "min": 0.7
-              },
-              {
-                "conditionType": "Compound",
-                "not": {
-                  "conditionType": "EngineErrorCodeReceived",
-                  "engineErrorCode": "ImageQualityTooDark"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "to": "InvestigateHeldCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "conditionType": "UserIsHoldingCube"
-              },
-              {
-                "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
-                "maxAge_ms" : 1000
-              },
-              {
-                "conditionType": "FeatureGate",
-                "feature": "ReactToHeldCube"
-              },
-              {
-                "conditionType": "Compound",
-                "not":
-                {
-                  "conditionType": "BatteryLevel",
-                  "targetBatteryLevel" : "Low"
-                }
-              }
-            ]
-          }
+          "preDefinedStrategyName": "CloseFaceForSocializing"
         }
       ],
       "nonInterruptingTransitions": [
         {
-          "to": "ObservingDriveOffCharger",
+          "to": "DriveOffChargerIntoObserving",
           "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "BoredOfObserving"
-              },
-              {
-                "conditionType": "SimpleMood",
-                "mood": "HighStim"
-              },
-              {
-                "conditionType": "Compound",
-                "not": {
-                  "conditionType": "EngineErrorCodeReceived",
-                  "engineErrorCode": "ImageQualityTooDark"
-                }
-              }
-            ]
+            "conditionType": "TimerInRange",
+            "begin_s": 1100.0,
+            "manualResetOnly": true
           }
         },
         {
-          "to": "ObservingDriveOffCharger",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "WantsToLeaveChargerForPlay"
-              },
-              {
-                "conditionType": "SimpleMood",
-                "mood": "HighStim"
-              },
-              {
-                "conditionType": "Compound",
-                "not": {
-                  "conditionType": "EngineErrorCodeReceived",
-                  "engineErrorCode": "ImageQualityTooDark"
-                }
-              }
-            ]
-          }
-        }        
-      ],
-      "exitTransitions": [
+          "to": "DriveOffChargerIntoPlay",
+          "preDefinedStrategyName": "NeedsToLeaveChargerForPlay"
+        },
         {
-          "to": "Observing",
-          "condition": {
-            "conditionType": "Compound" ,
-            "not": {
-              "conditionType": "OnCharger"
-            }
-          }
+          "to": "NappingOnCharger",
+          "preDefinedStrategyName": "WantsToSleep"
         }
       ]
     },
@@ -224,96 +146,21 @@
         {
           "to": "Observing",
           "condition": {
-            "conditionType": "Compound",
-            "not": {
-              "conditionType": "OnChargerPlatform"
+            "conditionType": "Negate",
+            "operand": {
+              "conditionType": "OnCharger"
             }
-          }
-        },
-        {
-          "to": "InvestigateHeldCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "conditionType": "UserIsHoldingCube"
-              },
-              {
-                "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
-                "maxAge_ms" : 1000
-              },
-              {
-                "conditionType": "FeatureGate",
-                "feature": "ReactToHeldCube"
-              },
-              {
-                "conditionType": "Compound",
-                "not":
-                {
-                  "conditionType": "BatteryLevel",
-                  "targetBatteryLevel" : "Low"
-                }
-              }
-            ]
           }
         }
       ],
-      "nonInterruptingTransitions": [
+      "nonInterruptingTransitions": [        
         {
           "to": "ObservingOnCharger",
           "condition": {
-            "customCondition": "NoLongerRecentlyPlaced"
+            "conditionType": "TimerInRange",
+            "begin_s": 1200.0,
+            "manualResetOnly": true
           }
-        }
-      ],
-      "exitTransitions": [
-        {
-          "to": "Observing",
-          "condition": {
-            "conditionType": "Compound",
-            "not": {
-              "conditionType": "OnCharger"
-            }
-          }
-        }
-      ]
-    },
-
-    {
-      "from": [
-        "Observing",
-        "Socializing",
-        "DriveOffChargerIntoSocializing",
-        "PlayingWithCube",
-        "Exploring",
-        "InvestigateHeldCube"
-      ],
-      "interruptingTransitions": [
-        {
-          "to": "ObservingOnChargerRecentlyPlaced",
-          "condition": {
-            "conditionType": "OnCharger"
-          },
-          "emotionEvent": "PlacedOnCharger"
-        }
-      ]
-    },
-
-    {
-      "from": [
-        "ExploringVoiceCommand"
-      ],
-      "interruptingTransitions": [
-        {
-          "to": "ObservingOnChargerRecentlyPlaced",
-          "condition": {
-            "conditionType": "BecameTrueThisTick",
-            "subCondition": {
-              "conditionType": "OnCharger"
-            }
-          },
-          "emotionEvent": "PlacedOnCharger"
         }
       ]
     },
@@ -322,190 +169,40 @@
       "from": "Observing",
       "interruptingTransitions": [
         {
-          "to": "Socializing",
+          "to": "ObservingOnChargerRecentlyPlaced",
           "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "CloseFaceForSocializing"
-              },
-              {
-                "conditionType": "Emotion",
-                "emotion": "Stimulated",
-                "min": 0.5
-              }
-            ]
+            "conditionType": "OnCharger"
           }
+        },
+        {
+          "to": "Socializing",
+          "preDefinedStrategyName": "CloseFaceForSocializing"
         },
         {
           "to": "PlayingWithCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "CloseCubeForPlaying"
-              },
-              {
-                "conditionType": "SimpleMood",
-                "mood": "HighStim"
-              },
-              {
-                "conditionType": "Compound",
-                "not": { "conditionType": "RobotInHabitat" }
-              }
-            ]
-          }
+          "preDefinedStrategyName": "CloseCubeForPlaying"
         }
       ],
       "nonInterruptingTransitions": [
         {
-          "to": "Exploring",
+          "to": "ReturningToCharger",
           "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "conditionType": "FeatureGate",
-                "feature": "Exploring" 
-              },
-              {
-                "customCondition": "ExploringCooldownMet"
-              },
-              {
-                "conditionType": "Compound",
-                "not": { "conditionType": "RobotInHabitat" }
-              }
-            ]
+            "conditionType": "BatteryLevel",
+            "targetBatteryLevel": "Low"
           }
         }
       ]
     },
 
     {
-      "from": "Exploring",
+      "from": "Socializing",
       "interruptingTransitions": [
         {
-          "to": "Socializing",
+          "to": "ObservingOnChargerRecentlyPlaced",
           "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "CloseFaceForSocializing"
-              },
-              {
-                "conditionType": "Emotion",
-                "emotion": "Stimulated",
-                "min": 0.7
-              }
-            ]
-          }
-        },
-        {
-          // recently put down (we can't consider picked up since an interruption handles that)
-          "to": "Observing",
-          "condition": {
-            "conditionType": "OffTreadsState",
-            "targetState": "OnTreads",
-            "maxTimeSinceChange_ms": 3100 // fragile: the put down behavior lasts 3000.
+            "conditionType": "OnCharger"
           }
         }
-      ],
-      "nonInterruptingTransitions": [
-        {
-          "to": "Observing",
-          "condition":
-          {
-            "conditionType": "SimpleMood",
-            "mood": "LowStim"
-          }
-        }
-      ]
-    },
-
-    {
-      "from": [
-        "ExploringVoiceCommand", 
-        "Exploring" // stimulation decay should happen before this, but just in case it's continually stimulated while exploring
-      ],
-      "nonInterruptingTransitions": [
-        {
-          "to": "Observing",
-          "condition": {
-            "customCondition": "BoredOfExploring"
-          }
-        }
-      ]
-    },
-
-    {
-      "from": [
-        "Observing",
-        "Socializing",
-        "PlayingWithCube",
-        "Exploring"
-      ],
-      "interruptingTransitions": [
-        {
-          "to": "InvestigateHeldCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "conditionType": "UserIsHoldingCube"
-              },
-              {
-                "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
-                "maxAge_ms" : 1000
-              },
-              {
-                "conditionType": "FeatureGate",
-                "feature": "ReactToHeldCube"
-              }
-            ]
-          }
-        }
-      ]
-    },
-
-    {
-      // same as above transitions into InvestigateHeldCube, but waits a little longer
-      // so that a cube doesn't pull it out of exploring for a minute
-      "from": "ExploringVoiceCommand",
-      "interruptingTransitions": [
-        {
-          "to": "InvestigateHeldCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "conditionType": "TimerInRange",
-                "begin_s": 60.0
-              },
-              {
-                "conditionType": "UserIsHoldingCube"
-              },
-              {
-                "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
-                "maxAge_ms" : 1000
-              },
-              {
-                "conditionType": "FeatureGate",
-                "feature": "ReactToHeldCube"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    
-    {
-      "from": [
-        "Socializing",
-        "PlayingWithCube",
-        "Exploring",
-        "ExploringVoiceCommand",
-        "InvestigateHeldCube"
       ],
       "exitTransitions": [
         {
@@ -518,37 +215,51 @@
     },
 
     {
-      "from": "ObservingDriveOffCharger",
+      "from": "PlayingWithCube",
+      "interruptingTransitions": [
+        {
+          "to": "ObservingOnChargerRecentlyPlaced",
+          "condition": {
+            "conditionType": "OnCharger"
+          }
+        }
+      ],
       "exitTransitions": [
         {
-          // even though we weren't planning to socialize, if we can now then we should (socializing is important)
-          "to": "Socializing",
+          "to": "Observing",
           "condition": {
-            "customCondition": "CloseFaceForSocializing"
+            "conditionType": "TrueCondition" 
           }
+        }
+      ]
+    },
+
+    {
+      "from": "DriveOffChargerIntoObserving",
+      "exitTransitions": [
+        {
+          "to": "Socializing",
+          "preDefinedStrategyName": "CloseFaceForSocializing"
         },
+        {
+          // fall back to observing if can't find a face after driving off the charger
+          "to": "Observing",
+          "condition": {
+            "conditionType": "TrueCondition"
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "DriveOffChargerIntoPlay",
+      "exitTransitions": [
         {
           "to": "PlayingWithCube",
-          "condition": {
-            "conditionType": "Compound",
-            "and": [
-              {
-                "customCondition": "CloseCubeForPlaying"
-              },
-              {
-                // NOTE: it's possible that stim dropped during the driving off of the charger, in this case we'll
-                // fall back to observing but any additional stim should quickly get us back into playing range
-                "conditionType": "SimpleMood",
-                "mood": "HighStim"
-              },
-              {
-                "conditionType": "Compound",
-                "not": { "conditionType": "RobotInHabitat" }
-              }
-            ]
-          }
+          "preDefinedStrategyName": "CloseCubeForPlaying"
         },
         {
+          // fall back to observing if can't find a cube after driving off the charger
           "to": "Observing",
           "condition": {
             "conditionType": "TrueCondition"
@@ -568,28 +279,425 @@
         }
       ]
     },
+    
+    {
+      "from": "NappingOnCharger",
+      "interruptingTransitions": [
+        {
+          "to": "WakingUp",
+          "condition": {
+            "conditionType": "Negate",
+            "operand": {
+              "conditionType": "OnCharger"
+            }
+          }
+        },
+        {
+          "to": "ObservingOnCharger",
+          "condition": {
+            "conditionType": "TriggerWordPending"
+          }
+        }
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "WakingUp",
+          "condition": {
+            "conditionType": "TimerInRange",
+            "begin_s": 14400.0,
+            "manualResetOnly": true
+          }
+        }
+      ]
+    },
 
+    {
+      "from": "Napping",
+      "interruptingTransitions": [
+        {
+          "to": "WakingUp",
+          "condition": {
+            "conditionType": "OnCharger"
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "WakingUp",
+      "exitTransitions": [
+        {
+          "to": "ObservingOnCharger",
+          "condition": {
+            "conditionType": "TrueCondition" 
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "ReturningToCharger",
+      "interruptingTransitions": [
+        {
+          "to": "Observing",
+          "condition": {
+            "conditionType": "OffTreadsState",
+            "targetState": "InAir"
+          }
+        }
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "FailedToFindCharger",
+          "condition": {
+            "conditionType": "TimerInRange",
+            "begin_s": 300.0,
+            "manualResetOnly": true
+          }
+        }
+      ],
+      "exitTransitions": [
+        {
+          "to": "ObservingOnChargerRecentlyPlaced",
+          "condition": {
+            "conditionType": "OnCharger"
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "FailedToFindCharger",
+      "interruptingTransitions": [
+        {
+          "to": "ReturningToCharger",
+          "preDefinedStrategyName": "ChargerLocated"
+        }
+      ],
+      "exitTransitions": [
+        {
+          "to": "ObservingOnChargerRecentlyPlaced",
+          "condition": {
+            "conditionType": "OnCharger"
+          }
+        },
+        {
+          "to": "Napping",
+          "condition": {
+            "conditionType": "TrueCondition" 
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "FistBump",
+      "exitTransitions": [
+        {
+          "to": "Socializing",
+          "condition": {
+            "conditionType": "TrueCondition"
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "Keepaway",
+      "exitTransitions": [
+        {
+          "to": "Socializing",
+          "condition": {
+            "conditionType": "TrueCondition"
+          }
+        }
+      ]
+    },
+
+    {
+      "from": "RollCube",
+      "exitTransitions": [
+        {
+          "to": "Observing",
+          "condition": {
+            "conditionType": "TrueCondition"
+          }
+        }
+      ]
+    },
 
     //***************************
     // VOICE COMMANDS   
-    //***************************
+    //*************************** 
 
-    // explore voice command
+    // go to your charger
     {
-      "from": "*",
+      "from": [
+        "DriveOffChargerIntoObserving",
+        "DriveOffChargerIntoSocializing",
+        "DriveOffChargerIntoPlay",
+        "FistBump",
+        "Keepaway",
+        "Observing",
+        "ReturningToCharger", // to avoid unclaimed intent
+        "Socializing",
+        "RollCube",
+        "Keepaway"
+      ],
       "interruptingTransitions": [
         {
-          "to": "ExploringVoiceCommand",
+          "to": "ReturningToCharger",
           "condition": {
             "conditionType": "UserIntentPending",
             "list": [
-              {"type": "explore_start"}
+              {"type": "system_charger"}
             ]
           }
         }
       ]
-    }
+    },
+    {
+      "from": [
+        "PlayingWithCube"
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "ReturningToCharger",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {"type": "system_charger"}
+            ]
+          }
+        }
+      ]
+    },
 
+    // do a fist bump
+    {
+      "from": [
+        "ObservingOnCharger",
+        "ObservingOnChargerRecentlyPlaced",
+        "DriveOffChargerIntoObserving",
+        "DriveOffChargerIntoSocializing",
+        "DriveOffChargerIntoPlay",
+        "FistBump",
+        "Keepaway",
+        "Observing",
+        "Socializing",
+        "WakingUp",
+        "ReturningToCharger",
+        "FailedToFindCharger"
+      ],
+      "interruptingTransitions": [
+        {
+          "to": "FistBump",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "fist_bump"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "from": [
+        "PlayingWithCube",
+        "RollCube"
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "FistBump",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "fist_bump"
+              }
+            ]
+          }
+        }
+      ]
+    },
+
+    // Play Keepaway
+    {
+      "from": [
+        "ObservingOnCharger",
+        "ObservingOnChargerRecentlyPlaced",
+        "DriveOffChargerIntoObserving",
+        "DriveOffChargerIntoSocializing",
+        "DriveOffChargerIntoPlay",
+        "FistBump",
+        "Keepaway",
+        "Observing",
+        "Socializing",
+        "WakingUp",
+        "ReturningToCharger",
+        "FailedToFindCharger"
+      ],
+      "interruptingTransitions": [
+        {
+          "to": "Keepaway",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "keep_away"
+              }
+            ]
+          }
+        }
+      ]
+
+    },
+    {
+      "from": [
+        "PlayingWithCube",
+        "RollCube"
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "Keepaway",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "keep_away"
+              }
+            ]
+          }
+        }
+      ]
+    },
+
+    // go to sleep off charger
+    {
+      "from": [
+        "DriveOffChargerIntoObserving",
+        "DriveOffChargerIntoSocializing",
+        "DriveOffChargerIntoPlay",
+        "FistBump",
+        "Keepaway",
+        "Observing",
+        "Socializing",
+        "WakingUp",
+        "ReturningToCharger",
+        "FailedToFindCharger",
+        "PlayingWithCube",
+        "RollCube"
+      ],
+      "interruptingTransitions": [
+        {
+          "to": "Napping",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {"type": "system_sleep"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "from": [
+        "PlayingWithCube",
+        "RollCube"
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "Napping",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {"type": "system_sleep"}
+            ]
+          }
+        }
+      ]
+    },
+
+    // go to sleep on charger
+    {
+      "from": [
+        "ObservingOnCharger",
+        "ObservingOnChargerRecentlyPlaced"
+      ],
+      "interruptingTransitions": [
+        {
+          "to": "NappingOnCharger",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {"type": "system_sleep"}
+            ]
+          }
+        }
+      ]
+    },
+
+    // roll cube
+    {
+      "from": [
+        "ObservingOnCharger",
+        "ObservingOnChargerRecentlyPlaced",
+        "DriveOffChargerIntoObserving",
+        "DriveOffChargerIntoSocializing",
+        "DriveOffChargerIntoPlay",
+        "FistBump",
+        "Keepaway",
+        "Observing",
+        "Socializing",
+        "WakingUp",
+        "ReturningToCharger",
+        "FailedToFindCharger",
+        "PlayingWithCube",
+        "RollCube"
+      ],
+      "interruptingTransitions": [
+        {
+          "to": "RollCube",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "roll_cube"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "from": [
+        "FistBump",
+        "Keepaway"
+      ],
+      "nonInterruptingTransitions": [
+        {
+          "to": "RollCube",
+          "condition": {
+            "conditionType": "UserIntentPending",
+            "list": [
+              {
+                "type": "play_specific",
+                "entity_behavior": "roll_cube"
+              }
+            ]
+          }
+        }
+      ]
+
+    }
+    
   ]
 
 }

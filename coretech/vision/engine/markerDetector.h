@@ -14,7 +14,7 @@
 #define __Anki_Vision_MarkerDetector_H__
 
 #include "coretech/common/shared/types.h"
-#include "coretech/common/shared/math/rect_fwd.h"
+#include "coretech/common/engine/math/rect.h"
 
 #include "coretech/vision/engine/visionMarker.h"
 
@@ -39,7 +39,10 @@ public:
   Result Init(s32 numRows, s32 numCols);
   
   Result Detect(const Image& inputImage, std::list<ObservedMarker>& observedMarkers);
-    
+  
+  // Returns true when looking for dark-on-light markers, false for light-on-dark mode.
+  static bool IsDarkOnLight();
+  
 private:
 
   const Camera&           _camera;

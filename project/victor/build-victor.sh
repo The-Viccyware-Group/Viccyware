@@ -12,16 +12,14 @@ function usage() {
     echo "  -h                      print this message"
     echo "  -v                      print verbose output"
     echo "  -c [CONFIGURATION]      build configuration {Debug,Release}"
-    echo "  -p [PLATFORM]           build target platform {mac,vicos}"
+    echo "  -p [PLATFORM]           build target platform {android,mac}"
     echo "  -a                      append cmake platform argument {arg}"
-    echo "  -g [GENERATOR]          CMake generator {Ninja,Xcode,Makefiles}"
+    echo "  -g [GENERATOR]          CMake generator {Ninja,Xcode,Makefile}"
     echo "  -f                      force-run filelist updates and cmake configure before building"
     echo "  -X                      delete build assets, forcing assets to be re-copied"
     echo "  -d                      DEBUG: generate file lists and exit"
     echo "  -x [CMAKE_EXE]          path to cmake executable"
     echo "  -C                      generate build config and exit without building"
-    echo "  -D                      Define a cmake variable from the command-line"
-    echo "                          Those that match the ANKI_* pattern will be made into #defines for all targets"
     echo "  -F [FEATURE]            enable feature {factoryTest,factoryTestDev}"
     echo "  -T                      list all cmake targets"
     echo "  -t [target]             build specified cmake target"
@@ -38,20 +36,18 @@ CONFIGURE=0
 GEN_SRC_ONLY=0
 RM_BUILD_ASSETS=0
 RUN_BUILD=1
-RUN_INSTALL=1
 CMAKE_TARGET=""
 EXPORT_COMPILE_COMMANDS=0
 IGNORE_EXTERNAL_DEPENDENCIES=0
 BUILD_SHARED_LIBS=1
 
 CONFIGURATION=Debug
-PLATFORM=vicos
+PLATFORM=android
 GENERATOR=Ninja
 FEATURES=""
-DEFINES=""
 ADDITIONAL_PLATFORM_ARGS=()
 
-while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
+while getopts ":x:c:p:a:t:g:F:hvfdCTeISX" opt; do
     case $opt in
         h)
             usage
@@ -66,11 +62,6 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
         C)
             CONFIGURE=1
             RUN_BUILD=0
-            ;;
-        D)
-            # -D defines on the command-line will force a reconfigure, save any dev gotchas
-            CONFIGURE=1
-            DEFINES="${DEFINES} -D${OPTARG}"
             ;;
         d)
             CONFIGURE=1
@@ -98,12 +89,10 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
             GENERATOR="${OPTARG}"
             ;;
         F)
-            CONFIGURE=1
             FEATURES="${FEATURES} ${OPTARG}"
             ;;
         t)
             CMAKE_TARGET="${OPTARG}"
-            RUN_INSTALL=0
             ;;
         e)
             EXPORT_COMPILE_COMMANDS=1
@@ -129,41 +118,11 @@ done
 shift $(($OPTIND - 1))
 
 #
-# Run everything from ${TOPLEVEL}, even if invoked from somewhere else
-cd ${TOPLEVEL}
-
-#
-# Verify tflite files were downloaded correctly via git lfs
-#
-
-function usage_fix_lfs() {
-    echo "$1 is not a valid .tflite file!!!"
-    echo "Probably a problem with your git lfs setup.  Try the following to fix it...."
-    echo ""
-    echo "git lfs uninstall  # Remove Git LFS hooks and filters"
-    echo "rm $f              # Delete borked file"
-    echo "git stash          # Save your work in progress"
-    echo "git reset --hard   # This will wipe out your work in progress, hope you stashed"
-    echo "git lfs install    # Install Git LFS configuration"
-    echo "git lfs pull       # Fetch Git LFS changes from remote & checkout required files"
-    echo "git stash apply    # This will grab changes from your stash"
-    exit 1
-}
-
-for f in `git ls-files *.tflite`; do
-    egrep -q TFL3 $f || usage_fix_lfs $f
-done
-
-
-#
 # settings
 #
 
 if [ -z "${CMAKE_EXE+x}" ]; then
-    echo "Attempting to install cmake"
-    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 3.20.6
-    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 3.20.6`
-    echo ${CMAKE_EXE}
+    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 3.9.6`
 fi
 
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
@@ -187,29 +146,6 @@ case "${CONFIGURATION}" in
     ;;
   *)
     echo "${SCRIPT_NAME}: Unknown configuration '${CONFIGURATION}'"
-    usage
-    exit 1
-    ;;
-esac
-
-#
-# Validate generator
-#
-case "${GENERATOR}" in
-  [Nn][Ii][Nn][Jj][Aa])
-    GENERATOR="Ninja"
-    ;;
-  [Xx][Cc][Oo][Dd][Ee])
-    GENERATOR="Xcode"
-    ;;
-  [Mm][Aa][Kk][Ee][Ff][Ii][Ll][Ee][Ss])
-    GENERATOR="Makefiles"
-    ;;
-  "Unix Makefiles")
-    GENERATOR="Makefiles"
-    ;;
-  *)
-    echo "${SCRIPT_NAME}: Unknown generator '${GENERATOR}'"
     usage
     exit 1
     ;;
@@ -251,7 +187,7 @@ fi
 
 # For non-ninja builds, add generator type to build dir
 BUILD_SYSTEM_TAG=""
-if [ "${GENERATOR}" != "Ninja" ]; then
+if [ ${GENERATOR} != "Ninja" ]; then
     BUILD_SYSTEM_TAG="-${GENERATOR}"
 fi
 : ${BUILD_DIR:="${TOPLEVEL}/_build/${PLATFORM}/${CONFIGURATION}${BUILD_SYSTEM_TAG}"}
@@ -261,9 +197,9 @@ case ${GENERATOR} in
         PROJECT_FILE="build.ninja"
         ;;
     "Xcode")
-        PROJECT_FILE="victor.xcodeproj"
+        PROJECT_FILE="cozmo.xcodeproj"
         ;;
-    "Makefiles")
+    "Makefile")
         PROJECT_FILE="Makefile"
         GENERATOR="CodeBlocks - Unix Makefiles"
       ;;
@@ -285,12 +221,28 @@ fi
 
 : ${CMAKE_MODULE_DIR:="${TOPLEVEL}/cmake"}
 
-if [[ ! -f ${CMAKE_EXE} ]]; then
+if [ ! -f ${CMAKE_EXE} ]; then
   echo "Missing CMake executable: ${CMAKE_EXE}"
   echo "Fetch the required CMake version by running ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py"
   echo "Alternatively, specify a CMake executable using the -x flag."
   exit 1
 fi
+
+if [ -z "${GOROOT+x}" ]; then
+    GO_EXE=`tools/build/tools/ankibuild/go.py`
+    export GOROOT=$(dirname $(dirname $GO_EXE))
+else
+    GO_EXE=$GOROOT/bin/go
+fi
+export GOPATH=${TOPLEVEL}/cloud/go
+
+if [ ! -f ${GO_EXE} ]; then
+  echo "Missing Go executable: ${GO_EXE}"
+  echo "Fetch the required Go version by running ${TOPLEVEL}/tools/build/tools/ankibuild/go.py"
+  exit 1
+fi
+
+tools/build/tools/ankibuild/go.py --check-version $GO_EXE
 
 #
 # Remove assets in build directory if requested. This will force the
@@ -310,57 +262,26 @@ fi
 #
 # grab Go dependencies ahead of generating source lists
 #
+# needed for metabuild if we have to run it
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     GEN_SRC_DIR="${TOPLEVEL}/generated/cmake"
-    if [ $CONFIGURE -eq 1 ] ; then
-      rm -rf "${GEN_SRC_DIR}"
-    fi
     mkdir -p "${GEN_SRC_DIR}"
 
     # Scan for BUILD.in files
     METABUILD_INPUTS=`find . -name BUILD.in`
-
-    # # Process BUILD.in files (creates list of Go projects to fetch)
-    # PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
-    #   -o ${GEN_SRC_DIR} \
-    #   ${METABUILD_INPUTS}
 fi
 
-# Set protobuf location
-HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
-if [[ `uname -a` == *"aarch64"* && $HOST == "linux" ]]; then
-	HOST+="-arm64"
+if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
+  echo "Getting Go dependencies"
+  # Process BUILD.in files (creates list of Go projects to fetch)
+  ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
+      -o ${GEN_SRC_DIR} \
+      ${METABUILD_INPUTS}
+  # Check out specified revisions of repositories we've versioned
+  (cd ${TOPLEVEL}; PATH="$PATH:$(dirname $GO_EXE)" ./godeps.js execute ${GEN_SRC_DIR})
+else
+  echo "Ignore Go dependencies"
 fi
-echo $HOST
-PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
-
-# Build protocCppPlugin if needed
-if [[ ! -x ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin ]]; then
-  BUILD_PROTOC_PLUGIN=1
-else 
-  BUILD_PROTOC_PLUGIN=0
-  for f in `find ${TOPLEVEL}/tools/protobuf/plugin -type f`; do
-    if [ "$f" -nt ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin ]; then
-      BUILD_PROTOC_PLUGIN=1
-    fi
-  done
-fi
-if [[ $BUILD_PROTOC_PLUGIN -eq 1 ]]; then
-    ${TOPLEVEL}/tools/protobuf/plugin/make.sh
-fi
-
-
-# Build/Install the protoc generators for go
-# GOBIN="${TOPLEVEL}/cloud/go/bin"
-# if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
-#     echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
-#     GOBIN=$GOBIN \
-#     CC=/usr/bin/cc \
-#     CXX=/usr/bin/c++ \
-#     "${GOROOT}/bin/go" install \
-#     github.com/golang/protobuf/protoc-gen-go \
-#     github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-# fi
 
 #
 # generate source file lists
@@ -401,20 +322,48 @@ if [ $CONFIGURE -eq 1 ]; then
             -DMACOSX=1
             -DANDROID=0
             -DVICOS=0
-            -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/macosx.toolchain.cmake"
+            -DVICOS_STAGING=0
         )
-    elif [ "$PLATFORM" == "vicos" ] ; then
+    elif [ "$PLATFORM" == "android" ]; then
+        #
+        # If ANDROID_NDK is set, use it, else provide default location
+        #
+        if [ -z "${ANDROID_NDK+x}" ]; then
+          ANDROID_NDK=`${TOPLEVEL}/tools/build/tools/ankibuild/android.py`
+        fi
+
+        PLATFORM_ARGS=(
+            -DMACOSX=0
+            -DANDROID=1
+            -DVICOS=0
+            -DVICOS_STAGING=0
+            -DANDROID_NDK="${ANDROID_NDK}"
+            -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/android.toolchain.patched.cmake"
+            -DANDROID_TOOLCHAIN_NAME=clang
+            -DANDROID_ABI='armeabi-v7a with NEON'
+            -DANDROID_NATIVE_API_LEVEL=24
+            -DANDROID_PLATFORM=android-24
+            -DANDROID_STL=c++_shared
+            -DANDROID_CPP_FEATURES='rtti exceptions'
+        )
+    elif [ "$PLATFORM" == "vicos" ] || [ "$PLATFORM" == "vicos-staging" ] ; then
         #
         # If VICOS_SDK is set, use it, else provide default location
         #
         if [ -z "${VICOS_SDK+x}" ]; then
-            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 4.0.0-r05 | tail -1)
+            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 0.8.0-r01 | tail -1)
+        fi
+
+        VICOS_STAGING=0
+        if [ "$PLATFORM" == "vicos-staging" ]; then
+            VICOS_STAGING=1
         fi
 
         PLATFORM_ARGS=(
             -DMACOSX=0
             -DANDROID=0
             -DVICOS=1
+            -DVICOS_STAGING=${VICOS_STAGING}
             -DVICOS_SDK="${VICOS_SDK}"
             -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/vicos.oelinux.toolchain.cmake"
             -DVICOS_CPP_FEATURES='rtti exceptions'
@@ -427,17 +376,17 @@ if [ $CONFIGURE -eq 1 ]; then
 
     # Append additional platrom args
     PLATFORM_ARGS+=(${ADDITIONAL_PLATFORM_ARGS[@]})
-    echo "PLATFORM ARGS $PLATFORM_ARGS"
+
     $CMAKE_EXE ${TOPLEVEL} \
         ${VERBOSE_ARG} \
         -G"${GENERATOR}" \
         -DCMAKE_BUILD_TYPE=${CONFIGURATION} \
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
-        -DPROTOBUF_HOME=${PROTOBUF_HOME} \
+        -DGOPATH=${GOPATH} \
+        -DGOROOT=${GOROOT} \
         -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \
         ${EXPORT_FLAGS} \
         ${FEATURE_FLAGS} \
-        ${DEFINES} \
         "${PLATFORM_ARGS[@]}"
 fi
 
@@ -465,10 +414,6 @@ else
     TARGET_ARG="--target $CMAKE_TARGET"
   fi
   $CMAKE_EXE --build . $TARGET_ARG $*
-  if [[ "$PLATFORM" == "vicos" && $RUN_INSTALL -eq 1 ]]; then
-    # run install target on robot-platforms
-    $CMAKE_EXE --build . --target install
-  fi
 fi
 
 popd > /dev/null 2>&1

@@ -1,9 +1,0 @@
-{
-  "behaviorID" : "ObservingDriveOffCharger",
-  "behaviorClass" : "DispatcherQueue",
-
-  "behaviors": [
-    "DriveOffChargerRandomly",
-    "ShortLookAroundForFaceAndCube"
-  ]
-}

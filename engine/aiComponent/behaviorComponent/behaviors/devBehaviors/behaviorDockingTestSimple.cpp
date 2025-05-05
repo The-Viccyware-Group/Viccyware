@@ -30,10 +30,8 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorDockingTestSimple.h"
-#include "engine/block.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/blockWorld/blockWorldFilter.h"
-#include "engine/components/backpackLights/engineBackpackLightComponent.h"
+#include "engine/components/bodyLightComponent.h"
 #include "engine/components/carryingComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/externalInterface/externalInterface.h"
@@ -42,9 +40,7 @@
 #include "engine/robotManager.h"
 #include "engine/robotToEngineImplMessaging.h"
 #include "clad/types/dockingSignals.h"
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "clad/types/pathMotionProfile.h"
-#include "osState/osState.h"
 #include "util/console/consoleInterface.h"
 #include <ctime>
 
@@ -53,14 +49,14 @@
 #define END_TEST_IN_HANDLER(RESULT, NAME) EndAttempt(robot, RESULT, NAME); return;
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 // This macro uses PRINT_NAMED_INFO if the supplied define (first arg) evaluates to true, and PRINT_NAMED_DEBUG otherwise
 // All args following the first are passed directly to the chosen print macro
 #define BEHAVIOR_VERBOSE_PRINT(_BEHAVIORDEF, ...) do { \
-if ((_BEHAVIORDEF)) { PRINT_CH_INFO("Behaviors",  __VA_ARGS__ ); } \
-else { PRINT_CH_DEBUG("Behaviors",  __VA_ARGS__ ); } \
+if ((_BEHAVIORDEF)) { PRINT_NAMED_INFO( __VA_ARGS__ ); } \
+else { PRINT_NAMED_DEBUG( __VA_ARGS__ ); } \
 } while(0) \
 
 CONSOLE_VAR(u32, kMaxNumAttempts,              "DockingTest", 30);
@@ -94,7 +90,7 @@ static const Point3f kObstacleSize_mm = {10, 10, 50};
 static const u32 kExpectedNumPreDockPoses = 1;
 static const f32 kInvalidAngle = 1000;
 
-static const BackpackLightAnimation::BackpackAnimation passLights = {
+static const BackpackLights passLights = {
   .onColors               = {{NamedColors::GREEN,NamedColors::GREEN,NamedColors::GREEN}},
   .offColors              = {{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}},
   .onPeriod_ms            = {{1000,1000,1000}},
@@ -104,7 +100,7 @@ static const BackpackLightAnimation::BackpackAnimation passLights = {
   .offset                 = {{0,0,0}}
 };
 
-static const BackpackLightAnimation::BackpackAnimation failLights = {
+static const BackpackLights failLights = {
   .onColors               = {{NamedColors::RED,NamedColors::RED,NamedColors::RED}},
   .offColors              = {{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}},
   .onPeriod_ms            = {{500,500,500}},
@@ -213,8 +209,23 @@ void BehaviorDockingTestSimple::OnBehaviorActivated()
   struct tm* now = localtime(&t);
   
   Write("=====Start DockingTestSimple=====");
+  const RobotInterface::FWVersionInfo& fw = robot.GetRobotToEngineImplMessaging().GetFWVersionInfo();
   std::stringstream ss;
-  ss << "OS Version: " << OSState::getInstance()->GetOSBuildVersion() << "\n";
+  ss << "Firmware Version\n";
+  ss << "Body Version: " << std::hex << fw.bodyVersion << "\n";
+  ss << "RTIP Version: " << std::hex << fw.rtipVersion << "\n";
+  ss << "Wifi Version: " << std::hex << fw.wifiVersion << "\n";
+  ss << "ToEngineCLADHash: ";
+  for(auto iter = fw.toEngineCLADHash.begin(); iter != fw.toEngineCLADHash.end(); ++iter)
+  {
+    ss << std::hex << (int)(*iter) << " ";
+  }
+  ss << "\nToRobotCLADHash: ";
+  for(auto iter = fw.toRobotCLADHash.begin(); iter != fw.toRobotCLADHash.end(); ++iter)
+  {
+    ss << std::hex << (int)(*iter) << " ";
+  }
+  ss << "\n";
   Write(ss.str());
   
   ss.clear();
@@ -275,7 +286,7 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
       }
       
       // Turn off backpack lights in case we needed to be manually reset
-      robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+      robot.GetBodyLightComponent().SetBackpackLights(failLights);
       
       _dVars.blockObjectIDPickup.UnSet();
       
@@ -409,7 +420,8 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
                                           robot.GetPose(),
                                           {(kRollInsteadOfPickup ? PreActionPose::ROLLING : PreActionPose::DOCKING)},
                                           {_dVars.initialVisionMarker.GetCode()},
-                                          obstacles);
+                                          obstacles,
+                                          nullptr);
         
         if(preActionPoses.empty())
         {
@@ -431,7 +443,7 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
           // Delete the old obstacles we added
           BlockWorldFilter filter;
           filter.SetOriginMode(BlockWorldFilter::OriginMode::InAnyFrame);
-          filter.AddFilterFcn(&BlockWorldFilter::IsCustomObjectFilter);
+          filter.AddAllowedFamily(ObjectFamily::CustomObject);
           robot.GetBlockWorld().DeleteLocatedObjects(filter);
         
           // Add new obstacles at random poses around the preDock pose corresponding with _dVars.initialVisionMarker
@@ -663,7 +675,8 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
                                         robot.GetPose(),
                                         {(kRollInsteadOfPickup ? PreActionPose::ROLLING : PreActionPose::DOCKING)},
                                         {_dVars.initialVisionMarker.GetCode()},
-                                        obstacles);
+                                        obstacles,
+                                        nullptr);
       
       if(preActionPoses.size() != kExpectedNumPreDockPoses)
       {
@@ -675,7 +688,8 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
                                             robot.GetPose(),
                                             {(kRollInsteadOfPickup ? PreActionPose::ROLLING : PreActionPose::DOCKING)},
                                             {_dVars.markerBeingSeen.GetCode()},
-                                            obstacles);
+                                            obstacles,
+                                            nullptr);
           
           if(preActionPoses.size() != kExpectedNumPreDockPoses)
           {
@@ -729,7 +743,8 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
         action->AddAction(placeAction);
       }
       
-      DriveToPoseAction* driveAction = new DriveToPoseAction(p);
+      const bool kDriveWithDown = true;
+      DriveToPoseAction* driveAction = new DriveToPoseAction(p, kDriveWithDown);
       action->AddAction(driveAction);
       
       DelegateIfInControl(robot, action,
@@ -761,8 +776,7 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
           robot.GetContext()->GetVizManager()->SendSaveImages(ImageSendMode::Off);
         }
         
-        IActionRunner* action = new CompoundActionSequential({new SayTextAction("Test Complete", SayTextAction::AudioTtsProcessingStyle::Unprocessed),
-                                                              new WaitAction(3)});
+        IActionRunner* action = new CompoundActionSequential({new SayTextAction("Test Complete", SayTextIntent::Text), new WaitAction(3)});
         DelegateIfInControl(robot, action,
                     [this](const ActionResult& result, const ActionCompletedUnion& completionInfo){
                       if(result == ActionResult::SUCCESS)
@@ -781,8 +795,7 @@ void BehaviorDockingTestSimple::BehaviorUpdate()
           robot.GetContext()->GetVizManager()->SendSaveImages(ImageSendMode::Off);
         }
         
-        IActionRunner* action = new CompoundActionSequential({new SayTextAction("Help", SayTextAction::AudioTtsProcessingStyle::Unprocessed),
-                                                              new WaitAction(3)});
+        IActionRunner* action = new CompoundActionSequential({new SayTextAction("Help", SayTextIntent::Text), new WaitAction(3)});
         DelegateIfInControl(robot, action,
                     [this](const ActionResult& result, const ActionCompletedUnion& completionInfo){
                       if(result == ActionResult::SUCCESS)
@@ -842,11 +855,11 @@ void BehaviorDockingTestSimple::SetCurrStateAndFlashLights(State s, Robot& robot
 {
   if(_dVars.yellForHelp)
   {
-    robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+    robot.GetBodyLightComponent().SetBackpackLights(failLights);
   }
   else if(_dVars.yellForCompletion)
   {
-    robot.GetBackpackLightComponent().SetBackpackAnimation(passLights);
+    robot.GetBodyLightComponent().SetBackpackLights(passLights);
   }
   SetCurrState(s);
 }
@@ -944,7 +957,7 @@ void BehaviorDockingTestSimple::HandleWhileActivated(const EngineToGameEvent& ev
     }
       
     default:
-      PRINT_CH_INFO("Behaviors", "BehaviorDockingTest.HandleWhileRunning.InvalidTag",
+      PRINT_NAMED_INFO("BehaviorDockingTest.HandleWhileRunning.InvalidTag",
                         "Received unexpected event with tag %hhu.", event.GetData().GetTag());
       break;
   }
@@ -1021,7 +1034,7 @@ void BehaviorDockingTestSimple::HandleObservedObject(Robot& robot,
     return;
   }
   
-  if(IsValidLightCube(oObject->GetType(), false))
+  if(oObject->GetFamily() == ObjectFamily::LightCube)
   {
     if(_dVars.blockObjectIDPickup.IsSet() && _dVars.blockObjectIDPickup == objectID)
     {
@@ -1035,7 +1048,7 @@ void BehaviorDockingTestSimple::HandleObservedObject(Robot& robot,
       }
       else
       {
-        PRINT_CH_INFO("Behaviors", "BehaviorDockingTest.HandleObservedObject", "Saw more than one marker");
+        PRINT_NAMED_INFO("BehaviorDockingTest.HandleObservedObject", "Saw more than one marker");
         _dVars.yellForHelp = true;
         END_TEST_IN_HANDLER(ActionResult::ABORT, "SawMoreThanOneMarkerOnInit");
       }
@@ -1052,7 +1065,7 @@ void BehaviorDockingTestSimple::HandleObservedObject(Robot& robot,
       }
       else
       {
-        PRINT_CH_INFO("Behaviors", "BehaviorDockingTest.HandleObservedObject", "Saw more than one marker");
+        PRINT_NAMED_INFO("BehaviorDockingTest.HandleObservedObject", "Saw more than one marker");
         _dVars.yellForHelp = true;
         END_TEST_IN_HANDLER(ActionResult::ABORT, "SawMoreThanOneMarkerOnInit");
       }
@@ -1089,12 +1102,12 @@ void BehaviorDockingTestSimple::HandleDockingStatus(const AnkiEvent<RobotInterfa
   const DockingStatus& payload = message.GetData().Get_dockingStatus();
   switch(payload.status)
   {
-    case(Anki::Vector::Status::STATUS_BACKING_UP):
+    case(Anki::Cozmo::Status::STATUS_BACKING_UP):
     {
       _dVars.numDockingRetries++;
       break;
     }
-    case(Anki::Vector::Status::STATUS_DOING_HANNS_MANEUVER):
+    case(Anki::Cozmo::Status::STATUS_DOING_HANNS_MANEUVER):
     {
       _dVars.didHM = true;
       break;
@@ -1213,5 +1226,5 @@ void BehaviorDockingTestSimple::PrintStats()
   Write("=====End DockingTestSimple=====");
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

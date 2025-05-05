@@ -26,6 +26,7 @@ set(ANKI_BUILD_CXX_COMPILE_OPTIONS
   -g
   -Wall
   -Wconditional-uninitialized
+  -Werror
   -Wformat
   -Wformat-security
   -Wheader-guard
@@ -33,7 +34,6 @@ set(ANKI_BUILD_CXX_COMPILE_OPTIONS
   -Woverloaded-virtual
   -Wshorten-64-to-32
   -Wundef
-  -Wunused-variable
   -Wno-unused-command-line-argument
-  -Wno-delete-non-virtual-dtor
 )
+

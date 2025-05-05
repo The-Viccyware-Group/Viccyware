@@ -9,20 +9,18 @@
 * Copyright: Anki, inc. 2016
 *
 */
-#include "engine/comms/robotConnectionManager.h"
+
 #include "engine/actions/actionContainers.h"
 #include "engine/comms/robotConnectionData.h"
-
+#include "engine/comms/robotConnectionManager.h"
 #include "engine/robot.h"
 #include "engine/robotManager.h"
 
 #include "anki/cozmo/shared/cozmoConfig.h"
-#include "coretech/messaging/shared/socketConstants.h"
 
 #include "util/cpuProfiler/cpuProfiler.h"
-#include "util/histogram/histogram.h"
-#include "util/logging/DAS.h"
 #include "util/logging/logging.h"
+#include "util/wifi/wifiUtil_android.h"
 
 #define LOG_CHANNEL "RobotConnectionManager"
 
@@ -31,12 +29,12 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 static const int kNumQueueSizeStatsToSendToDas = 4000;
 }
-
+  
 RobotConnectionManager::RobotConnectionManager(RobotManager* robotManager)
 : _currentConnectionData(new RobotConnectionData())
 , _robotManager(robotManager)
@@ -52,7 +50,7 @@ RobotConnectionManager::~RobotConnectionManager()
 void RobotConnectionManager::Init()
 {
 }
-
+  
 Result RobotConnectionManager::Update()
 {
   ANKI_CPU_PROFILE("RobotConnectionManager::Update");
@@ -61,7 +59,7 @@ Result RobotConnectionManager::Update()
   // being cleared
   if( _queueSizeAccumulator.GetNum() >= kNumQueueSizeStatsToSendToDas ) {
     SendAndResetQueueStats();
-  }
+  }  
 
   // If we lose connection to robot, report connection closed
   if (!_udpClient.IsConnected()) {
@@ -75,14 +73,14 @@ Result RobotConnectionManager::Update()
 
 void RobotConnectionManager::SendAndResetQueueStats()
 {
-  // Note: This used to be the DAS message "robot.msg_queue.recent_incoming_size" but was demoted to an INFO since it
-  // was spamming DAS
-  LOG_INFO("RobotConnectionManager.SendAndResetQueueStats.Stats",
-           "num %d, min %.2f, mean %.2f, max %.2f",
-           _queueSizeAccumulator.GetNum(),
-           _queueSizeAccumulator.GetMin(),
-           _queueSizeAccumulator.GetMean(),
-           _queueSizeAccumulator.GetMax());
+  // s_val: min:mean:max as ints
+  // data: num
+  Util::sEventF("cozmo_engine.robot_msg_queue.recent_incoming_size",
+                {{DDATA, std::to_string( _queueSizeAccumulator.GetNum() ).c_str()}},
+                "%d:%d:%d",
+                (int)std::round(_queueSizeAccumulator.GetMin()),
+                (int)std::round(_queueSizeAccumulator.GetMean()),
+                (int)std::round(_queueSizeAccumulator.GetMax()));
 
   // clear accumulator so we only send recent stats
   _queueSizeAccumulator.Clear();
@@ -95,10 +93,10 @@ bool RobotConnectionManager::IsConnected(RobotID_t robotID) const
   }
   return false;
 }
-
+  
 Result RobotConnectionManager::Connect(RobotID_t robotID)
 {
-  // LOG_DEBUG("RobotConnectionManager.Connect", "Connect to robot %d", robotID);
+  LOG_INFO("RobotConnectionManager.Connect", "Connect to robot %d", robotID);
 
   _currentConnectionData->Clear();
 
@@ -106,13 +104,13 @@ Result RobotConnectionManager::Connect(RobotID_t robotID)
     _udpClient.Disconnect();
   }
 
-  const std::string & client_path = ENGINE_ANIM_CLIENT_PATH + std::to_string(robotID);
-  const std::string & server_path = ENGINE_ANIM_SERVER_PATH + std::to_string(robotID);
+  const std::string & client_path = Anki::Cozmo::ENGINE_ANIM_CLIENT_PATH + std::to_string(robotID);
+  const std::string & server_path = Anki::Cozmo::ENGINE_ANIM_SERVER_PATH + std::to_string(robotID);
 
   const bool ok = _udpClient.Connect(client_path, server_path);
   if (!ok) {
-    LOG_WARNING("RobotConnectionManager.Connect", "Unable to connect from %s to %s",
-                client_path.c_str(), server_path.c_str());
+    LOG_ERROR("RobotConnectionManager.Connect", "Unable to connect from %s to %s",
+              client_path.c_str(), server_path.c_str());
     _currentConnectionData->SetState(RobotConnectionData::State::Disconnected);
     return RESULT_FAIL_IO;
   }
@@ -122,7 +120,7 @@ Result RobotConnectionManager::Connect(RobotID_t robotID)
 
   return RESULT_OK;
 }
-
+  
 void RobotConnectionManager::DisconnectCurrent()
 {
   LOG_DEBUG("RobotConnectionManager.DisconnectCurrent", "Disconnect");
@@ -138,7 +136,7 @@ void RobotConnectionManager::DisconnectCurrent()
     SendAndResetQueueStats();
   }
 }
-
+  
 bool RobotConnectionManager::SendData(const uint8_t* buffer, unsigned int size)
 {
   const bool validState = IsValidConnection();
@@ -154,7 +152,7 @@ bool RobotConnectionManager::SendData(const uint8_t* buffer, unsigned int size)
     DisconnectCurrent();
     return false;
   }
-
+  
   return true;
 }
 
@@ -179,7 +177,7 @@ void RobotConnectionManager::ProcessArrivedMessages()
   while (_currentConnectionData->HasMessages())
   {
     RobotConnectionMessageData nextMessage = _currentConnectionData->PopNextMessage();
-
+    
 #if TRACK_INCOMING_PACKET_LATENCY
     const auto& timeReceived = nextMessage.GetTimeReceived();
     if (timeReceived != Util::kNetTimeStampZero)
@@ -190,7 +188,7 @@ void RobotConnectionManager::ProcessArrivedMessages()
 #endif
 
     _queueSizeAccumulator += _currentConnectionData->GetIncomingQueueSize();
-
+    
     if (RobotConnectionMessageType::Data == nextMessage.GetType())
     {
       HandleDataMessage(nextMessage);
@@ -214,7 +212,7 @@ void RobotConnectionManager::ProcessArrivedMessages()
     }
   }
 }
-
+  
 void RobotConnectionManager::HandleDataMessage(RobotConnectionMessageData& nextMessage)
 {
   const bool isConnected = IsValidConnection();
@@ -223,7 +221,7 @@ void RobotConnectionManager::HandleDataMessage(RobotConnectionMessageData& nextM
     LOG_INFO("RobotConnectionManager.HandleDataMessage.NotValidState", "Connection not yet valid, dropping message");
     return;
   }
-
+  
   const bool correctAddress = _currentConnectionData->GetAddress() == nextMessage.GetAddress();
   if (!correctAddress)
   {
@@ -233,7 +231,7 @@ void RobotConnectionManager::HandleDataMessage(RobotConnectionMessageData& nextM
               nextMessage.GetAddress().ToString().c_str());
     return;
   }
-
+  
   _readyData.push_back(std::move(nextMessage.GetData()));
 }
 
@@ -248,7 +246,7 @@ void RobotConnectionManager::HandleConnectionResponseMessage(RobotConnectionMess
               "Got connection response at unexpected time");
     return;
   }
-
+  
   _currentConnectionData->SetState(RobotConnectionData::State::Connected);
 }
 
@@ -257,13 +255,13 @@ void RobotConnectionManager::HandleDisconnectMessage(RobotConnectionMessageData&
   LOG_DEBUG("RobotConnectionManager.HandleDisconnectMessage", "Handle disconnect");
 
   const bool connectionWasInWaitingState = (RobotConnectionData::State::Waiting == _currentConnectionData->GetState());
-
+  
   // This connection is no longer valid.
   // Note not calling DisconnectCurrent because this message means reliableTransport is already deleting this connection data
   _currentConnectionData->Clear();
-
+  
   // This robot is gone.
-  Robot* robot = _robotManager->GetRobot();
+  Robot* robot =  _robotManager->GetRobot();
   if (nullptr != robot)
   {
     // If the connection is waiting when we handle this disconnect message, report it as a robot rejection
@@ -277,12 +275,12 @@ void RobotConnectionManager::HandleConnectionRequestMessage(RobotConnectionMessa
               "Received connection request from %s. Ignoring",
               nextMessage.GetAddress().ToString().c_str());
 }
-
+  
 bool RobotConnectionManager::IsValidConnection() const
 {
   return _currentConnectionData->GetState() == RobotConnectionData::State::Connected;
 }
-
+  
 bool RobotConnectionManager::PopData(std::vector<uint8_t>& data_out)
 {
   if (_readyData.empty()) {
@@ -293,12 +291,12 @@ bool RobotConnectionManager::PopData(std::vector<uint8_t>& data_out)
   _readyData.pop_front();
   return true;
 }
-
+  
 void RobotConnectionManager::ClearData()
 {
   _readyData.clear();
 }
-
+  
 const Anki::Util::Stats::StatsAccumulator& RobotConnectionManager::GetQueuedTimes_ms() const
 {
 #if TRACK_INCOMING_PACKET_LATENCY
@@ -309,63 +307,5 @@ const Anki::Util::Stats::StatsAccumulator& RobotConnectionManager::GetQueuedTime
 #endif // TRACK_INCOMING_PACKET_LATENCY
 }
 
-#if ANKI_PROFILE_ENGINE_SOCKET_BUFFER_STATS
-
-void RobotConnectionManager::InitSocketBufferStats()
-{
-  constexpr int lowest = 1;
-  constexpr int highest = 256*1024;
-  constexpr int significant_figures = 3;
-
-  _incomingStats = std::make_unique<Histogram>(lowest, highest, significant_figures);
-  _outgoingStats = std::make_unique<Histogram>(lowest, highest, significant_figures);
-
-  // Postconditions
-  DEV_ASSERT(_incomingStats, "RobotConnectionManager.InitSocketBufferStats.InvalidIncomingStats");
-  DEV_ASSERT(_outgoingStats, "RobotConnectionManager.InitSocketBufferStats.InvalidOutgoingStats");
-}
-
-void RobotConnectionManager::UpdateSocketBufferStats()
-{
-  // Preconditions
-  DEV_ASSERT(_incomingStats, "RobotConnectionManager.UpdateSocketBufferStats.InvalidIncomingStats");
-  DEV_ASSERT(_outgoingStats, "RobotConnectionManager.UpdateSocketBufferStats.InvalidOutgoingStats");
-
-  if (_udpClient.IsConnected()) {
-    const auto incoming = _udpClient.GetIncomingSize();
-    if (incoming >= 0) {
-      _incomingStats->Record(incoming);
-    }
-    const auto outgoing = _udpClient.GetOutgoingSize();
-    if (outgoing >= 0) {
-      _outgoingStats->Record(outgoing);
-    }
-  }
-}
-
-void RobotConnectionManager::ReportSocketBufferStats(const std::string & name, const HistogramPtr & histogram)
-{
-  // Preconditions
-  DEV_ASSERT(histogram, "RobotConnectionManager.ReportSocketBufferStats.InvalidHistogram");
-
-  const int64_t min = histogram->GetMin();
-  const int64_t mean = histogram->GetMean();
-  const int64_t max = histogram->GetMax();
-
-  LOG_INFO("RobotConnectionManager.ReportSocketBufferStats", "%s: %lld/%lld/%lld", name.c_str(), min, mean, max);
-}
-
-void RobotConnectionManager::ReportSocketBufferStats()
-{
-  // Preconditions
-  DEV_ASSERT(_incomingStats, "RobotConnectionManager.ReportSocketBufferStats.InvalidIncomingStats");
-  DEV_ASSERT(_outgoingStats, "RobotConnectionManager.ReportSocketBufferStats.InvalidOutgoingStats");
-
-  ReportSocketBufferStats("incoming", _incomingStats);
-  ReportSocketBufferStats("outgoing", _outgoingStats);
-}
-
-#endif // ANKI_PROFILE_ENGINE_SOCKET_BUFFER_STATS
-
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

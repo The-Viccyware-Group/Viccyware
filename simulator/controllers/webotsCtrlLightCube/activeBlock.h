@@ -12,7 +12,7 @@
 #include "coretech/common/shared/types.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace ActiveBlock {
   
       Result Init();
@@ -21,7 +21,7 @@ namespace Anki {
       Result Update();
   
     }  // namespace ActiveBlock
-  }  // namespace Vector
+  }  // namespace Cozmo
 }  // namespace Anki
 
 

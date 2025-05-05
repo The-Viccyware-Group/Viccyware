@@ -22,9 +22,6 @@ SCRIPTDIR=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || ech
 # Where is simpleperf?
 : ${SIMPLEPERF:="${TOPLEVEL}/lib/util/tools/simpleperf"}
 
-# Where is adb?
-: ${ADB:="adb"}
-
 if [ ! -d ${ANKI_PROFILE_SYMBOLCACHE} ] ; then
   bash ${SCRIPTDIR}/make_symbol_cache.sh ${ANKI_PROFILE_SYMBOLCACHE}
 fi
@@ -32,11 +29,6 @@ fi
 if [ ! -d ${ANKI_PROFILE_PROCNAME} ] ; then
   mkdir ${ANKI_PROFILE_PROCNAME}
 fi
-
-#
-# Remount /data with exec permissions
-#
-${ADB} shell "mount /data -o remount,exec"
 
 #
 # Invoke inferno.sh to collect data and generate html report
@@ -49,8 +41,3 @@ ${SIMPLEPERF}/inferno.sh -nc -du \
   -f ${ANKI_PROFILE_FREQUENCY} \
   --record_file ${ANKI_PROFILE_PROCNAME}/perf.data \
   -o ${ANKI_PROFILE_PROCNAME}/report.html
-
-#
-# Remount /data with noexec permissions
-#
-${ADB} shell "mount /data -o remount,noexec"

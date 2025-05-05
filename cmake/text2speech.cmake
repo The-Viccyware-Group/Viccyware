@@ -2,7 +2,7 @@
 # cmake directories for use with Acapela TTS SDK
 #
 # Path to third-party repo
-set(TEXT2SPEECH_HOME "${ANKI_THIRD_PARTY_DIR}/acapela")
+set(TEXT2SPEECH_HOME "${ANKI_EXTERNAL_DIR}/anki-thirdparty/acapela")
 
 # Path to third-party header files for this platform
 set(TEXT2SPEECH_INCLUDE_DIRS "")
@@ -13,11 +13,16 @@ set(TEXT2SPEECH_LIB_DIR "")
 # List of library targets for this platform
 set(TEXT2SPEECH_LIBS "")
 
-if (VICOS)
+if (ANDROID)
 
   #
   # Use Acapela TTS for Linux Embedded V8.511
   # Use static linking with libbabile.a
+  #
+  # Note that libbabile.a relies on some glibc functions
+  # (__error_location, __isoc99_vssprintf) that are not
+  # supported by clang.  We define our own version of 
+  # these functions to satisfy the linker.
   #
 
   set(TEXT2SPEECH_SDK "${TEXT2SPEECH_HOME}/AcapelaTTS_for_LinuxEmbedded_V8.511")

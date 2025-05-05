@@ -14,23 +14,19 @@
 #define __Anki_Cozmo_Basestation_VisionPoseData_H__
 
 #include "coretech/common/shared/types.h"
-#include "coretech/common/shared/math/matrix_fwd.h"
-#include "coretech/common/engine/robotTimeStamp.h"
+#include "coretech/common/engine/math/matrix.h"
 
-#include "engine/components/sensors/imuComponent.h"
+#include "engine/groundPlaneROI.h"
 #include "engine/robotStateHistory.h"
 #include "engine/rollingShutterCorrector.h"
-#include "engine/vision/groundPlaneROI.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 struct VisionPoseData
 {
-  using ImuDataHistory = ImuHistory; // TODO: Remove
-  
   // TODO: Add getters for these and make them private, prefixed with underscore (COZMO-14998)
-  RobotTimeStamp_t      timeStamp;
+  TimeStamp_t           timeStamp;
   HistRobotState        histState;  // contains historical head/lift/pose info
   Pose3d                cameraPose; // w.r.t. pose in poseStamp
   bool                  groundPlaneVisible;
@@ -40,7 +36,7 @@ struct VisionPoseData
   
   VisionPoseData() = default;
   
-  void Set(const RobotTimeStamp_t histTimeStamp_in,
+  void Set(const TimeStamp_t      histTimeStamp_in,
            const HistRobotState&  histState_in,
            const Pose3d&          cameraPose_in,
            const bool             groundPlaneVisible_in,
@@ -99,7 +95,7 @@ void swap(T1&& first, T2&& second)
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif /* __Anki_Cozmo_Basestation_VisionPoseData_H__ */

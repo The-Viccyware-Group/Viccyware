@@ -14,19 +14,16 @@
 #ifndef __Cozmo_Basestation_Components_AnimationComponent_H__
 #define __Cozmo_Basestation_Components_AnimationComponent_H__
 
+#include "coretech/common/shared/types.h"
+#include "coretech/vision/engine/image.h"
 #include "anki/cozmo/shared/animationTag.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
-
-#include "clad/robotInterface/messageRobotToEngine.h"
-#include "clad/types/compositeImageTypes.h"
-
-#include "coretech/common/shared/types.h"
-#include "coretech/vision/engine/image.h"
-#include "coretech/vision/shared/spritePathMap.h"
-
 #include "engine/actions/actionInterface.h"
-
+#include "engine/events/ankiEvent.h"
+#include "clad/externalInterface/messageGameToEngine.h"
+#include "clad/robotInterface/messageRobotToEngine.h"
+#include "clad/types/keepFaceAliveParameters.h"
 #include "util/helpers/noncopyable.h"
 #include "util/signals/signalHolder.h"
 
@@ -34,26 +31,12 @@
 #include <unordered_set>
 
 namespace Anki {
+namespace Cozmo {
 
 // Forward declarations
-namespace Vision{
-class RGB565ImageBuilder;
-}
-
-namespace Vector {
-
-// Forward declarations
-class Animation;
 class AnimationGroupContainer;
-class CozmoContext;
-class DataAccessorComponent;
-class MovementComponent;
 class Robot;
-namespace RobotInterface{
-class EngineToRobot;
-}
-template <typename T>
-class AnkiEvent;
+class CozmoContext;
   
 class AnimationComponent : public IDependencyManagedComponent<RobotComponentID>, 
                            private Anki::Util::noncopyable, 
@@ -76,11 +59,9 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
-    dependencies.insert(RobotComponentID::DataAccessor);
-    dependencies.insert(RobotComponentID::Movement);
+    dependencies.insert(RobotComponentID::CozmoContext);
   };
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {
     dependencies.insert(RobotComponentID::AIComponent);
@@ -104,16 +85,12 @@ public:
   // Returns true when the list of available animations has been received from animation process
   bool IsInitialized() { return _isInitialized; }
 
-  using AnimationCompleteCallback = std::function<void(const AnimResult res, u32 streamTimeAnimEnded)>;
+  using AnimationCompleteCallback = std::function<void(const AnimResult res)>;
   
   // Set strictCooldown = true when we do NOT want to simply choose the animation closest
   // to being off cooldown when all animations in the group are on cooldown
-  const std::string& GetAnimationNameFromGroup(const std::string& name,
-                                               bool strictCooldown = false,
-                                               int recursionCount = 0) const;
-
-  bool IsAnimationGroup(const std::string& group) const;
-
+  const std::string& GetAnimationNameFromGroup(const std::string& name, bool strictCooldown = false) const;
+  
   // Tell animation process to play the specified animation
   // If a non-empty callback is specified, the actionTag of the calling action must be specified
   Result PlayAnimByName(const std::string& animName,
@@ -121,41 +98,11 @@ public:
                         bool interruptRunning = true,
                         AnimationCompleteCallback callback = nullptr,
                         const u32 actionTag = 0,
-                        float timeout_sec = _kDefaultTimeout_sec,
-                        u32 startAt_ms = 0,
-                        bool renderInEyeHue = true);
-
-  // Used to procedurally alter animations which manage onscreen position and timing of sprites
-  // with as little engine generated information as possible
-  using RemapMap = std::unordered_map<Vision::SpriteBoxName, Vision::SpritePathMap::AssetID>;
-  Result PlayAnimWithSpriteBoxRemaps(const std::string& animName,
-                                     const RemapMap& remaps,
-                                     bool interruptRunning = true,
-                                     AnimationCompleteCallback callback = nullptr,
-                                     const std::string& lockFaceAtEndOfAnimTag = "");
-
-  // Used to add full SpriteBoxKeyFrames to an animation, then play it. If animName is empty, plays
-  // an anim constructed from ONLY the supplied keyframes
-  Result PlayAnimWithSpriteBoxKeyFrames(const std::string& animName,
-                                        const std::vector<Vision::SpriteBoxKeyFrame>& keyframes,
-                                        bool interruptRunning = true,
-                                        AnimationCompleteCallback callback = nullptr);
-
-  Result AddSpriteBoxKeyFramesToRunningAnim(const std::vector<Vision::SpriteBoxKeyFrame>& keyframes);
+                        float timeout_sec = _kDefaultTimeout_sec);
   
   bool IsPlayingAnimation() const { return _callbackMap.size() > 0; }
   
   Result StopAnimByName(const std::string& animName);
-
-  // Send a message to the animation streamer to be applied at the specified stream time
-  // If the streaming animation is canceled before it hits the stream time this message will be dropped
-  // When applyBeforeTick is true the alteration is displayed to the user that tick (e.g. display a new image)
-  // When false, the alteration is applied after the keyframe's processed (e.g. lock face track on frame 6 after drawing 
-  //   an image, but the animation is only 6 frames long so locking can't be applied at the start of the next tick) 
-  void AlterStreamingAnimationAtTime(RobotInterface::EngineToRobot&& msg, 
-                                     TimeStamp_t relativeStreamTime_ms, bool applyBeforeTick = true,
-                                     MovementComponent* devSafetyCheck = nullptr);
-
 
   // If you want to play multiple frames in sequence, duration_ms should be a multiple of ANIM_TIME_STEP_MS.
   //
@@ -169,17 +116,28 @@ public:
   //  be used to init a static constexpr.)
   //
   // If the durations are too short, it may allow for procedural faces to (sporadically) interrupt the
-  // face images. If the durations are too long, you won't be streaming in real-time.
+  // face images. If the durations are too long, you won't be streaming in real-time. In either case you
+  // should use GetAnimState_NumProcAnimFaceKeyframes() to monitor how many frames are currently in the
+  // buffer and not call these DisplayFaceImage functions so frequently such that it grows too large,
+  // otherwise there will be increasing lag in the stream.
   Result DisplayFaceImageBinary(const Vision::Image& img, u32 duration_ms, bool interruptRunning = false);
   Result DisplayFaceImage(const Vision::Image& img, u32 duration_ms, bool interruptRunning = false);
   Result DisplayFaceImage(const Vision::ImageRGB& img, u32 duration_ms, bool interruptRunning = false);
   Result DisplayFaceImage(const Vision::ImageRGB565& imgRGB565, u32 duration_ms, bool interruptRunning = false);
+
+  // Enable/Disable KeepFaceAlive
+  // If enable == false, disableTimeout_ms is the duration over which the face should 
+  // return to no adjustments
+  Result EnableKeepFaceAlive(bool enable, u32 disableTimeout_ms = 0) const;
+
+  // Restore all KeepFaceAlive parameters to defaults
+  Result SetDefaultKeepFaceAliveParameters() const;
   
-  // KeepFaceAlive is a procedural way to add small eye movements and blinks to the eyes. It defaults to on to
-  // make sure the robot always feels "alive", but it can be locked out by adding (or removing) a "disable
-  // lock". If any disable locks are present, the keep alive will be disabled
-  void AddKeepFaceAliveDisableLock(const std::string& lockName);
-  void RemoveKeepFaceAliveDisableLock(const std::string& lockName);
+  // Set KeepFaceAliveParameterToDefault
+  Result SetKeepFaceAliveParameterToDefault(KeepFaceAliveParameter param) const;
+  
+  // Set KeepFaceAlive parameter to specified value
+  Result SetKeepFaceAliveParameter(KeepFaceAliveParameter param, f32 value) const;
 
   // Either start an eye shift or update an already existing eye shift with new params
   // Note: Eye shift will continue until removed so if eye shift with the same name
@@ -210,27 +168,25 @@ public:
 
   // Returns true if an eye squint layer of the given name is currently applied
   bool IsEyeSquinting(const std::string& name) const { return _activeEyeSquintLayers.count(name) > 0; }
+  
+  // Enables only the specified tracks. 
+  // Status of other tracks remain unchanged.
+  void UnlockTracks(u8 tracks);
+  void UnlockAllTracks();
 
-  // set saturation to a given level (default 1.0);
-  Result SetFaceSaturation(float level);
+  // Disables only the specified tracks. 
+  // Status of other tracks remain unchanged.
+  void LockTracks(u8 tracks);
+
+  u8   GetLockedTracks() const {return _lockedTracks; }
   
   bool                IsAnimating()        const { return _isAnimating;  }
   const std::string&  GetPlayingAnimName() const { return _currAnimName; }
   u8                  GetPlayingAnimTag()  const { return _currAnimTag;  }
 
-  // Allows external components to set up a special callback function that persists across multiple calls
-  // This functionality is currently associated exclusively with the needs of UserIntentComponent's TriggerWordGetIn animation
-  // The animation tag returned is what should be associated with any animations that want to call this callback when they
-  // complete. Callback parameter is true when the animation is playing and false when it stops
-  AnimationTag SetTriggerWordGetInCallback(std::function<void(bool)> callbackFunction);
-  
-  // Similar to above, but returns a animation tags corresponding to Alexa's Listening, Thinking, Speaking, and Error
-  // UX states. The callback passes 0, 1, 2, and 3 corresponding to the same. Second param is true when the animation
-  // starts and false when it stops
-  std::array<AnimationTag,4> SetAlexaUXResponseCallback(std::function<void(unsigned int,bool)> callback);
-
-
   // Accessors for latest animState values
+  u32 GetAnimState_NumProcAnimFaceKeyframes() const { return _animState.numProcAnimFaceKeyframes; }   
+  u8  GetAnimState_LockedTracks()             const { return _animState.lockedTracks;             }
   u8  GetAnimState_TracksInUse()              const { return _animState.tracksInUse;              }
 
   // Event/Message handling
@@ -244,19 +200,6 @@ public:
   void HandleAnimationEvent(const AnkiEvent<RobotInterface::RobotToEngine>& message);
   void HandleAnimState(const AnkiEvent<RobotInterface::RobotToEngine>& message);  
 
-  // Set eye focus
-  void AddKeepFaceAliveFocus(const std::string& name);
-  void RemoveKeepFaceAliveFocus(const std::string& name);
-  
-  // Should only be called if a callback was passed into the component by an action
-  // and therefore there should already be a callback in the callback map that matches this
-  // animation name
-  void AddAdditionalAnimationCallback(const std::string& name,
-                                      AnimationComponent::AnimationCompleteCallback callback,
-                                      bool callEvenIfAnimCanceled = false);
-
-  static Tag GetInvalidTag();
-  
 private:
   
   // Returns Tag if animation is playing.
@@ -267,19 +210,6 @@ private:
 
   template <typename MessageType, typename ImageType>
   Result DisplayFaceImageHelper(const ImageType& imgRGB565, u32 duration_ms, bool interruptRunning);
-
-  void SetAnimationCallback(const std::string& animName,
-                            AnimationCompleteCallback callback, 
-                            const u32 currTag,
-                            const u32 actionTag,
-                            int numLoops,
-                            float timeout_sec,
-                            bool callbackStillValidEvenIfTagIsNot = false);
-
-  Result SendEnableKeepFaceAlive(bool enable, u32 disableTimeout_ms = 0);
-  
-  bool TagIsAlexa( AnimationTag tag ) const;
-  void SendAlexaCallback( uint8_t tag, bool playing ) const;
   
   static constexpr float _kDefaultTimeout_sec = 60.f;
 
@@ -287,9 +217,6 @@ private:
   Tag  _tagCtr;
   
   Robot* _robot = nullptr;
-  DataAccessorComponent* _dataAccessor = nullptr;
-  MovementComponent* _movementComponent = nullptr;
-
   struct AnimationGroupWrapper{
     AnimationGroupWrapper(AnimationGroupContainer&  container)
     : _container(container){}
@@ -308,6 +235,7 @@ private:
   std::unordered_set<std::string> _activeEyeShiftLayers;
   std::unordered_set<std::string> _activeEyeSquintLayers;  
   
+  u8 _lockedTracks;
 
   // For tracking whether or not an animation is playing based on
   // AnimStarted and AnimEnded messages
@@ -315,40 +243,28 @@ private:
   std::string   _currAnimName;
   Tag           _currAnimTag;
 
-
-  // NOTE: this must match the real default in the anim process or else things can get out of sync
-  bool _lastSentEnableKeepFaceAlive = true;
-  bool _desiredEnableKeepFaceAlive = true;
-
   // Latest state message received from anim process
   AnimationState _animState;
-
-  // keep face alive enable / disable tracking
-  int _numKeepFaceAliveDisableLocks = 0;
-
-  std::unique_ptr<Vision::RGB565ImageBuilder> _oledImageBuilder;
 
   struct AnimCallbackInfo {
     AnimCallbackInfo(const std::string animName,
                      const AnimationCompleteCallback& callback,
                      const u32 actionTag,
-                     const float abortTime_sec,
-                     const bool callbackStillValidEvenIfTagIsNot = false)
+                     const float abortTime_sec)
     : animName(animName)
     , callback(callback)
     , actionTag(actionTag)
     , abortTime_sec(abortTime_sec)
-    , callbackStillValidEvenIfTagIsNot(callbackStillValidEvenIfTagIsNot)
     {}
     
-    void ExecuteCallback(AnimResult res, u32 streamTimeAnimEnded)
+    void ExecuteCallback(AnimResult res)
     {
       // Execute callback as long as it's non-null and
       // 1) No actionTag (i.e. actionTag == 0) was associated with it
       // 2) Or the valid calling action is still active
       if ((callback != nullptr) &&
-          ((actionTag == 0) || callbackStillValidEvenIfTagIsNot || IActionRunner::IsTagInUse(actionTag))) {
-        callback(res, streamTimeAnimEnded);
+          ((actionTag == 0) || IActionRunner::IsTagInUse(actionTag))) {
+        callback(res);
       }
     }
     
@@ -356,29 +272,15 @@ private:
     const AnimationCompleteCallback callback;
     const u32 actionTag;
     const float abortTime_sec;
-    const bool callbackStillValidEvenIfTagIsNot;
   };
 
   // Map of animation tags to info needed for handling callbacks when the animation completes
-  std::unordered_multimap<Tag, AnimCallbackInfo> _callbackMap;
-  // Special tag associated with the userIntentComponent's triggerWordGetInAnimation
-  AnimationTag _tagForTriggerWordGetInCallbacks;
-  std::function<void(bool)> _triggerWordGetInCallbackFunction;
-  
-  AnimationTag _tagForAlexaListening;
-  AnimationTag _tagForAlexaThinking;
-  AnimationTag _tagForAlexaSpeaking;
-  AnimationTag _tagForAlexaError;
-  std::function<void(unsigned int,bool)> _alexaResponseCallback;
-  
-  int _compositeImageID;
-
-  std::set<std::string> _focusRequests;
+  std::unordered_map<Tag, AnimCallbackInfo> _callbackMap;
   
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif

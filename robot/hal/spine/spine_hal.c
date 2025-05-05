@@ -3,17 +3,14 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <unistd.h>
 #include <termios.h>
-#include <string.h>
+/* #include <string.h> */
 
 #include "schema/messages.h"
 #include "spine_crc.h"
 #include "spine_hal.h"
-
-
 
 #define SKIP_CRC_CHECK 0
 
@@ -90,8 +87,6 @@ SpineErr hal_serial_open(const char* devicename, long baudrate)
       hal_serial_close();
       return spine_error(err_TERMIOS_FAIL, "tcgetattr() failed");
     }
-
-
 //?    memcpy(gHal.oldcfg,cfg,sizeof(gHal.oldcfg)); //make backup;
 
     cfmakeraw(&cfg);
@@ -102,19 +97,17 @@ SpineErr hal_serial_open(const char* devicename, long baudrate)
 
     LOGD("configuring port %s (fd=%d)", devicename, gHal.fd);
 
-
     if (tcsetattr(gHal.fd, TCSANOW, &cfg)) {
       hal_serial_close();
       return spine_error(err_TERMIOS_FAIL, "tcsetattr() failed");
     }
-
   }
   spine_debug("serial port OK\n");
   return err_OK;
 }
 
 
-int hal_serial_read(uint8_t* buffer, int len)   //->bytes_received
+int hal_serial_read(uint8_t* buffer, int len)   //->bytes_recieved
 {
 
   int result = read(gHal.fd, buffer, len);
@@ -154,9 +147,6 @@ static int get_payload_len(PayloadId payload_type, enum MsgDir dir)
   case PAYLOAD_DATA_FRAME:
     return (dir == dir_SEND) ? sizeof(struct HeadToBody) : sizeof(struct BodyToHead);
     break;
-  case PAYLOAD_CONT_DATA:
-    return sizeof(struct ContactData);
-    break;
   case PAYLOAD_VERSION:
     return (dir == dir_SEND) ? 0 : sizeof(struct VersionInfo);
     break;
@@ -171,12 +161,6 @@ static int get_payload_len(PayloadId payload_type, enum MsgDir dir)
     break;
   case PAYLOAD_DFU_PACKET:
     return sizeof(struct WriteDFU);
-    break;
-  case PAYLOAD_SHUT_DOWN:
-    return 0;
-    break;
-  case PAYLOAD_BOOT_FRAME:
-    return sizeof(struct MicroBodyToHead);
     break;
   default:
     break;
@@ -205,7 +189,7 @@ static const uint8_t* spine_construct_header(PayloadId payload_type,  uint16_t p
 }
 
 
-//Function: Examines `buf[idx]` and determines if it is part of sync sequence.
+//Function: Examines `buf[idx]` and determines if it is part of sync seqence.
 //Prereq: The first `idx` chars in `buf` are partial valid sync sequence.
 //Returns: Length of partial valid sync sequence. possible values = 0..idx+1
 static int spine_sync(const uint8_t* buf, unsigned int idx)
@@ -268,7 +252,7 @@ SpineErr hal_init(const char* devicename, long baudrate)
 // Scan the whole payload for sync, to recover after dropped bytes,
 int hal_resync_partial(int start_offset, int len) {
    /*  ::: Preconditions :::
-       gHal.inbuffer contains len received bytes.
+       gHal.inbuffer contains len recieved bytes.
        the first start_offset bytes do not need to be scanned
        ::: Postconditions :::
        the first valid sync header and any following bytes up to `len`
@@ -302,7 +286,7 @@ int hal_resync_partial(int start_offset, int len) {
 
 
 //gathers most recently queued frame,
-//Spins until valid frame header is received.
+//Spins until valid frame header is recieved.
 const struct SpineMessageHeader* hal_read_frame()
 {
   static unsigned int index = 0;
@@ -327,8 +311,7 @@ const struct SpineMessageHeader* hal_read_frame()
 
   //At this point we have a valid message header. (spine_sync rejects bad lengths and payloadTypes)
   // Collect the right number of bytes.
-  struct SpineMessageHeader* hdr = (struct SpineMessageHeader*)gHal.inbuffer;
-  unsigned int payload_length = hdr->bytes_to_follow;
+  unsigned int payload_length = ((struct SpineMessageHeader*)gHal.inbuffer)->bytes_to_follow;
   unsigned int total_message_length = SPINE_HEADER_LEN + payload_length + SPINE_CRC_LEN;
 
   spine_debug_x("%d byte payload\n", payload_length);

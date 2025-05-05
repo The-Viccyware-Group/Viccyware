@@ -18,7 +18,7 @@
 #include "util/random/randomGenerator.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
     
 AnimationGroupContainer::AnimationGroupContainer(Util::RandomGenerator& rng)
 : _rng(rng)
@@ -83,7 +83,7 @@ Result AnimationGroupContainer::DefineFromJson(const Json::Value& jsonRoot,
 {
       
   if(RESULT_OK != AddAnimationGroup(animationGroupName)) {
-    PRINT_CH_INFO("Animations", "AnimationGroupContainer.DefineAnimationGroupFromJson.ReplaceName",
+    PRINT_NAMED_INFO("AnimationGroupContainer.DefineAnimationGroupFromJson.ReplaceName",
                      "Replacing existing animation group named '%s'.",
                      animationGroupName.c_str());
   }
@@ -141,5 +141,5 @@ void AnimationGroupContainer::SetAnimationCooldown(const std::string& name, doub
   _animationCooldowns[name] = cooldownExpiration_s;
 }
     
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

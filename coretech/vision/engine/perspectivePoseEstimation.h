@@ -13,8 +13,10 @@
 #ifndef ANKI_VISION_PERSPECTIVEPOSEESTIMATION_H
 #define ANKI_VISION_PERSPECTIVEPOSEESTIMATION_H
 
+#include <array>
+#include "coretech/common/engine/math/point.h"
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/math/quad_fwd.h"
+#include "coretech/common/engine/math/quad.h"
 
 namespace Anki {
   namespace Vision {

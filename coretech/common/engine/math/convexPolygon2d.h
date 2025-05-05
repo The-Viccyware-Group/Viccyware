@@ -13,9 +13,8 @@
 #ifndef __COMMON_BASESTATION_MATH_CONVEXPOLYGON2D_H__
 #define __COMMON_BASESTATION_MATH_CONVEXPOLYGON2D_H__
 
-#include "coretech/common/engine/math/polygon_fwd.h"
-#include "coretech/common/engine/math/pointSet.h"
-#include "coretech/common/engine/math/axisAlignedHyperCube.h"
+#include "coretech/common/engine/math/polygon.h"
+#include "coretech/common/engine/math/point.h"
 
 #include <vector>
 
@@ -41,11 +40,7 @@ public:
   // get the convex hull for the provided set of points
   static ConvexPolygon ConvexHull(std::vector<Point2f>&& points);
   
-  // expand outward by `d`. if (d < 0), do nothing.
   void RadialExpand(f32 d);
-  
-  // Compute the geometric center of all points
-  virtual Point2f ComputeCentroid() const;
   
 private:
   EClockDirection _currDirection;

@@ -47,10 +47,6 @@ LightCube {
 }
 %COZMOBOT% {
   name "CozmoBot_1"
-  
-  # Simulate a low battery condition. This value should be less than
-  # kLowBatteryThresholdVolts in batteryComponent.cpp.
-  batteryVolts 3.5
 }
 BuildServerTestController {
   controllerArgs "%COZMO_SIM_TEST%"

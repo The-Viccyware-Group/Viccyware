@@ -49,7 +49,6 @@ int imu_manage(struct IMURawData* raw);
  * returns NULL or error message.
  */
 const char* imu_open(void);
-void imu_close(void);
 
 /** Initalizes IMU device
  */

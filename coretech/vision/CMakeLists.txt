@@ -7,34 +7,24 @@ set(CORETECH_VISION_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 include(okao)
 
 include(anki_build_cxx)
-include(anki_build_strip)
 
 #
 # cti_vision
 #
 
-option(VISION_PROFILER "Enables Anki::Vision::Profiler::Tic/Toc functions" OFF)
-if(VISION_PROFILER)
-  set(additional_defines ANKI_VISION_PROFILER=1)
-endif()
-
 anki_build_cxx_library(cti_vision ${ANKI_SRCLIST_DIR} STATIC)
-anki_build_target_license(cti_vision "ANKI" "BSD-3,${CMAKE_CURRENT_SOURCE_DIR}/engine/perspectivePoseEstimation.cpp")
 
-set_target_properties(cti_vision
+set_target_properties(cti_vision 
   PROPERTIES
   FOLDER "CoreTech"#/Basestation"
 )
 
 target_link_libraries(cti_vision
-  PUBLIC
   cti_common
   jsoncpp
   util
-  robot_interface  # for emrHelper.h
   ${OPENCV_LIBS}
   ${OKAO_LIBS}
-  ${ASAN_LINKER_FLAGS}
 )
 
 target_compile_options(cti_vision
@@ -42,8 +32,9 @@ PRIVATE
   $<$<CONFIG:Debug>:-O0>
   $<$<CONFIG:Release>:-O2>
   ${SYMBOL_VISIBILITY_FLAGS}
-  ${ASAN_CXX_FLAGS}
 )
+
+set_property(TARGET cti_vision PROPERTY CXX_STANDARD 11)
 
 target_include_directories(cti_vision
   PUBLIC
@@ -57,9 +48,7 @@ target_compile_definitions(cti_vision
   FACE_TRACKER_FACESDK=1
   FACE_TRACKER_OPENCV=2
   FACE_TRACKER_OKAO=3
-  FACE_TRACKER_TEST=4
   FACE_TRACKER_PROVIDER=FACE_TRACKER_OKAO
-  ${additional_defines}
 )
 
 #
@@ -91,7 +80,6 @@ if (MACOSX)
   include(gtest)
 
   anki_build_cxx_executable(cti_vision_test ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(cti_vision_test "ANKI")
 
   target_link_libraries(cti_vision_test
     PRIVATE
@@ -104,34 +92,8 @@ if (MACOSX)
   set_tests_properties(cti_vision_test
     PROPERTIES
     ENVIRONMENT "GTEST_OUTPUT=xml:ctiVisionGoogleTest.xml"
-  )
-
-  # Standalone face detection / recognition testing tool
-  anki_build_cxx_executable(cti_vision_face_eval ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(cti_vision_face_eval "ANKI")
-
-  target_link_libraries(cti_vision_face_eval
-    PRIVATE
-    cti_vision
+    ENVIRONMENT "TEST_DATA_PATH=${CMAKE_CURRENT_SOURCE_DIR}"
   )
 
 endif()
 
-#
-# cti_vision_debayer
-#
-anki_build_cxx_executable(cti_vision_debayer ${ANKI_SRCLIST_DIR})
-
-anki_build_target_license(cti_vision_debayer "ANKI")
-
-target_include_directories(cti_vision_debayer
-  PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
-)
-
-target_link_libraries(cti_vision_debayer
-  PRIVATE
-  cti_vision
-)
-
-anki_build_strip(TARGET cti_vision_debayer)

@@ -21,7 +21,7 @@
 #include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class IBEICondition;
 class TriggerAnimationAction;
@@ -39,8 +39,7 @@ protected:
   BehaviorReactToTouchPetting(const Json::Value& config);
   
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
-    modifiers.wantsToBeActivatedWhenOffTreads = true;
-    modifiers.behaviorAlwaysDelegates         = false;
+    modifiers.behaviorAlwaysDelegates = false;
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
 
@@ -59,9 +58,6 @@ protected:
   // helper method to play maximum bliss looping animations
   void PlayBlissLoopAnimation();
   
-  // helper method to clear the stateful members for touch tracking
-  void ResetTouchState();
-  
 private:
 
   // - - - - - - - - - - - - - -
@@ -72,8 +68,6 @@ private:
   
   // ordered list of petting getout animations (corresponds to above list)
   std::vector<AnimationTrigger> _animPettingGetout;
-  
-  AnimationTrigger _animPettingGetin;
   
   // duration of time to wait before checking
   // for state transition conditions for bliss
@@ -120,6 +114,10 @@ private:
   
   // tracking variable -- counting individual press/release pairs per bliss level
   u32 _numPressesAtCurrentBlissLevel;
+  
+  // counter for tracking ticks while pressed for audio purring
+  // TODO: remove this in a future pass when audio system is setup
+  u32 _numTicksPressed;
   
   // press state for the current tick
   bool _isPressed;

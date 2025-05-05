@@ -23,19 +23,10 @@
 #include "pathFollower.h"
 #include "pickAndPlaceController.h"
 #include "proxSensors.h"
-#include "messages.h"
-
 #include "anki/cozmo/robot/logging.h"
 #include "anki/cozmo/robot/hal.h"
-#include "anki/cozmo/robot/DAS.h"
-
+#include "messages.h"
 #include "clad/robotInterface/messageRobotToEngine_send_helper.h"
-#include "clad/types/motorTypes.h"
-
-#include "util/container/minMaxQueue.h"
-
-#include <array>
-#include <cmath>
 
 #define DEBUG_IMU_FILTER 0
 
@@ -48,7 +39,7 @@
 #define DEFAULT_BRACE_WHEN_FALLING true
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace IMUFilter {
 
       namespace {
@@ -59,13 +50,6 @@ namespace Anki {
         Radians rot_ = 0;   // radians
         f32 rotSpeed_ = 0; // rad/s
 
-        // Roll angle:
-        f32 roll_                        = 0.f;
-        const f32 ROLL_FILT_COEFF        = 0.75f; // Filter to combine gyro and accel for smooth roll estimation
-                                                  // The higher this value, the slower it approaches accel-based roll,
-                                                  // but the less noisy it is.
-        const f32 ROLL_FILT_COEFF_MOVING = 0.9f;  // Same as above, but used when the robot's wheels are moving
-
         // Pitch angle: Approaches angle of accelerometer wrt gravity horizontal
         f32 pitch_                      = 0;
         const f32 PITCH_FILT_COEFF      = 0.98f;  // Filter to combine gyro and accel for smooth pitch estimation
@@ -74,71 +58,59 @@ namespace Anki {
         const f32 PITCH_FILT_COEFF_MOVING = 0.998f;  // Same as above, but used when the robot's wheels are moving
         const f32 UNINIT_HEAD_ANGLE     = 10000;  // Just has to be some not physically possible value
         f32 prevHeadAngle_              = UNINIT_HEAD_ANGLE;
-
+        
         f32 gyro_[3]                    = {0};    // Bias-compensated gyro measurements
         f32 gyro_robot_frame[3]         = {0};    // Unfiltered gyro measurements in robot frame
         f32 gyro_robot_frame_filt[3]    = {0};    // Filtered gyro measurements in robot frame
         const f32 RATE_FILT_COEFF       = 1.f;    // IIR low-pass filter coefficient (1 == disable filter)
-
+        
         f32 gyro_bias_filt[3]           = {0};     // Filtered gyro bias
         const f32 GYRO_BIAS_FILT_COEFF_NORMAL  = 0.0005f; // IIR low-pass filter coefficient (1 == disable filter).
                                                           // Relatively slow once we're sure calibration is reasonably good since it shouldn't be changing that fast.
 
         const f32 GYRO_BIAS_FILT_COEFF_TEMP_CHANGING = 0.0025f; // Gyro bias filter coefficient used while the IMU temperature is changing (due to initial warming up)
 
-        const f32 GYRO_BIAS_FILT_COEFF_PRECALIB = 0.017f;   // Gyro bias filter coefficient. Relatively fast before calibration.
+        const f32 GYRO_BIAS_FILT_COEFF_PRECALIB = 0.2f;   // Gyro bias filter coefficient. Relatively fast before calibration.
         f32 gyroBiasCoeff_              = GYRO_BIAS_FILT_COEFF_PRECALIB;
-
-        // Are we finished initial calibration for the gyro zero-rate bias?
-        bool biasFilterComplete_        = false;
-
-        // During initial gyro bias calibration, store recent bias estimates in a queue. This allows us to compute a
-        // min and max of recent bias estimates, to ensure that all readings are within a small band before declaring
-        // the gyro bias 'calibrated'.
-        std::array<Util::MinMaxQueue<f32>, 3> gyroBiasCalibValues_;
-
-        // Max difference between the max and min of recent gyro bias estimates. If any recent readings that fall
-        // outside this band, then the gyro bias is not yet calibrated.
-        const f32 BIAS_FILT_ALLOWED_BAND = DEG_TO_RAD_F32(0.35f);
-
-        // Number of consecutive gyro bias estimates required to fall within a small min/max window before declaring the gyro 'calibrated'
-        const u16 BIAS_FILT_COMPLETE_COUNT = 200;
-
+        u16 biasFiltCnt_                = 0;
+        const f32 BIAS_FILT_RESTART_THRESH = DEG_TO_RAD_F32(0.5f); // Max difference allowed between bias filter output and gyro input before filter is restarted
+        const u16 BIAS_FILT_COMPLETE_COUNT = 200;    // Number of consecutive gyro readings required while robot not moving before bias filter switches to slower rate
         bool gyro_sign[3] = {false}; // true is negative, false is positive
-
-        // Circular buffer of robot-frame gyro readings corresponding to every IMU reading that we have received. These
-        // get sent to engine as part of RobotState and are used for image de-warping, etc.
-        ImuDataBufferType imuDataBuffer_;
 
         f32 accel_filt[3]               = {0};    // Filtered accelerometer measurements
         f32 accel_robot_frame[3]        = {0};    // Unfiltered accelerometer measurements in robot frame
         f32 accel_robot_frame_filt[3]   = {0};    // Filtered accelerometer measurements in robot frame
         f32 abs_accel_robot_frame_filt[3] = {0};  // Absolute value of accelerations
         const f32 ACCEL_FILT_COEFF      = 0.1f;   // IIR low-pass filter coefficient (1 == disable filter)
-
+ 
         f32 accelMagnitudeSqrd_         = 9810 * 9810;
 
         const f32 HP_ACCEL_FILT_COEFF   = 0.5f;     // IIR high-pass filter coefficient (0 == no-pass)
         f32 accel_robot_frame_high_pass[3] = {0};
-
+        
         // These values used to check if IMU temperature is changing (see usage in IMUFilter::Update())
         u32 timeOfLastImuTempSample_ms_ = 0;
         f32 lastImuTempSample_degC_ = 0.f;
-
+        
         // ==== Pickup detection ===
         bool pickupDetectEnabled_       = true;
         bool pickedUp_                  = false;
-        bool isMotionDetected_          = false;
 
         const f32 PICKUP_WHILE_MOVING_ACC_THRESH[3]  = {5000, 5000, 12000};  // mm/s^2
-        const f32 PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH = DEG_TO_RAD_F32(10.f);  // rad/s
+        const f32 PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH[3] = {0.5f, 0.5f, 0.5f};   // rad/s
         const f32 UNEXPECTED_ROTATION_SPEED_THRESH   = DEG_TO_RAD_F32(20.f); //rad/s
         const u8 PICKUP_COUNT_WHILE_MOVING           = 40;
         const u8 PICKUP_COUNT_WHILE_MOTIONLESS       = 20;
         u8 potentialPickupCnt_                       = 0;
+        
+        const f32 PUTDOWN_HYSTERESIS = 500.f;
+        const u8  PUTDOWN_COUNT      = 40;
+        u8 putdownCnt_               = 0;
+        
+        u16 cliffValsWhileNotMoving_[HAL::CLIFF_COUNT] = {0};
 
-        const u8 NUM_CLIFF_SENSORS_FOR_CHANGE_DETECT_PICKUP = 3;
-
+        const u16 CLIFF_DELTA_FOR_PICKUP = 50;
+        
         const f32 ACCEL_DISTURBANCE_MOTION_THRESH = 40.f;
         s8 external_accel_disturbance_cnt[3]      = {0};
         // === End of Pickup detection ===
@@ -146,23 +118,16 @@ namespace Anki {
 
         // Motion detection
         u32 lastMotionDetectedTime_ms = 0;
-        const u32 MOTION_DETECT_TIMEOUT_MS = 200;
+        const u32 MOTION_DETECT_TIMEOUT_MS = 250;
         const f32 ACCEL_MOTION_THRESH = 10;  // mm/s^2
-        const f32 GYRO_MOTION_THRESHOLD = DEG_TO_RAD_F32(0.5f);           // Gyro motion threshold post-calibration
+        const f32 GYRO_MOTION_THRESHOLD = DEG_TO_RAD_F32(2.f);            // Gyro motion threshold post-calibration
         const f32 GYRO_MOTION_PRECALIB_THRESHOLD = DEG_TO_RAD_F32(10.f);  // Gyro motion threshold pre-calibration
                                                                           // (Max bias according to BMI160 datasheet is +/- 10 deg/s)
-
-        // Poke detection
-        TimeStamp_t _lastPokeDetectTime = 0;
-        TimeStamp_t _peakGyroStartTime = 0;
-        TimeStamp_t _peakGyroMaxTime = 0;
-        const u32 POKE_DETECT_COOLDOWN_MS = 1000;
-        const f32 PEAK_GYRO_THRESHOLD = DEG_TO_RAD_F32(5.f);  // rad/s
-        const u32 MAX_GYRO_PEAK_DURATION_MS = 75;
+        f32 gyroMotionThresh_ = GYRO_MOTION_PRECALIB_THRESHOLD;
 
         // Recorded buffer
         bool isRecording_ = false;
-
+        
 #if(RECORD_AND_SEND_MODE == RECORD_AND_SEND_FILT_DATA)
         u8 recordDataIdx_ = 0;
         RobotInterface::IMUDataChunk imuChunkMsg_;
@@ -178,88 +143,10 @@ namespace Anki {
         bool fallStarted_ = false;               // Indicates that falling is detected by accelerometer, but not necessarily for long enough to trigger falling_ flag
         TimeStamp_t fallStartedTime_ = 0;        // timestamp of when freefall started
         TimeStamp_t freefallDuration_ = 0;       // approximate duration of freefall
+        float fallDetectMaxHighPassAccel_ = 0.f; // The maximum experienced high-pass filtered accelerometer magnitude during a falling event
         TimeStamp_t braceStartedTime_ = 0;
-
-        // Impact detection
-
-        // note:
-        //
-        // In brief, there are three events used to determine if an impact was experienced:
-        //  BeingHeld, Freefall, and AccelerationSpike.
-        // The last one is when the measured acceleration norm from the imu shows high force
-        // which we know occurs when the robot hits the ground, or when is snapped or jerked
-        // during handling, or forcibly put onto a table.
-        // We care about not firing fall-impact events for the latter two cases, as a result
-        // we use a combination of heuristics on BeingHeld and Freefall detection to have
-        // confidence we experience a true-fall.
-        // 
-        // Empirical testing shows that both BeingHeld and Freefall are prone to false results
-        // as well as inconsistent timing of detection. For example:
-        // - the robot may detect teetering right before rolling off of the edge of a table
-        //   as being held
-        // - during very fast tumbling mid-air, the robot may misclassify the Freefall state
-        // - the robot may register as being held either instantly, or up to a second later
-        //
-        // To combat this, we buffer the AccelerationSpike event with a rolling-window, which
-        // means when an impact is detected there is an active period during which we may
-        // catch other pertinent events like BeingHeld and Freefall to determine if it was a
-        // true-fall.
-        //
-        // Examples of how this is applied are:
-        //
-        // - suppressing impact-detection if being-held was recently true prevents handling
-        //   and moving the robot around as registering as a true-positive fall.
-        //
-        // - suppressing impact-detection if being-held is true for a minimum duration means
-        //   we can be more confident in the being-held state. The flipside is that it takes
-        //   longer to be certain, which necessitates buffering the acceleration spike event
-        //   in order to correlate it correctly.
-        // 
-        // - free-fall detection has some cases (i.e. tumbling) that causes the robot to
-        //   misdetect this case. To combat this, we use a timeout that is conditioned on
-        //   freefall state variables to catch this case and thus check for impact more
-        //   aggressively (thus reducing false-negatives where we ignore impacts because
-        //   there was no confirmed fall)
-
-        // compute the max acceleration in a sliding-window for detecting the impact spike
-        Util::MinMaxQueue<f32> maxAccelerationMagnitudeBuffer_;
-
-        // previous update tick's state of being-held
-        bool lastRobotBeingHeldState_ = false;
-
-        // the instant the robot started being-held
-        TimeStamp_t timeOfStartBeingHeld_ = 0;
-
-        // the instant the robot stopped being held
-        TimeStamp_t timeOfEndBeingHeld_ = 0;
-
-        // max size of the acceleration-magnitutde buffer
-        const size_t MAX_ACCEL_MAGNITUDE_BUFFER_SIZE = 20;
-
-        // while the robot is being held, the minimum duration of a hold that suppresses impact-detection from activating
-        const TimeStamp_t MIN_TIME_HELD_SUPPRESS_IMPACT_MS = 500;
-
-        // after the robot is being putdown, suppress impacts for a duration of time (helps ignore being put down forcefully)
-        const TimeStamp_t MIN_TIME_SINCE_PUTDOWN_SUPPRESS_IMPACT_MS = 500;
-        
-        // we expect to see a spike in acceleration in excess of 1.0g's at the time of impact
-        const float MIN_ACCEL_MAG_SQUARED_FOR_IMPACT_MMPS2 = pow(2.2e4,2);
-
-        // last time when the falling-detector registered a potential fall
-        TimeStamp_t lastPotentialFallTime_ = 0; 
-
-        // minimum time period after a fall was detected to check for impact
-        const TimeStamp_t IMPACT_DETECTION_WINDOW_AFTER_FALL_MS = 600;
-
-        // throttle the number of times per second we can send the 
-        // ImpactMsg since it may trigger multiple times after the 
-        // first possible detection
-        const TimeStamp_t IMPACT_MESSAGE_THROTTLE_TIME_MS = 5000;
-
-        TimeStamp_t lastImpactSendTime_ms_ = 0;
-
         // === End of Falling detection ===
-
+        
         // N-side down
         const f32 NSIDE_DOWN_THRESH_MMPS2 = 8000;
 
@@ -387,28 +274,39 @@ namespace Anki {
           HeadController::Brace();
         }
       }
-
+      
       void UnbraceAfterImpact()
       {
         if (bracingEnabled_) {
           LiftController::Unbrace();
           HeadController::Unbrace();
+          
+          LiftController::StartCalibrationRoutine(true);
+          HeadController::StartCalibrationRoutine(true);
         }
       }
-
+      
       void ResetFallingVars() {
         falling_ = false;
         fallStarted_ = false;
         fallStartedTime_ = 0;
         freefallDuration_ = 0;
+        fallDetectMaxHighPassAccel_ = 0.f;
         braceStartedTime_ = 0;
       }
 
       void ResetPickupVars() {
+        pickedUp_ = 0;
+
+        for (int i=0 ; i < HAL::CLIFF_COUNT ; i++) {
+          cliffValsWhileNotMoving_[i] = 0;
+        }
+
         potentialPickupCnt_ = 0;
+        putdownCnt_ = 0;
         external_accel_disturbance_cnt[0] = external_accel_disturbance_cnt[1] = external_accel_disturbance_cnt[2] = 0;
       }
-
+      
       void SetPickupDetect(bool pickupDetected)
       {
         if (pickedUp_ != pickupDetected) {
@@ -419,9 +317,7 @@ namespace Anki {
 
       void EnablePickupDetect(bool enable)
       {
-        if (!enable) {
-          SetPickupDetect(false);
-        }
+        SetPickupDetect(false);
         pickupDetectEnabled_ = enable;
       }
 
@@ -430,7 +326,7 @@ namespace Anki {
         AnkiInfo( "IMUFilter.EnableBraceWhenFalling", "%d", enable);
         bracingEnabled_ = enable;
       }
-
+      
       Result Init()
       {
         EnableBraceWhenFalling(DEFAULT_BRACE_WHEN_FALLING);
@@ -461,83 +357,70 @@ namespace Anki {
         output[2] = coeff * (output[2] + input[2] - prev_input[2]);
       }
 
-      void ClearGyroBiasCalibValues()
+      // Simple poke detect
+      // If wheels aren't moving but a sudden rotation about z-axis was detected
+      void DetectPoke()
       {
-        for (auto& biasVals : gyroBiasCalibValues_) {
-          biasVals.clear();
+        static TimeStamp_t peakGyroStartTime = 0;
+        static TimeStamp_t peakGyroMaxTime = 0;
+        static TimeStamp_t peakAccelStartTime = 0;
+        static TimeStamp_t peakAccelMaxTime = 0;
+        static TimeStamp_t lastPokeDetectTime = 0;
+        const u32 pokeDetectRefractoryPeriod_ms = 1000;
+
+        // Do nothing during refractory period
+        TimeStamp_t currTime = HAL::GetTimeStamp();
+        if (currTime - lastPokeDetectTime < pokeDetectRefractoryPeriod_ms) {
+          peakGyroStartTime = currTime;
+          peakAccelStartTime = currTime;
+          return;
         }
-      }
+        // Only check for poke when wheels are not being driven
+        if (!WheelController::AreWheelsMoving()) {
 
-      void UpdateGyroBiasFilter(const float rawGyro[3])
-      {
-        // Gyro bias filter update/calibration:
-        //
-        // During initial calibration, we maintain a filtered gyro bias estimate for each of the three axes. Once the
-        // filtered bias estimates converge on a near-constant value, we declare the gyro bias filter 'complete'. The
-        // criterion for convergence is that the filtered bias estimate has remained within a small window
-        // (BIAS_FILT_ALLOWED_BAND) for the required number of ticks (BIAS_FILT_COMPLETE_COUNT).
-        //
-        // Once the initial calibration is complete (i.e. IsBiasFilterComplete() == true), we switch to a much slower
-        // filter which keeps track of slow drifting of gyro zero-rate bias over time and temperature changes.
+          // Check for a gyro rotation spike
+          const f32 peakGyroThresh = 4.f;
+          const u32 maxGyroPeakDuration_ms = 75;
+          if (fabsf(gyro_robot_frame_filt[2]) > peakGyroThresh) {
+            peakGyroMaxTime = currTime;
+          } else if (fabsf(gyro_robot_frame_filt[2]) < peakGyroThresh) {
+            if ((peakGyroMaxTime > peakGyroStartTime) && (peakGyroMaxTime - peakGyroStartTime < maxGyroPeakDuration_ms)) {
+              AnkiEvent( "IMUFilter.PokeDetected.Gyro", "");
+              peakGyroStartTime = currTime;
+              lastPokeDetectTime = currTime;
 
-        if (!isMotionDetected_) {
-          // Update gyro bias offset while not moving. If the gyro bias value queue is just starting, then set the
-          // filtered gyro bias to the actual gyro value to initialize it. Otherwise, pass it through the low pass filter.
-          for (int i=0 ; i<3 ; i++) {
-            if (!IsBiasFilterComplete() && gyroBiasCalibValues_[i].empty()) {
-              gyro_bias_filt[i] = rawGyro[i];
+              RobotInterface::RobotPoked m;
+              RobotInterface::SendMessage(m);
             } else {
-              gyro_bias_filt[i] = LowPassFilter_single(gyro_bias_filt[i], rawGyro[i], gyroBiasCoeff_);
+              peakGyroStartTime = currTime;
             }
           }
 
-          AnkiInfoPeriodic(12000, "IMUFilter.Bias", "%f %f %f (deg/sec)",
-                           RAD_TO_DEG_F32(gyro_bias_filt[0]),
-                           RAD_TO_DEG_F32(gyro_bias_filt[1]),
-                           RAD_TO_DEG_F32(gyro_bias_filt[2]));
+          // Check for accel spike
+          if (!HeadController::IsMoving() && !LiftController::IsMoving()) {
+            const f32 peakAccelThresh = 4000.f;
+            const u32 maxAccelPeakDuration_ms = 75;
+            if (fabsf(accel_robot_frame_filt[0]) > peakAccelThresh) {
+              peakAccelMaxTime = currTime;
+            } else if (fabsf(accel_robot_frame_filt[0]) < peakAccelThresh) {
+              if ((peakAccelMaxTime > peakAccelStartTime) && (peakAccelMaxTime - peakAccelStartTime < maxAccelPeakDuration_ms)) {
+                AnkiEvent( "IMUFilter.PokeDetected.Accel", "");
+                peakAccelStartTime = currTime;
+                lastPokeDetectTime = currTime;
 
-          // If initial bias estimate not complete, accumulate
-          if (!IsBiasFilterComplete()) {
-            for (int i=0 ; i<3 ; i++) {
-              auto& biasVals = gyroBiasCalibValues_[i];
-              biasVals.push(gyro_bias_filt[i]);
-              while (biasVals.size() > BIAS_FILT_COMPLETE_COUNT) {
-                biasVals.pop();
+                RobotInterface::RobotPoked m;
+                RobotInterface::SendMessage(m);
+              } else {
+                peakAccelStartTime = currTime;
               }
             }
-            // Only declare the bias filter complete if we have enough filtered bias readings, and they all fall within
-            // the required window.
-            biasFilterComplete_ = std::all_of(gyroBiasCalibValues_.begin(), gyroBiasCalibValues_.end(),
-                                              [](const Util::MinMaxQueue<f32>& biasVals) {
-                                                return (biasVals.size() >= BIAS_FILT_COMPLETE_COUNT) &&
-                                                       (biasVals.max() - biasVals.min() < BIAS_FILT_ALLOWED_BAND);
-                                              });
-            if (IsBiasFilterComplete()) {
-              // Bias filter has accumulated enough measurements while not moving.
-              // Switch to slow filtering.
-              const f32 gyro_bias_deg[] = {RAD_TO_DEG_F32(gyro_bias_filt[0]),
-                                           RAD_TO_DEG_F32(gyro_bias_filt[1]),
-                                           RAD_TO_DEG_F32(gyro_bias_filt[2])};
-              AnkiInfo("IMUFilter.GyroCalibrated", "%f %f %f (deg/sec)",
-                       gyro_bias_deg[0],
-                       gyro_bias_deg[1],
-                       gyro_bias_deg[2]);
-
-              DASMSG(imu_filter_gyro_calibrated, "imu_filter.gyro_calibrated", "Gyro calibration values and duration");
-              DASMSG_SET(i1, 1000 * gyro_bias_deg[0], "X-axis gyro bias (milli-degrees)");
-              DASMSG_SET(i2, 1000 * gyro_bias_deg[1], "Y-axis gyro bias (milli-degrees)");
-              DASMSG_SET(i3, 1000 * gyro_bias_deg[2], "Z-axis gyro bias (milli-degrees)");
-              DASMSG_SET(i4, HAL::GetTimeStamp() - lastMotionDetectedTime_ms, "Time since last motion detected (ms)");
-              DASMSG_SEND();
-
-              gyroBiasCoeff_ = GYRO_BIAS_FILT_COEFF_NORMAL;
-              // No longer need to keep the gyro bias calibration values, so discard them to save memory
-              ClearGyroBiasCalibValues();
-            }
+          } else {
+            peakAccelStartTime = currTime;
           }
-        } else if (!IsBiasFilterComplete()) {
-          // Since we're moving, clear out the initial gyro bias value queues so that we restart gyro bias calibration
-          ClearGyroBiasCalibValues();
+
+        } else {
+          peakGyroStartTime = currTime;
+          peakAccelStartTime = currTime;
         }
       }
 
@@ -551,32 +434,33 @@ namespace Anki {
         // Fall detection timing:
         const TimeStamp_t now = HAL::GetTimeStamp();
         const TimeStamp_t fallDetectionTimeout_ms = 150; // fallStarted flag must be set for this long in order for 'bracing' to occur.
-
+        
         // "Bracing manuever" timing
         const TimeStamp_t bracingTime_ms = 250; // this much time (minimum) is allowed for the bracing maneuver to complete.
-
+        
         if (falling_) {
+          // Update the maximum experienced HP-filtered accelerometer value (take max of all three axes)
+          for (int i=0 ; i<3 ; i++) {
+            fallDetectMaxHighPassAccel_ = MAX(fallDetectMaxHighPassAccel_, fabsf(accel_robot_frame_high_pass[i]));
+          }
           if (accelMagnitudeSqrd_ > FALLING_THRESH_HIGH_MMPS2_SQRD) {
             // Estimating time in freefall: Consider the freefall finished
             // once the accelMagnitude rises above the upper threshold
             if (freefallDuration_ == 0) {
               freefallDuration_ = now - fallStartedTime_;
             }
-
             // Wait for robot to stop moving and bracing to complete, then unbrace.
             // Check for high-freq activity on x-axis (this could easily be any other axis since the threshold is so small)
             // to determine when the robot is definitely no longer moving.
             if((fabsf(accel_robot_frame_high_pass[0]) < STOPPED_TUMBLING_THRESH) &&
                (now - braceStartedTime_ > bracingTime_ms)) {
-              // Send the FallingEvent message
+              // Send the FallingEvent message:
               RobotInterface::FallingEvent msg;
               msg.timestamp = fallStartedTime_;
               msg.duration_ms = freefallDuration_;
+              msg.impactIntensity = fallDetectMaxHighPassAccel_;
               RobotInterface::SendMessage(msg);
-              DASMSG(imu_filter_falling_event,  "imu_filter.falling_event", "Robot experienced a fall");
-              DASMSG_SET(i1, freefallDuration_, "Duration of fall (ms)");
-              DASMSG_SEND();
-
+              
               ResetFallingVars();
               UnbraceAfterImpact();
             }
@@ -602,64 +486,6 @@ namespace Anki {
         }
       }
       
-      // impact detection works based on seeing a high enough acceleration norm
-      // over a sliding window of time. If the robot is being handled (in-hand
-      // manipulation), then impact detection is suppressed.
-      // additionally, we check for impact only for a short duration after a fall
-      // is potentially detected
-      void DetectImpact()
-      {
-        const TimeStamp_t now = HAL::GetTimeStamp();
-
-        f32 currTickAccelNormSq = (accel_robot_frame[0]*accel_robot_frame[0] +
-                                   accel_robot_frame[1]*accel_robot_frame[1] +
-                                   accel_robot_frame[2]*accel_robot_frame[2]);
-        
-        maxAccelerationMagnitudeBuffer_.push(currTickAccelNormSq);
-        if(maxAccelerationMagnitudeBuffer_.size() > MAX_ACCEL_MAGNITUDE_BUFFER_SIZE) {
-          maxAccelerationMagnitudeBuffer_.pop();
-        }
-        f32 maxAccMagnitude = maxAccelerationMagnitudeBuffer_.max();
-
-        // compute whether the robot's being-held state should suppress the impact detector
-        const bool currRobotBeingHeldState = IMUFilter::IsBeingHeld();
-        if(currRobotBeingHeldState && !lastRobotBeingHeldState_) {
-          timeOfStartBeingHeld_ = now;
-        }
-        if(!currRobotBeingHeldState && lastRobotBeingHeldState_) {
-          timeOfEndBeingHeld_ = now;
-        }
-        lastRobotBeingHeldState_ = currRobotBeingHeldState;
-        const bool isCurrentlyHeld    = currRobotBeingHeldState && ((now - timeOfStartBeingHeld_) > MIN_TIME_HELD_SUPPRESS_IMPACT_MS);
-        const bool wasRecentlyHeld    = !currRobotBeingHeldState && ((now - timeOfEndBeingHeld_) < MIN_TIME_SINCE_PUTDOWN_SUPPRESS_IMPACT_MS);
-        const bool beingHeldSuppressImpact = (wasRecentlyHeld || isCurrentlyHeld);
-
-        // determine if we should query for impact detection, because of a possible fall
-        if(falling_ || fallStarted_) {
-          lastPotentialFallTime_ = now;
-        }
-        const TimeStamp_t timeSinceFallingDetected = now - lastPotentialFallTime_;
-        const TimeStamp_t timeSinceImpactMsg = now - lastImpactSendTime_ms_;
-        const bool shouldCheckForImpact = (timeSinceFallingDetected < IMPACT_DETECTION_WINDOW_AFTER_FALL_MS);
-
-        // throttle sending the impact message if we've sent it already
-        const bool canSendMessage = (timeSinceImpactMsg > IMPACT_MESSAGE_THROTTLE_TIME_MS);
-
-        if(canSendMessage) {
-          const bool didAccelerationSpike = (maxAccMagnitude > MIN_ACCEL_MAG_SQUARED_FOR_IMPACT_MMPS2);
-          const bool detectedImpact = shouldCheckForImpact && !beingHeldSuppressImpact && didAccelerationSpike;
-
-          if(detectedImpact) {
-            RobotInterface::SendMessage(RobotInterface::FallImpactEvent());
-
-            DASMSG(imu_filter_fall_impact_event,  "imu_filter.fall_impact_event", "Robot experienced a freefall for a minimum duration and then a sudden impact");
-            DASMSG_SEND();
-
-            lastImpactSendTime_ms_ = now;
-          }
-        }
-      }
-
       // Conservative check for unintended acceleration that are
       // valid even while the motors are moving.
       bool CheckPickupWhileMoving() {
@@ -668,47 +494,81 @@ namespace Anki {
                (abs_accel_robot_frame_filt[2] > PICKUP_WHILE_MOVING_ACC_THRESH[2]);
       }
 
+      // Conservative check for unintended acceleration that are
+      // valid even while the motors are moving.
+      bool CheckPutdown() {
+        return  (abs_accel_robot_frame_filt[0] < PICKUP_WHILE_MOVING_ACC_THRESH[0] - PUTDOWN_HYSTERESIS) ||
+                (abs_accel_robot_frame_filt[1] < PICKUP_WHILE_MOVING_ACC_THRESH[1] - PUTDOWN_HYSTERESIS) ||
+                (abs_accel_robot_frame_filt[2] < PICKUP_WHILE_MOVING_ACC_THRESH[2] - PUTDOWN_HYSTERESIS);
+      }
+      
       bool AreMotorsMoving() {
-        return  WheelController::AreWheelsMoving() || HeadController::IsMoving() || LiftController::IsMoving();
+        return  WheelController::AreWheelsPowered() || WheelController::AreWheelsMoving()
+                || HeadController::IsMoving() || !HeadController::IsInPosition()
+                || LiftController::IsMoving() || !LiftController::IsInPosition();
       }
 
-      // Checks for conditions to enter/exit picked up state
+      // Robot pickup detector
+      //
+      // Pickup detection occurs when the z-axis accelerometer reading is detected to be trending
+      // up or down. When the robot moves under it's own power the accelerometer readings tend to be
+      // much more noisy than when it is held by a person. The trend must satisfy one of two cases to
+      // be considered a pickup detection:
+      //
+      // 1) Be trending for at least PD_MIN_TREND_LENGTH tics without any head motion.
+      //    (Head motion is sometimes smooth enough to look like a pickup.)
+      //
+      // 2) Be trending for at least PD_MIN_TREND_LENGTH and have spanned a delta of
+      //    PD_SUFFICIENT_TREND_DIFF mm/s^2. In this case head motion is allowed.
+      //    This is so we can at least have a less sensitive detector if the robot
+      //    is engaged is some never-ending head motions.
       void DetectPickup()
       {
         if (!pickupDetectEnabled_)
           return;
 
-        // If enough of the cliff sensors detect cliffs, this is indicative of pickup.
-        u8 numCliffSensorsDetectingChange = 0;
-        for (int i=0 ; i < HAL::CLIFF_COUNT ; i++) {
-          if (ProxSensors::IsCliffDetected(i)) {
-            ++numCliffSensorsDetectingChange;
-          }
-        }
-        bool cliffBasedPickupDetect = numCliffSensorsDetectingChange >= NUM_CLIFF_SENSORS_FOR_CHANGE_DETECT_PICKUP;
-
-
         if (IsPickedUp()) {
+          
           // Picked up flag is reset only when the robot has
           // stopped moving, detects no cliffs, and has been set upright.
-          if (!cliffBasedPickupDetect &&
-              !isMotionDetected_ &&
+          if (!ProxSensors::IsAnyCliffDetected() &&
+              CheckPutdown() &&
               (accel_robot_frame_filt[2] > NSIDE_DOWN_THRESH_MMPS2)) {
-            SetPickupDetect(false);
+            if (++putdownCnt_ > PUTDOWN_COUNT) {
+              SetPickupDetect(false);
+            }
+          } else {
+            putdownCnt_ = 0;
           }
 
         } else {
-
-          // Gyro activity can also indicate pickup.
-          // Different detection thresholds are used depending on whether or not the wheels are moving.
+          
+          // If cliff sensor changes while wheels not moving this is indicative of pickup
+          bool cliffBasedPickupDetect = false;
           bool gyroZBasedMotionDetect = false;
-          if (!AreMotorsMoving()) {
+          if (!WheelController::AreWheelsMoving() && !WheelController::AreWheelsPowered()) {
+            s16 maxCliffDelta = 0;
+            
+            for (int i=0 ; i < HAL::CLIFF_COUNT ; i++) {
+              if (cliffValsWhileNotMoving_[i] == 0) {
+                cliffValsWhileNotMoving_[i] = ProxSensors::GetCliffValue(i);
+              } else {
+                const s16 absCliffDelta = ABS(cliffValsWhileNotMoving_[i] - ProxSensors::GetCliffValue(i));
+                maxCliffDelta = MAX(maxCliffDelta, absCliffDelta);
+              }
+            }
+
+            cliffBasedPickupDetect = maxCliffDelta > CLIFF_DELTA_FOR_PICKUP;
 
             // As long as wheels aren't moving, we can also check for Z-axis gyro motion
-            gyroZBasedMotionDetect = ABS(gyro_robot_frame_filt[2]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH;
-
+            gyroZBasedMotionDetect = ABS(gyro_robot_frame_filt[2]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH[2];
+            
           } else {
 
+            for (int i=0 ; i < HAL::CLIFF_COUNT ; i++) {
+              cliffValsWhileNotMoving_[i] = 0;
+            }
+            
             // Is the robot turning at a radically different speed than what it should be experiencing given current wheel speeds?
             // UNEXPECTED_ROTATION_SPEED_THRESH is being used as a multipurpose margin here. Because GetCurrNoSlipBodyRotSpeed() is based
             // on filtered wheel speeds there's a little delay which permits measuredBodyRotSpeed to be a little faster than maxPossibleBodyRotSpeed.
@@ -721,15 +581,15 @@ namespace Anki {
 
           }
 
-
+          
           // Sensitive check
           // If motors aren't moving, any motion is because a person was messing with it!
           if (!AreMotorsMoving()) {
-
+            
             // Sufficient gyro motion is evidence of pickup
-            bool gyroBasedMotionDetected = (ABS(gyro_robot_frame_filt[0]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH) ||
-                                           (ABS(gyro_robot_frame_filt[1]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH) ||
-                                           (ABS(gyro_robot_frame_filt[2]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH);
+            bool gyroBasedMotionDetected = (ABS(gyro_robot_frame_filt[0]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH[0]) ||
+                                           (ABS(gyro_robot_frame_filt[1]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH[1]) ||
+                                           (ABS(gyro_robot_frame_filt[2]) > PICKUP_WHILE_WHEELS_NOT_MOVING_GYRO_THRESH[2]);
 
             if (cliffBasedPickupDetect || gyroBasedMotionDetected)
             {
@@ -740,7 +600,7 @@ namespace Anki {
               // Decrease potentialPickupCnt while no motion is detected
               --potentialPickupCnt_;
             }
-
+            
             // If the sign of the gyro data changes then reset potentialPickupCnt
             // This is to prevent oscillations from triggering pickup
             for(u8 i = 0; i < 3; ++i)
@@ -750,10 +610,10 @@ namespace Anki {
                 potentialPickupCnt_ = 0;
               }
             }
-
-
+            
+            
             // Sufficient acceleration is evidence of pickup.
-            // Only evaluating the horizontal axes. Z-acceleration is sensitive to surface vibrations,
+            // Only evaluating the horiztonal axes. Z-acceleration is sensitive to surface vibrations,
             // plus z-motion should be captured more reliably by the cliff sensor.
             // Keeping track of sign of disturbance because if it crosses 0 this is more indicative of
             // vibration versus steady motion.
@@ -769,10 +629,10 @@ namespace Anki {
                 external_accel_disturbance_cnt[i] = 0;
               }
             }
-
+            
             bool accelBasedMotionDetected = (ABS(external_accel_disturbance_cnt[0]) > PICKUP_COUNT_WHILE_MOTIONLESS) ||
                                             (ABS(external_accel_disturbance_cnt[1]) > PICKUP_COUNT_WHILE_MOTIONLESS);
-
+            
             if (potentialPickupCnt_ > PICKUP_COUNT_WHILE_MOTIONLESS || accelBasedMotionDetected) {
               AnkiInfo( "IMUFilter.PDWhileStationary", "acc (%f, %f, %f), gyro (%f, %f, %f), cliff %d",
                     accel_robot_frame_filt[0], accel_robot_frame_filt[1], accel_robot_frame_filt[2],
@@ -782,7 +642,7 @@ namespace Anki {
             }
 
           } else {
-
+            
             // Do conservative check for pickup.
             // Only when we're really sure it's moving!
             // TODO: Make this smarter!
@@ -795,75 +655,67 @@ namespace Anki {
             } else {
               potentialPickupCnt_ = 0;
             }
-
+            
           }
-
+          
         }
       }
 
+
       // Update the last time motion was detected
-      void DetectMotion()
+      bool DetectMotion()
       {
         u32 currTime = HAL::GetTimeStamp();
 
         if (AreMotorsMoving() ||
-
+            
             (IsBiasFilterComplete() &&
-            (ABS(gyro_[0]) > GYRO_MOTION_THRESHOLD ||
-             ABS(gyro_[1]) > GYRO_MOTION_THRESHOLD ||
-             ABS(gyro_[2]) > GYRO_MOTION_THRESHOLD)) ||
-
+            (ABS(gyro_[0]) > gyroMotionThresh_ ||
+             ABS(gyro_[1]) > gyroMotionThresh_ ||
+             ABS(gyro_[2]) > gyroMotionThresh_)) ||
+             
             (!IsBiasFilterComplete() &&
-             (ABS(imu_data_.gyro[0]) > GYRO_MOTION_PRECALIB_THRESHOLD ||
-              ABS(imu_data_.gyro[1]) > GYRO_MOTION_PRECALIB_THRESHOLD ||
-              ABS(imu_data_.gyro[2]) > GYRO_MOTION_PRECALIB_THRESHOLD)) ||
-
+             (ABS(imu_data_.rate_x) > gyroMotionThresh_ ||
+              ABS(imu_data_.rate_y) > gyroMotionThresh_ ||
+              ABS(imu_data_.rate_z) > gyroMotionThresh_)) ||
+              
+            
             ABS(accel_robot_frame_high_pass[0]) > ACCEL_MOTION_THRESH ||
             ABS(accel_robot_frame_high_pass[1]) > ACCEL_MOTION_THRESH ||
             ABS(accel_robot_frame_high_pass[2]) > ACCEL_MOTION_THRESH) {
           lastMotionDetectedTime_ms = currTime;
         }
-
+        
         // TODO: Gyro seems to be sensitive enough that it's sufficient for detecting motion, but if
         //       that's not the case, check for changes in gravity vector.
         // ...
-
-
-        isMotionDetected_ = (lastMotionDetectedTime_ms + MOTION_DETECT_TIMEOUT_MS) >= currTime;
-
-      }
-
-      // Simple poke detect
-      // If wheels aren't moving but a sudden rotation about z-axis was detected
-      void DetectPoke()
-      {
-        // Do nothing during cooldown period
-        TimeStamp_t currTime = HAL::GetTimeStamp();
-        if (currTime - _lastPokeDetectTime < POKE_DETECT_COOLDOWN_MS) {
-          _peakGyroStartTime = currTime;
-          return;
-        }
-        // Do nothing if motors are moving, as detecting pokes while the robot is attempting to move is far more challenging.
-        // Also don't attempt to detect pokes if a pickup was detected.
-        // TODO(GB): Poke detection should still run if the robot is being held upright in the user's hand.
-        if (!AreMotorsMoving() && !pickedUp_) {
-          // Check for a gyro rotation spike
-          if (fabsf(gyro_robot_frame_filt[2]) > PEAK_GYRO_THRESHOLD) {
-            _peakGyroMaxTime = currTime;
-          } else {
-            if ((_peakGyroMaxTime > _peakGyroStartTime) && (_peakGyroMaxTime - _peakGyroStartTime < MAX_GYRO_PEAK_DURATION_MS)) {
-              AnkiInfo( "IMUFilter.PokeDetected.Gyro", "");
-              _peakGyroStartTime = currTime;
-              _lastPokeDetectTime = currTime;
-              RobotInterface::RobotPoked m;
-              RobotInterface::SendMessage(m);
-            } else {
-              _peakGyroStartTime = currTime;
-            }
+        
+        
+/*
+        // Measure peak readings every 2 seconds
+        static f32 max_gyro[3] = {0,0,0};
+        for (int i=0; i<3; ++i) {
+          if(ABS(gyro_robot_frame_filt[i]) > max_gyro[i]) {
+            max_gyro[i] = ABS(gyro_robot_frame_filt[i]);
           }
-        } else {
-          _peakGyroStartTime = currTime;
         }
+        
+        static u32 measurement_cycles = 0;
+        if (measurement_cycles++ == 400) {
+          AnkiDebug( "IMUFilter", "Max gyro: %f %f %f",
+                    max_gyro[0],
+                    max_gyro[1],
+                    max_gyro[2]);
+          
+          measurement_cycles = 0;
+          for (int i=0; i<3; ++i) {
+            max_gyro[i] = 0;
+          }
+        }
+*/
+        
+        return (lastMotionDetectedTime_ms + MOTION_DETECT_TIMEOUT_MS) >= currTime;
+        
       }
 
       // This pitch measurement isn't precise to begin with, but it's extra imprecise when the head is moving
@@ -873,41 +725,22 @@ namespace Anki {
         f32 headAngle = HeadController::GetAngleRad();
 
         if (prevHeadAngle_ != UNINIT_HEAD_ANGLE) {
-          const f32 accelBasedPitch = atan2f(imu_data_.accel[0], imu_data_.accel[2]) - headAngle;
+          const f32 accelBasedPitch = atan2f(imu_data_.acc_x, imu_data_.acc_z) - headAngle;
           const f32 gyroBasedPitch = pitch_ - (gyro_robot_frame[1] * CONTROL_DT) - (headAngle - prevHeadAngle_);
-
+          
           // Complementary filter to mostly trust gyro integration for current pitch in the short term
           // but always approach accelerometer-based pitch in the "long" term. Because of things like
           // keepaway and pounce which require fast and somewhat accurate measurements of pitch, use
           // a different coefficient while the wheels are moving.
-          const f32 coeff = (WheelController::AreWheelsPowered() || WheelController::AreWheelsMoving() || HeadController::IsMoving()) ?
+          const f32 coeff = (WheelController::AreWheelsPowered() || WheelController::AreWheelsMoving()) ?
                               PITCH_FILT_COEFF_MOVING :
                               PITCH_FILT_COEFF;
           pitch_ = (coeff * gyroBasedPitch) + ((1.f - coeff) * accelBasedPitch);
         }
-
+        
         prevHeadAngle_ = headAngle;
 
         //AnkiDebugPeriodic(50, "RobotPitch", "%f deg (motion %d, gyro %f)", RAD_TO_DEG_F32(pitch_), MotionDetected(), gyro_robot_frame_filt[1]);
-      }
-
-      void UpdateRoll()
-      {
-        const f32 headAngle = HeadController::GetAngleRad();
-        const f32 accelBasedRoll = atan2f(imu_data_.accel[1], imu_data_.accel[2] * cosf(headAngle));
-        const f32 gyroBasedRoll = roll_ - (gyro_robot_frame[0] * CONTROL_DT);
-
-        // Complementary filter to mostly trust gyro integration for current roll in the short term
-        // but always approach accelerometer-based roll in the "long" term.
-        const bool isMoving = WheelController::AreWheelsPowered() || WheelController::AreWheelsMoving() || HeadController::IsMoving();
-        const f32 coeff = isMoving ? ROLL_FILT_COEFF_MOVING : ROLL_FILT_COEFF;
-        roll_ = (coeff * gyroBasedRoll) + ((1.f - coeff) * accelBasedRoll);
-//        AnkiDebugPeriodic(250, "IMUFilter.UpdateRoll",
-//                         "Filtered, accel-based, gyro-based: %f %f %f, (In motion: %d)",
-//                         RAD_TO_DEG_F32(roll_),
-//                         RAD_TO_DEG_F32(accelBasedRoll),
-//                         RAD_TO_DEG_F32(gyroBasedRoll),
-//                         isMoving);
       }
 
       Result Update()
@@ -927,42 +760,89 @@ namespace Anki {
         const u32 imuTempReadingRate_ms = FACTORY_TEST ? (1*1000) : (10*1000);
         const f32 temperatureDiffThresh_degC = 0.5f;
         const TimeStamp_t curTime = HAL::GetTimeStamp();
-
+        
         if (curTime > timeOfLastImuTempSample_ms_ + imuTempReadingRate_ms && IsBiasFilterComplete()) {
           const bool temperatureChanging = fabsf(lastImuTempSample_degC_ - imu_data_.temperature_degC) > temperatureDiffThresh_degC;
           gyroBiasCoeff_ = temperatureChanging ?
             GYRO_BIAS_FILT_COEFF_TEMP_CHANGING :
             GYRO_BIAS_FILT_COEFF_NORMAL;
-
+          
           lastImuTempSample_degC_ = imu_data_.temperature_degC;
           timeOfLastImuTempSample_ms_ = curTime;
-
+          
           // Also send an IMUTemperature message to engine
           RobotInterface::IMUTemperature m;
           m.temperature_degC = imu_data_.temperature_degC;
           RobotInterface::SendMessage(m);
         }
 
-        ////// Gyro Update //////
+        ////// Gyro Update //////        
 
         // Bias corrected gyro readings
-        for (int i=0 ; i<3 ; i++) {
-          gyro_[i] = imu_data_.gyro[i] - gyro_bias_filt[i];
-        }
-
+        gyro_[0] = imu_data_.rate_x - gyro_bias_filt[0];
+        gyro_[1] = imu_data_.rate_y - gyro_bias_filt[1];
+        gyro_[2] = imu_data_.rate_z - gyro_bias_filt[2];
+          
 #ifndef SIMULATOR
-        // VECTOR: Correct for observed sensitivity error on z axis of gyro (VIC-285)
-        // It has been observed that the z axis gyro usually reports about a 1.03% higher
+        // COZMO V1: Correct for observed sensitivity error on z axis of gyro (COZMO-14182)
+        // It has been observed that the z axis gyro usually reports about a 1.8% higher
         // rate than it is actually experiencing, so simply scale it here.
-         gyro_[2] *= 0.989f;
+
+        // Similar correction needed for Victor?
+        // gyro_[2] *= 0.982f;
 #endif
 
-
+          
         // Update gyro bias filter
-        DetectMotion();
-
-        UpdateGyroBiasFilter(imu_data_.gyro);
-
+        if (!DetectMotion()) {
+          
+          if (biasFiltCnt_ == 0) {
+            // Initialize bias filter
+            gyro_bias_filt[0] = imu_data_.rate_x;
+            gyro_bias_filt[1] = imu_data_.rate_y;
+            gyro_bias_filt[2] = imu_data_.rate_z;
+            AnkiInfo( "IMUFilter.Update.GyroBiasInit", "%f %f %f",
+                     RAD_TO_DEG_F32(gyro_bias_filt[0]),
+                     RAD_TO_DEG_F32(gyro_bias_filt[1]),
+                     RAD_TO_DEG_F32(gyro_bias_filt[2]));
+          } else {
+            // Update gyro bias offset while not moving
+            gyro_bias_filt[0] = LowPassFilter_single(gyro_bias_filt[0], imu_data_.rate_x, gyroBiasCoeff_);
+            gyro_bias_filt[1] = LowPassFilter_single(gyro_bias_filt[1], imu_data_.rate_y, gyroBiasCoeff_);
+            gyro_bias_filt[2] = LowPassFilter_single(gyro_bias_filt[2], imu_data_.rate_z, gyroBiasCoeff_);
+          }
+          
+          AnkiDebugPeriodic(12000, "IMUFilter.Bias", "%f %f %f",
+                            RAD_TO_DEG_F32(gyro_bias_filt[0]),
+                            RAD_TO_DEG_F32(gyro_bias_filt[1]),
+                            RAD_TO_DEG_F32(gyro_bias_filt[2]));
+          
+          // If initial bias estimate not complete, accumulate
+          if (!IsBiasFilterComplete()) {
+            biasFiltCnt_++;
+            if (biasFiltCnt_ == BIAS_FILT_COMPLETE_COUNT) {
+              // Bias filter has accumulated enough measurements while not moving.
+              // Switch to slow filtering.
+              AnkiEvent( "IMUFilter.Update.GyroCalibrated", "%f %f %f",
+                       RAD_TO_DEG_F32(gyro_bias_filt[0]),
+                       RAD_TO_DEG_F32(gyro_bias_filt[1]),
+                       RAD_TO_DEG_F32(gyro_bias_filt[2]));
+              gyroBiasCoeff_ = GYRO_BIAS_FILT_COEFF_NORMAL;
+              gyroMotionThresh_ = GYRO_MOTION_THRESHOLD;
+            }
+            else if ( (fabsf(gyro_bias_filt[0] - imu_data_.rate_x) > BIAS_FILT_RESTART_THRESH) ||
+                      (fabsf(gyro_bias_filt[1] - imu_data_.rate_y) > BIAS_FILT_RESTART_THRESH) ||
+                      (fabsf(gyro_bias_filt[2] - imu_data_.rate_z) > BIAS_FILT_RESTART_THRESH) ) {
+              // Bias filter saw evidence of motion by virtue of the fact that the filter value differs from
+              // the input. Reset the counter.
+              biasFiltCnt_ = 0;
+            }
+          }
+          
+        } else if (!IsBiasFilterComplete()) {
+          biasFiltCnt_ = 0;
+        }
+        
         // Don't do any other IMU updates until head is calibrated
         if (!HeadController::IsCalibrated()) {
           pitch_ = 0.f;
@@ -974,7 +854,7 @@ namespace Anki {
         if (!IsBiasFilterComplete()) {
           return retVal;
         }
-
+          
         // Compute head angle wrt to world horizontal plane
         const f32 headAngle = HeadController::GetAngleRad();  // TODO: Use encoders or accelerometer data? If encoders,
                                                               // may need to use accelerometer data anyway for when it's on ramps.
@@ -1003,40 +883,46 @@ namespace Anki {
           gyro_sign[i] = signbit(gyro_robot_frame_filt[i]);
         }
 
-        // Filter gyro readings in robot frame
+        // Fiter gyro readings in robot frame
         LowPassFilter(gyro_robot_frame_filt, gyro_robot_frame, RATE_FILT_COEFF);
 
 
         ///// Accelerometer update /////
-
-        LowPassFilter(accel_filt, imu_data_.accel, ACCEL_FILT_COEFF);
-
+          
+        accel_filt[0] = LowPassFilter_single(accel_filt[0], imu_data_.acc_x, ACCEL_FILT_COEFF);
+        accel_filt[1] = LowPassFilter_single(accel_filt[1], imu_data_.acc_y, ACCEL_FILT_COEFF);
+        accel_filt[2] = LowPassFilter_single(accel_filt[2], imu_data_.acc_z, ACCEL_FILT_COEFF);
+          
         // Compute accelerations in robot frame
-        const f32 xzAccelMagnitude = std::hypot(imu_data_.accel[0], imu_data_.accel[2]);
-        const f32 accel_angle_imu_frame = atan2_fast(imu_data_.accel[2], imu_data_.accel[0]);
+        const f32 xzAccelMagnitude = sqrtf(imu_data_.acc_x * imu_data_.acc_x + imu_data_.acc_z * imu_data_.acc_z);
+        const f32 accel_angle_imu_frame = atan2_fast(imu_data_.acc_z, imu_data_.acc_x);
         const f32 accel_angle_robot_frame = accel_angle_imu_frame + headAngle;
-
+        
         accel_robot_frame[0] = xzAccelMagnitude * cosf(accel_angle_robot_frame);
-        accel_robot_frame[1] = imu_data_.accel[1];
+        accel_robot_frame[1] = imu_data_.acc_y;
         accel_robot_frame[2] = xzAccelMagnitude * sinf(accel_angle_robot_frame);
-
+        
 
         f32 prev_accel_robot_frame_filt[3] = { accel_robot_frame_filt[0],
                                                accel_robot_frame_filt[1],
                                                accel_robot_frame_filt[2] };
-
+          
         // Filter accel readings in robot frame
         LowPassFilter(accel_robot_frame_filt, accel_robot_frame, ACCEL_FILT_COEFF);
-
+          
         // High-pass filter accelerations
         HighPassFilter(accel_robot_frame_high_pass, accel_robot_frame_filt, prev_accel_robot_frame_filt, HP_ACCEL_FILT_COEFF);
 
         // Absolute values (fall-detection)
-        accelMagnitudeSqrd_ = 0;
-        for (int i=0 ; i<3 ; i++) {
-          abs_accel_robot_frame_filt[i] = ABS(accel_robot_frame_filt[i]);
-          accelMagnitudeSqrd_ += (imu_data_.accel[i] * imu_data_.accel[i]);
-        }
+        abs_accel_robot_frame_filt[0] = ABS(accel_robot_frame_filt[0]);
+        abs_accel_robot_frame_filt[1] = ABS(accel_robot_frame_filt[1]);
+        abs_accel_robot_frame_filt[2] = ABS(accel_robot_frame_filt[2]);
+          
+        accelMagnitudeSqrd_ = imu_data_.acc_x * imu_data_.acc_x +
+                              imu_data_.acc_y * imu_data_.acc_y +
+                              imu_data_.acc_z * imu_data_.acc_z;
+
+          
 
 #if(DEBUG_IMU_FILTER)
         PERIODIC_PRINT(200, "Accel angle %f %f\n", accel_angle_imu_frame, accel_angle_robot_frame);
@@ -1047,7 +933,6 @@ namespace Anki {
 #endif
 
         UpdatePitch();
-        UpdateRoll();
 
         // XY-plane rotation rate is robot frame z-axis rotation rate
         rotSpeed_ = gyro_robot_frame_filt[2];
@@ -1055,30 +940,26 @@ namespace Anki {
         // Update orientation
         f32 dAngle = rotSpeed_ * CONTROL_DT;
         rot_ += dAngle;
-
+        
         //MadgwickAHRSupdateIMU(gyro_[0], gyro_[1], gyro_[2],
-        //                      imu_data_.accel[0], imu_data_.accel[1], imu_data_.accel[2]);
+        //                      imu_data_.acc_x, imu_data_.acc_y, imu_data_.acc_z);
 
 
         // XXX: Commenting this out because pickup detection seems to be firing
         //      when the robot drives up ramp (or the side of a platform) and
         //      clearing pose history.
         DetectPickup();
-
-        // Poke detection MUST occur after pick-up detection, to avoid confusing an
-        // overly-aggressive pickup with a poke.
+        
         DetectPoke();
-
         DetectFalling();
 
-        DetectImpact();
-
-        // Queue ImuData to be sent as part of RobotState
-        auto& thisDataFrame = imuDataBuffer_.push_back();
-        thisDataFrame.timestamp = curTime;
-        thisDataFrame.gyroRobotFrame.x = gyro_robot_frame_filt[0];
-        thisDataFrame.gyroRobotFrame.y = gyro_robot_frame_filt[1];
-        thisDataFrame.gyroRobotFrame.z = gyro_robot_frame_filt[2];
+        // Send ImageImuData to engine
+        ImageImuData imageImuData;
+        imageImuData.systemTimestamp_ms = curTime;
+        imageImuData.rateX = gyro_robot_frame_filt[0];
+        imageImuData.rateY = gyro_robot_frame_filt[1];
+        imageImuData.rateZ = gyro_robot_frame_filt[2];
+        RobotInterface::SendMessage(imageImuData);
 
         // Recording IMU data for sending to basestation
         if (isRecording_) {
@@ -1104,19 +985,21 @@ namespace Anki {
               isRecording_ = false;
             }
           }
-#else
+#else         
           ++sentIMUDataMsgs_;
           if (sentIMUDataMsgs_ == totalIMUDataMsgsToSend_) {
             AnkiDebug( "IMUFilter.IMURecording.CompleteRaw", "time %dms", HAL::GetTimeStamp());
             isRecording_ = false;
             imuRawDataMsg_.order = 2;  // 2 == last msg of sequence
           }
-
-          for (int i=0 ; i<3 ; i++) {
-            imuRawDataMsg_.a[i] = (int16_t) imu_data_.accel[i]; // mm/s^2
-            imuRawDataMsg_.g[i] = (int16_t) 1000.f * imu_data_.gyro[i]; // millirad/sec
-          }
-
+          
+          imuRawDataMsg_.a[0] = (int16_t) imu_data_.acc_x; // mm/s^2
+          imuRawDataMsg_.a[1] = (int16_t) imu_data_.acc_y;
+          imuRawDataMsg_.a[2] = (int16_t) imu_data_.acc_z;
+          imuRawDataMsg_.g[0] = (int16_t) 1000.f * imu_data_.rate_x; // millirad/sec
+          imuRawDataMsg_.g[1] = (int16_t) 1000.f * imu_data_.rate_y;
+          imuRawDataMsg_.g[2] = (int16_t) 1000.f * imu_data_.rate_z;
+          
           RobotInterface::SendMessage(imuRawDataMsg_);
           imuRawDataMsg_.order = 1;    // 1 == intermediate msg of sequence
 #endif
@@ -1124,7 +1007,7 @@ namespace Anki {
         }
 
         } // while (HAL::IMUReadData())
-
+        
         return retVal;
 
       } // Update()
@@ -1133,15 +1016,10 @@ namespace Anki {
       {
         return imu_data_;
       }
-
+      
       const f32* GetBiasCorrectedGyroData()
       {
         return gyro_;
-      }
-
-      ImuDataBufferType& GetImuDataBuffer()
-      {
-        return imuDataBuffer_;
       }
 
       f32 GetRotation()
@@ -1160,24 +1038,9 @@ namespace Anki {
         return pitch_;
       }
 
-      f32 GetRoll()
-      {
-        return roll_;
-      }
-
       bool IsPickedUp()
       {
         return pickedUp_ || falling_;
-      }
-
-      bool IsBeingHeld()
-      {
-        return IsPickedUp() && isMotionDetected_;
-      }
-
-      bool IsMotionDetected()
-      {
-        return isMotionDetected_;
       }
 
       bool IsFalling()
@@ -1187,14 +1050,14 @@ namespace Anki {
 
       bool IsBiasFilterComplete()
       {
-        return biasFilterComplete_;
+        return biasFiltCnt_ >= BIAS_FILT_COMPLETE_COUNT;
       }
-
+      
       const f32* GetGyroBias()
       {
         return gyro_bias_filt;
       }
-
+      
       void RecordAndSend(const u32 length_ms)
       {
         AnkiDebug( "IMUFilter.IMURecording.Start", "time = %dms", HAL::GetTimeStamp());
@@ -1212,5 +1075,5 @@ namespace Anki {
       }
 
     } // namespace IMUFilter
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

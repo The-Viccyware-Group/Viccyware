@@ -2,8 +2,6 @@
 
 import os
 import errno
-import glob
-import inspect
 import subprocess
 import sys
 import argparse
@@ -12,45 +10,15 @@ import threading
 import tarfile
 import logging
 import configparser
-import re
 from datetime import datetime
 import json
 from enum import Enum, unique
 from functools import lru_cache
-import requests
 
-try:
-    ANKI_BUILD_VERSION = os.environ['ANKI_BUILD_VERSION']
-except KeyError:
-    print("Please set the environment variable ANKI_BUILD_VERSION")
-    sys.exit(1)
+# Root folder path of cozmo-one repo
+COZMO_ENGINE_ROOT = subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip(b"\r\n").decode("utf-8")
 
-try:
-    SLACK_TOKEN_URL =  os.environ['SLACK_TOKEN_URL']
-except KeyError:
-    print("Please set the environment variable SLACK_TOKEN_URL")
-    sys.exit(1)
-
-try:
-    SLACK_CHANNEL =  os.environ['SLACK_CHANNEL']
-except KeyError:
-    print("Please set the environment variable SLACK_CHANNEL")
-    sys.exit(1)
-
-TEAMCITY_SERVER_URL = "https://build.ankicore.com"
-VICTOR_WEBOTS_NIGHTLY_SDK_TESTS = "Victor_Dev_VictorWebotsNightlySdkTests"
-
-# Root folder path of victor repo
-VECTOR_ENGINE_ROOT = subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip(b"\r\n").decode("utf-8")
-
-BUILD_TOOLS_ROOT = os.path.join(VECTOR_ENGINE_ROOT, 'tools', 'build', 'tools')
-
-VICTOR_SDK_PORT = 8443
-POST_ACTION     = "POST"
-HEADERS         = {
-                      'content-type': "application/json"
-                  }
-
+BUILD_TOOLS_ROOT = os.path.join(COZMO_ENGINE_ROOT, 'tools', 'build', 'tools')
 sys.path.insert(0, BUILD_TOOLS_ROOT)
 from ankibuild import util
 
@@ -61,7 +29,7 @@ formatter = logging.Formatter('{name} {levelname} - {message}', style='{')
 stdout_handler.setFormatter(formatter)
 UtilLog.addHandler(stdout_handler)
 
-WORLD_FILE_TEST_NAME_PLACEHOLDER = r'%VECTOR_SIM_TEST'
+WORLD_FILE_TEST_NAME_PLACEHOLDER = r'%COZMO_SIM_TEST'
 # Name of user created certificate for signing webots executables to be
 # excepted by the firewall
 CERTIFICATE_NAME = "WebotsFirewall"
@@ -69,7 +37,7 @@ CERTIFICATE_NAME = "WebotsFirewall"
 class ThreadOutput(object):
   test_return_code = None
 
-class TemplateStringNotFoundException(Exception):
+class TemplateStringNotFoundException(Exception): 
   def __init__(self, template_string, source_data):
     UtilLog.error("Template string was not found in source data!")
     UtilLog.error("Template String: {0}\nSource Data: {1}".format(template_string, source_data))
@@ -98,7 +66,7 @@ class ForwardWebotsLogLevel(Enum):
 def get_subpath(partial_path, *args):
   """Joins `partial_path` with project root folder and returns the full path to the subfolder.
 
-  This exists instead of just using os.path.join(VECTOR_ENGINE_ROOT, 'path', 'to', 'folder')
+  This exists instead of just using os.path.join(COZMO_ENGINE_ROOT, 'path', 'to', 'folder')
   everywhere so that it is much easier to find and replace a particular path if the folder moves in
   the future. Having paths in a path/to/folder as opposed to os.path.join(...) also makes the folder
   paths easier to read.
@@ -115,9 +83,9 @@ def get_subpath(partial_path, *args):
   """
   forward_args = partial_path.split("/") + list(args)
   if forward_args:
-    return os.path.join(VECTOR_ENGINE_ROOT, *(forward_args))
+    return os.path.join(COZMO_ENGINE_ROOT, *(forward_args))
   else:
-    return VECTOR_ENGINE_ROOT
+    return COZMO_ENGINE_ROOT
 
 def mkdir_p(path):
   try:
@@ -273,10 +241,13 @@ def sign_webot_executables(build_type, password):
 
   UtilLog.info("Your password may be needed in order to add the webots executables to the firewall exception list.")
 
-  executables_folder = get_subpath(os.path.join("_build","mac"), build_type.name, "bin")
-  webots_ctrl_executable = glob.glob(os.path.join(executables_folder, 'webotsCtrl*'))
-  vic_gateway_executable = glob.glob(os.path.join(executables_folder, 'vic-gateway'))
-  executables = webots_ctrl_executable + vic_gateway_executable
+  executables_folder = get_subpath("generated/mac/DerivedData", build_type)
+
+  executables = [
+    'webotsCtrlBuildServerTest',
+    'webotsCtrlGameEngine',
+    'webotsCtrlRobot'
+  ]
 
   codesign_command = [
     'codesign',
@@ -286,11 +257,11 @@ def sign_webot_executables(build_type, password):
   ]
 
   # Add the executables to the firewall list and explicitly allow incoming connections
-  for exe_path in executables:
-    if os.path.isfile(exe_path):
-      firewall_cli(["--add"], password, executable_path=exe_path)
-      firewall_cli(["--unblock"], password, executable_path=exe_path)
-      sudo_this(codesign_command + [exe_path], password)
+  for exe in executables:
+    exe_path = os.path.join(executables_folder, exe)
+    firewall_cli(["--add"], password, executable_path=exe_path)
+    firewall_cli(["--unblock"], password, executable_path=exe_path)
+    sudo_this(codesign_command + [exe_path], password)
 
   # There is a strange issue where select tests will fail for no reason if
   # firewall is not reset like below (CST_RobotKidnapping and
@@ -306,6 +277,27 @@ def sign_webot_executables(build_type, password):
   firewall_cli(["--setglobalstate", "on"], password)
 
   UtilLog.info("sign_webot_executables() finished")
+
+
+# build unittest executable
+def build(build_type):
+  derived_data_path = get_subpath("generated/mac/DerivedData")
+
+  build_command = [
+    'xcodebuild',
+    '-workspace', get_subpath("generated/mac", "CozmoWorkspace_mac.xcworkspace"),
+    '-scheme', 'BUILD_WORKSPACE',
+    '-sdk', 'macosx',
+    '-configuration', build_type.name,
+    # 'SYMROOT=' + derived_data_path,
+    # 'OBJROOT=' + derived_data_path,
+    'build'
+    ]
+
+  UtilLog.debug('build command {command}'.format(command=' '.join(build_command)))
+
+  return subprocess.call(build_command) == 0
+
 
 def run_webots(output, wbt_file_path, world_file_name, show_graphics, log_file_name):
   """Run an individual webots simulation and return the return code of the process through `output`.
@@ -375,7 +367,9 @@ def run_sdk(output, sdk_root, sdk_file_name, log_file_name):
   """
 
 
-  run_command = ["python3", os.path.join(sdk_root, sdk_file_name)]
+  run_command = [
+    sdk_root + '/' + sdk_file_name
+    ]
 
   UtilLog.debug('run command {command}'.format(command=' '.join(run_command)))
 
@@ -403,19 +397,18 @@ def is_webots_running():
   if len(result) > 0:
     return True
   return False
-
+  
 def is_webots_not_running():
   return not is_webots_running()
 
 # sleep for some time, then kill webots if needed
 def stop_webots():
-  currFile = inspect.getfile(inspect.currentframe())
-
   # kill all webots processes
-  ps   = subprocess.Popen(('ps', 'Auxc'), stdout=subprocess.PIPE)
-  grep = subprocess.Popen(('grep', '-e', '[w]ebots', '-e', 'vic-gateway'), stdin=ps.stdout, stdout=subprocess.PIPE)
-  grep_minus_this_process = subprocess.Popen(('grep', '-v', currFile), stdin=grep.stdout, stdout=subprocess.PIPE)
-  awk  = subprocess.Popen(('awk', '{print $2}'), stdin=grep_minus_this_process.stdout, stdout=subprocess.PIPE)
+  ps   = subprocess.Popen(('ps', 'Aux'), stdout=subprocess.PIPE)
+  grep = subprocess.Popen(('grep', '[w]ebots'), stdin=ps.stdout, stdout=subprocess.PIPE)
+  grep_minus_this_process = subprocess.Popen(('grep', '-v', '.py'), stdin=grep.stdout, stdout=subprocess.PIPE)
+  grep_minus_bash_scripts = subprocess.Popen(('grep', '-v', '.sh'), stdin=grep_minus_this_process.stdout, stdout=subprocess.PIPE)
+  awk  = subprocess.Popen(('awk', '{print $2}'), stdin=grep_minus_bash_scripts.stdout, stdout=subprocess.PIPE)
   kill = subprocess.Popen(('xargs', 'kill', '-9'), stdin=awk.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   out, err = kill.communicate()
   if err:
@@ -470,7 +463,8 @@ def get_tests(config_file_path):
   return tests
 
 
-def run_tests(tests, log_folder, show_graphics, timeout, forward_webots_log_level, sdk_root, num_runs, num_retries = 0):
+def run_tests(tests, log_folder, show_graphics, timeout, forward_webots_log_level, sdk_root, num_retries = 0,
+              fail_on_error=False):
   """Run webots tests and store the logs.
 
   Args:
@@ -491,9 +485,6 @@ def run_tests(tests, log_folder, show_graphics, timeout, forward_webots_log_leve
     forward_webots_log_level (ForwardWebotsLogLevel enum) --
       How much of the webots logs to forward to this script's stdout.
 
-    num_runs (int) --
-      How many time the tests will be run
-
     num_retries (int) --
       When a test fails, the number of times to retry the test before declaring it as failed. Be
       aware of off-by-one gotcha here, if num_retries == 1, that means each test will be run for a
@@ -503,105 +494,118 @@ def run_tests(tests, log_folder, show_graphics, timeout, forward_webots_log_leve
     test_statuses (dict) --
       Dictionary of test controller name (key) -> test_controllers (value, dict) where:
         test_controllers is a dictionary of webots worlds (key) -> test result (value, ResultCode enum)
+
+    total_error_count (int) --
+      the total number of errors that were in the webots logs, summed over every run
+
+    total_warning_count (int) --
+      the total number of warnings that were in the webots logs, summed over every run
   """
   test_statuses = {}
+  log_file_paths = []
+  total_error_count = 0
+  total_warning_count = 0
 
+  cur_time = datetime.strftime(datetime.now(), '%Y-%m-%d_%H-%M-%S')
   GENERATED_FILE_PATH = get_subpath("simulator/worlds")
 
   for test_controller, (worlds, sdk_scripts) in tests.items():
+    test_statuses[test_controller] = {}
     # Loop through all the webots worlds this test controller should run in.
     for world_file in worlds:
-      log_file_paths = []
-      cur_time_for_combine = datetime.strftime(datetime.now(), '%Y-%m-%d_%H-%M-%S')
-      for run_number in range(0, num_runs):
-        cur_time = datetime.strftime(datetime.now(), '%Y-%m-%d_%H-%M-%S')
-        # I use this sequence so we don't have to change the whole parse result code
-        if run_number not in test_statuses:
-          test_statuses[run_number] = {}
-        if test_controller not in test_statuses[run_number]:
-          test_statuses[run_number][test_controller] = {}
-        stop_webots()
-        test_result = ResultCode.failed
-        UtilLog.info('Running test: {test_controller} in world {world_file}'.format(
+      test_result = ResultCode.failed
+      UtilLog.info('Running test: {test_controller} in world {world_file}'.format(
                       test_controller=test_controller, world_file=world_file))
 
-        source_file_path = get_subpath("simulator/worlds", world_file)
+      source_file_path = get_subpath("simulator/worlds", world_file)
 
-        num_retries_counting_up = -1 # only needed for teamcity variable logging
+      num_retries_counting_up = -1 # only needed for teamcity variable logging
 
-        # need to keep num_retries from changing so the num_retries_mutable can reset to num_retries
-        # after the loop
-        num_retries_mutable = num_retries
+      # need to keep num_retries from changing so the num_retries_mutable can reset to num_retries
+      # after the loop
+      num_retries_mutable = num_retries
 
-        # num_retries_mutable > -1 because even if num_retries_mutable is 0, we want to run the test at least once.
-        while num_retries_mutable > -1 and test_result is ResultCode.failed:
-          num_retries_mutable -= 1
-          num_retries_counting_up += 1
-          if num_retries_counting_up > 0:
-            UtilLog.info("Retry #{retry_number}".format(retry_number=num_retries_counting_up))
+      error_count = 0
+      warning_count = 0
 
-          webots_log_file_name = get_log_file_path(log_folder, test_controller, world_file, "txt", cur_time, num_retries_counting_up)
-          sdk_log_file_name =    get_log_file_path(log_folder, test_controller, world_file, "sdk.txt", cur_time, num_retries_counting_up)
-          UtilLog.info('results will be logged to {file}'.format(file=webots_log_file_name))
-          log_file_paths.append(webots_log_file_name)
-          log_file_paths.append(sdk_log_file_name)
+      # num_retries_mutable > -1 because even if num_retries_mutable is 0, we want to run the test at least once.
+      while num_retries_mutable > -1 and test_result is ResultCode.failed:
+        num_retries_mutable -= 1
+        num_retries_counting_up += 1
+        if num_retries_counting_up > 0:
+          UtilLog.info("Retry #{retry_number}".format(retry_number=num_retries_counting_up))
 
-          output_webots = ThreadOutput() #We don't care about the webot return code since we kill it
-          output_sdk = ThreadOutput()
-          run_webots_thread = threading.Thread(target=run_webots, args=[output_webots, GENERATED_FILE_PATH, world_file,
+        webots_log_file_name = get_log_file_path(log_folder, test_controller, world_file, "txt", cur_time, num_retries_counting_up)
+        sdk_log_file_name =    get_log_file_path(log_folder, test_controller, world_file, "sdk.txt", cur_time, num_retries_counting_up)
+        UtilLog.info('results will be logged to {file}'.format(file=webots_log_file_name))
+        log_file_paths.append(webots_log_file_name)
+        log_file_paths.append(sdk_log_file_name)
+      
+        output_webots = ThreadOutput() #We don't care about the webot return code since we kill it
+        output_sdk = ThreadOutput()
+        run_webots_thread = threading.Thread(target=run_webots, args=[output_webots, GENERATED_FILE_PATH, world_file,
                                                                       show_graphics, webots_log_file_name])
-          run_webots_thread.start()
-          time.sleep(15) #TODO wait until robot is connected instead of 10 seconds
+        run_webots_thread.start()
+        time.sleep(15) #TODO wait until robot is connected instead of 10 seconds
 
-          for sdk_file in sdk_scripts:
-            run_sdk_thread = threading.Thread(target=run_sdk, args=[output_sdk, sdk_root, sdk_file, sdk_log_file_name])
-            run_sdk_thread.start()
+        for sdk_file in sdk_scripts:
+          run_sdk_thread = threading.Thread(target=run_sdk, args=[output_sdk, sdk_root, sdk_file, sdk_log_file_name])
+          run_sdk_thread.start()
 
-            run_sdk_thread.join(timeout)
-            if output_sdk.test_return_code is None or output_sdk.test_return_code != 0:
-              break;
+          run_sdk_thread.join(timeout)
+          if output_sdk.test_return_code is None or output_sdk.test_return_code != 0:
+            break;
 
+        stop_webots()
+
+        # Check log for crashes, errors, and warnings
+        (crash_count, error_count, warning_count) = parse_output(forward_webots_log_level, webots_log_file_name)
+
+        # Check if timeout exceeded
+        if run_webots_thread.isAlive():
+          UtilLog.error('{test_controller} exceeded timeout.'.format(test_controller=test_controller))
           stop_webots()
+          continue
 
-          # Check log for crashes, errors, and warnings
-          sdk_test_result = parse_output(sdk_log_file_name)
+        # Check for crashes
+        if crash_count > 0:
+          UtilLog.error('{test_controller} had a crashed controller.'.format(test_controller=test_controller))
+          continue
 
-          # Check if timeout exceeded
-          if run_webots_thread.isAlive():
-            UtilLog.error('{test_controller} exceeded timeout.'.format(test_controller=test_controller))
-            stop_webots()
-            continue
+        # Get return code from test
+        if output_sdk.test_return_code is None:
+          UtilLog.error('No result code received from {test_controller}'.format(test_controller=test_controller))
+          continue
 
-          # Get return code from test
-          if output_sdk.test_return_code is None:
-            UtilLog.error('No result code received from {test_controller}'.format(test_controller=test_controller))
-            continue
+        if output_sdk.test_return_code != 0:
+          UtilLog.error('Received non-zero return code from webots. Received Webots code: {return_code_webots} Received SDK code: {return_code_sdk}'.format(
+                          return_code_webots=output_webots.test_return_code,
+                          return_code_sdk=output_sdk.test_return_code))
+          continue
 
-          if output_sdk.test_return_code != 0:
-            UtilLog.error('Received non-zero return code from webots. Received Webots code: {return_code_webots} Received SDK code: {return_code_sdk}'.format(
-                            return_code_webots=output_webots.test_return_code,
-                            return_code_sdk=output_sdk.test_return_code))
-            continue
+        if fail_on_error and error_count > 0:
+          UtilLog.error('There was an error in the webots log.')
+          continue
 
-          if sdk_test_result is ResultCode.failed:
-            UtilLog.error('There was failed/error test in sdk log')
-            continue
+        test_result = ResultCode.succeeded  # pylint: disable=redefined-variable-type
 
-          test_result = ResultCode.succeeded  # pylint: disable=redefined-variable-type
+      total_error_count += error_count
+      total_warning_count += warning_count
 
-        UtilLog.info("##teamcity[buildStatisticValue key='WebotsNumRetries_{test_controller}_{world_file}' value='{num_of_retries}']".format(
-                      test_controller=test_controller, world_file=world_file,
+      UtilLog.info("##teamcity[buildStatisticValue key='WebotsNumRetries_{test_controller}_{world_file}' value='{num_of_retries}']".format(
+                      test_controller=test_controller, world_file=world_file, 
                       num_of_retries=num_retries_counting_up))
 
-        UtilLog.info("Test {test_controller} {test_result}".format(test_controller=test_controller,
+      UtilLog.info("Test {test_controller} {test_result}".format(test_controller=test_controller, 
                                                                  test_result=test_result.name))
-        test_statuses[run_number][test_controller][world_file] = test_result
-      # Now all runs of the same world file will be combined in one tar file
-      tarzip_logs(log_file_paths, test_controller, cur_time_for_combine)
-  return test_statuses
+      test_statuses[test_controller][world_file] = test_result
+
+  tarzip_logs(log_file_paths, cur_time)
+
+  return (test_statuses, total_error_count, total_warning_count)
 
 
-def tarzip_logs(log_file_paths, test_controller, cur_time):
+def tarzip_logs(log_file_paths, cur_time):
   """Zips up a list of webots logs that are in the same directory.
 
   The zip file will be located in the same directory as the logs.
@@ -609,9 +613,6 @@ def tarzip_logs(log_file_paths, test_controller, cur_time):
   Args:
     log_file_paths (list[str]) --
       A non-empty list of log file paths to zip up.
-
-    test_controller (string) --
-      test controller that will be included in the name of the zip file.
 
     cur_time (string) --
       Timestamp that will be included in the name of the zip file.
@@ -623,35 +624,39 @@ def tarzip_logs(log_file_paths, test_controller, cur_time):
   log_folder = os.path.dirname(log_file_paths[0])
   mkdir_p(log_folder)
 
-  with tarfile.open(os.path.join(log_folder, "webots_out_{0}_{1}.tar.gz".format(test_controller, cur_time)),
+  with tarfile.open(os.path.join(log_folder, "webots_out_{0}.tar.gz".format(cur_time)),
                     "w:gz") as tar:
     for log_file_path in log_file_paths:
       tar.add(log_file_path, arcname=os.path.basename(log_file_path))
 
 
-def parse_output(sdk_log_file):
-  test_result = ResultCode.failed
-  with open(sdk_log_file, 'r') as f:
+def parse_output(log_level, log_file):
+  with open(log_file, 'r') as f:
     lines = [line.strip() for line in f]
+  crash_count = 0
+  error_count = 0
+  warning_count = 0
 
-  # This is for handling test_all_message sdk log, since it's different with pytest log
-  if "Test_all_messages" in sdk_log_file:
-    for line in reversed(lines):
-      if "all tests finished successfully" in line:
-        test_result = ResultCode.succeeded
-        break
-      elif re.search("tests finished with \d+ errors!", line):
-        break
-  else:
-    for line in reversed(lines):
-      if re.search("^=.*in.*seconds.*=$", line):
-        if re.search("\d\s(failed|error)", line):
-          break
-        else:
-          test_result = ResultCode.succeeded
-          break
+  for line in lines:
+    if 'The process crashed some time after starting successfully.' in line:
+      crash_count += 1
 
-  return test_result
+    # [Error] catches controller log errors
+    # 'ERROR:' catches potential problems with the webots world/protos
+    if '[Error]' in line or 'ERROR:' in line:
+      error_count += 1
+      if log_level is ForwardWebotsLogLevel.only_errors or log_level is ForwardWebotsLogLevel.only_teamcity_stats_and_errors:
+        UtilLog.error("Webots log contained an error: '{error_msg}'".format(error_msg=line))
+    if 'Warn' in line:
+      warning_count += 1
+
+    if log_level is ForwardWebotsLogLevel.only_teamcity_stats_and_errors:
+      if "##teamcity[buildStatisticValue" in line:
+        UtilLog.info(line)
+    elif log_level is ForwardWebotsLogLevel.full_forwarding:
+      UtilLog.info(line)
+
+  return (crash_count, error_count, warning_count)
 
 
 def get_build_folder(build_type):
@@ -660,8 +665,8 @@ def get_build_folder(build_type):
   build_type (BuildType enum) --
     The targetted build type. Must be a member of the BuildType enum.
   """
-
-  return get_subpath("_build/mac", build_type.name)
+  assert build_type in BuildType
+  return get_subpath("build/mac", build_type.name)
 
 def get_log_file_path(log_folder, test_name, world_file_name, extension=".txt", timestamp="", retry_number=0):
   """Returns what the log file names should be.
@@ -677,7 +682,7 @@ def get_log_file_path(log_folder, test_name, world_file_name, extension=".txt", 
 
   timestamp (string, optional)--
     Timestamp of the test run. Will be included in the file name if provided.
-
+    
   retry_number (integer)--
     Which retry of the run this is (0 if it is the original run).
   """
@@ -685,7 +690,7 @@ def get_log_file_path(log_folder, test_name, world_file_name, extension=".txt", 
   retry_string = ""
   if retry_number > 0:
     retry_string = "_retry{0}".format(retry_number)
-
+    
   if timestamp == "":
     file_name = "webots_out_{0}_{1}{2}.{4}".format(test_name, world_file_name, retry_string, extension)
   else:
@@ -738,7 +743,7 @@ def main(args):
   parser.add_argument('--sdkScriptLocation',
                       dest='sdk_root',
                       action='store',
-                      default=os.path.join(VECTOR_ENGINE_ROOT, 'tools', 'sdk', 'vector-sdk-tests', 'automated'),
+                      default=os.path.join(COZMO_ENGINE_ROOT, 'tools', 'sdk_devonly', 'test_scripts'),
                       type=str,
                       help='Location of where to look for the sdk scripts which will be ran.')
 
@@ -762,7 +767,7 @@ def main(args):
                       dest='password',
                       action='store',
                       help="""Your password is needed to add the webots executables to the firewall exception list. Can
-                      be omitted if your firewall is disabled. It is requested in plaintext so this script can be re-ran
+                      be omitted if your firewall is disabled. It is requested in plaintext so this script can be re-ran 
                       easily and also for build server/steps reasons.""")
 
   parser.add_argument('--forwardWebotsLogLevel',
@@ -775,7 +780,7 @@ def main(args):
   parser.add_argument('--timeout',
                       dest='timeout',
                       action='store',
-                      default=1000,
+                      default=180,
                       type=int,
                       help="""Time limit for each webots test before marking it as failure and killing the webots instance.""")
 
@@ -789,6 +794,13 @@ def main(args):
                       1, that means each test will be run for a maximum of two times, if the first
                       run of each test fails.""")
 
+  parser.add_argument('--ignoreLogErrors',
+                      dest='fail_on_error',
+                      default='true',
+                      action='store_false',
+                      help="""If set, a test will not automatically fail just because an error
+                      appears in its webots log.""")
+
   (options, _) = parser.parse_known_args(args)
 
   options.build_type = BuildType[options.build_type]
@@ -799,12 +811,17 @@ def main(args):
   else:
     UtilLog.setLevel(logging.INFO)
 
-  os.chdir(VECTOR_ENGINE_ROOT)
+  os.chdir(COZMO_ENGINE_ROOT)
 
   cfg_path = get_subpath("project/build-scripts/webots", options.config_file)
   assert os.path.isfile(cfg_path)
 
   UtilLog.debug(options)
+
+  # build the project first
+  if not build(options.build_type):
+    UtilLog.error("build failed")
+    return 1
 
   sign_webot_executables(options.build_type, options.password)
 
@@ -818,11 +835,17 @@ def main(args):
   return_value = 0
 
   global_test_results = {}
-  test_results_list = run_tests(tests, build_folder, options.show_graphics, options.timeout,
-                             options.log_level, options.sdk_root, options.num_runs, options.num_retries)
+  for _ in range(0, options.num_runs):
+    stop_webots()
 
-  for run_number in range(0, options.num_runs):
-    test_results = test_results_list[run_number]
+    test_results, total_error_count, total_warning_count = run_tests(tests, build_folder,
+                                                                     options.show_graphics,
+                                                                     options.timeout,
+                                                                     options.log_level,
+                                                                     options.sdk_root,
+                                                                     options.num_retries,
+                                                                     options.fail_on_error)
+
     num_of_tests = sum(len(test_controller) for test_controller in test_results.values())
 
     if any_test_succeeded(test_results):
@@ -841,6 +864,14 @@ def main(args):
           if result is ResultCode.failed:
             global_test_results.setdefault(test_controller, []).append("failed")
             UtilLog.info("{test_controller} in {world} failed.".format(test_controller=test_controller, world=world))
+
+    if not options.show_graphics:
+      # Only makes sense to print these when gui is not on because if the gui is on the webots logs
+      # won't be piped to the log files and therefore errors and warnings will always be 0
+      UtilLog.info("##teamcity[buildStatisticValue key='WebotsErrorCount' value='{errors}']".format(
+                   errors=total_error_count))
+      UtilLog.info("##teamcity[buildStatisticValue key='WebotsWarningCount' value='{warnings}']".format(
+                   warnings=total_warning_count))
 
     UtilLog.info("##teamcity[buildStatisticValue key='WebotsTestCount' value='{num_of_tests}']".format(
                  num_of_tests=num_of_tests))
@@ -875,7 +906,7 @@ def main(args):
 
   if options.num_runs > 1:
     UtilLog.info("{failed}/{total} ({percentage:.1f}%) runs failed".format(
-                  failed=num_of_failed_runs, total=num_of_total_runs,
+                  failed=num_of_failed_runs, total=num_of_total_runs, 
                   percentage=float(num_of_failed_runs)/num_of_total_runs*100))
 
     results_passed_msg = ''
@@ -888,33 +919,27 @@ def main(args):
 
     UtilLog.info('results_passed_msg:\n{}'.format(results_passed_msg))
     UtilLog.info('results_failed_msg:\n{}'.format(results_failed_msg))
-
-    build_url = "{}/viewLog.html?buildId={}&tab=artifacts&buildTypeId={}"\
-                .format(TEAMCITY_SERVER_URL, ANKI_BUILD_VERSION, VICTOR_WEBOTS_NIGHTLY_SDK_TESTS)
-
-    payload = '{{\
-                "text": "<{}|*SDK Nightly Test Results:*>\n",\
-                "mrkdwn": true,\
-                "channel": "{}",\
-                "username": "buildbot",\
-                "attachments": [\
-                    {{\
-                        "text": "{}",\
-                        "fallback": "{}",\
-                        "color": "danger"\
-                    }},\
-                    {{\
-                        "text": "{}",\
-                        "fallback": "{}",\
-                        "color": "good"\
-                    }}\
-                ]\
-            }}'.format(build_url, SLACK_CHANNEL, results_failed_msg,
-                       results_failed_msg, results_passed_msg, results_passed_msg)
-
-    response = requests.request(POST_ACTION, SLACK_TOKEN_URL, data=payload, headers=HEADERS)
-    UtilLog.info('payload info :\n{}'.format(str(payload)))
-    UtilLog.info(response.text)
+    payload = {
+               "text":"*SDK Nightly Test Results:*\n",
+               "mrkdwn": True,
+               "channel":"{}".format(os.environ['SLACK_CHANNEL']),
+               "username":"buildbot",
+               "attachments":[
+                 {
+                 "text":"{}".format(results_failed_msg),
+                 "fallback":"{}".format(results_failed_msg),
+                 "color":"danger"
+                 },{
+                 "text": "{}".format(results_passed_msg),
+                 "fallback": "{}".format(results_passed_msg),
+                 "color": "good"
+                 }
+               ]
+             }
+    slack_url = '{}'.format(os.environ['SLACK_TOKEN_URL'])
+    cmd = ['curl', '-X', 'POST', '-d', 'payload={}'.format(payload), slack_url]
+    process = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
 
   return return_value
 

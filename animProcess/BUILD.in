@@ -1,19 +1,18 @@
 cxx_project(
     name = 'victor_anim',
     srcs = cxx_src_glob(['src/cozmoAnim'],
-                        excludes = ['*_vicos.*',
-                                    'vicos/**/*',
+                        excludes = ['*_android.*',
+                                    'android/**/*',
                                     '*_mac.*',
                                     'cozmoAnimMain.cpp']),
     platform_srcs = [
-        ('vicos', glob(['vicos/**/*.cpp',
-                          '**/*_vicos.cpp'])),
+        ('android', glob(['android/**/*.cpp',
+                          '**/*_android.cpp'])),
         ('mac', glob(['**/*_mac.cpp']))
     ],
     headers = cxx_header_glob(['.']),
     platform_headers = [
-        ('vicos', glob(['**/*_vicos.h'])),
-        ('mac', glob(['**/*_mac.h']))
+        ('android', glob(['**/*.h']))
     ]
 )
 
@@ -25,9 +24,4 @@ cxx_project(
     headers = [],
     platform_headers = [
     ]
-)
-
-cxx_project(
-    name = 'vic-bootAnim',
-    srcs = glob(['src/bootAnim/bootAnim.cpp'])
 )

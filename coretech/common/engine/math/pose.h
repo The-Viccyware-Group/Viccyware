@@ -33,13 +33,13 @@
 
 #include "util/logging/logging.h"
 
-#include "coretech/common/shared/math/matrix_fwd.h"
-#include "coretech/common/shared/math/point_fwd.h"
+#include "coretech/common/engine/math/matrix.h"
+#include "coretech/common/engine/math/point.h"
 #include "coretech/common/engine/math/poseBase.h"
-#include "coretech/common/engine/math/quad_fwd.h"
-#include "coretech/common/shared/math/rotation.h"
+#include "coretech/common/engine/math/quad.h"
+#include "coretech/common/engine/math/rotation.h"
 #include "coretech/common/engine/math/transform.h"
-#include "coretech/common/shared/math/radians.h"
+#include "coretech/common/shared/radians.h"
 
 #include "coretech/common/engine/exceptions.h"
 
@@ -113,7 +113,7 @@ namespace Anki {
     // Either store "somePoseWrtRoot" and then get Foo& from it, or make Foo a copy.
     Pose2d GetWithRespectToRoot() const;
 
-    void Print(const std::string& channel = "Pose", const std::string& eventName = "Pose3d.Print") const;
+    void Print(const std::string& channel = DEFAULT_CHANNEL_NAME, const std::string& eventName = "Pose3d.Print") const;
     
   protected:
     
@@ -193,7 +193,7 @@ namespace Anki {
     
     RotationMatrix3d        GetRotationMatrix() const { return GetRotation().GetRotationMatrix(); }
     RotationVector3d        GetRotationVector() const { return GetRotation().GetRotationVector(); }
-    Vec3f                   GetRotationAxis()   const { return GetRotation().GetAxis(); }
+    Vec3f                   GetRotationAxis()   const { return GetRotation().GetRotationVector().GetAxis(); }
 
     // Get the rotation angle, optionally around a specific axis.
     // By default the rotation angle *around the pose's rotation axis* is
@@ -285,7 +285,7 @@ namespace Anki {
     
     // TODO: Provide IsSameAs_WithAmbiguity() wrappers that don't require Tdiff/angleDiff outputs
 
-    void Print(const std::string& channel = "Pose", const std::string& eventName = "Pose3d.Print") const;
+    void Print(const std::string& channel = DEFAULT_CHANNEL_NAME, const std::string& eventName = "Pose3d.Print") const;
     
   protected:
     
@@ -306,11 +306,18 @@ namespace Anki {
   Pose2d operator* (const Pose2d& pose1, const Pose2d& pose2);
   Pose3d operator* (const Pose3d& pose1, const Pose3d& pose2);
   
-  // Calculate vector from pose2's translation to pose1's translation (rotations of the input poses are ignored), with
-  // the resulting vector expressed in the outputFrame (which can be any pose in the same tree as pose1 and pose2).
-  // returns true/false depending on whether poses (and output frame) are comparable (share root)
+  // Compute vector from pose2's translation to pose1's translation
+  Vec3f ComputeVectorBetween(const Pose3d& pose1, const Pose3d& pose2);
+  
+  // Compute distance between the two poses' translations
+  inline f32 ComputeDistanceBetween(const Pose3d& pose1, const Pose3d& pose2) {
+    return ComputeVectorBetween(pose1, pose2).Length();
+  }
+
+  // calculate vector between pose's translations (rotation is ignored)
+  // returns true/false depending on whether poses are comparable (share root)
   // stores result in outVector if the return value is true, untouched if false
-  bool ComputeVectorBetween(const Pose3d& pose1, const Pose3d& pose2, const Pose3d& outputFrame, Vec3f& outVector);
+  bool ComputeVectorBetween(const Pose3d& pose1, const Pose3d& pose2, Vec3f& outVector);
   
   // calculate distance between pose's translations (rotation is ignored)
   // returns true/false depending on whether poses are comparable (share root)

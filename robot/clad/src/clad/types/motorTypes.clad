@@ -3,7 +3,7 @@
  */
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 MotorID {
   MOTOR_LEFT_WHEEL = 0,
@@ -29,22 +29,5 @@ message MotorAutoEnabled
   bool enabled
 }
 
-enum uint_8 MotorCalibrationReason
-{
-  Startup,
-  Playpen,
-  SelfTest,
-  Game,
-  LiftMotorBurnoutProtection,
-  HeadMotorBurnoutProtection,
-  PowerSaveEnteringActiveMode,
-  BehaviorReactToUncalibratedHeadAndLift,
-  BehaviorReactToOnFace,
-  BehaviorReactToOnBack,
-  BehaviorReactToPlacedOnSlope,
-  BehaviorReactToPutDown,
-  BehaviorReactToCliff
-}
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

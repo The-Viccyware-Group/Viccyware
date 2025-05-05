@@ -16,7 +16,7 @@
 #include "pathPlanner.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class DubbinsPlanner : public IPathPlanner
 {

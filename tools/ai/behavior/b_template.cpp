@@ -14,7 +14,7 @@
 #include "${include_path}"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

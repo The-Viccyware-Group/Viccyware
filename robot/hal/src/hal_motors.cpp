@@ -33,7 +33,7 @@
 #endif
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 static_assert(EnumToUnderlyingType(MotorID::MOTOR_LEFT_WHEEL) == MOTOR_LEFT, "Robot/Spine CLAD Mimatch");
 static_assert(EnumToUnderlyingType(MotorID::MOTOR_RIGHT_WHEEL) == MOTOR_RIGHT, "Robot/Spine CLAD Mimatch");
@@ -53,10 +53,6 @@ namespace { // "Private members"
   //convert per syscon tick -> /sec
   static const f32 HAL_SEC_PER_TICK = (1.0 / 256) / 48000000;
 
-  // Number of tics that encoders position is unchanged before 
-  // the speed of that motor is considered to be zero.
-  const u32 ZERO_SPEED_ENCODER_TIC_THRESH = 5;
-
   //encoder counts -> mm or deg
   static f32 HAL_MOTOR_POSITION_SCALE[MOTOR_COUNT] = {
     ((       0.96 * 29.0 * 0.25 * 3.14159265359) / 172.3), //Left Tread mm (Magic 96% corrective fudge factor, 29mm wheel diameter)
@@ -75,8 +71,6 @@ namespace { // "Private members"
 
   struct {
     s32 motorOffset[MOTOR_COUNT];
-    s32 prevPosition[MOTOR_COUNT];
-    u32 numTicsNotMoving[MOTOR_COUNT] = {0};
     CONSOLE_DATA(f32 motorPower[MOTOR_COUNT]);
   } internalData_;
   
@@ -128,28 +122,15 @@ f32 HAL::MotorGetSpeed(MotorID motor)
   const auto m = EnumToUnderlyingType(motor);
   assert(m < MOTOR_COUNT);
 
-  // If encoder position doesn't change for more than
-  // ZERO_SPEED_ENCODER_TIC_THRESH tics in a row, then assume zero speed
-  if (bodyData_->motor[m].position == internalData_.prevPosition[m]) { 
-    if (++internalData_.numTicsNotMoving[m] >= ZERO_SPEED_ENCODER_TIC_THRESH) {
-      internalData_.numTicsNotMoving[m] = ZERO_SPEED_ENCODER_TIC_THRESH;
-      return 0.f;
-    }
-  } else {
-    internalData_.numTicsNotMoving[m] = 0;
-  }
-  internalData_.prevPosition[m] = bodyData_->motor[m].position;
-
-
   // Every frame, syscon sends the last detected speed as a two part number:
   // `delta` encoder counts, and `time` span for those counts.
   // syscon only changes the value when counts are detected
-  // if no counts for ~125ms (i.e. MAX_ENCODER_FRAMES), will report 0/0
+  // if no counts for ~25ms, will report 0/0
   if (bodyData_->motor[m].time != 0) {
     float countsPerTick = (float)bodyData_->motor[m].delta / bodyData_->motor[m].time;
     return (countsPerTick / HAL_SEC_PER_TICK) * HAL_MOTOR_POSITION_SCALE[m];
   }
-  return 0.f; //if time is 0, it's not moving.
+  return 0.0; //if time is 0, it's not moving.
 }
 
 // Returns units based on the specified motor type:
@@ -182,6 +163,6 @@ void PrintConsoleOutput(void)
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

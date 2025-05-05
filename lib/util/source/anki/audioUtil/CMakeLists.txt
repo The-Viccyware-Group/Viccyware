@@ -1,8 +1,7 @@
 project(libankiutil LANGUAGES CXX)
 
 include(anki_build_cxx)
-include(anki_build_strip)
-
+include(android_strip)
 
 set(AUDIO_UTIL_SRC
   audioRecognizerProcessor.cpp
@@ -54,7 +53,6 @@ endif()
 target_compile_options(util_audio
   PRIVATE
   ${ANKI_BUILD_CXX_COMPILE_OPTIONS}
-  ${ASAN_CXX_FLAGS} 
 )
 
 target_compile_definitions(util_audio
@@ -67,17 +65,13 @@ target_include_directories(util_audio PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
 PRIVATE
   $<BUILD_INTERFACE:${PLATFORM_INCLUDES}> 
-)
+  )
 
 target_link_libraries(util_audio
-  PRIVATE
   util
-  ${PLATFORM_LIBS}
-  ${ASAN_LINKER_FLAGS}
-)
+  ${PLATFORM_LIBS})
 
-anki_build_target_license(util_audio "ANKI")
-
-anki_build_strip(TARGET util_audio)
+android_strip(TARGET util_audio)
 
 #export(TARGETS ankiutil FILE ankiutil-config.cmake)
+

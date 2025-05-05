@@ -1,7 +1,7 @@
 # Visual Studio Code
 
 Visual Studio Code (VSCode) is the main supported environment for writing code 
-that will run on the Vicos system. Xcode is supported for debugging 
+that will run on the embedded android system. Xcode is supported for debugging 
 and profiling on Mac, but not much effort has been made to make it nice to use 
 beyond the default cmake generated projects.
 
@@ -114,46 +114,27 @@ to pick up where you left off.
 
 ## Run Task: Build 
 
-Use "Terminal -> Run Build Task" to run the default build task.  
+Use "Tasks -> Run Build Task" to run the default build task.  
 
-You can set additional build flags (e.g. "-p mac" vs "-p vicos") by editing 
+You can set additional build flags (e.g. "-p mac" vs "-p android") by editing 
 the task configuration, or you can create a second set of tasks and switch 
 between them.
 
 ## Run Task: Deploy
 
-After building, use "Terminal -> Run Task -> deploy:debug" to deploy executables
+After building, use "Tasks -> Run Task -> deploy:debug" to deploy executables
 to the robot.
 
 ## Run Task: Debug
 
-After deploying, use "Terminal -> Run Task -> debug:debug" to launch the debugger
+After deploying, use "Tasks -> Run Task -> debug:debug" to launch the debugger
 on a robot process.
 
 ## Customize
 
 VS Code is extensible and highly customizable.  Most of the configuration 
 settings use a simple JSON syntax and can be changed with 
-"Terminal -> Configure Tasks" or "Code -> Preferences -> Settings".
+"Tasks -> Configure Tasks" or "Code -> Preferences -> Settings".
 
 If you don't like the default settings, change them!
 
-VS Code has a feature called "Preview Mode". Files with italicized tab titles are "preview" tabs and will go away when opening a new file. If you have a preview tab open and you want to keep it open, the shortcut is cmd+K followed by enter.  You can also double-click on the title of that tab and it will stay. Or you can modify Settings to prevent preview mode from being used at all:
-
-```
-{
-  // Controls if opened editors show as preview. Preview editors are reused until they are kept (e.g. via double click or editing) and show up with an italic font style.
-  "workbench.editor.enablePreview": false,
-
-  // Controls if opened editors from Quick Open show as preview. Preview editors are reused until they are kept (e.g. via double click or editing).
-  "workbench.editor.enablePreviewFromQuickOpen": false,
-}
-```
-
-Also useful for Settings:
-```
-{
-  "files.autoSave": "onFocusChange",
-  "files.insertFinalNewline": true,
-}
-```

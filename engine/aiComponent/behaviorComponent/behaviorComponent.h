@@ -22,6 +22,11 @@
 #include "util/entityComponent/dependencyManagedEntity.h"
 #include "util/entityComponent/iManageableComponent.h"
 
+#include "clad/externalInterface/messageEngineToGameTag.h"
+#include "clad/externalInterface/messageGameToEngineTag.h"
+#include "clad/robotInterface/messageRobotToEngineTag.h"
+
+
 #include "util/helpers/noncopyable.h"
 
 #include <assert.h>
@@ -29,15 +34,15 @@
 #include <set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declarations
 class AIComponent;
 class AsyncMessageGateComponent;
 class BEIRobotInfo;
 class BehaviorComponent;
-class BehaviorComponentMessageHandler;
 class BehaviorContainer;
+class BehaviorEventAnimResponseDirector;
 class BehaviorExternalInterface;
 class BehaviorManager;
 class BehaviorSystemManager;
@@ -45,16 +50,36 @@ class BehaviorTimers;
 class BlockWorld;
 class DelegationComponent;
 class DevBaseBehavior;
+class DevBehaviorComponentMessageHandler;
 class FaceWorld;
 class IBehavior;
 class Robot;
 class UserIntentComponent;
 class BehaviorEventComponent;
-class ActiveFeatureComponent;
 
 namespace Audio {
 class BehaviorAudioComponent;
 }
+
+
+class BaseBehaviorWrapper : public IDependencyManagedComponent<BCComponentID>
+{
+public:
+  BaseBehaviorWrapper(IBehavior* baseBehavior)
+  : IDependencyManagedComponent(this, BCComponentID::BaseBehaviorWrapper)
+  , _baseBehavior(baseBehavior){}
+
+  virtual ~BaseBehaviorWrapper(){}
+
+
+  virtual void InitDependent(Robot* robot, const BCCompMap& dependentComponents) override {};
+  virtual void UpdateDependent(const BCCompMap& dependentComponents) override {};
+  virtual void GetInitDependencies(BCCompIDSet& dependencies) const override {};
+  virtual void GetUpdateDependencies(BCCompIDSet& dependencies) const override {};
+
+  IBehavior* _baseBehavior;
+
+};
 
 class BehaviorComponent : public IBehaviorMessageSubscriber,
                           public IDependencyManagedComponent<AIComponentID>,
@@ -68,9 +93,10 @@ public:
   using ComponentPtr = std::unique_ptr<EntityType>;
 
   // IDependencyManagedComponent<AIComponentID> functions
-  virtual void InitDependent(Robot* robot, const AICompMap& dependentComps) override;
+  virtual void InitDependent(Robot* robot, const AICompMap& dependentComponents) override;
 
   virtual void GetUpdateDependencies(AICompIDSet& dependencies) const override {
+    dependencies.insert(AIComponentID::InformationAnalyzer);
     dependencies.insert(AIComponentID::ContinuityComponent);
     dependencies.insert(AIComponentID::Whiteboard);
   };
@@ -90,18 +116,17 @@ public:
 
 
   template<typename T>
-  T& GetComponent() const {return _comps->GetComponent<T>();}
+  T& GetComponent() const {return _comps->GetValue<T>();}
 
   virtual void SubscribeToTags(IBehavior* subscriber, std::set<ExternalInterface::MessageGameToEngineTag>&& tags) const override;
   virtual void SubscribeToTags(IBehavior* subscriber, std::set<ExternalInterface::MessageEngineToGameTag>&& tags) const override;
   virtual void SubscribeToTags(IBehavior* subscriber, std::set<RobotInterface::RobotToEngineTag>&& tags) const override;
-  virtual void SubscribeToTags(IBehavior* subscriber, std::set<AppToEngineTag>&& tags) const override;
 
 protected:
   // Support legacy cozmo code
   friend class Robot;
   friend class AIComponent;
-  friend class BehaviorComponentMessageHandler;
+  friend class DevBehaviorComponentMessageHandler;
   friend class TestBehaviorFramework; // for testing access to internals
 
   // For test only
@@ -111,7 +136,7 @@ private:
   ComponentPtr _comps;
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

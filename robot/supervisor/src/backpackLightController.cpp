@@ -22,19 +22,16 @@
 #include "clad/robotInterface/messageEngineToRobot.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace BackpackLightController {
 
   namespace {
 
     // Light parameters for each layer
     RobotInterface::SetBackpackLights _ledParams[(int)BackpackLightLayer::BPL_NUM_LAYERS];
-
-    RobotInterface::SetSystemLight _sysLedParams;
     
     BackpackLightLayer _layer;                                    // Currently animated layer
     TimeStamp_t        _ledPhases[(int)LEDId::NUM_BACKPACK_LEDS]; // Time phase of current animation
-    TimeStamp_t        _sysLedPhase;
     bool               _enable = true;                            // Whether or not backpack lights are active
   };
 
@@ -61,21 +58,10 @@ namespace BackpackLightController {
     }
   }
 
-  void SetParams(const RobotInterface::SetSystemLight& params)
-  {
-    memcpy(&_sysLedParams, &params, sizeof(params));
-    _sysLedPhase = HAL::GetTimeStamp();
-  }
-
   void TurnOffAll()
   {
     memset(_ledParams, 0, sizeof(_ledParams));
-    memset(&_sysLedParams, 0, sizeof(_sysLedParams));
     ResetPhases();
-    // Note: this is not done in ResetPhases() otherwise
-    // the system light phase could be interrupted when setting
-    // the other backpack lights
-    _sysLedPhase = HAL::GetTimeStamp();
   }
 
   void EnableLayer(const BackpackLightLayer layer, bool forceUpdate)
@@ -105,35 +91,6 @@ namespace BackpackLightController {
   Result Init()
   {
     memset(&_ledParams[(int)BackpackLightLayer::BPL_USER], 0, sizeof(_ledParams[(int)BackpackLightLayer::BPL_USER]));
-
-    const u16 kTimeDiff_ms = 1000;
-    for(u8 i = 0; i < (u8)LEDId::NUM_BACKPACK_LEDS; i++)
-    {
-      u32 color; // Purple lights
-      if(i == 0) {
-        color = 0xff07b5f5;
-      } else if(i == 1) {
-        color = 0xff07b5f5;
-      } else if(i == 2) {
-        color = 0xff07b5f5;
-      } else {
-        color = 0x80808000; // fallback color
-      }
-    
-      _ledParams[(int)BackpackLightLayer::BPL_USER].lights[i] = {
-        .onColor = color,
-        .offColor = 0,
-        .onPeriod_ms = static_cast<u16>(kTimeDiff_ms * (i+1)),
-        .offPeriod_ms = static_cast<u16>(kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i)),
-        .transitionOnPeriod_ms = 300,
-        .transitionOffPeriod_ms = 300,
-        .offset_ms = static_cast<s16>(kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i))
-      };
-    }
-    
-    EnableLayer(BackpackLightLayer::BPL_USER, true);
-    
-    
     return RESULT_OK;
   }
 
@@ -150,12 +107,9 @@ namespace BackpackLightController {
       HAL::SetLED((HAL::LEDId)i, newColor);
     } // for each LED
 
-    const u32 newColor = GetCurrentLEDcolor(_sysLedParams.light, currentTime, _sysLedPhase);
-    HAL::SetSystemLED(newColor);
-
     return RESULT_OK;
   }
 
 } // namespace BackpackLightController
 } // namespace Anki
-} // namespace Vector
+} // namespace Cozmo

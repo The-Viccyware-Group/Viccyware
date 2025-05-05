@@ -4,7 +4,7 @@
  * Author: Brad Neuman
  * Created: 2018-01-16
  *
- * Description: True if the robot is on the charger contacts (not the platform)
+ * Description: True if the robot is on the charger platform
  *
  * Copyright: Anki, Inc. 2018
  *
@@ -16,7 +16,7 @@
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionOnCharger : public IBEICondition
 {

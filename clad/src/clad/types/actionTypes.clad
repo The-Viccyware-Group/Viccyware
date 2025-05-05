@@ -5,10 +5,11 @@
 
 #include "clad/audio/audioEventTypes.clad"
 //#include "clad/types/actionResults.clad"
+#include "clad/types/toolCodes.clad"
 #include "clad/types/unexpectedMovementTypes.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum no_cpp_class uint_32 ActionConstants {
   INVALID_TAG      =          0,
@@ -33,12 +34,14 @@ enum int_32 RobotActionType {
     UNKNOWN = -1,
 
     ALIGN_WITH_OBJECT,
+    ASCEND_OR_DESCEND_RAMP,
     BACKUP_ONTO_CHARGER,
     CALIBRATE_MOTORS,
-    CLIFF_ALIGN_TO_WHITE,
+    CROSS_BRIDGE,
     DEVICE_AUDIO,              // This calls audio from WWise
     DISPLAY_FACE_IMAGE,
     DISPLAY_PROCEDURAL_FACE,
+    DRIVE_OFF_CHARGER_CONTACTS,
     DRIVE_STRAIGHT,
     DRIVE_TO_FLIP_BLOCK_POSE,
     DRIVE_TO_OBJECT,
@@ -50,7 +53,6 @@ enum int_32 RobotActionType {
     HANG,
     MOUNT_CHARGER,
     MOVE_HEAD_TO_ANGLE,
-    MOVE_LIFT_TO_ANGLE,
     MOVE_LIFT_TO_HEIGHT,
     PAN_AND_TILT,
     PICK_AND_PLACE_INCOMPLETE, // type for PickAndPlaceAction if fail before SelectDockAction ()
@@ -61,7 +63,7 @@ enum int_32 RobotActionType {
     PLAY_ANIMATION,
     PLAY_CUBE_ANIMATION,
     POP_A_WHEELIE,
-    RESELECTING_LOOP_ANIMATION,
+    READ_TOOL_CODE,
     ROLL_OBJECT_LOW,           // Possible sub-type of PickAndPlaceAction
     SAY_TEXT,
     SEARCH_FOR_NEARBY_OBJECT,
@@ -95,7 +97,11 @@ enum uint_8 AlignmentType {
 
 // Object Interaction completed is used by actions that interact with objects
 structure ObjectInteractionCompleted {
-    int_32 objectID
+    int_32 objectIDs[5],
+    uint_8 numObjects = 0,
+    bool   seeingUnexpectedObject = 0, // True if this action failed because it saw an unexepected object
+                                       // E.g. PickupObjectAction failing because it saw an object on top of the one
+                                       // it was trying to pickup
 }
 
 // Used by PlayAnimationAction
@@ -111,6 +117,11 @@ structure DeviceAudioCompleted {
 // Used by TrackFaceAction and TrackPetFaceAction
 structure TrackFaceCompleted {
   int_32 faceID
+}
+
+// Used by ReadToolCodeAction
+structure ReadToolCodeCompleted {
+  ToolCodeInfo info // info.code will be UnknownTool if failure
 }
 
 // Used by TurnInPlaceAction
@@ -129,6 +140,7 @@ union ActionCompletedUnion {
   AnimationCompleted          animationCompleted,
   DeviceAudioCompleted        deviceAudioCompleted,
   TrackFaceCompleted          trackFaceCompleted,
+  ReadToolCodeCompleted       readToolCodeCompleted,
   TurnInPlaceCompleted        turnInPlaceCompleted,
   DefaultCompleted            defaultCompleted,
 }
@@ -143,5 +155,5 @@ enum uint_8 QueueActionPosition {
     IN_PARALLEL
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

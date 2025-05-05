@@ -23,7 +23,7 @@ namespace Json {
 }
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   
 class EmotionAffector
@@ -56,7 +56,7 @@ private:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

@@ -11,18 +11,16 @@
 
 #include "coretech/common/shared/types.h"
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 #include "coretech/vision/engine/camera.h"
 #include "clad/types/robotStatusAndActions.h"
 
 #include "util/bitFlags/bitFlags.h"
 #include "util/entityComponent/iDependencyManagedComponent.h"
-#include "engine/components/sensors/proxSensorComponent.h"
 #include "engine/robotComponents_fwd.h"
 #include "util/helpers/templateHelpers.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     /*
      * HistRobotState
@@ -36,7 +34,8 @@ namespace Anki {
       
       HistRobotState(const Pose3d& pose,
                      const RobotState& state,
-                     const ProxSensorData& proxData);
+                     const bool isProxSensorValid,
+                     const uint8_t cliffDetectedFlags);
       
       HistRobotState(const HistRobotState& other) = default;
       
@@ -54,20 +53,10 @@ namespace Anki {
       const f32           GetLiftHeight_mm()               const;
       const u16           GetCliffData(CliffSensor sensor) const;
       const PoseFrameID_t GetFrameId()                     const {return _state.pose_frame_id;}
+      const u16           GetProxSensorVal_mm()            const {return _state.proxData.distance_mm;}
       
       const f32           GetLeftWheelSpeed_mmps()         const {return _state.lwheel_speed_mmps;}
       const f32           GetRightWheelSpeed_mmps()        const {return _state.rwheel_speed_mmps;}
-
-      // TODO: remove this once `_pose` actually contains full 3d orientation (currently it only includes yaw)
-      const f32           GetPitch_rad()                   const {return _state.pose.pitch_angle;}
-
-      const ProxSensorData& GetProxSensorData()            const {return _proxData;}
-
-      // Only meant to be used by RobotStateHistory::UpdateProxSensorData()
-      // VIC-13035: The better thing to do would be to pull out ProxSensorData into 
-      //            its own history buffer and keep HistRobotState as a container for
-      //            raw unprocessed states (i.e. RobotState) only.
-      void SetProxSensorData(const ProxSensorData& data) {_proxData = data;}
                                                           
       bool WasCarryingObject() const { return  (_state.status & Util::EnumToUnderlying(RobotStatusFlag::IS_CARRYING_BLOCK)); }
       bool WasMoving()         const { return  (_state.status & Util::EnumToUnderlying(RobotStatusFlag::IS_MOVING)); }
@@ -76,6 +65,7 @@ namespace Anki {
       bool WereWheelsMoving()  const { return  (_state.status & Util::EnumToUnderlying(RobotStatusFlag::ARE_WHEELS_MOVING)); }
       bool WasPickedUp()       const { return  (_state.status & Util::EnumToUnderlying(RobotStatusFlag::IS_PICKED_UP)); }
       bool WasCameraMoving()   const { return  (WasHeadMoving() || WereWheelsMoving()); }
+      bool WasProxSensorValid() const { return _wasProxSensorValid; }
       bool WasCliffDetected(CliffSensor sensor) const;
 
       
@@ -92,7 +82,7 @@ namespace Anki {
       Pose3d                       _pose;  // robot pose
       RobotState                   _state;
       
-      ProxSensorData               _proxData;
+      bool                         _wasProxSensorValid;
       Util::BitFlags8<CliffSensor> _cliffDetectedFlags;
     };
     
@@ -118,7 +108,7 @@ namespace Anki {
       //////
       // IDependencyManagedComponent functions
       //////
-      virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override {};
+      virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override {};
       virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
       virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
       //////
@@ -142,94 +132,82 @@ namespace Anki {
       // Adds a timestamped state received from the robot to the history.
       // Returns RESULT_FAIL if an entry for that timestamp already exists
       // or the state is too old to be added.
-      Result AddRawOdomState(const RobotTimeStamp_t t, const HistRobotState& state);
+      Result AddRawOdomState(const TimeStamp_t t, const HistRobotState& state);
 
       // Adds a timestamped state based off of a vision marker to the history.
       // These are used in conjunction with raw odometry states to compute
       // better estimates of the state at any point t in the history.
-      Result AddVisionOnlyState(const RobotTimeStamp_t t, const HistRobotState& state);
+      Result AddVisionOnlyState(const TimeStamp_t t, const HistRobotState& state);
       
       // Sets p to the raw odometry state nearest the given timestamp t in the history.
       // Interpolates state if withInterpolation == true.
       // Returns OK if t is between the oldest and most recent timestamps stored.
-      Result GetRawStateAt(const RobotTimeStamp_t t_request,
-                           RobotTimeStamp_t& t, HistRobotState& state,
+      Result GetRawStateAt(const TimeStamp_t t_request,
+                           TimeStamp_t& t, HistRobotState& state,
                            bool withInterpolation = false) const;
       
       // Get raw odometry states (and their times) immediately before and after
       // the state nearest to the requested time. Returns failure if either cannot
       // be found (e.g. when the requested time corresponds to the first or last
       // state in  history).
-      Result GetRawStateBeforeAndAfter(const RobotTimeStamp_t t,
-                                       RobotTimeStamp_t&    t_before,
+      Result GetRawStateBeforeAndAfter(const TimeStamp_t t,
+                                       TimeStamp_t&    t_before,
                                        HistRobotState& state_before,
-                                       RobotTimeStamp_t&    t_after,
+                                       TimeStamp_t&    t_after,
                                        HistRobotState& state_after);
-
-      // If a raw state with the given timestamp is found, its proxSensorData
-      // is updated. Otherwise, returns RESULT_FAIL.
-      //
-      // NOTE: Only meant to be used in Robot::UpdateFullRobotState() to update
-      //       the robot state history with processed prox data
-      // VIC-13035: The better thing to do would be to pull out ProxSensorData into 
-      //            its own history buffer and keep HistRobotState as a container for
-      //            raw unprocessed states (i.e. RobotState) only.
-      Result UpdateProxSensorData(const RobotTimeStamp_t t, const ProxSensorData& data);
       
       // Returns OK and points statePtr to a vision-based state at the specified time if such a state exists.
       // Note: The state that statePtr points to may be invalidated by subsequent calls to
       //       the history like Clear() or Add...(). Use carefully!
-      Result GetVisionOnlyStateAt(const RobotTimeStamp_t t_request, HistRobotState** statePtr);
+      Result GetVisionOnlyStateAt(const TimeStamp_t t_request, HistRobotState** statePtr);
       
       // Same as above except that it uses the last vision-based
       // state that exists at or before t_request to compute a
       // better estimate of the state at time t.
-      Result ComputeStateAt(const RobotTimeStamp_t t_request,
-                            RobotTimeStamp_t& t, HistRobotState& state,
+      Result ComputeStateAt(const TimeStamp_t t_request,
+                            TimeStamp_t& t, HistRobotState& state,
                             bool withInterpolation = false) const;
 
       // Same as above except that it also inserts the resulting state
       // as a vision-based state back into history.
-      Result ComputeAndInsertStateAt(const RobotTimeStamp_t t_request,
-                                     RobotTimeStamp_t& t, HistRobotState** statePtr,
+      Result ComputeAndInsertStateAt(const TimeStamp_t t_request,
+                                     TimeStamp_t& t, HistRobotState** statePtr,
                                      HistStateKey* key = nullptr,
                                      bool withInterpolation = false);
 
       // Points *statePtr to a computed state in the history that was insert via ComputeAndInsertStateAt
-      Result GetComputedStateAt(const RobotTimeStamp_t t_request,
+      Result GetComputedStateAt(const TimeStamp_t t_request,
                                 HistRobotState ** statePtr,
                                 HistStateKey* key = nullptr);
 
       // NOTE: p is not const, but *statePtr is. So you can assign to *statePtr, or statePtr, but not **statePtr
-      Result GetComputedStateAt(const RobotTimeStamp_t t_request,
+      Result GetComputedStateAt(const TimeStamp_t t_request,
                                 const HistRobotState ** statePtr,
                                 HistStateKey* key = nullptr) const;
 
       // If at least one vision only state exists, the most recent one is returned in p
       // and the time it occured at in t.
-      Result GetLatestVisionOnlyState(RobotTimeStamp_t& t, HistRobotState& state) const;
+      Result GetLatestVisionOnlyState(TimeStamp_t& t, HistRobotState& state) const;
       
       // Get the last state in history with the given pose frame ID.
       Result GetLastStateWithFrameID(const PoseFrameID_t frameID, HistRobotState& state) const;
-
-      // Returns the number of raw states with the given pose frame ID.
-      u32 GetNumRawStatesWithFrameID(const PoseFrameID_t frameID) const;
       
       // Checks whether or not the given key is associated with a valid computed state
-      bool IsValidKey(const HistStateKey key) const;     
+      bool IsValidKey(const HistStateKey key) const;
       
-      RobotTimeStamp_t GetOldestTimeStamp() const;
-      RobotTimeStamp_t GetNewestTimeStamp() const;
+      
+      TimeStamp_t GetOldestTimeStamp() const;
+      TimeStamp_t GetNewestTimeStamp() const;
 
-      RobotTimeStamp_t GetOldestVisionOnlyTimeStamp() const;
-      RobotTimeStamp_t GetNewestVisionOnlyTimeStamp() const;
+      TimeStamp_t GetOldestVisionOnlyTimeStamp() const;
+      TimeStamp_t GetNewestVisionOnlyTimeStamp() const;
 
       // Prints the entire history
       void Print() const;
       
-      typedef std::map<RobotTimeStamp_t, HistRobotState> StateMap_t;
+      typedef std::map<TimeStamp_t, HistRobotState> StateMap_t;
       
-      const StateMap_t& GetRawStates() const { return _states; }
+      const StateMap_t& GetRawPoses() const { return _states; }
       
     private:
       
@@ -250,9 +228,9 @@ namespace Anki {
       static HistStateKey currHistStateKey_;
       
       // Map of HistStateKeys to timestamps and vice versa
-      using TimestampByKeyMap_t           = std::map<HistStateKey, RobotTimeStamp_t> ;
+      using TimestampByKeyMap_t           = std::map<HistStateKey, TimeStamp_t> ;
       using TimestampByKeyMapIter_t       = TimestampByKeyMap_t::iterator;
-      using KeyByTimestampMap_t           = std::map<RobotTimeStamp_t, HistStateKey>;
+      using KeyByTimestampMap_t           = std::map<TimeStamp_t, HistStateKey>;
       using KeyByTimestampMapIter_t       = KeyByTimestampMap_t::iterator;
       using const_KeyByTimestampMapIter_t = KeyByTimestampMap_t::const_iterator;
       
@@ -265,7 +243,7 @@ namespace Anki {
     }; // class RobotStateHistory
 
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_RobotStateHistory_H__

@@ -16,7 +16,7 @@
  *                     which it receives messages from the robot that sent the image.
  *                     In this way, the processed image markers appear to come directly
  *                     from the robot to the basestation.
- *                   - While we only have TCP support on robot, RobotVisionMsgHandler
+ *                   - While we only have TCP support on robot, RobotVisionMsgHandler 
  *                     will also forward non-image messages from the robot on to the basestation.
  *
  * Author: Andrew Stein / Kevin Yoon
@@ -42,7 +42,7 @@
 
 
 namespace Anki {
-
+  
   // Forward declaration:
   namespace Util {
   namespace AnkiLab {
@@ -54,18 +54,19 @@ namespace Anki {
     class DataPlatform;
   }
   }
-
-namespace Vector {
-
+  
+namespace Cozmo {
+  
 // Forward declarations
 class Robot;
 class IExternalInterface;
-class IGatewayInterface;
 class CozmoContext;
 class UiMessageHandler;
-class ProtoMessageHandler;
+class GameMessagePort;
 class AnimationTransfer;
-
+class BLESystem;
+class DeviceDataManager;
+  
 template <typename Type>
 class AnkiEvent;
 
@@ -77,7 +78,7 @@ class CozmoEngine
 {
 public:
 
-  CozmoEngine(Util::Data::DataPlatform* dataPlatform);
+  CozmoEngine(Util::Data::DataPlatform* dataPlatform, GameMessagePort* gameMessagePort);
   virtual ~CozmoEngine();
 
 
@@ -85,10 +86,12 @@ public:
 
   // Hook this up to whatever is ticking the game "heartbeat"
   Result Update(const BaseStationTime_t currTime_nanosec);
-
+  
   void ListenForRobotConnections(bool listen);
-
+  
   Robot* GetRobot();
+
+  void ExecuteBackgroundTransfers();
 
   Util::AnkiLab::AssignmentStatus ActivateExperiment(const Util::AnkiLab::ActivateExperimentRequest& request,
                                                      std::string& outVariationKey);
@@ -99,50 +102,46 @@ public:
                                      const float sleepDurationActual_ms) const;
 
   UiMessageHandler* GetUiMsgHandler() const { return _uiMsgHandler.get(); }
-  ProtoMessageHandler* GetProtoMsgHandler() const { return _protoMsgHandler.get(); }
-
-  EngineState GetEngineState() const { return _engineState; }
-
-  // Designate calling thread as owner of engine updates
-  void SetEngineThread();
-
+  
   // Handle various message types
   template<typename T>
   void HandleMessage(const T& msg);
 
 protected:
-
+  
   std::vector<::Signal::SmartHandle> _signalHandles;
-
+  
   bool                                                      _isInitialized = false;
   Json::Value                                               _config;
   std::unique_ptr<UiMessageHandler>                         _uiMsgHandler;
-  std::unique_ptr<ProtoMessageHandler>                      _protoMsgHandler;
   std::unique_ptr<CozmoContext>                             _context;
-  Anki::Vector::DebugConsoleManager                          _debugConsoleManager;
-  Anki::Vector::DasToSdkHandler                              _dasToSdkHandler;
+  std::unique_ptr<BLESystem>                                _bleSystem;
+  std::unique_ptr<DeviceDataManager>                        _deviceDataManager;
+  Anki::Cozmo::DebugConsoleManager                          _debugConsoleManager;
+  Anki::Cozmo::DasToSdkHandler                              _dasToSdkHandler;
+  bool                                                      _isGamePaused = false;
   bool                                                      _hasRunFirstUpdate = false;
   bool                                                      _uiWasConnected = false;
-  bool                                                      _updateMoveComponent = false;
 
   virtual Result InitInternal();
-
+  
   void SetEngineState(EngineState newState);
-
+  
   Result ConnectToRobotProcess();
   Result AddRobot(RobotID_t robotID);
-
+  
   void UpdateLatencyInfo();
+  void SendSupportInfo() const;
   void InitUnityLogger();
 
   EngineState _engineState = EngineState::Stopped;
 
   std::unique_ptr<AnimationTransfer>                        _animationTransferHandler;
-
+  
 }; // class CozmoEngine
+  
 
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_BASESTATION_COZMO_ENGINE_H

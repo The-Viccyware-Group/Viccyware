@@ -14,7 +14,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IFistBumpListener{
 public:
@@ -22,7 +22,7 @@ public:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_BehaviorListenerInterfaces_IFistBumpListener_H__

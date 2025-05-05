@@ -4,7 +4,7 @@
 // Copyright: Anki Inc (c) 2016
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum int_32 BehaviorObjective {
 
@@ -58,5 +58,5 @@ enum int_32 BehaviorObjective {
 
 } // enum class BehaviorObjectives
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

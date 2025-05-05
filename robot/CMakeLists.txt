@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.6)
 project(robot)
 
 include(anki_build_cxx)
-include(anki_build_strip)
+include(android_strip)
 
 add_library(robot_interface INTERFACE IMPORTED GLOBAL)
 set_property(TARGET robot_interface
@@ -22,9 +22,9 @@ if (MACOSX)
   set(PLATFORM_COMPILE_DEFS
     SIMULATOR
   )
+elseif (ANDROID)
 endif()
 
-if (VICOS)
 
 add_library(robot_hal STATIC
   ${CMAKE_SOURCE_DIR}/robot/hal/src/hal.cpp
@@ -36,9 +36,6 @@ target_link_libraries(robot_hal
   cti_common_robot
   robot_interface
   robot_clad_cpplite
-  hdr_histogram_static
-  log
-  ${ASAN_LINKER_FLAGS}
 )
 
 target_include_directories(robot_hal
@@ -52,7 +49,6 @@ target_include_directories(robot_hal
 target_compile_options(robot_hal
   PRIVATE
   ${ANKI_BUILD_CXX_COMPILE_OPTIONS}
-  ${ASAN_CXX_FLAGS} 
 )
 
 target_compile_definitions(robot_hal
@@ -62,10 +58,6 @@ target_compile_definitions(robot_hal
   ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS}
   #HAL_DUMMY_BODY # Uncomment if deploying on head only
 )
-
-anki_build_target_license(robot_hal "ANKI")
-
-endif()
 
 # Create a lib for cube firmware led animation code, so
 # we can link into it from webotsCtrlLightCube
@@ -84,8 +76,6 @@ target_compile_definitions(cube_led_animator
   ${PLATFORM_COMPILE_DEFS}
   ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS}
 )
-
-anki_build_target_license(cube_led_animator "ANKI")
 endif()
 
 set(PLATFORM_SRCS "")
@@ -93,7 +83,7 @@ set(PLATFORM_LIBS "")
 set(PLATFORM_INCLUDES "")
 set(PLATFORM_COMPILE_DEFS "")
 set(PLATFORM_FLAGS "")
-if (VICOS)
+if (ANDROID)
   set(PLATFORM_LIBS
     robot_hal
   )
@@ -116,49 +106,29 @@ elseif (MACOSX)
       SIMULATOR
   )
   set(PLATFORM_SRCS
-      ${CMAKE_SOURCE_DIR}/robot/hal/sim/src/sim_DAS.cpp
       ${CMAKE_SOURCE_DIR}/robot/hal/sim/src/sim_hal.cpp
       ${CMAKE_SOURCE_DIR}/robot/hal/src/radio.cpp
       ${CMAKE_SOURCE_DIR}/simulator/robot/sim_overlayDisplay.cpp
   )
 endif()
 
-#
-# displayFaultCode
-#
-add_executable(displayFaultCode
-  ${CMAKE_SOURCE_DIR}/robot/include/anki/cozmo/shared/factory/faultCodeMain.cpp
+anki_build_cxx_library(robot_transport ${ANKI_SRCLIST_DIR} STATIC)
+
+target_compile_definitions(robot_transport
+  PRIVATE
+  COZMO_ROBOT
+  ${PLATFORM_COMPILE_DEFS}
 )
 
-target_compile_options(displayFaultCode
-  PRIVATE
-  ${ANKI_BUILD_CXX_COMPILE_OPTIONS}
-  ${ASAN_CXX_FLAGS}
+target_include_directories(robot_transport
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_compile_definitions(displayFaultCode PRIVATE ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS})
 
-target_include_directories(displayFaultCode
-  PRIVATE
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>)
-
-target_link_libraries(displayFaultCode
-  PRIVATE
-  ${ANKITRACE}
-  ${ASAN_EXE_LINKER_FLAGS}
-)
-
-anki_build_strip(TARGET displayFaultCode)
-
-anki_build_target_license(displayFaultCode "ANKI")
-
-#
-# supervisor
-#
 anki_build_cxx_library(supervisor ${ANKI_SRCLIST_DIR} STATIC
   ${PLATFORM_SRCS}
 )
-anki_build_target_license(supervisor "ANKI")
 
 target_link_libraries(supervisor
   PRIVATE
@@ -180,6 +150,8 @@ target_include_directories(supervisor
   PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/supervisor/src>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/generated/clad>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/generated/clad/robot>
   PUBLIC
   ${PLATFORM_INCLUDES}
 )
@@ -188,8 +160,8 @@ set(PLATFORM_LIBS "")
 set(PLATFORM_INCLUDES "")
 set(PLATFORM_COMPILE_DEFS "")
 set(PLATFORM_FLAGS "")
-if (VICOS)
-  set(PLATFORM_LIBS log)
+if (ANDROID)
+  set(PLATFORM_LIBS android log)
 elseif (MACOSX)
   find_library(FOUNDATION Foundation)
   set(PLATFORM_LIBS
@@ -203,10 +175,9 @@ endif()
 #
 # spine
 #
-if (VICOS)
+if (ANDROID)
 
   anki_build_cxx_library(spine ${ANKI_SRCLIST_DIR} STATIC)
-  anki_build_target_license(spine "ANKI")
 
   target_include_directories(spine
     PRIVATE
@@ -226,17 +197,15 @@ endif()
 #
 # robot_supervisor
 #
-if (VICOS)
+if (ANDROID)
 
   anki_build_cxx_executable(vic-robot ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(vic-robot "ANKI")
 
   target_compile_definitions(vic-robot
     PRIVATE
     COZMO_ROBOT
     CORETECH_ROBOT
     ${PLATFORM_COMPILE_DEFS}
-    ${ANKITRACE}
     #HAL_DUMMY_BODY # Uncomment if deploying on head only
   )
 
@@ -245,23 +214,22 @@ if (VICOS)
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/include>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/syscon>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/generated/clad/robot>
   )
 
   target_link_libraries(vic-robot
     PRIVATE
     robot_hal
     supervisor
+    robot_transport
     spine
     robot_interface
     robot_clad_cpplite
     cti_common_robot
-    cti_messaging_robot
-    victorCrashReports
-    ${ANKITRACE}
+    cti_messaging
     ${PLATFORM_LIBS}
-    ${ASAN_EXE_LINKER_FLAGS}
   )
 
-  anki_build_strip(TARGET vic-robot)
+  android_strip(TARGET vic-robot)
 
 endif()

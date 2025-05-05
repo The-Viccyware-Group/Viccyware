@@ -20,19 +20,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifndef COZMO_ROBOT
-#error "This logging file may only be included in vic-robot"
-#endif
-
-#if defined(VICOS)
+#if defined(ANDROID)
 
 #include <android/log.h>
 #define console_printf(fmt, ...) __android_log_print(ANDROID_LOG_INFO, "vic-robot", fmt, ##__VA_ARGS__)
 #define log_assert(line, file, expr, fmt, ...) __android_log_assert(expr, "vic-robot", fmt ": failed at line " line " in file " file, ##__VA_ARGS__)
 #define log_error(name, fmt, ...) __android_log_print(ANDROID_LOG_ERROR, "vic-robot", name ": " fmt, ##__VA_ARGS__)
 #define log_warn(name, fmt, ...) __android_log_print(ANDROID_LOG_WARN, "vic-robot", name ": " fmt, ##__VA_ARGS__)
-#define log_info(name, fmt, ...) __android_log_print(ANDROID_LOG_INFO, "vic-robot", name ": " fmt, ##__VA_ARGS__)
-#define log_debug(name, fmt, ...) __android_log_print(ANDROID_LOG_DEBUG, "vic-robot", name ": " fmt, ##__VA_ARGS__)
+#define log_event(name, fmt, ...) __android_log_print(ANDROID_LOG_INFO, "vic-robot", name ": " fmt, ##__VA_ARGS__)
+#define log_info(name, fmt, ...) __android_log_print(ANDROID_LOG_DEBUG, "vic-robot", name ": " fmt, ##__VA_ARGS__)
+#define log_debug(name, fmt, ...) __android_log_print(ANDROID_LOG_VERBOSE, "vic-robot", name ": " fmt, ##__VA_ARGS__)
 
 #else
 
@@ -40,12 +37,16 @@
 #define log_assert(line, file, expr, fmt, ...) console_printf("[Assert] " fmt ": \"" expr "\" failed at line " line " in file " file "\r\n", ##__VA_ARGS__)
 #define log_error(name, fmt, ...) console_printf("[Error] " name ": " fmt "\r\n", ##__VA_ARGS__)
 #define log_warn(name, fmt, ...) console_printf("[Warn] " name ": " fmt "\r\n", ##__VA_ARGS__)
+#define log_event(name, fmt, ...) console_printf("[Event] " name ": " fmt "\r\n", ##__VA_ARGS__)
 #define log_info(name, fmt, ...) console_printf("[Info] " name ": " fmt "\r\n", ##__VA_ARGS__)
 #define log_debug(name, fmt, ...) console_printf("[Debug] " name ": " fmt "\r\n", ##__VA_ARGS__)
 
 #endif
 
 // Keil doesn't seem to reliably error on these not being defined below so trigger explicitly.
+#ifndef ANKI_DEBUG_EVENTS
+#error ANKI_DEBUG_EVENTS not defined
+#endif
 #ifndef ANKI_DEBUG_INFO
 #error ANKI_DEBUG_INFO not defined
 #endif
@@ -54,21 +55,22 @@
 #endif
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace RobotInterface {
+
+#if ANKI_DEBUG_EVENTS
+      #define AnkiEvent(nameString, fmtString, ...) \
+      { \
+        log_event(nameString, fmtString, ##__VA_ARGS__); \
+      }
+#else
+      #define AnkiEvent(...)
+#endif
 
 #if ANKI_DEBUG_INFO
       #define AnkiInfo(nameString, fmtString, ...) \
       { \
         log_info(nameString, fmtString, ##__VA_ARGS__); \
-      }
-      
-      #define AnkiInfoPeriodic(num_calls_between_prints, nameString, fmtString, ...) \
-      {   static u16 cnt = num_calls_between_prints; \
-          if (++cnt > num_calls_between_prints) { \
-            log_info(nameString, fmtString, ##__VA_ARGS__); \
-            cnt = 0; \
-          } \
       }
 #else
       #define AnkiInfo(...)

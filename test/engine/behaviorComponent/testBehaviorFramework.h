@@ -11,8 +11,6 @@
 *
 **/
 
-#ifndef __Test_Engine_TestBehaviorFramework_H__
-#define __Test_Engine_TestBehaviorFramework_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
@@ -20,7 +18,7 @@
 #include "clad/types/behaviorComponent/userIntent.h"
 
 
-extern Anki::Vector::CozmoContext* cozmoContext;
+extern Anki::Cozmo::CozmoContext* cozmoContext;
 
 #define DoTicks(testFramework, r, b, n) do { SCOPED_TRACE(__LINE__); DoTicks_(testFramework, r, b, n); } while(0)
 #define DoTicksToComplete(testFramework, r, b, n) do { SCOPED_TRACE(__LINE__); DoTicks_(testFramework,r, b, n, true); } while(0)
@@ -29,7 +27,7 @@ extern Anki::Vector::CozmoContext* cozmoContext;
 /// Setup a test behavior class that tracks data for testing
 //////////
 namespace Anki{
-namespace Vector{
+namespace Cozmo{
 class AIComponent;
 class BehaviorExternalInterface;
 class BehaviorSystemManager;
@@ -39,8 +37,6 @@ class BehaviorEventComponent;
 class TestBehaviorWithHelpers;
 class TestBehaviorFramework;
 
-struct MetaUserIntent_SimpleVoiceResponse;
-
 // Function to do ticks on a behavior
 void DoTicks_(TestBehaviorFramework& testFramework, Robot& robot, TestBehaviorWithHelpers& behavior, int num, bool expectComplete = false);
 void DoBehaviorInterfaceTicks(Robot& robot, ICozmoBehavior& behavior, int num=1);
@@ -48,11 +44,7 @@ void DoBehaviorComponentTicks(Robot& robot, ICozmoBehavior& behavior, BehaviorCo
 
 void InjectBehaviorIntoStack(ICozmoBehavior& behavior, TestBehaviorFramework& testFramework);
 
-// return true if the stacks a and b "match" with arbitrary prefix. In other words, check from the back of the
-// stacks so that a/b/c/d would match c/d
-bool CheckStackSuffixMatch(const std::vector<IBehavior*>& a, const std::vector<IBehavior*>& b);
-
-void IncrementBaseStationTimerTicks();
+void IncrementBaseStationTimerTicks(int numTicks = 1);
 void InjectValidDelegateIntoBSM(TestBehaviorFramework& testFramework,
                                 IBehavior* delegator,
                                 IBehavior* delegated,
@@ -90,10 +82,7 @@ public:
   BehaviorExternalInterface& GetBehaviorExternalInterface(){ assert(_behaviorExternalInterface); return *_behaviorExternalInterface;}
   BehaviorSystemManager& GetBehaviorSystemManager(){ assert(_behaviorSystemManager); return *_behaviorSystemManager; }
   BehaviorContainer& GetBehaviorContainer(){ assert(_behaviorContainer); return *_behaviorContainer;}
-
- // Return a named behavior stack as defined in namedBehaviorStacks.json
-  std::vector<IBehavior*> GetNamedBehaviorStack(const std::string& behaviorStackName);
-
+   
   ///////
   // Functions which alter the behavior stack
   ///////
@@ -106,50 +95,33 @@ public:
   void ReplaceBehaviorStack(std::vector<IBehavior*> newStack);
   // Add a valid delegate to the stack
   void AddDelegateToStack(IBehavior* delegate);
-   // Set the active behavior stack using a namedBehviorStack from namedBehaviorStacks.json
-  void SetBehaviorStackByName(const std::string& behaviorStackName);
-
-  // Delegate through all valid tree states TreeCallback is called after each delegation (and optionally takes
-  // a bool which is true if the node is a leaf, false otherwise)
+  
+  // Delegate through all valid tree states
+  // TreeCallback is called after each delegation
   void FullTreeWalk(std::map<IBehavior*,std::set<IBehavior*>>& delegateMap,
-                    const std::function<void(void)>& evaluateTreeCallback,
-                    const std::function<void(IBehavior*)>& evaluatePreDelgationCallback = nullptr);
-
-  void FullTreeWalk(std::map<IBehavior*,std::set<IBehavior*>>& delegateMap,
-                    const std::function<void(bool)>& evaluateTreeCallback = nullptr,
-                    const std::function<void(IBehavior*)>& evaluatePreDelgationCallback = nullptr);
+                    std::function<void(void)> evaluateTreeCallback = nullptr);
 
   // Walks the full freeplay tree to see whether the stack can occur
   static bool CanStackOccurDuringFreeplay(const std::vector<IBehavior*>& stackToBuild);
-  
-  // Adds a face if one doesn't already exist
-  void AddFakeFirstFace();
-  
-  // Adds objectType if one doesnt already exist, either at origin or at pose, if specified
-  void AddFakeFirstObject( ObjectType objectType, Pose3d* pose = nullptr );
 
-  // iterate the simple voice responses from the user intent map / component
-  void IterateSimpleVoiceResponse(std::function< void( const MetaUserIntent_SimpleVoiceResponse& ) > lambda);
-  
+  ///////
+  // Functions related to user intents
+  ///////
+
+  // Pass in:
+  //  1) Initial Behavior Stack
+  //  2) User intent to send
+  //  3) Behavior expected to handle the intent
+  // Returns true if from the initial stack the user intent results in the 
+  // expected behavior taking control of the stack
+  // False otherwise
+  bool TestUserIntentTransition(const std::vector<IBehavior*>& initialStack,
+                                UserIntent intentToSend,
+                                BehaviorID expectedIntentHandlerID);
 
 private:
-  // There are some special case delegations where behaviors require certain
-  // properties of the system to be true before delegation - this is a place to
-  // maintain the special case logic required
-  void ApplyAdditionalRequirementsBeforeDelegation(IBehavior* delegate);
-  
-  // Restore state prior to calling ApplyAdditionalRequirementsBeforeDelegation
-  void RemoveAdditionalDelegationRequirements(IBehavior* delegate);
-
-  // Called once during init to load the namedBehaviorStack map from Json
-  void LoadNamedBehaviorStacks();
-
   std::unique_ptr<BehaviorContainer> _behaviorContainer;
   std::unique_ptr<Robot> _robot;
-  
-  std::unordered_map<std::string, std::vector<IBehavior*>> _namedBehaviorStacks;
-  
-  std::unordered_map<std::string, std::vector<bool>> _cachedDelegationReqs;
 
   // Not guaranteed to be initialized
   AIComponent*               _aiComponent;
@@ -255,5 +227,3 @@ public:
 
 }
 }
-
-#endif // __Test_Engine_TestBehaviorFramework_H__

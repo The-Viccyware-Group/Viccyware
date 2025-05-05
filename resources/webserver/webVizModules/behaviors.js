@@ -1,143 +1,27 @@
 (function(myMethods, sendData) {
 
-  //myMethods.devShouldDumpData = true;
-
   // helper methods
 
-  var downloadAsCsv = function(){
-    var data = cachedTreeData; // use latest, even if frozen
-    
-    var doToSelfAndChildren = function(elem, func) {
-      func(elem);
-      var children = elem['children'];
-      if( typeof children !== 'undefined' && Array.isArray(children) ) {
-        children.forEach(function(child) {
-          doToSelfAndChildren(child, func);
-        });
-      }
-    }
-
-    // find all times where behaviors were activated or deactivated
-    var changedTimes = new Set();
-    var findChanged = function(elem) {
-      var activeTimes = elem.data.activeTimes;
-      if( typeof elem.data !== 'undefined' 
-          && typeof elem.data.activeTimes !== 'undefined' 
-          && Array.isArray(elem.data.activeTimes) ) 
-      {
-        elem.data.activeTimes.forEach(function(startStop) {
-          if( typeof startStop.start !== 'undefined' ) {
-            changedTimes.add(startStop.start)
-          }
-          if( typeof startStop.end !== 'undefined' ) {
-            changedTimes.add(startStop.end)
-          }
-        });
-      }
-    };
-    doToSelfAndChildren( data, findChanged );
-    // transform set to sorted array
-    changedTimes = Array.from(changedTimes).sort(function(a,b){return a - b});
-
-    var outputInfo = {};
-    var maxStackLength = 0;
-    // for any event at that time, gather info on the stack at that time
-    changedTimes.forEach(function(time){
-      var behaviorsActiveAtTime = [];
-      var findBehaviorsActiveAtTime = function(elem) {
-        var activeTimes = elem.data.activeTimes;
-        if( typeof elem.data !== 'undefined' 
-          && typeof elem.data.activeTimes !== 'undefined' 
-          && Array.isArray(elem.data.activeTimes) ) 
-        {
-          elem.data.activeTimes.forEach(function(startStop) {
-            if( (startStop.start <= time) 
-                && ((typeof startStop.end === 'undefined') || (startStop.end > time)) ) 
-            {
-              behaviorsActiveAtTime.push( elem.data.behaviorID );
-            }
-          });
-        }
-      };
-      doToSelfAndChildren( data, findBehaviorsActiveAtTime );
-
-      outputInfo[time] = behaviorsActiveAtTime;
-      maxStackLength = Math.max(maxStackLength, behaviorsActiveAtTime.length);
-    });
-
-    // finally, write the info into csv format
-
-    // create header
-    var dateStr = (new Date()).toLocaleString('en-US').replace(',','');
-    var outputCsv = 'time[' + dateStr + ']';
-    for( var i=0; i<maxStackLength; ++i ) {
-      outputCsv += ',behavior';
-    }
-    outputCsv += '\n';
-    // write body
-    changedTimes.forEach(function(time){
-      var info = outputInfo[time];
-      outputCsv += time;
-      for( var i=0; i<maxStackLength; ++i ) {
-        if( i < info.length ) {
-          outputCsv += ',' + info[i];  
-        } else {
-          outputCsv += ',';
-        }
-      }
-      outputCsv += '\n';
-    });
-    // make QA agree that this doesn't suffice for full logs
-    alert('Downloading behavior stacks. To help the engineers, it\'s useful to send them this file, a screenshot of this tab, _AND_ a full log (victor_log)')
-    // force download
-    var elem = document.createElement('a');
-    elem.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(outputCsv));
-    elem.setAttribute('download', 'behaviorStackLog.csv');
-    elem.style.display = 'none';
-    document.body.appendChild(elem);
-    elem.click();
-    document.body.removeChild(elem);
-  };
-
-  function clearDisplay() {
-    flatData = undefined;
-    treeData = undefined;
-    svgGroups.rowGroup.selectAll('*').remove();
-    svgGroups.labelGroup.selectAll('*').remove();
-    svgGroups.timeBarsGroup.selectAll('.timeBar').remove();
-    svgGroups.zoomGroup.selectAll('.miniTimeBar').remove();
-  }
-
-  function sendBehavior(behaviorName, presetConditions) {
-    var payload = {'behaviorName': behaviorName, 'presetConditions': presetConditions};
-    sendData( payload );
-    clearDisplay();
-  }
-
-  function addControls(data, container) {
+  function setBehaviorDropdown(data, container) {
     data.sort();
     // create if needed, then populate a dropdown with behaviorIDs,
-    // and when the user selects one, tell the engine to start that behavior
+    // and when the user selects one, tell the engine to start that behavior 
     var dropDown = $('#behaviorDropdown');
     if( dropDown.length == 0 ) {
       dropDown = $('<select></select>', {id: 'behaviorDropdown'}).appendTo(container);
       dropDown.change(function() {
         if( this.value ) {
-          sendBehavior(this.value, false); // just default to false so they try it normally
+          var payload = {'behaviorName': this.value};
+          sendData( payload );
+
+          flatData = undefined;
+          treeData = undefined;
+          svgGroups.rowGroup.selectAll('*').remove();
+          svgGroups.labelGroup.selectAll('*').remove();
+          svgGroups.timeBarsGroup.selectAll('.timeBar').remove();
+          svgGroups.zoomGroup.selectAll('.miniTimeBar').remove();
         }
       });
-      $('<button type"button" id="resend">Resend</button>').click( function() {
-        sendBehavior($('#behaviorDropdown')[0].value, $('#presetConditions').is(':checked'));
-      }).appendTo(container);
-      $('<input type="checkbox" id="presetConditions" />').appendTo(container);
-      $('<label for="presetConditions">Force</label>').appendTo(container);
-      $('<input type="checkbox" id="showActivatable" />').appendTo(container)
-        .change( function() {
-          showInactive = $(this).is(':checked');
-        })
-      $('<label for="showActivatable">Show activatable</label>').appendTo(container);
-
-      $('<button type="button" id="downloadTimeBars">Download as csv</button>').click(downloadAsCsv).appendTo(container);
     }
     dropDown.empty();
     $("<option/>", {val: '', text:'Select a behaviorID to switch to immediately'}).appendTo(dropDown);
@@ -221,8 +105,8 @@
     var endPerc = (x + width)/params.frameWidth;
     if( width > 0 ) {
       hasZoomWindow = true;
-      minZoomTime = minTime + startPerc*(globalTime - minTime);
-      maxZoomTime = minTime +   endPerc*(globalTime - minTime);
+      minZoomTime = startPerc*globalTime;
+      maxZoomTime = endPerc*globalTime;
     } else {
       hasZoomWindow = false;
     }
@@ -304,7 +188,7 @@
     if( hasZoomWindow ) {
       t = minZoomTime + frac * (maxZoomTime - minZoomTime);
     } else {
-      t = minTime + frac * (globalTime - minTime);
+      t = frac * globalTime;
     }
     return t;
   };
@@ -371,7 +255,7 @@
         return 0;
       }
     } else {
-      return maxLabelWidth + (d.start-minTime)*(params.frameWidth - maxLabelWidth)/(globalTime - minTime);
+      return maxLabelWidth + d.start*(params.frameWidth - maxLabelWidth)/globalTime;
     }
   }
   var time2Width = function(d, maxLabelWidth, ignoreZoom) {
@@ -386,16 +270,13 @@
         return 0;
       }
     } else {
-      return (getEndTime(d)-d.start)*(params.frameWidth - maxLabelWidth)/(globalTime - minTime);
+      return (getEndTime(d)-d.start)*(params.frameWidth - maxLabelWidth)/globalTime;
     }
   };
 
   var tree = d3.tree().nodeSize([0, 30]) //Invokes tree
   var params = {};
   var svgGroups = {};
-  var activeFeatureDiv;
-  var currentBehaviorDiv;
-  var currentBehaviorStateDiv;
 
   var hasZoomWindow = false;
   var minZoomTime = 0;
@@ -404,7 +285,6 @@
   var timeCursorPosition=-1;
   var timeCursorTime;
   var maxLabelWidth = 190;
-  var showInactive = false;
     
 
   function update(source) {
@@ -418,9 +298,7 @@
 
     // returns all nodes and each descendant in pre-order traversal (sort)
     nodes.eachBefore(function (n) {
-      if( showInactive || (typeof n.data.activeTimes !== 'undefined') ) {
-        nodesSort.push(n); 
-      }
+      nodesSort.push(n); 
     });
 
     // compute positioning
@@ -460,6 +338,9 @@
                         .attr('transform', function(d) {  
                           return 'translate(' + source.y + ',' + source.x + ')'; 
                         });
+                        
+
+    //node.exit().text('done')
 
     nodeEnter.append('text')
              .attr('dy', 3.5 + params.barHeight/2)
@@ -475,24 +356,18 @@
     node.attr('transform', function(d) { return 'translate(' + d.y + ',' + d.x + ')'; })
         .style('opacity', 1);
 
-    node.exit().remove();
-
     // Update the links…
     var link = svgGroups.labelGroup.selectAll('.link')
                          .data(source.links(), function(d) { return d.target.id; });
 
     var diagonalFunc = function(d) {
-      if( showInactive || typeof d.target.data.activeTimes !== 'undefined' ) {
-        return rightAngleBend([{
-          y: d.source.x,
-          x: d.source.y
-        }, {
-          y: d.target.x,
-          x: d.target.y
-        }]);
-      } else {
-        return;
-      }
+      return rightAngleBend([{
+        y: d.source.x,
+        x: d.source.y
+      }, {
+        y: d.target.x,
+        x: d.target.y
+      }]);
     };
     // Enter any new links at the parent's previous position.
     link.enter().insert('path', 'g')
@@ -569,7 +444,7 @@
     
 
     var scale = d3.scaleLinear()
-                  .domain(hasZoomWindow ? [minZoomTime, maxZoomTime] : [minTime, globalTime])
+                  .domain(hasZoomWindow ? [minZoomTime, maxZoomTime] : [0, globalTime])
                   .range([maxLabelWidth, params.frameWidth]);
     var x_axis = d3.axisBottom()
                    .scale(scale);
@@ -649,7 +524,6 @@
   // data:
   var flatData; // passed in from the engine
   var globalTime; // the displayed time
-  var minTime; // the connection time that becomes the min axis value
   var cachedTime=0.0; // the time passed in, but maybe not displayed yet
   var treeData; // the displayed hierarchy created from flat data
   var cachedTreeData; // the hierarchy created from flat data but maybe not displayed yet
@@ -678,6 +552,11 @@
 
   myMethods.init = function(elem) {
 
+    if ( location.port != '8888' ) { 
+      $('<h3>You must use this tab with the engine process (port 8888)</h3>').appendTo(elem);
+      return;
+    }
+
     params.duration = 400;
     params.margin = {top: 30, right: 20, bottom: 30, left: 20};
     params.frameWidth = $(elem).width() - params.margin.right - params.margin.left;
@@ -685,11 +564,7 @@
     params.pathOffset = 10;
     params.barHeight = 30;
 
-    $('<h4>Usage: Move your mouse around the main window to see active behaviors and the times they were active. You may also drag your cursor in the bottom window to zoom in on a particular period of time. Click in the same box to zoom out. Zooming will pause live updates, so you should toggle the switch on the left when you\'re done.</h3>').appendTo( elem );
     
-    activeFeatureDiv = $('<h3 id="activeFeature"></h3>').appendTo( elem );
-    currentBehaviorDiv = $('<h3 id="currentBehavior"></h3>').appendTo( elem );
-    currentBehaviorStateDiv = $('<h3 id="currentBehaviorDebugState"></h3>').appendTo( elem );
 
     var svg = d3.select(elem)
                 .append('svg')
@@ -811,28 +686,9 @@
 
   myMethods.onData = function(allData, elem) {
 
-    if( (typeof allData.tree === 'undefined') &&
-        (typeof allData.debugState === 'undefined') &&
-        (typeof allData.activeFeature === 'undefined') ) {
+    if( typeof allData.tree === 'undefined' ) {
       // currently the only other option a list of behaviors
-      addControls( allData, elem );
-      return;
-    }
-    else if( typeof allData.debugState !== 'undefined' &&
-             typeof currentBehaviorStateDiv !== 'undefined' ) {
-      currentBehaviorStateDiv.text('Latest state: ' + allData.debugState);
-      return;
-    }
-    else if( typeof allData.activeFeature !== 'undefined' &&
-             typeof activeFeatureDiv !== 'undefined' ) {
-      activeFeatureDiv.text('Active feature: ' + allData.activeFeature);
-      return;
-    }
-
-    if( !allData.stack || allData.stack.length == 0 ) {
-      currentBehaviorDiv.text( 'No running behavior' )
-      flatData = undefined;
-      treeData = undefined;
+      setBehaviorDropdown( allData, elem );
       return;
     }
 
@@ -858,22 +714,6 @@
                        .id(function(d) { return d.behaviorID; })
                        .parentId(function(d) { return d.parent; })
                        (flatData);
-    
-    // always update the current behavior, even if the toggle for live updates is off
-    if( stack.length && (typeof currentBehaviorDiv !== 'undefined') ) {
-      var newText = 'Current behavior: ' + stack[stack.length - 1];
-      if( newText != currentBehaviorDiv.text() ) {
-        currentBehaviorStateDiv.text();
-      }
-      currentBehaviorDiv.text( newText )
-    } else if( typeof currentBehaviorDiv !== 'undefined' ) {
-      currentBehaviorDiv.text( 'No running behavior' )
-    }
-
-    // always set the minTime if it hasnt been yet
-    if( typeof minTime === 'undefined' ) {
-      minTime = cachedTime - 1.0; // start 1 sec earlier to avoid divide by 0 checks
-    }
     
     // add activeTimes to data, which also sticks it back into flatData as an added bonus
     cachedTreeData.each(function( node ) {
@@ -978,32 +818,7 @@
         stroke-opacity:0.5;
         stroke:red;
         pointer-events: none;
-      }
-      #activeFeature {
-        font-size:12px;
-        margin-top: 3px;
-        margin-bottom:3px;
-      }
-      #currentBehavior {
-        font-size:16px;
-        margin-top: 5px;
-        margin-bottom:5px;
-      }
-      #showActivatable {
-        margin-left:10px;
-        margin-right:2px;
-      }
-      #downloadTimeBars {
-        padding: 5px 10px;
-        margin-right:20px;
-        float:right;
-      }
-      #resend{
-        padding: 5px 5px;
-        margin-left:10px;
-        margin-right:10px;
-      }
-      `
+      }`
   }; // end getStyles
 
 })(moduleMethods, moduleSendDataFunc);

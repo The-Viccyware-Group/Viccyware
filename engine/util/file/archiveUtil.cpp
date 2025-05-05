@@ -15,25 +15,20 @@
 #include "util/logging/logging.h"
 #include "util/math/numericCast.h"
 
-#define ANKI_HAS_LIBARCHIVE 0
-
-#if ANKI_HAS_LIBARCHIVE
-  #include "archive.h"
-  #include "archive_entry.h"
-#endif 
+#include "archive.h"
+#include "archive_entry.h"
 
 #include <sys/stat.h>
 #include <fstream>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 bool ArchiveUtil::CreateArchiveFromFiles(const std::string& outputPath,
                                          const std::string& filenameBase,
                                          const std::vector<std::string>& filenames)
 {
-#if ANKI_HAS_LIBARCHIVE
   struct archive* newArchive = archive_write_new();
   if (nullptr == newArchive)
   {
@@ -113,8 +108,6 @@ bool ArchiveUtil::CreateArchiveFromFiles(const std::string& outputPath,
   archive_write_free(newArchive);
   
   return true;
-#endif
-  return false;
 }
   
 std::string ArchiveUtil::RemoveFilenameBase(const std::string& filenameBase, const std::string& filename)
@@ -141,15 +134,12 @@ std::string ArchiveUtil::RemoveFilenameBase(const std::string& filenameBase, con
   return filename;
 }
 
-#if ANKI_HAS_LIBARCHIVE
 // Declaring this helper used in CreateFilesFromArchive
 static int copy_data(struct archive *ar, struct archive *aw);
-#endif
 
 bool ArchiveUtil::CreateFilesFromArchive(const std::string& archivePath,
                                          const std::string& outputPath)
 {
-#if ANKI_HAS_LIBARCHIVE
   struct archive * read_archive = archive_read_new();
   if (nullptr == read_archive)
   {
@@ -358,11 +348,8 @@ bool ArchiveUtil::CreateFilesFromArchive(const std::string& archivePath,
   
   doFinishingTasks();
   return true;
-#endif
-  return false;
 }
 
-#if ANKI_HAS_LIBARCHIVE
 static int copy_data(struct archive *ar, struct archive *aw)
 {
   int errorCode = ARCHIVE_OK;
@@ -394,23 +381,20 @@ static int copy_data(struct archive *ar, struct archive *aw)
     }
   }
 }
-#endif
 
 const char* ArchiveUtil::GetArchiveErrorString(int errorCode)
 {
   switch (errorCode)
   {
-    #if ANKI_HAS_LIBARCHIVE
     case ARCHIVE_EOF: return "ARCHIVE_EOF";
     case ARCHIVE_OK: return "ARCHIVE_OK";
     case ARCHIVE_RETRY: return "ARCHIVE_RETRY";
     case ARCHIVE_WARN: return "ARCHIVE_WARN";
     case ARCHIVE_FAILED: return "ARCHIVE_FAILED";
     case ARCHIVE_FATAL: return "ARCHIVE_FATAL";
-    #endif
     default: return "UNKNOWN";
   }
 }
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

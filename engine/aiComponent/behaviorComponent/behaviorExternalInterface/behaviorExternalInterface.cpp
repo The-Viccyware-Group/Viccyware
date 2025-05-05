@@ -17,9 +17,8 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/mics/micComponent.h"
+#include "engine/components/progressionUnlockComponent.h"
 #include "engine/components/publicStateBroadcaster.h"
-#include "engine/components/variableSnapshot/variableSnapshotComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/moodSystem/moodManager.h"
@@ -27,7 +26,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 const BEIComponentWrapper& BehaviorExternalInterface::GetComponentWrapper(BEIComponentID componentID) const
@@ -48,236 +47,159 @@ BehaviorExternalInterface::~BehaviorExternalInterface()
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorExternalInterface::InitDependent(Robot* robot, const BCCompMap& dependentComps)
+void BehaviorExternalInterface::InitDependent(Robot* robot, const BCCompMap& dependentComponents)
 {
-  auto* aiComponent            = dependentComps.GetComponentPtr<AIComponent>();
-  auto* behaviorContainer      = dependentComps.GetComponentPtr<BehaviorContainer>();
-  auto* behaviorEventComponent = dependentComps.GetComponentPtr<BehaviorEventComponent>();
-  auto* behaviorTimers         = dependentComps.GetComponentPtr<BehaviorTimerManager>();
-  auto* blockWorld             = dependentComps.GetComponentPtr<BlockWorld>();
-  auto* delegationComponent    = dependentComps.GetComponentPtr<DelegationComponent>();
-  auto* faceWorld              = dependentComps.GetComponentPtr<FaceWorld>();
-  auto* heldInPalmTracker      = dependentComps.GetComponentPtr<HeldInPalmTracker>();
-  auto* robotInfo              = dependentComps.GetComponentPtr<BEIRobotInfo>();
-  auto* sleepTracker           = dependentComps.GetComponentPtr<SleepTracker>();
+  auto& aiComponent            = dependentComponents.GetValue<AIComponent>();
+  auto& behaviorContainer      = dependentComponents.GetValue<BehaviorContainer>();
+  auto& behaviorEventComponent = dependentComponents.GetValue<BehaviorEventComponent>();
+  auto& behaviorTimers         = dependentComponents.GetValue<BehaviorTimerManager>();
+  auto& blockWorld             = dependentComponents.GetValue<BlockWorld>();
+  auto& delegationComponent    = dependentComponents.GetValue<DelegationComponent>();
+  auto& faceWorld              = dependentComponents.GetValue<FaceWorld>();
+  auto& robotInfo              = dependentComponents.GetValue<BEIRobotInfo>();
 
-  Init(aiComponent,
-       robot->GetComponentPtr<AnimationComponent>(),
-       robot->GetComponentPtr<BeatDetectorComponent>(),
-       behaviorContainer,
-       behaviorEventComponent,
-       behaviorTimers,
-       blockWorld,
-       robot->GetComponentPtr<BackpackLightComponent>(),
-       robot->GetComponentPtr<CubeAccelComponent>(), 
-       robot->GetComponentPtr<CubeCommsComponent>(), 
-       robot->GetComponentPtr<CubeConnectionCoordinator>(),
-       robot->GetComponentPtr<CubeInteractionTracker>(),
-       robot->GetComponentPtr<CubeLightComponent>(),
-       robot->GetComponentPtr<CliffSensorComponent>(),
-       delegationComponent,
-       faceWorld,
-       robot->GetComponentPtr<HabitatDetectorComponent>(),
-       heldInPalmTracker,
-       robot->GetComponentPtr<MapComponent>(),
-       robot->GetComponentPtr<MicComponent>(),
-       robot->GetComponentPtr<MoodManager>(),
-       robot->GetComponentPtr<MovementComponent>(),
-       robot->GetComponentPtr<PetWorld>(),
-       robot->GetComponentPtr<PhotographyManager>(),
-       robot->GetComponentPtr<PowerStateManager>(),
-       robot->GetComponentPtr<ProxSensorComponent>(),
-       robot->GetComponentPtr<PublicStateBroadcaster>(),
-       robot->GetComponentPtr<SDKComponent>(),
+  Init(&aiComponent,
+       &robot->GetAnimationComponent(),
+       &behaviorContainer,
+       &behaviorEventComponent,
+       &behaviorTimers,
+       &blockWorld,
+       &robot->GetBodyLightComponent(),
+       &robot->GetCubeAccelComponent(), 
+       &robot->GetCubeLightComponent(),
+       &delegationComponent,
+       &faceWorld,
+       &robot->GetMapComponent(),
+       &robot->GetMicDirectionHistory(),
+       &robot->GetMoodManager(),
+       &robot->GetObjectPoseConfirmer(),
+       &robot->GetPetWorld(),
+       &robot->GetProgressionUnlockComponent(),
+       &robot->GetProxSensorComponent(),
+       &robot->GetPublicStateBroadcaster(),
        robot->GetAudioClient(),
-       robotInfo,
-       robot->GetComponentPtr<DataAccessorComponent>(),
-       robot->GetComponentPtr<TextToSpeechCoordinator>(),
-       robot->GetComponentPtr<TouchSensorComponent>(),
-       robot->GetComponentPtr<VariableSnapshotComponent>(),
-       robot->GetComponentPtr<VisionComponent>(),
-       robot->GetComponentPtr<VisionScheduleMediator>(),
-       robot->GetComponentPtr<SettingsCommManager>(),
-       robot->GetComponentPtr<SettingsManager>(),
-       sleepTracker);
+       &robotInfo,
+       &robot->GetTouchSensorComponent(),
+       &robot->GetVisionComponent(),
+       &robot->GetVisionScheduleMediator());
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorExternalInterface::Init(AIComponent*                   aiComponent,
                                      AnimationComponent*            animationComponent,
-                                     BeatDetectorComponent*         beatDetectorComponent,
                                      BehaviorContainer*             behaviorContainer,
                                      BehaviorEventComponent*        behaviorEventComponent,
                                      BehaviorTimerManager*          behaviorTimers,
                                      BlockWorld*                    blockWorld,
-                                     BackpackLightComponent*        backpackLightComponent,
+                                     BodyLightComponent*            bodyLightComponent,
                                      CubeAccelComponent*            cubeAccelComponent,
-                                     CubeCommsComponent*            cubeCommsComponent,
-                                     CubeConnectionCoordinator*     cubeConnectionCoordinator,
-                                     CubeInteractionTracker*        cubeInteractionTracker,
                                      CubeLightComponent*            cubeLightComponent,
-                                     CliffSensorComponent*          cliffSensorComponent,
                                      DelegationComponent*           delegationComponent,
                                      FaceWorld*                     faceWorld,
-                                     HabitatDetectorComponent*      habitatDetectorComponent,
-                                     HeldInPalmTracker*             heldInPalmTracker,
                                      MapComponent*                  mapComponent,
-                                     MicComponent*                  micComponent,
+                                     MicDirectionHistory*           micDirectionHistory,
                                      MoodManager*                   moodManager,
-                                     MovementComponent*             movementComponent,
+                                     ObjectPoseConfirmer*           objectPoseConfirmer,
                                      PetWorld*                      petWorld,
-                                     PhotographyManager*            photographyManager,
-                                     PowerStateManager*             powerStateManager,
+                                     ProgressionUnlockComponent*    progressionUnlockComponent,
                                      ProxSensorComponent*           proxSensor,
                                      PublicStateBroadcaster*        publicStateBroadcaster,
-                                     SDKComponent*                  sdkComponent,
                                      Audio::EngineRobotAudioClient* robotAudioClient,
                                      BEIRobotInfo*                  robotInfo,
-                                     DataAccessorComponent*         dataAccessor,
-                                     TextToSpeechCoordinator*       textToSpeechCoordinator,
                                      TouchSensorComponent*          touchSensorComponent,
-                                     VariableSnapshotComponent*     variableSnapshotComponent,
                                      VisionComponent*               visionComponent,
-                                     VisionScheduleMediator*        visionScheduleMediator,
-                                     SettingsCommManager*           settingsCommManager,
-                                     SettingsManager*               settingsManager,
-                                     SleepTracker*                  sleepTracker)
+                                     VisionScheduleMediator*        visionScheduleMediator)
 {
   _arrayWrapper = std::make_unique<CompArrayWrapper>(aiComponent,
                                                      animationComponent,
-                                                     beatDetectorComponent,
                                                      behaviorContainer,
                                                      behaviorEventComponent,
                                                      behaviorTimers,
                                                      blockWorld,
-                                                     backpackLightComponent,
+                                                     bodyLightComponent,
                                                      cubeAccelComponent,
-                                                     cubeCommsComponent,
-                                                     cubeConnectionCoordinator,
-                                                     cubeInteractionTracker,
                                                      cubeLightComponent,
-                                                     cliffSensorComponent,
                                                      delegationComponent,
                                                      faceWorld,
-                                                     habitatDetectorComponent,
-                                                     heldInPalmTracker,
                                                      mapComponent,
-                                                     micComponent,
+                                                     micDirectionHistory,
                                                      moodManager,
-                                                     movementComponent,
+                                                     objectPoseConfirmer,
                                                      petWorld,
-                                                     photographyManager,
-                                                     powerStateManager,
+                                                     progressionUnlockComponent,
                                                      proxSensor,
                                                      publicStateBroadcaster,
-                                                     sdkComponent,
                                                      robotAudioClient,
                                                      robotInfo,
-                                                     dataAccessor,
-                                                     textToSpeechCoordinator,
                                                      touchSensorComponent,
-                                                     variableSnapshotComponent,
                                                      visionComponent,
-                                                     visionScheduleMediator,
-                                                     settingsCommManager,
-                                                     settingsManager,
-                                                     sleepTracker);
+                                                     visionScheduleMediator);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 OffTreadsState BehaviorExternalInterface::GetOffTreadsState() const
 {
-  return GetComponentWrapper(BEIComponentID::RobotInfo).GetComponent<BEIRobotInfo>().GetOffTreadsState();
+  return GetComponentWrapper(BEIComponentID::RobotInfo).GetValue<BEIRobotInfo>().GetOffTreadsState();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Util::RandomGenerator& BehaviorExternalInterface::GetRNG()
 {
-  return GetComponentWrapper(BEIComponentID::RobotInfo).GetComponent<BEIRobotInfo>().GetRNG();
+  return GetComponentWrapper(BEIComponentID::RobotInfo).GetValue<BEIRobotInfo>().GetRNG();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorExternalInterface::CompArrayWrapper::CompArrayWrapper(AIComponent*                   aiComponent,
                                                               AnimationComponent*            animationComponent,
-                                                              BeatDetectorComponent*         beatDetectorComponent,
                                                               BehaviorContainer*             behaviorContainer,
                                                               BehaviorEventComponent*        behaviorEventComponent,
                                                               BehaviorTimerManager*          behaviorTimers,
                                                               BlockWorld*                    blockWorld,
-                                                              BackpackLightComponent*        backpackLightComponent,
+                                                              BodyLightComponent*            bodyLightComponent,
                                                               CubeAccelComponent*            cubeAccelComponent,
-                                                              CubeCommsComponent*            cubeCommsComponent,
-                                                              CubeConnectionCoordinator*     cubeConnectionCoordinator,
-                                                              CubeInteractionTracker*        cubeInteractionTracker,
                                                               CubeLightComponent*            cubeLightComponent,
-                                                              CliffSensorComponent*          cliffSensorComponent,
                                                               DelegationComponent*           delegationComponent,
                                                               FaceWorld*                     faceWorld,
-                                                              HabitatDetectorComponent*      habitatDetectorComponent,
-                                                              HeldInPalmTracker*             heldInPalmTracker,
                                                               MapComponent*                  mapComponent,
-                                                              MicComponent*                  micComponent,
+                                                              MicDirectionHistory*           micDirectionHistory,
                                                               MoodManager*                   moodManager,
-                                                              MovementComponent*             movementComponent,
+                                                              ObjectPoseConfirmer*           objectPoseConfirmer,
                                                               PetWorld*                      petWorld,
-                                                              PhotographyManager*            photographyManager,
-                                                              PowerStateManager*             powerStateManager,
+                                                              ProgressionUnlockComponent*    progressionUnlockComponent,
                                                               ProxSensorComponent*           proxSensor,
                                                               PublicStateBroadcaster*        publicStateBroadcaster,
-                                                              SDKComponent*                  sdkComponent,
                                                               Audio::EngineRobotAudioClient* robotAudioClient,
                                                               BEIRobotInfo*                  robotInfo,
-                                                              DataAccessorComponent*         dataAccessor,
-                                                              TextToSpeechCoordinator*       textToSpeechCoordinator,
                                                               TouchSensorComponent*          touchSensorComponent,
-                                                              VariableSnapshotComponent*     variableSnapshotComponent,
                                                               VisionComponent*               visionComponent,
-                                                              VisionScheduleMediator*        visionScheduleMediator,
-                                                              SettingsCommManager*           settingsCommManager,
-                                                              SettingsManager*               settingsManager,
-                                                              SleepTracker*                  sleepTracker)
+                                                              VisionScheduleMediator*        visionScheduleMediator)
 : _array({
-    {BEIComponentID::AIComponent,               BEIComponentWrapper(aiComponent)},
-    {BEIComponentID::Animation,                 BEIComponentWrapper(animationComponent)},
-    {BEIComponentID::BackpackLightComponent,    BEIComponentWrapper(backpackLightComponent)},
-    {BEIComponentID::BeatDetector,              BEIComponentWrapper(beatDetectorComponent)},
-    {BEIComponentID::BehaviorContainer,         BEIComponentWrapper(behaviorContainer)},
-    {BEIComponentID::BehaviorEvent,             BEIComponentWrapper(behaviorEventComponent)},
-    {BEIComponentID::BehaviorTimerManager,      BEIComponentWrapper(behaviorTimers)},
-    {BEIComponentID::BlockWorld,                BEIComponentWrapper(blockWorld)},
-    {BEIComponentID::CliffSensor,               BEIComponentWrapper(cliffSensorComponent)},
-    {BEIComponentID::CubeAccel,                 BEIComponentWrapper(cubeAccelComponent)},
-    {BEIComponentID::CubeComms,                 BEIComponentWrapper(cubeCommsComponent)},
-    {BEIComponentID::CubeConnectionCoordinator, BEIComponentWrapper(cubeConnectionCoordinator)},
-    {BEIComponentID::CubeInteractionTracker,    BEIComponentWrapper(cubeInteractionTracker)},
-    {BEIComponentID::CubeLight,                 BEIComponentWrapper(cubeLightComponent)},
-    {BEIComponentID::DataAccessor,              BEIComponentWrapper(dataAccessor)},
-    {BEIComponentID::Delegation,                BEIComponentWrapper(delegationComponent)},
-    {BEIComponentID::FaceWorld,                 BEIComponentWrapper(faceWorld)},
-    {BEIComponentID::HabitatDetector,           BEIComponentWrapper(habitatDetectorComponent)},
-    {BEIComponentID::HeldInPalmTracker,         BEIComponentWrapper(heldInPalmTracker)},
-    {BEIComponentID::Map,                       BEIComponentWrapper(mapComponent)},
-    {BEIComponentID::MicComponent,              BEIComponentWrapper(micComponent)},
-    {BEIComponentID::MoodManager,               BEIComponentWrapper(moodManager)},
-    {BEIComponentID::MovementComponent,         BEIComponentWrapper(movementComponent)},
-    {BEIComponentID::PetWorld,                  BEIComponentWrapper(petWorld)},
-    {BEIComponentID::PhotographyManager,        BEIComponentWrapper(photographyManager)},
-    {BEIComponentID::PowerStateManager,         BEIComponentWrapper(powerStateManager)},
-    {BEIComponentID::ProxSensor,                BEIComponentWrapper(proxSensor)},
-    {BEIComponentID::PublicStateBroadcaster,    BEIComponentWrapper(publicStateBroadcaster)},
-    {BEIComponentID::RobotAudioClient,          BEIComponentWrapper(robotAudioClient)},
-    {BEIComponentID::RobotInfo,                 BEIComponentWrapper(robotInfo)},
-    {BEIComponentID::SDK,                       BEIComponentWrapper(sdkComponent)},
-    {BEIComponentID::SettingsCommManager,       BEIComponentWrapper(settingsCommManager)},
-    {BEIComponentID::SettingsManager,           BEIComponentWrapper(settingsManager)},
-    {BEIComponentID::SleepTracker,              BEIComponentWrapper(sleepTracker)},
-    {BEIComponentID::TextToSpeechCoordinator,   BEIComponentWrapper(textToSpeechCoordinator)},
-    {BEIComponentID::TouchSensor,               BEIComponentWrapper(touchSensorComponent)},
-    {BEIComponentID::VariableSnapshotComponent, BEIComponentWrapper(variableSnapshotComponent)},
-    {BEIComponentID::Vision,                    BEIComponentWrapper(visionComponent)},
-    {BEIComponentID::VisionScheduleMediator,    BEIComponentWrapper(visionScheduleMediator)}
+    {BEIComponentID::AIComponent,            BEIComponentWrapper(aiComponent)},
+    {BEIComponentID::Animation,              BEIComponentWrapper(animationComponent)},
+    {BEIComponentID::BehaviorContainer,      BEIComponentWrapper(behaviorContainer)},
+    {BEIComponentID::BehaviorEvent,          BEIComponentWrapper(behaviorEventComponent)},
+    {BEIComponentID::BehaviorTimerManager,   BEIComponentWrapper(behaviorTimers)},
+    {BEIComponentID::BlockWorld,             BEIComponentWrapper(blockWorld)},
+    {BEIComponentID::BodyLightComponent,     BEIComponentWrapper(bodyLightComponent)},
+    {BEIComponentID::CubeAccel,              BEIComponentWrapper(cubeAccelComponent)},
+    {BEIComponentID::CubeLight,              BEIComponentWrapper(cubeLightComponent)},
+    {BEIComponentID::Delegation,             BEIComponentWrapper(delegationComponent)},
+    {BEIComponentID::FaceWorld,              BEIComponentWrapper(faceWorld)},
+    {BEIComponentID::Map,                    BEIComponentWrapper(mapComponent)},
+    {BEIComponentID::MicDirectionHistory,    BEIComponentWrapper(micDirectionHistory)},
+    {BEIComponentID::MoodManager,            BEIComponentWrapper(moodManager)},
+    {BEIComponentID::ObjectPoseConfirmer,    BEIComponentWrapper(objectPoseConfirmer)},
+    {BEIComponentID::PetWorld,               BEIComponentWrapper(petWorld)},
+    {BEIComponentID::ProgressionUnlock,      BEIComponentWrapper(progressionUnlockComponent)},
+    {BEIComponentID::ProxSensor,             BEIComponentWrapper(proxSensor)},
+    {BEIComponentID::PublicStateBroadcaster, BEIComponentWrapper(publicStateBroadcaster)},
+    {BEIComponentID::RobotAudioClient,       BEIComponentWrapper(robotAudioClient)},
+    {BEIComponentID::RobotInfo,              BEIComponentWrapper(robotInfo)},
+    {BEIComponentID::TouchSensor,            BEIComponentWrapper(touchSensorComponent)},
+    {BEIComponentID::Vision,                 BEIComponentWrapper(visionComponent)},
+    {BEIComponentID::VisionScheduleMediator, BEIComponentWrapper(visionScheduleMediator)}
 }){}
-
-} // namespace Vector
+  
+} // namespace Cozmo
 } // namespace Anki

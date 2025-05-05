@@ -1,18 +1,16 @@
 #include "common.h"
 #include "hardware.h"
 
-#include "comms.h"
 #include "power.h"
-#include "analog.h"
 #include "vectors.h"
 #include "flash.h"
 #include "motors.h"
 #include "encoders.h"
 #include "opto.h"
-#include "mics.h"
-#include "lights.h"
 
-extern "C" void SoftReset(bool onCharger);
+#include "contacts.h"
+
+extern "C" void SoftReset(const uint32_t reset);
 
 static const uint32_t APB1_CLOCKS = 0
               | RCC_APB1ENR_USART2EN
@@ -36,42 +34,10 @@ static const uint32_t APB2_CLOCKS = 0
 
 static PowerMode currentState = POWER_UNINIT;
 static PowerMode desiredState = POWER_CALM;
-static bool enter_recovery = false;
-
-static void enterBootloader(void);
-static inline void enableHead(void);
 
 void Power::init(void) {
-  DFU_FLAG = 0;
   RCC->APB1ENR |= APB1_CLOCKS;
   RCC->APB2ENR |= APB2_CLOCKS;
-  
-  enableHead();
-}
-
-void Power::signalRecovery() {
-  enter_recovery = true;
-}
-
-static inline void enableHead(void) {
-  if (IS_WHISKEY) {
-    MAIN_EN_WIS::set();
-  } else {
-    MAIN_EN_VIC::set();
-  }
-  Mics::start();
-  Lights::enable();
-}
-
-static inline void disableHead(void) {
-  if (IS_WHISKEY) {
-    MAIN_EN_WIS::reset();
-  } else {
-    MAIN_EN_VIC::reset();
-  }
-  Mics::stop();
-  Lights::disable();
-  Comms::reset();
 }
 
 static void markForErase(void) {
@@ -82,6 +48,10 @@ static void markForErase(void) {
 }
 
 static void enterBootloader(void) {
+  __disable_irq();
+
+  NVIC->ICER[0]  = ~0;  // Disable all interrupts
+
   // Shut down the motors
   Motors::stop();
 
@@ -142,91 +112,56 @@ static void enterBootloader(void) {
   RCC->APB1ENR &= ~APB1_CLOCKS;
   RCC->APB2ENR &= ~APB2_CLOCKS;
 
-  __disable_irq();
-
   // Set to flash handler
   SYSCFG->CFGR1 = 0;
 
-  markForErase();
-
   // Pass control back to the reset handler
-  DFU_FLAG = DFU_ENTRY_POINT;
-  NVIC->ICER[0] = ~0; // Disable all interrupts
-  NVIC->ICPR[0] = ~0; // Clear all pending interrupts
-
-  SoftReset(Analog::on_charger);
-}
-
-void Power::wakeUp() {
-  // Only wake up if we are in a low power state, not sleeping
-  if (desiredState == POWER_CALM) {
-    desiredState = POWER_ACTIVE;
-  }
+  SoftReset(*(uint32_t*)0x08000004);
 }
 
 void Power::setMode(PowerMode set) {
   desiredState = set;
 }
 
-void Power::adjustHead() {
-  static bool headPowered = true;
-  bool wantPower = desiredState != POWER_STOP;
-
-  if (headPowered == wantPower) {
-    return ;
-  }
-
-  // If the head is transitioning between power / not-powered
-  // We need to disable the TX pin, or set it to signal wether
-  // or not we are signalling recovery
-  if (wantPower) {
-    if (enter_recovery) {
-      BODY_TX::reset();
-    } else {
-      BODY_TX::set();
-    }
-    BODY_TX::mode(MODE_OUTPUT);
-
-    enableHead();
-  } else {
-    BODY_TX::mode(MODE_INPUT);
-
-    disableHead();
-  }
-
-  enter_recovery = false;
-  headPowered = wantPower;
-}
-
 void Power::tick(void) {
   PowerMode desired = desiredState;
 
   if (currentState != desired) {
-    // Power reduction code
+    // Disable optical sensors
     if (currentState == POWER_ACTIVE) {
       Opto::stop();
       Encoders::stop();
-      Mics::reduce(true);
     } else if (desired == POWER_ACTIVE) {
-      Encoders::start();
+      Encoders::init();
       Opto::start();
-      Mics::reduce(false);
-    } 
-
-    if (desired == POWER_ERASE) {
-      enterBootloader();
-      return ;
     }
 
     currentState = desired;
   }
 
   switch (currentState) {
+    case POWER_ERASE:
+      markForErase();
+      enterBootloader();
+      break ;
     case POWER_STOP:
-      Analog::setPower(false);
+      POWER_EN::pull(PULL_NONE);
+      POWER_EN::reset();
+      POWER_EN::mode(MODE_OUTPUT);
       break ;
     default:
-      Analog::setPower(true);
+      POWER_EN::pull(PULL_UP);
+      POWER_EN::mode(MODE_INPUT);
       break ;
   }
+}
+
+void Power::disableHead(void) {
+  MAIN_EN::mode(MODE_OUTPUT);
+  MAIN_EN::reset();
+}
+
+void Power::enableHead(void) {
+  MAIN_EN::mode(MODE_OUTPUT);
+  MAIN_EN::set();
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
-from cert import loadCert
+from Crypto.PublicKey import RSA
 import os
 import sys
 
@@ -121,6 +121,7 @@ static const big_num_micro_t CERT_RSA_EXP = %s;
 """ % writeLong(key.e))
 
 with open(args.output, "w") as target:
-	key = loadCert(args.key if args.key else None)
+	cert_fn = args.key if args.key else os.environ['COZMO2_CERT'] if 'COZMO2_CERT' in os.environ else os.path.join(os.path.dirname(__file__), "development.pem")
+	key = RSA.importKey(open(cert_fn, "r").read())
 	calcmont(key)
 	calccert(key)

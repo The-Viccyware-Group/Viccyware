@@ -455,15 +455,12 @@ public:
     zu  // Zulu
   };
   static std::string CountryISO2ToString(const CountryISO2 countryCode);
-  static CountryISO2 CountryISO2FromString(const std::string& countryString,
-                                           bool* resultValid = nullptr);
+  static CountryISO2 CountryISO2FromString(const std::string& countryString);
   static std::string LanguageToString(const Language languageCode);
-  static Language LanguageFromString(const std::string& languageString,
-                                     bool* resultValid = nullptr);
+  static Language LanguageFromString(const std::string& languageString);
 
   // this method will use native adapters to return the current device locale
   static Locale GetNativeLocale();
-  static bool IsValidLocaleString(const std::string& localeString);
   static Locale LocaleFromString(const std::string& localeString);
 
   static const Language kDefaultLanguage = Language::en;

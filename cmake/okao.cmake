@@ -1,14 +1,16 @@
-set(OKAO_INCLUDE_PATH "${OKAO_VISION_DIR}/include")
+project(okao)
+
+set(OKAO_INCLUDE_PATH "${CORETECH_EXTERNAL_DIR}/okaoVision/include")
 
 set(WHOLE_ARCHIVE_FLAG "")
 set(NO_WHOLE_ARCHIVE_FLAG "")
 
-if (VICOS)
-  set(OKAO_LIB_PATH "${OKAO_VISION_DIR}/lib/Android/armeabi-v7a")
+if (ANDROID)
+  set(OKAO_LIB_PATH "${CORETECH_EXTERNAL_DIR}/okaoVision/lib/Android/armeabi-v7a")
   set(WHOLE_ARCHIVE_FLAG "-Wl,--whole-archive")
   set(NO_WHOLE_ARCHIVE_FLAG "-Wl,--no-whole-archive")
 elseif (MACOSX)
-  set(OKAO_LIB_PATH "${OKAO_VISION_DIR}/lib/MacOSX")
+  set(OKAO_LIB_PATH "${CORETECH_EXTERNAL_DIR}/okaoVision/lib/MacOSX")
 else()
   message(FATAL_ERROR "OkaoVision not available for platform")
 endif()
@@ -42,5 +44,4 @@ foreach(LIB ${OKAO_LIBS})
     "${OKAO_LIB_PATH}/libe${LIB}.a"
     INTERFACE_INCLUDE_DIRECTORIES
     "${OKAO_INCLUDE_PATH}")
-  anki_build_target_license(${LIB} "Commercial")
 endforeach()

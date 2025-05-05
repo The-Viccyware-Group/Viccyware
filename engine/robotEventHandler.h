@@ -23,7 +23,7 @@
 #include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declarations
 class ActionList;
@@ -37,6 +37,7 @@ enum class QueueActionPosition : uint8_t;
 
 template <typename Type>
 class AnkiEvent;
+
 
 class RobotEventHandler : private Util::noncopyable
 {
@@ -68,7 +69,7 @@ private:
 };
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_RobotEventHandler_H__

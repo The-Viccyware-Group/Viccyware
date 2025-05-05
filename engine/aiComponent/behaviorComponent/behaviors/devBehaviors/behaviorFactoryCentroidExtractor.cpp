@@ -23,7 +23,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorFactoryCentroidExtractor.h"
-#include "engine/components/backpackLights/engineBackpackLightComponent.h"
+#include "engine/components/bodyLightComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/robot.h"
@@ -35,12 +35,12 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 
 // Backpack lights
-static const BackpackLightAnimation::BackpackAnimation passLights = {
+static const BackpackLights passLights = {
   .onColors               = {{NamedColors::GREEN,NamedColors::GREEN,NamedColors::GREEN}},
   .offColors              = {{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}},
   .onPeriod_ms            = {{1000,1000,1000}},
@@ -50,7 +50,7 @@ static const BackpackLightAnimation::BackpackAnimation passLights = {
   .offset                 = {{0,0,0}}
 };
 
-static BackpackLightAnimation::BackpackAnimation failLights = {
+static BackpackLights failLights = {
   .onColors               = {{NamedColors::RED,NamedColors::RED,NamedColors::RED}},
   .offColors              = {{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}},
   .onPeriod_ms            = {{500,500,500}},
@@ -60,11 +60,11 @@ static BackpackLightAnimation::BackpackAnimation failLights = {
   .offset                 = {{0,0,0}}
 };
 
-static const BackpackLightAnimation::BackpackLEDArray fail_onColorRed{{NamedColors::RED,NamedColors::RED,NamedColors::RED}};
-static const BackpackLightAnimation::BackpackLEDArray fail_onColorOrange{{NamedColors::ORANGE,NamedColors::ORANGE,NamedColors::ORANGE}};
-static const BackpackLightAnimation::BackpackLEDArray fail_onColorMagenta{{NamedColors::MAGENTA,NamedColors::MAGENTA,NamedColors::MAGENTA}};
-static const BackpackLightAnimation::BackpackLEDArray fail_onColorBlue{{NamedColors::BLUE,NamedColors::BLUE,NamedColors::BLUE}};
-static const BackpackLightAnimation::BackpackLEDArray fail_offColor{{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}};
+static const BackpackLEDArray fail_onColorRed{{NamedColors::RED,NamedColors::RED,NamedColors::RED}};
+static const BackpackLEDArray fail_onColorOrange{{NamedColors::ORANGE,NamedColors::ORANGE,NamedColors::ORANGE}};
+static const BackpackLEDArray fail_onColorMagenta{{NamedColors::MAGENTA,NamedColors::MAGENTA,NamedColors::MAGENTA}};
+static const BackpackLEDArray fail_onColorBlue{{NamedColors::BLUE,NamedColors::BLUE,NamedColors::BLUE}};
+static const BackpackLEDArray fail_offColor{{NamedColors::BLACK,NamedColors::BLACK,NamedColors::BLACK}};
 }
 
 
@@ -109,7 +109,7 @@ void BehaviorFactoryCentroidExtractor::OnBehaviorActivated()
   std::stringstream serialNumString;
   serialNumString << std::hex << robot.GetHeadSerialNumber();
   _iConfig.factoryTestLogger.StartLog(serialNumString.str() + "_centroids", true, robot.GetContextDataPlatform());
-  PRINT_CH_INFO("Behaviors", "BehaviorFactoryCentroidExtractor.WillLogToDevice",
+  PRINT_NAMED_INFO("BehaviorFactoryCentroidExtractor.WillLogToDevice",
                     "Log name: %s",
                     _iConfig.factoryTestLogger.GetLogName().c_str());
   
@@ -120,7 +120,7 @@ void BehaviorFactoryCentroidExtractor::OnBehaviorActivated()
   robot.GetActionList().Cancel();
       
   // Start motor calibration
-  robot.SendMessage(RobotInterface::EngineToRobot(RobotInterface::StartMotorCalibration(true, true, MotorCalibrationReason::Playpen)));
+  robot.SendMessage(RobotInterface::EngineToRobot(RobotInterface::StartMotorCalibration(true, true)));
   
   
 }
@@ -168,7 +168,7 @@ void BehaviorFactoryCentroidExtractor::TransitionToMovingHead(Robot& robot)
                 {
                   PRINT_NAMED_WARNING("BehaviorFactoryCentroidExtractor.MoveHead", "Moving head to 0 degrees failed");
                   failLights.onColors = fail_onColorMagenta;
-                  robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+                  robot.GetBodyLightComponent().SetBackpackLights(failLights);
                 }
               });
 }
@@ -187,7 +187,7 @@ void BehaviorFactoryCentroidExtractor::HandleWhileActivated(const EngineToGameEv
       PRINT_NAMED_WARNING("BehaviorFactoryCentroidExtractor.DotTestFailed",
                           "Failed to find all 4 dots");
       failLights.onColors = fail_onColorRed;
-      robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+      robot.GetBodyLightComponent().SetBackpackLights(failLights);
     }
     else
     {
@@ -196,7 +196,7 @@ void BehaviorFactoryCentroidExtractor::HandleWhileActivated(const EngineToGameEv
         PRINT_NAMED_WARNING("BehaviorFactoryCentroidExtractor.DidNotComputeCameraPose",
                             "Failed to compute camPose camera is not calibrated");
         failLights.onColors = fail_onColorOrange;
-        robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+        robot.GetBodyLightComponent().SetBackpackLights(failLights);
       }
       else
       {
@@ -243,11 +243,11 @@ void BehaviorFactoryCentroidExtractor::HandleWhileActivated(const EngineToGameEv
         if(doThresholdCheck && exceedsThresh)
         {
           failLights.onColors = fail_onColorBlue;
-          robot.GetBackpackLightComponent().SetBackpackAnimation(failLights);
+          robot.GetBodyLightComponent().SetBackpackLights(failLights);
         }
         else
         {
-          robot.GetBackpackLightComponent().SetBackpackAnimation(passLights);
+          robot.GetBodyLightComponent().SetBackpackLights(passLights);
         }
       }
     }
@@ -284,5 +284,5 @@ void BehaviorFactoryCentroidExtractor::HandleWhileActivated(const EngineToGameEv
   }
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

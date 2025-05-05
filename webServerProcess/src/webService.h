@@ -35,17 +35,12 @@ namespace Json {
 namespace Anki {
 
 namespace Util {
-
 namespace Data {
   class DataPlatform;
-}
-namespace Dispatch {
-  class Queue;
-}
-
+} // namespace Data
 } // namespace Util
 
-namespace Vector {
+namespace Cozmo {
 
 namespace WebService {
 
@@ -64,9 +59,6 @@ public:
   void SendToWebSockets(const std::string& moduleName, const Json::Value& data) const;
   
   inline void SendToWebViz(const std::string& moduleName, const Json::Value& data) const { SendToWebSockets(moduleName, data); }
-  
-  // returns true if a client has subscribed to a given module name (or any module if empty)
-  bool IsWebVizClientSubscribed(const std::string& moduleName = {}) const;
   
   // subscribe to when a client connects and notifies the webservice that they want data for moduleName
   using SendToClientFunc = std::function<void(const Json::Value&)>;
@@ -101,8 +93,6 @@ public:
     RT_ConsoleFuncList,
     RT_ConsoleFuncCall,
     
-    RT_External,
-    
     RT_TempAppToEngine,
     RT_TempEngineToApp,
     
@@ -110,25 +100,17 @@ public:
     RT_WebsocketOnData,
   };
 
-  struct Request;
-  using ExternalCallback = int (*)(WebService::WebService::Request* request);
-
   struct Request
   {
     Request(RequestType rt, const std::string& param1, const std::string& param2);
-    Request(RequestType rt, const std::string& param1, const std::string& param2,
-            const std::string& param3, ExternalCallback extCallback, void* cbdata);
+    Request(RequestType rt, const std::string& param1, const std::string& param2, const std::string& param3);
     RequestType _requestType;
     std::string _param1;
     std::string _param2;
     std::string _param3;
-    ExternalCallback _externalCallback;
-    void*       _cbdata;
     std::string _result;
     bool        _resultReady; // Result is ready for use by the webservice thread
     bool        _done;        // Result has been used and now it's OK for main thread to delete this item
-    std::mutex  _readyMutex;
-    std::condition_variable _readyCondition;
   };
 
   void AddRequest(Request* requestPtr);
@@ -138,14 +120,10 @@ public:
   const Anki::Util::Data::DataPlatform* GetPlatform() { return _platform; }
 
   void RegisterRequestHandler(std::string uri, mg_request_handler handler, void* cbdata);
-  int ProcessRequestExternal(struct mg_connection *conn, void* cbdata,
-                             ExternalCallback extCallback, const std::string& param1 = "",
-                             const std::string& param2 = "", const std::string& param3 = "");
 
 private:
 
-  void GenerateConsoleVarsUI(std::string& page, const std::string& category,
-                             const bool standalone);
+  void GenerateConsoleVarsUI(std::string& page, const std::string& category);
 
   struct WebSocketConnectionData {
     struct mg_connection* conn = nullptr;
@@ -162,15 +140,14 @@ private:
   void OnOpenWebSocket(struct mg_connection* conn);
   void OnReceiveWebSocket(struct mg_connection* conn, const Json::Value& data);
   void OnCloseWebSocket(const struct mg_connection* conn);
-
-  void SendToWebSocket(struct mg_connection* conn, const Json::Value& data) const;
-
+  
+  static void SendToWebSocket(struct mg_connection* conn, const Json::Value& data);
+  
   // todo: OTA update somehow?
 
   struct mg_context* _ctx;
   
   std::vector<WebSocketConnectionData> _webSocketConnections;
-  mutable std::mutex s_wsConnectionsMutex;
 
   std::string _consoleVarsUIHTMLTemplate;
 
@@ -184,13 +161,11 @@ private:
   
   OnAppToEngineOnDataType _appToEngineOnData;
   OnAppToEngineRequestDataType _appToEngineRequestData;
-  
-  Util::Dispatch::Queue* _dispatchQueue = nullptr;
 };
 
 } // namespace WebService
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // defined(WEB_SERVICE_H)

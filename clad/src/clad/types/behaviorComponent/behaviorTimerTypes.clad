@@ -6,24 +6,17 @@
 // Desc: Named timers shared among behaviors
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // PLEASE KEEP ALPHABETIZED
 enum uint_8 BehaviorTimerTypes {
   Invalid,
 
-  DancingCooldown,
   FistBump,
-  ListenForBeatsCooldown,
-  ObservingOnCharger,
-  ObservingOffCharger,
   PlayingWithCube,
-  PounceOnMotion,
-  ReactToIllumination,
-  ReactToTouchPetting,
   Socializing,
   
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

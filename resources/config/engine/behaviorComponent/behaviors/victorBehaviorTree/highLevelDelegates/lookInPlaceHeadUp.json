@@ -1,12 +1,7 @@
 {
-  "behaviorClass": "LookAroundInPlace",
+  "behaviorClass": "ExploreLookAroundInPlace",
   "behaviorID": "LookInPlaceHeadUp",
 
-  "wantsToBeActivatedCondition": {
-    "conditionType": "OffTreadsState",
-    "targetState": "OnTreads"
-  },
-  
   "params":
   {
     "behavior_ShouldResetTurnDirection": true,

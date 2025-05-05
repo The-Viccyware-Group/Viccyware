@@ -2,7 +2,7 @@
 */
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 structure LabAssignment
 {
@@ -15,5 +15,5 @@ structure LabAssignments
   LabAssignment labAssignments[uint_8],
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

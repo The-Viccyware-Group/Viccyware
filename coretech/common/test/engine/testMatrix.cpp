@@ -1,7 +1,6 @@
 #include "util/helpers/includeGTest.h" // Used in place of gTest/gTest.h directly to suppress warnings in the header
 
-#include "coretech/common/shared/math/matrix.h"
-#include "util/math/math.h"
+#include "coretech/common/engine/math/matrix_impl.h"
 #include <iostream>
 
 // For test debug printing
@@ -60,7 +59,7 @@ GTEST_TEST(TestMatrix, MatrixConstructorsAndAccessors)
   
   
   // Try to access invalid inded
-  ASSERT_DEATH(A(3,0),"");
+  ASSERT_ANY_THROW(A(3,0));
   
   
   /////////////  Non-square matrix ///////////////////
@@ -108,8 +107,8 @@ GTEST_TEST(TestMatrix, MatrixConstructorsAndAccessors)
 #endif
   
   /////////////// Empty matrix ///////////////
-  ASSERT_DEATH(Matrix<float> C(0,3,(float*)NULL),"");
-  ASSERT_DEATH(Matrix<float> C(1,0,(float*)NULL),"");
+  ASSERT_ANY_THROW(Matrix<float> C(0,3,(float*)NULL));
+  ASSERT_ANY_THROW(Matrix<float> C(1,0,(float*)NULL));
 }
 
 GTEST_TEST(TestMatrix, MatrixAssignFromStdVector)
@@ -175,7 +174,7 @@ GTEST_TEST(TestMatrix, SmallMatrixConstructorsAndAccessors)
 #endif
   
   // Try to access invalid index
-  ASSERT_DEATH(M(2,2),"");
+  ASSERT_ANY_THROW(M(2,2));
   
   
   // Contstructor with initial value array
@@ -247,7 +246,7 @@ GTEST_TEST(TestMatrix, MatrixMultiplication2)
   Matrix<float> A(3,3,0.f), B(4,3,0.f);
   Matrix<float> C;
   
-  ASSERT_DEATH(C = A*B,"");
+  ASSERT_ANY_THROW(C = A*B);
   
   
 #ifdef DEBUG_TEST_MATRIX
@@ -310,55 +309,6 @@ GTEST_TEST(TestMatrix, MatrixMatrixMultiplication)
 
 
 
-GTEST_TEST(TestMatrix, SmallMatrixAddition)
-{
-  Matrix_3x3f A;
-  
-  A(0,0) = 1.f;
-  A(1,1) = 2.f;
-  A(2,2) = 3.f;
-  
-  Matrix_3x3f B{{
-    10.f, 1.f, 1.f,
-    1.f, 10.f, 1.f,
-    1.f, 1.f, 10.f
-  }};
-
-  // Normal SmallMatrix multiplication
-  Matrix_3x3f C = A+B;
-  
-#ifdef DEBUG_TEST_MATRIX
-  cout << "SmallMatrix A: \n" << A << "\n";
-  cout << "SmallMatrix B: \n" << B << "\n";
-  cout << "SmallMatrix C = A+B: \n" << C << "\n";
-#endif
-  
-  ASSERT_NEAR_EQ(C(0,0), 11.f);  ASSERT_NEAR_EQ(C(0,1), 1.f);    ASSERT_NEAR_EQ(C(0,2), 1.f);
-  ASSERT_NEAR_EQ(C(1,0), 1.f);   ASSERT_NEAR_EQ(C(1,1), 12.f);   ASSERT_NEAR_EQ(C(1,2), 1.f);
-  ASSERT_NEAR_EQ(C(2,0), 1.f);   ASSERT_NEAR_EQ(C(2,1), 1.f);    ASSERT_NEAR_EQ(C(2,2), 13.f);
-  
-  C += A;
-
-  ASSERT_NEAR_EQ(C(0,0), 12.f);  ASSERT_NEAR_EQ(C(0,1), 1.f);    ASSERT_NEAR_EQ(C(0,2), 1.f);
-  ASSERT_NEAR_EQ(C(1,0), 1.f);   ASSERT_NEAR_EQ(C(1,1), 14.f);   ASSERT_NEAR_EQ(C(1,2), 1.f);
-  ASSERT_NEAR_EQ(C(2,0), 1.f);   ASSERT_NEAR_EQ(C(2,1), 1.f);    ASSERT_NEAR_EQ(C(2,2), 16.f);
-
-  
-  Matrix_3x3f D = C - A;
-
-  ASSERT_NEAR_EQ(D(0,0), 11.f);  ASSERT_NEAR_EQ(D(0,1), 1.f);    ASSERT_NEAR_EQ(D(0,2), 1.f);
-  ASSERT_NEAR_EQ(D(1,0), 1.f);   ASSERT_NEAR_EQ(D(1,1), 12.f);   ASSERT_NEAR_EQ(D(1,2), 1.f);
-  ASSERT_NEAR_EQ(D(2,0), 1.f);   ASSERT_NEAR_EQ(D(2,1), 1.f);    ASSERT_NEAR_EQ(D(2,2), 13.f);
-
-  D -= B;
-
-  ASSERT_NEAR_EQ(D(0,0), 1.f);  ASSERT_NEAR_EQ(D(0,1), 0.f);   ASSERT_NEAR_EQ(D(0,2), 0.f);
-  ASSERT_NEAR_EQ(D(1,0), 0.f);  ASSERT_NEAR_EQ(D(1,1), 2.f);   ASSERT_NEAR_EQ(D(1,2), 0.f);
-  ASSERT_NEAR_EQ(D(2,0), 0.f);  ASSERT_NEAR_EQ(D(2,1), 0.f);   ASSERT_NEAR_EQ(D(2,2), 3.f);
-  
-}
-
-
 GTEST_TEST(TestMatrix, SmallMatrixMultiplication)
 {
   Matrix_3x3f A;
@@ -393,7 +343,7 @@ GTEST_TEST(TestMatrix, SmallMatrixMultiplication)
   
   // This results in compile time error if using OpenCV
   // Invalid multiplication
-  // ASSERT_DEATH(C = B*A,"");
+  //ASSERT_ANY_THROW(C = B*A);
 }
 
 
@@ -444,8 +394,8 @@ GTEST_TEST(TestMatrix, MatrixInverse)
   // Invert non-square matrix
   Matrix<float> B(3,4,0.f), Binv;
   
-  ASSERT_DEATH(B.GetInverse(Binv),"");
-  ASSERT_DEATH(B.Invert(),"");
+  ASSERT_ANY_THROW(B.GetInverse(Binv));
+  ASSERT_ANY_THROW(B.Invert());
 }
 
 
@@ -458,7 +408,7 @@ GTEST_TEST(TestMatrix, SmallMatrixInverse)
   Matrix_3x3f Ainv, I;
   const Matrix_3x3f A_orig(initValsA);
   
-  Ainv = A.GetInverse();
+  A.GetInverse(Ainv);
   
   // Verify A has not changed
   ASSERT_TRUE(IsNearlyEqual(A, A_orig));
@@ -501,8 +451,8 @@ GTEST_TEST(TestMatrix, SmallMatrixInverse)
 //                       0, 0, 1, 0};
 //  Matrix_3x4f B(initValsB);
 //  
-//  ASSERT_DEATH(B.GetInverse(),"");
-//  ASSERT_DEATH(B.Invert(),"");
+//  ASSERT_ANY_THROW(B.GetInverse());
+//  ASSERT_ANY_THROW(B.Invert());
 
   
 }
@@ -589,7 +539,8 @@ GTEST_TEST(TestMatrix, SmallMatrixTranspose)
   const Matrix_3x3f A(initValsA);
   const Matrix_3x3f A_orig(initValsA);
   
-  Matrix_3x3f A_t = A.GetTranspose();
+  Matrix_3x3f A_t;
+  A.GetTranspose(A_t);
   
 #ifdef DEBUG_TEST_MATRIX
   cout << "SmallMatrix A: \n" << A << "\n";
@@ -611,7 +562,8 @@ GTEST_TEST(TestMatrix, SmallMatrixTranspose)
   const Matrix_3x4f B(initValsB);
   const Matrix_3x4f B_orig(initValsB);
   
-  SmallMatrix<4,3,float> B_t = B.GetTranspose();
+  SmallMatrix<4,3,float> B_t;
+  B.GetTranspose(B_t);
   
 #ifdef DEBUG_TEST_MATRIX
   cout << "SmallMatrix B: \n" << B << "\n";
@@ -659,4 +611,5 @@ GTEST_TEST(TestMatrix, SmallSquareMatrixMultiplicationByPoint)
 #endif
   
 } // TestMatrix:SmallSquareMatrixMultiplicationByPoint()
+
 

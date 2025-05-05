@@ -12,11 +12,10 @@
 
 #include "overheadEdgesDetector.h"
 #include "coretech/vision/engine/imageCache.h"
-#include "coretech/common/engine/math/quad.h"
 #include "engine/robot.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Declaration
 namespace {
@@ -239,7 +238,8 @@ Result OverheadEdgesDetector::DetectHelper(const typename ImageTraitType::ImageT
   // Note: transposing so we can work along rows, which is more efficient.
   //       (this also means using bbox.X for transposed rows and bbox.Y for transposed cols)
   _profiler.Tic("FindingGroundEdgePoints");
-  Matrix_3x3f invH = H.GetInverse();
+  Matrix_3x3f invH;
+  H.GetInverse(invH);
   Array2d<typename ImageTraitType::FPixelType> edgeTrans(edgeImgX.get_CvMat_().t());
   OverheadEdgePoint edgePoint;
   for (s32 i = bbox.GetX(); i < bbox.GetXmax(); ++i)
@@ -354,18 +354,14 @@ Result OverheadEdgesDetector::DetectHelper(const typename ImageTraitType::ImageT
         Point3f temp = H * Anki::Point3f(groundPoint.x(), groundPoint.y(), 1.f);
         DEV_ASSERT(temp.z() > 0.f, "VisionSystem.DetectOverheadEdges.BadDisplayZ");
         const f32 divisor = 1.f / temp.z();
-        if(chain.isBorder) {
-          dispEdgeImg.DrawCircle({temp.x() * divisor, temp.y() * divisor}, NamedColors::RED, 1);
-        } else {
-          dispEdgeImg.DrawCircle({temp.x() * divisor, temp.y() * divisor}, NamedColors::WHITE, 1);
-        }
+        dispEdgeImg.DrawCircle({temp.x() * divisor, temp.y() * divisor}, NamedColors::RED, 1);
       }
     }
     dispEdgeImg.DrawQuad(groundInImage, NamedColors::GREEN, 1);
     //dispImg.Display("OverheadImage", 1);
     //dispEdgeImg.Display("OverheadEdgeImage");
-    currentResult.debugImages.emplace_back("OverheadImage", dispImg);
-    currentResult.debugImages.emplace_back("EdgeImage", dispEdgeImg);
+    currentResult.debugImageRGBs.push_back({"OverheadImage", dispImg});
+    currentResult.debugImageRGBs.push_back({"EdgeImage", dispEdgeImg});
   } // if(DRAW_OVERHEAD_IMAGE_EDGES_DEBUG)
 
   edgeFrame.timestamp = image.GetTimestamp();
@@ -528,5 +524,5 @@ Result OverheadEdgesDetector::DetectHelper<ImageRGBTrait>(const Vision::ImageRGB
                                                           const VisionPoseData &crntPoseData,
                                                           VisionProcessingResult &currentResult);
 
-} //namespace Vector
+} //namespace Cozmo
 } //namespace Anki

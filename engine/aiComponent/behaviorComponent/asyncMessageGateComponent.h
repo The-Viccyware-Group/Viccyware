@@ -29,15 +29,10 @@
 #include <unordered_map>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IBehavior;
 class IExternalInterface;
-class IGatewayInterface;
-  
-namespace RobotInterface {
-class MessageHandler;
-}
   
 class AsyncMessageGateComponent : public IDependencyManagedComponent<BCComponentID>, private Util::noncopyable
 {
@@ -47,16 +42,15 @@ public:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   
   AsyncMessageGateComponent(IExternalInterface* externalInterface,
-                            IGatewayInterface* gatewayInterface,
                             RobotInterface::MessageHandler* robotInterface);
-  virtual ~AsyncMessageGateComponent();
+  virtual ~AsyncMessageGateComponent() {};
 
   //////
   // IDependencyManagedComponent functions
   //////
   virtual void GetInitDependencies(BCCompIDSet& dependencies) const override {}
   virtual void GetUpdateDependencies(BCCompIDSet& dependencies) const override {};
-  virtual void InitDependent(Vector::Robot* robot, const BCCompMap& dependentComps) override {};
+  virtual void InitDependent(Cozmo::Robot* robot, const BCCompMap& dependentComponents) override {};
   //////
   // end IDependencyManagedComponent functions
   //////
@@ -64,7 +58,6 @@ public:
   void SubscribeToTags(IBehavior* subscriber, std::set<ExternalInterface::MessageGameToEngineTag>&& tags);
   void SubscribeToTags(IBehavior* subscriber, std::set<ExternalInterface::MessageEngineToGameTag>&& tags);
   void SubscribeToTags(IBehavior* subscriber, std::set<RobotInterface::RobotToEngineTag>&& tags);
-  void SubscribeToTags(IBehavior* subscriber, std::set<AppToEngineTag>&& tags);
   
   // Function which sets up the cache of all messages that have come in since
   // the last time the cache was prepared
@@ -73,14 +66,12 @@ public:
   void GetEventsForBehavior(IBehavior* subscriber, std::vector<const GameToEngineEvent>& events);
   void GetEventsForBehavior(IBehavior* subscriber, std::vector<const EngineToGameEvent>& events);
   void GetEventsForBehavior(IBehavior* subscriber, std::vector<const RobotToEngineEvent>& events);
-  void GetEventsForBehavior(IBehavior* subscriber, std::vector<const AppToEngineEvent>& events);
   
   // Clear the messages out of the cache so that a new updates can be loaded in
   void ClearCache();
   
 private:
   IExternalInterface* _externalInterface;
-  IGatewayInterface* _gatewayInterface;
   RobotInterface::MessageHandler* _robotInterface;
   bool _isCacheValid;
   
@@ -91,7 +82,6 @@ private:
     std::vector<int> _gameToEngineIdxs;
     std::vector<int> _engineToGameIdxs;
     std::vector<int> _robotToEngineIdxs;
-    std::vector<int> _appToEngineIdxs;
   };
   
   struct EventTracker{
@@ -102,8 +92,6 @@ private:
     std::mutex _engineToGameMutex;
     std::vector<const RobotToEngineEvent> _robotToEngineEvents;
     std::mutex _robotToEngineMutex;
-    std::vector<const AppToEngineEvent> _appToEngineEvents;
-    std::mutex _appToEngineMutex;
     
     // Only used by the cache instance of the tracker - allows faster access to events
     // as behavior indexed
@@ -122,13 +110,12 @@ private:
   std::unordered_map<GameToEngineTag, std::set<IBehavior*>>                  _gameToEngineSubscribers;
   std::unordered_map<EngineToGameTag, std::set<IBehavior*>>                  _engineToGameSubscribers;
   std::unordered_map<RobotInterface::RobotToEngineTag, std::set<IBehavior*>> _robotToEngineSubscribers;
-  std::unordered_map<AppToEngineTag, std::set<IBehavior*>>                   _appToEngineSubscribers;
   
   std::vector<Signal::SmartHandle> _eventHandles;
   
 }; // class AsyncMessageGateComponent
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

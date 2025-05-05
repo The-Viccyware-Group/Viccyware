@@ -1,11 +1,14 @@
 cxx_project(
     name = 'osState',
     srcs = cxx_src_glob(['.'],
-                        excludes = ['*_mac.*',
-                                    '*_vicos.*']),
+                        excludes = ['*_android.*',
+                                    '*_mac.*']),
     platform_srcs = [
-        ('mac', glob(['**/*_mac.cpp'])),
-        ('vicos', glob(['**/*_vicos.cpp']))
+        ('android', glob(['**/*_android.cpp'])),
+        ('mac', glob(['**/*_mac.cpp']))
     ],
-    headers = cxx_header_glob(['.'])
+    headers = cxx_header_glob(['.']),
+    platform_headers = [
+        ('android', glob(['**/*.h']))
+    ]
 )

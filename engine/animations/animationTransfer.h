@@ -27,7 +27,7 @@ namespace Anki {
     }
   }
   
-namespace Vector {
+namespace Cozmo {
   
   template <typename Type>
   class AnkiEvent;
@@ -40,7 +40,7 @@ namespace Vector {
   class AnimationTransfer  : Util::noncopyable
   {
   public:
-    AnimationTransfer(Anki::Vector::IExternalInterface* externalInterface, Anki::Util::Data::DataPlatform* dataPlatform);
+    AnimationTransfer(Anki::Cozmo::IExternalInterface* externalInterface, Anki::Util::Data::DataPlatform* dataPlatform);
     virtual ~AnimationTransfer();
     
     static const std::string kCacheAnimFileName;
@@ -59,7 +59,7 @@ namespace Vector {
   };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

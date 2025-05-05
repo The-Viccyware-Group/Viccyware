@@ -19,7 +19,7 @@
 #include "engine/faceWorld.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 }
@@ -49,8 +49,8 @@ BehaviorTurnToFace::BehaviorTurnToFace(const Json::Value& config)
 bool BehaviorTurnToFace::WantsToBeActivatedBehavior() const
 {
   Pose3d wastedPose;
-  RobotTimeStamp_t lastTimeObserved = GetBEI().GetFaceWorld().GetLastObservedFace(wastedPose);
-  std::set<Vision::FaceID_t> facesObserved = GetBEI().GetFaceWorld().GetFaceIDs(lastTimeObserved);
+  TimeStamp_t lastTimeObserved = GetBEI().GetFaceWorld().GetLastObservedFace(wastedPose);
+  std::set<Vision::FaceID_t> facesObserved = GetBEI().GetFaceWorld().GetFaceIDsObservedSince(lastTimeObserved);
   if(facesObserved.size() > 0){
     _dVars.targetFace = GetBEI().GetFaceWorld().GetSmartFaceID(*facesObserved.begin());
   }
@@ -75,5 +75,5 @@ void BehaviorTurnToFace::OnBehaviorDeactivated()
 }
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

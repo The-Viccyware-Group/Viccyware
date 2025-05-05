@@ -11,8 +11,8 @@
 
 #include "json/json.h"
 #include "coretech/common/shared/types.h"
-#include "coretech/common/shared/math/point.h"
-#include "coretech/common/shared/math/radians.h"
+#include "coretech/common/engine/math/point.h"
+#include "coretech/common/shared/radians.h"
 #include <cmath>
 
 namespace Anki {
@@ -69,10 +69,6 @@ namespace Anki {
       Radians ComputeHorizontalFOV() const;
       
       const DistortionCoeffs& GetDistortionCoeffs() const;
-      
-      // Adjust focal length and center for new resolution, leave skew and distortion coefficents alone.
-      CameraCalibration& Scale(u16 nrows, u16 ncols);           // in place, returning reference to "this"
-      CameraCalibration  GetScaled(u16 nrows, u16 ncols) const; // return new
       
       // Returns the 3x3 camera calibration matrix:
       // [fx   skew*fx   center_x;

@@ -8,9 +8,9 @@
 #ifndef __Anki_Cozmo_RobotGyroDriftDetector_H__
 #define __Anki_Cozmo_RobotGyroDriftDetector_H__
 
-#include "coretech/common/shared/math/point_fwd.h"
-#include "coretech/common/engine/robotTimeStamp.h"
-#include "coretech/common/shared/math/radians.h"
+#include "coretech/common/engine/math/point.h"
+#include "coretech/common/shared/radians.h"
+#include "coretech/common/shared/types.h"
 
 #include "engine/robotComponents_fwd.h"
 #include "util/entityComponent/iDependencyManagedComponent.h"
@@ -18,7 +18,7 @@
 #include "util/helpers/noncopyable.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 // forward decl:
 class Robot;
@@ -32,7 +32,7 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
   //////
@@ -59,7 +59,7 @@ private:
   PoseFrameID_t _startPoseFrameId = 0;
   Radians       _startAngle_rad;
   f32           _startGyroZ_rad_per_sec = 0.f;
-  RobotTimeStamp_t _startTime_ms = 0;
+  TimeStamp_t   _startTime_ms = 0;
   f32           _cumSumGyroZ_rad_per_sec = 0.f;
   f32           _minGyroZ_rad_per_sec = 0.f;
   f32           _maxGyroZ_rad_per_sec = 0.f;
@@ -87,7 +87,7 @@ private:
   
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_RobotGyroDriftDetector_H__

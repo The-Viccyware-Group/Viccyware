@@ -23,29 +23,50 @@ void Power::init(void) {
                | RCC_APB2ENR_SYSCFGEN
                | RCC_APB2ENR_ADC1EN
                ;
+
+  Power::setMode(POWER_ACTIVE);
+
+  // Set N pins on motors low for power up
+  LN1::reset();
+  LN2::reset();
+  HN1::reset();
+  HN2::reset();
+  RTN1::reset();
+  RTN2::reset();
+  LTN1::reset();
+  LTN2::reset();
+
+  LN1::mode(MODE_OUTPUT);
+  LN2::mode(MODE_OUTPUT);
+  HN1::mode(MODE_OUTPUT);
+  HN2::mode(MODE_OUTPUT);
+  RTN1::mode(MODE_OUTPUT);
+  RTN2::mode(MODE_OUTPUT);
+  LTN1::mode(MODE_OUTPUT);
+  LTN2::mode(MODE_OUTPUT);
 }
 
-static inline void disableHead(void) {
-  MAIN_EN_WIS::mode(MODE_OUTPUT);
-  MAIN_EN_WIS::reset();
-}
-
-static inline void enableHead(void) {
-  BODY_TX::mode(MODE_OUTPUT);
-
-  MAIN_EN_WIS::mode(MODE_OUTPUT);
-  MAIN_EN_WIS::set();
-}
 
 void Power::setMode(PowerMode set) {
   switch (set) {
     case POWER_STOP:
-      disableHead();
-      Analog::setPower(false);
+      POWER_EN::pull(PULL_NONE);
+      POWER_EN::reset();
+      POWER_EN::mode(MODE_OUTPUT);
       break ;
     default:
-      enableHead();
-      Analog::setPower(true);
+      POWER_EN::pull(PULL_UP);
+      POWER_EN::mode(MODE_INPUT);
       break ;
   }
+}
+
+void Power::disableHead(void) {
+  MAIN_EN::mode(MODE_OUTPUT);
+  MAIN_EN::reset();
+}
+
+void Power::enableHead(void) {
+  MAIN_EN::mode(MODE_OUTPUT);
+  MAIN_EN::set();
 }

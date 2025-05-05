@@ -15,29 +15,25 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior_fwd.h"
 
 #include "engine/actions/actionContainers.h"
+#include "engine/aiComponent/aiInformationAnalysis/aiInformationAnalysisProcessTypes.h"
 #include "engine/aiComponent/aiComponent.h"
-#include "engine/aiComponent/aiWhiteboard.h"
 #include "engine/aiComponent/behaviorComponent/behaviorComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
+#include "engine/aiComponent/aiWhiteboard.h"
 #include "engine/aiComponent/behaviorComponent/iBehavior.h"
-#include "engine/aiComponent/behaviorComponent/userIntentComponent_fwd.h"
-#include "engine/aiComponent/beiConditions/beiConditionFactory.h"
+#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
-#include "engine/components/cubes/cubeLights/cubeLightComponent.h"
-#include "engine/components/cubes/iCubeConnectionSubscriber.h"
+#include "engine/components/cubeLightComponent.h"
 #include "engine/components/visionScheduleMediator/iVisionModeSubscriber.h"
 #include "engine/components/visionScheduleMediator/visionScheduleMediator_fwd.h"
 #include "engine/robotInterface/messageHandler.h"
 #include <set>
 
+
 #include "clad/types/actionResults.h"
 #include "clad/types/behaviorComponent/behaviorObjectives.h"
-#include "clad/types/behaviorComponent/postBehaviorSuggestions.h"
-#include "clad/types/behaviorComponent/streamAndLightEffect.h"
-#include "clad/types/robotCompletedAction.h"
+#include "clad/types/unlockTypes.h"
 #include "util/console/consoleVariable.h"
 #include "util/logging/logging.h"
-#include "util/string/stringUtils.h"
 
 //Transforms enum into string
 #define DEBUG_SET_STATE(s) SetDebugStateName(#s)
@@ -47,15 +43,15 @@ namespace Util{
 class RandomGenerator;
 }
 class ObjectID;
-namespace Vector {
+namespace Cozmo {
   
 // Forward declarations
 class ActionableObject;
 class ConditionUserIntentPending;
 class DriveToObjectAction;
-class UnitTestKey;
-enum class ActiveFeature : uint32_t;
-enum class BehaviorStat : uint32_t;
+enum class ObjectInteractionIntention;
+class UserIntent;
+enum class UserIntentTag : uint8_t;
 
 class ISubtaskListener;
 class IReactToFaceListener;
@@ -64,11 +60,9 @@ class IReactToPetListener;
 class IFistBumpListener;
 class IFeedingListener;
 
-enum class AnimationTrigger : int32_t;
-enum class CubeAnimationTrigger : int32_t;
+enum class CubeAnimationTrigger;
 
 struct PathMotionProfile;
-struct TriggerWordResponseData;
 
 namespace ExternalInterface {
 struct BehaviorObjectiveAchieved;
@@ -84,26 +78,7 @@ struct BehaviorOperationModifiers{
     visionModesForActivatableScope = std::make_unique<std::set<VisionModeRequest>>();
     visionModesForActiveScope = std::make_unique<std::set<VisionModeRequest>>();
   }
-  
-  // Alters the default value of the behavior operation modifiers via the behavior's
-  // JSON configuration map. Returns a set of tags of which defaults were set.
-  std::set<std::string> SetDefaultBehaviorOperationModifiers(const Json::Value& config, const std::string& debugLabel);
-  
-  // Set of keys for operation modifiers that cannot be set via JSON
-  const std::set<std::string> illegalKeys = {"behaviorAlwaysDelegates"};
-  
-  // Allows for lookup of modifier flags via an associated string name
-  const std::unordered_map<std::string, bool*> stringToModifiersFlagMap = {
-    {"wantsToBeActivatedWhenCarryingObject", &wantsToBeActivatedWhenCarryingObject},
-    {"wantsToBeActivatedWhenOffTreads", &wantsToBeActivatedWhenOffTreads},
-    {"wantsToBeActivatedWhenOnCharger", &wantsToBeActivatedWhenOnCharger},
-    {"behaviorAlwaysDelegates", &behaviorAlwaysDelegates},
-    {"connectToCubeInBackground", &connectToCubeInBackground},
-    {"ensuresCubeConnectionAtDelegation", &ensuresCubeConnectionAtDelegation}
-  };
-  
-  bool ModifierFlagValueFromString(const std::string& str, bool& output) const;
-  
+
   // WantsToBeActivated modifiers
   bool wantsToBeActivatedWhenCarryingObject = false;
   bool wantsToBeActivatedWhenOffTreads = false;
@@ -118,31 +93,6 @@ struct BehaviorOperationModifiers{
   // Override to false if the behavior will always cancel itself when it's done
   bool behaviorAlwaysDelegates = true;
 
-  // Behaviors which require cube connections with varying degrees of flexibility should specify their type of requirement
-  // here. Subscription to cube connections will then be managed directly by iCozmoBehavior on Activation/Deactivation,
-  // and WantsToBeActivatedBase will confirm that connection requirements are met.
-  enum class CubeConnectionRequirements{
-    None,
-    OptionalLazy, // Always wantsToBeActivated; Subscribe only if already connected
-    OptionalActive, // Always wantsToBeActivated; Always subscribe
-    RequiredLazy, // Run only if already connected. Always subscribe if activated.
-    RequiredManaged // Run only if already connected. Always subscribe if activated. Requires Ancestor to manage connection.
-  } cubeConnectionRequirements = CubeConnectionRequirements::None;
-  
-  bool CubeConnectionRequirementFromString(const std::string& str, CubeConnectionRequirements& enumOutput) const;
-  
-  // Background connections will open and hold a cube connection open, but will not trigger connection/status lights.
-  // If a non-background subscription is made, the connection will convert to foreground until all foreground 
-  // subscriptions are gone, whereupon we will indicate disconnection to the user and convert back to a background
-  // connection until ALL subscriptions are released which will trigger disconnection. 
-  // NOTE: THIS ONLY SUPPRESSES STATUS LIGHTS! Light anims may still be invoked via the CubeLightComponent while in a
-  // background connection
-  bool connectToCubeInBackground = false;
-
-  // If set to true, this behavior will satisfy the Ancestry requirements for behaviors with 
-  // CubeConnectionRequirements::RequiredManaged. 
-  bool ensuresCubeConnectionAtDelegation = false;
-
   // Behaviors which require vision processing can add requests to these vectors to have the base class
   // manage subscriptions to those VisionModes. Default is none.
   std::unique_ptr<std::set<VisionModeRequest>> visionModesForActivatableScope;
@@ -150,38 +100,22 @@ struct BehaviorOperationModifiers{
 };
 
 // Base Behavior Interface specification
-class ICozmoBehavior : public IBehavior, public IVisionModeSubscriber, public ICubeConnectionSubscriber
+class ICozmoBehavior : public IBehavior, public IVisionModeSubscriber
 {
 protected:  
   friend class BehaviorFactory;
 
   // Can't create a public ICozmoBehavior, but derived classes must pass a robot
   // reference into this protected constructor.
-  explicit ICozmoBehavior(const Json::Value& config);
-
-  // Constructs in the same way, but holds a container which keeps custom injected BEI conditions in
-  // scope. This allows a derived class to declare custom BEI conditions and have them be used here (e.g. for
-  // a WantsToBeActivated json condition)
-  ICozmoBehavior(const Json::Value& config, const CustomBEIConditionHandleList& customConditionHandles);
+  ICozmoBehavior(const Json::Value& config);
     
   virtual ~ICozmoBehavior();
-  
-  // ICubeConnectionSubscriber methods - - - - -
-  virtual std::string GetCubeConnectionDebugName() const override {return GetDebugLabel();};
-  virtual void ConnectedCallback(CubeConnectionType connectionType) override {}
-  virtual void ConnectionFailedCallback() override {}
-  virtual void ConnectionLostCallback() override {}
-  // ICubeConnectionSubscriber methods - - - - -
-
+    
 public:  
   static Json::Value CreateDefaultBehaviorConfig(BehaviorClass behaviorClass, BehaviorID behaviorID);
   static void InjectBehaviorClassAndIDIntoConfig(BehaviorClass behaviorClass, BehaviorID behaviorID, Json::Value& config);  
   static BehaviorID ExtractBehaviorIDFromConfig(const Json::Value& config, const std::string& fileName = "");
   static BehaviorClass ExtractBehaviorClassFromConfig(const Json::Value& config);
-
-  // check if the given json is a valid config for this behavior. Note that the behavior must already be
-  // constructed in order for this to work.
-  void CheckJson(const Json::Value& config);
 
   // After Init is called, this function should be called on every behavior to set the operation modifiers. It
   // will internally call GetBehaviorOperationModifiers() as needed
@@ -215,9 +149,10 @@ public:
   // Returns true if the state of the world/robot is sufficient for this behavior to be executed
   bool WantsToBeActivatedInternal() const override final;
 
-  BehaviorID GetID() const { return _id; }
+  BehaviorID         GetID()      const { return _id; }
 
   const std::string& GetDebugStateName() const { return _debugStateName;}
+  ExecutableBehaviorType GetExecutableType() const { return _executableType; }
   const BehaviorClass GetClass() const { return _behaviorClassID; }
 
 
@@ -232,9 +167,15 @@ public:
                                              ActionableObject* object,
                                              std::vector<Pose3d>& possiblePoses,
                                              bool& alreadyInPosition);
+
+  // returns required process
+  AIInformationAnalysis::EProcess GetRequiredProcess() const { return _requiredProcess; }
+  
+  // returns the required unlockID for the behavior
+  const UnlockId GetRequiredUnlockID() const {  return _requiredUnlockId;}
+  
   
   // Add Listeners to a behavior which will notify them of milestones/events in the behavior's lifecycle
-  // TODO:(bn) this is likely unused and should be deleted (we tend to use direct casts to behavior types now)
   virtual void AddListener(ISubtaskListener* listener)
                 { DEV_ASSERT(false, "AddListener.FrustrationListener.Unimplemented"); }
   virtual void AddListener(IReactToFaceListener* listener)
@@ -247,15 +188,9 @@ public:
                 { DEV_ASSERT(false, "AddListener.FistBumpListener.Unimplemented"); }
   virtual void AddListener(IFeedingListener* listener)
                 { DEV_ASSERT(false, "AddListener.FeedingListener.Unimplemented"); }
-  
+
   // Give derived behaviors the opportunity to override default behavior operations
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const = 0;
-  
-  // Give other behaviors access to a constant reference to the finalized operation modifiers,
-  // including the defaults set by the JSON configuration during the construction of the behavior.
-  // In the case of a dispatcher behavior, this also factors in the operation modifiers of all its
-  // possible dispatches. Should only be called after Init.
-  const BehaviorOperationModifiers& GetBehaviorOperationModifiersPostInit() const;
   
   // gets list of ICozmoBehavior's expected keys and the derived class's, through GetBehaviorJsonKeys
   std::vector<const char*> GetAllJsonKeys() const;
@@ -266,15 +201,8 @@ public:
   // further down the stack
   void SetDontActivateThisTick(const std::string& coordinatorName);
 
-  // if an active feature is associated with this behavior, return true and set it in arguments
-  bool GetAssociatedActiveFeature(ActiveFeature& feature) const;
-
-  UserIntentPtr ActivateUserIntentHelper(UserIntentTag tag, const std::string& owner = "");
-  void DeactivateUserIntentHelper(UserIntentTag tag);
-  
-  std::map<std::string,ICozmoBehaviorPtr> TESTONLY_GetAnonBehaviors( UnitTestKey key ) const;
-
 protected:
+
 
   // default is no delegates, but behaviors which delegate can overload this
   virtual void GetAllDelegates(std::set<IBehavior*>& delegates) const override { }
@@ -283,9 +211,6 @@ protected:
     PRINT_CH_INFO("Behaviors", "Behavior.TransitionToState", "Behavior:%s, FromState:%s ToState:%s",
                   GetDebugLabel().c_str(), _debugStateName.c_str(), inName.c_str());
     _debugStateName = inName;
-    if( ANKI_DEV_CHEATS ) {
-      SetDebugStateNameToWebViz();
-    }
   }
   
   using EvalUserIntentFunc = std::function<bool(const UserIntent&)>; // should be true if data matches
@@ -309,6 +234,11 @@ protected:
   void ClearWaitForUserIntent();
   
   
+  // Set whether this behavior responds to the trigger word. It's only valid to call this before Init
+  // is called (i.e. from the constructor). Normally this can be specified in json, but in some cases
+  // it may be more desirable to set it from code
+  void SetRespondToTriggerWord(bool shouldRespond);
+  
   // Add to a list of BehaviorTimerManager timers that this behavior should reset upon activation.
   // You don't want to put a reset in too high (/ deep in the stack) a behavior in case one
   // of its delegates fails, which might reset the timer without the action being performed. You
@@ -321,11 +251,8 @@ protected:
   // into this list instead of assigning it.
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const = 0;
   
-  virtual void OnEnteredActivatableScopeInternal() final override;
-  virtual void OnLeftActivatableScopeInternal() final override;
-
-  virtual void OnBehaviorEnteredActivatableScope() { }
-  virtual void OnBehaviorLeftActivatableScope() { }
+  virtual void OnEnteredActivatableScopeInternal() override;
+  virtual void OnLeftActivatableScopeInternal() override;
 
   virtual void OnBehaviorActivated() = 0;
   
@@ -348,7 +275,6 @@ protected:
   void SubscribeToTags(std::set<GameToEngineTag>&& tags);
   void SubscribeToTags(std::set<EngineToGameTag>&& tags);
   void SubscribeToTags(std::set<RobotInterface::RobotToEngineTag>&& tags);
-  void SubscribeToAppTags(std::set<AppToEngineTag>&& tags); // can't be an overload since it is not a scoped enum
   
   // Function that calls message handling helper functions
   void UpdateMessageHandlingHelpers();
@@ -362,7 +288,6 @@ protected:
   virtual void AlwaysHandleInScope(const GameToEngineEvent& event) { }
   virtual void AlwaysHandleInScope(const EngineToGameEvent& event) { }
   virtual void AlwaysHandleInScope(const RobotToEngineEvent& event) { }
-  virtual void AlwaysHandleInScope(const AppToEngineEvent& event) { }
   
   // Derived classes must override this method to handle events that come in
   // while the behavior is running. In this case, the behavior is allowed to
@@ -373,7 +298,6 @@ protected:
   virtual void HandleWhileActivated(const GameToEngineEvent& event) { }
   virtual void HandleWhileActivated(const EngineToGameEvent& event) { }
   virtual void HandleWhileActivated(const RobotToEngineEvent& event) { }
-  virtual void HandleWhileActivated(const AppToEngineEvent& event) { }
   
   // Derived classes must override this method to handle events that come in
   // only while the behavior is NOT running. If it doesn't matter whether the
@@ -384,7 +308,6 @@ protected:
   virtual void HandleWhileInScopeButNotActivated(const GameToEngineEvent& event) { }
   virtual void HandleWhileInScopeButNotActivated(const EngineToGameEvent& event) { }
   virtual void HandleWhileInScopeButNotActivated(const RobotToEngineEvent& event) { }
-  virtual void HandleWhileInScopeButNotActivated(const AppToEngineEvent& event) { }
   
   // Many behaviors use a pattern of delegating control to a behavior or action, then waiting for it to finish 
   // before selecting what to do next. Behaviors can use the functions below to pass lambdas or member functions
@@ -441,9 +364,7 @@ protected:
   template<typename T>
   bool DelegateIfInControl(IBehavior* delegate, void(T::*callback)());
 
-  // Searches both the behavior container and anonymous behaviors. Returns the behavior or nullptr if not
-  // found (and performs an ANKI_VERIFY internally)
-  ICozmoBehaviorPtr FindBehavior( const std::string& behaviorIDStr ) const;
+
 
   // Behaviors can easily create delegates using "anonymous" behaviors in their config file (see _anonymousBehaviorMap
   // comments below).  This function enables access to those anonymous behaviors.
@@ -466,11 +387,11 @@ protected:
   // convenience wrapper for calling CancelSelf on the delegation component. It returns true if the behavior
   // was successfully canceled, false otherwise (e.g. the behavior wasn't active to begin with)
   bool CancelSelf();
-
+  
   // Behaviors should call this function when they reach their completion state
   // in order to log das events and notify activity strategies if they listen for the message
-  void BehaviorObjectiveAchieved(BehaviorObjective objectiveAchieved) const;
-  
+  void BehaviorObjectiveAchieved(BehaviorObjective objectiveAchieved, bool broadcastToGame = true) const;
+
   /////////////
   /// "Smart" helpers - Behaviors can call these functions to set properties that
   /// need to be cleared when the behavior stops.  ICozmoBehavior will hold the reference
@@ -493,54 +414,9 @@ protected:
   // Allows the behavior to set a custom light pattern which will be automatically canceled if the behavior ends
   bool SmartSetCustomLightPattern(const ObjectID& objectID,
                                   const CubeAnimationTrigger& anim,
-                                  const CubeLightAnimation::ObjectLights& modifier = {});
+                                  const ObjectLights& modifier = {});
   bool SmartRemoveCustomLightPattern(const ObjectID& objectID,
                                      const std::vector<CubeAnimationTrigger>& anims);
-
-  // Allows the behavior to activate a user intent and have it automatically deactived when this behavior is
-  // deactivated. For convenience (in the case where there is extra intent data), a pointer the the intent is
-  // returned. This pointer will be null if the intent couldn't be activated (i.e. it wasn't pending)
-  UserIntentPtr SmartActivateUserIntent(UserIntentTag tag);
-  UserIntentPtr SmartActivateUserIntent(UserIntentTag tag, bool showFeedback);
-  
-  // de-activate an intent activated through the smart function above.
-  void SmartDeactivateUserIntent();
-
-  // Disables engine's response to trigger words sent from the animation process
-  void SmartDisableEngineResponseToTriggerWord();
-  void SmartEnableEngineResponseToTriggerWord();
-
-  // Change the response to the trigger word until the behavior is deactivated
-  void SmartPushResponseToTriggerWord(const AnimationTrigger& getInAnimTrigger,
-                                      const AudioEngine::Multiplexer::PostAudioEvent& postAudioEvent,
-                                      StreamAndLightEffect streamAndLightEffect,
-                                      int32_t minStreamingDuration_ms = -1);
-  void SmartPushEmptyResponseToTriggerWord();
-
-  void SmartPushResponseToTriggerWord(const TriggerWordResponseData& newState);
-  void SmartPopResponseToTriggerWord();
-
-  
-  void SmartAlterStreamStateForCurrentResponse(const StreamAndLightEffect newEffect);
-
-
-  // Request that the robot enter power save mode
-  void SmartRequestPowerSaveMode();
-
-  // Request that the robot exit power save mode
-  void SmartRemovePowerSaveModeRequest();
-
-  // disable the procedural "keep face alive" in the animation system
-  void SmartDisableKeepFaceAlive();
-  void SmartReEnableKeepFaceAlive();
-
-  // From code, a behavior can use this function to override the active feature for a _single_ activation of
-  // this behavior. This function must be called before the end of OnBehaviorActivated for it to work, and can
-  // not be combined with a json-set active feature.
-  // NOTE: in most cases, you probably don't want this and instead should set a fixed active feature in the
-  // json instance of the behavior (most behavior instances correspond to a single feature)
-  // NOTE: if you get too fancy here you might break the CheckActiveFeatures unit test in testBehaviorSystemDelegationTree.cpp
-  void SmartSetActiveFeatureOnActivated(const ActiveFeature& feature);
 
   // Helper function to play an emergency get out through the continuity component
   void PlayEmergencyGetOut(AnimationTrigger anim);
@@ -554,26 +430,30 @@ protected:
   T& GetBehaviorComp() const {
     return GetBEI().GetAIComponent().GetComponent<BehaviorComponent>(). template GetComponent<T>();
   }
-
-  // NOTE: this is old functionality from Cozmo sparks, but may become useful again if we want a way to
-  // "streamline" certain behaviors (i.e. skip some of the animations / reactions that can slow things down).
-  // BN: as of 1.0.1 this is only ever used in a single behavior (pickupCube) and maybe not intentionally so...
+  
+  // If a behavior requires that an AIInformationProcess is running for the behavior
+  // to operate properly, the behavior should set this variable directly so that
+  // it's checked in WantsToBeActivatedBase
+  AIInformationAnalysis::EProcess _requiredProcess;
+  
   bool ShouldStreamline() const { return (_alwaysStreamline); }
-    
+  
+  // If you _know_ you have been activated due to a pending intent, get the intent along with
+  // its data using this helper
+  UserIntent& GetTriggeringUserIntent();
+  
   // make a member variable a console var that is only around as long as its class instance is
   #if ANKI_DEV_CHEATS
     template <typename T>
-    void MakeMemberTunable(T& param, const std::string& name, const char* category = nullptr);
+    void MakeMemberTunable(T& param, const std::string& name);
   #else // no op
     template <typename T>
-    void MakeMemberTunable(T& param, const std::string& name, const char* category = nullptr) {  }
+    void MakeMemberTunable(T& param, const std::string& name) {  }
   #endif
   
 private:
   
   std::string MakeUniqueDebugLabelFromConfig(const Json::Value& config);
-  
-  void SetDebugStateNameToWebViz() const;
 
   float _lastRunTime_s;
   float _activatedTime_s;
@@ -582,17 +462,10 @@ private:
   u32 _lastActionTag = 0;
   std::vector<IBEIConditionPtr> _wantsToBeActivatedConditions;
   std::vector<IBEIConditionPtr> _wantsToCancelSelfConditions;
-  
   BehaviorOperationModifiers _operationModifiers;
   
   // Returns true if the state of the world/robot is sufficient for this behavior to be executed
   bool WantsToBeActivatedBase() const;
-
-  // Helper function for WantsToBeActivatedBase, returns true if the cubeConnectionRequirements for
-  // this behavior are satisfied
-  bool CubeConnectionRequirementsMet() const;
-
-  void ManageCubeConnectionSubscriptions(bool onActivated);
   
   bool ReadFromJson(const Json::Value& config);
   
@@ -609,6 +482,7 @@ private:
   
   std::string _debugStateName = "";
   BehaviorClass _behaviorClassID;
+  ExecutableBehaviorType _executableType;
   int _timesResumedFromPossibleInfiniteLoop = 0;
   float _timeCanRunAfterPossibleInfiniteLoopCooldown_sec = 0.f;
 
@@ -617,20 +491,20 @@ private:
   //    the absence of other negative conditions), and
   // 2) Clear the intent when the behavior is activated
   std::shared_ptr< ConditionUserIntentPending > _respondToUserIntent;
-  bool _showActiveIntentFeedback = true;
-  bool _autoShutOffActiveIntentFeedback = false;
-
-  // The tag of the intent that should be deactivated when this behavior deactivates
-  UserIntentTag _intentToDeactivate;
-
-  // A behavior can specify an associated ActiveFeature. If it does, the ActiveFeatureComponent can check this
-  // while the behavior is active on the stack
-  std::unique_ptr<ActiveFeature> _associatedActiveFeature;
-  bool _resetActiveFeature = false;
-
-  // if set, increment this behavior stat when this behavior activates
-  std::unique_ptr<BehaviorStat> _behaviorStatToIncrement;
-   
+  
+  // if config changes this to false, the intent will be cleared but not moved into _pendingIntent,
+  // below. It will instead remain in the UserIntentComponent as a backup
+  bool _claimUserIntentData;
+  
+  // if a behavior is waiting for a specific intent and it got it, and _claimUserIntentData,
+  // then the intent will be here just prior to activation. otherwise it will be null
+  std::unique_ptr<UserIntent> _pendingIntent;
+  
+  // true when the trigger word is pending, in which case ICozmoBehavior will
+  // 1) WantToBeActivated, in the absence of other negative conditions
+  // 2) Clear the trigger word when the behavior is activated
+  bool _respondToTriggerWord;
+  
   // a list of named timers in the BehaviorTimerManager that should be reset when this behavior starts
   std::vector<std::string> _resetTimers;
 
@@ -638,27 +512,35 @@ private:
   std::string _dontActivateCoordinator;
   size_t _tickDontActivateSetFor = -1;
 
-  // If non-empty, trigger this emotion event when this behavior activated
-  std::string _emotionEventOnActivated;
-
+  // if an unlockId is set, the behavior won't be activatable unless the unlockId is unlocked in the progression component
+  UnlockId _requiredUnlockId;
+  
+  // if _requiredRecentDriveOffCharger_sec is greater than 0, this behavior is only activatable if last time the robot got off the charger by
+  // itself was less than this time ago. Eg, a value of 1 means if we got off the charger less than 1 second ago
+  float _requiredRecentDriveOffCharger_sec;
+  
+  // if _requiredRecentSwitchToParent_sec is greater than 0, this behavior is only activatable if last time its parent behavior
+  // chooser was activated happened less than this time ago. Eg: a value of 1 means 'if the parent got activated less
+  // than 1 second ago'. This allows some behaviors to run only first time that their parent is activated (specially for activities)
+  // TODO rsam: differentiate between (de)activation and interruption
+  float _requiredRecentSwitchToParent_sec;
+  
   int _startCount = 0;
 
   // for when delegation finishes - if invalid, no action
   RobotCompletedActionCallback _delegationCallback;
   
   bool _isActivated;
-    
+  
+  // A set of the locks that a behavior has used to disable reactions
+  // these will be automatically re-enabled on behavior stop
+  std::set<std::string> _smartLockIDs;
+  
   // An int that holds tracks disabled using SmartLockTrack
   std::map<std::string, u8> _lockingNameToTracksMap;
-  // Loaded in from data - these tracks will be locked/unlocked automatically when activated/deactivated 
-  u8 _tracksToLockWhileActivated = 0;
 
   bool _hasSetMotionProfile = false;
 
-  std::unique_ptr<StreamAndLightEffect> _alterStreamAfterWakeword;
-  std::unique_ptr<TriggerWordResponseData> _triggerStreamStateToPush;
-  bool _pushedCustomTriggerResponse = false;
-  
   //A list of object IDs that have had a custom light pattern set
   std::vector<ObjectID> _customLightObjects;
   
@@ -666,11 +548,7 @@ private:
   bool _alwaysStreamline = false;
   
   bool _initHasBeenCalled = false;
-
-  // for automatically removing a power save request when de-activated
-  std::string _powerSaveRequest;
-
-  bool _keepAliveDisabled = false;
+  
   
   ///////
   // Tracking subscribe tags for initialization
@@ -678,7 +556,6 @@ private:
   std::set<GameToEngineTag> _gameToEngineTags;
   std::set<EngineToGameTag> _engineToGameTags;
   std::set<RobotInterface::RobotToEngineTag> _robotToEngineTags;
-  std::set<AppToEngineTag> _appToEngineTags;
 
   // Behaviors can load in internal "anonymous" behaviors which are not stored
   // in the behavior container and are referenced by string instead of by ID
@@ -687,10 +564,6 @@ private:
   // anonymous behavior factory
   Json::Value _anonymousBehaviorMapConfig;  
   std::map<std::string,ICozmoBehaviorPtr> _anonymousBehaviorMap;
-  
-  // a NON-BINDING suggestion of what this behavior thinks should occur after de-activation.
-  // this value will be written to the whiteboard upon de-activation, and other behaviors can check it
-  PostBehaviorSuggestions _postBehaviorSuggestion = PostBehaviorSuggestions::Invalid;
   
   // list of member vars in this behavior that have been marked as tunable. upon class
   // desctruction, each console var will be unregistered.
@@ -729,7 +602,7 @@ template<typename T>
 bool ICozmoBehavior::DelegateNow(IBehavior* delegate, void(T::*callback)())
 {
   return DelegateNow(delegate,
-                     std::bind(callback, static_cast<T*>(this)));
+                     std::bind(callback, static_cast<T*>(this), std::placeholders::_1));
 }
 
   
@@ -803,14 +676,11 @@ bool ICozmoBehavior::FindAnonymousBehaviorByNameAndDowncast(const std::string& b
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #if ANKI_DEV_CHEATS
 template <typename T>
-void ICozmoBehavior::MakeMemberTunable(T& param, const std::string& name, const char* category)
+void ICozmoBehavior::MakeMemberTunable(T& param, const std::string& name)
 {
-  std::string uniqueName = GetDebugLabel() + "_" + name;
-  Anki::Util::StringReplace( uniqueName, "@", "" );
-  static const bool unregisterOnDestruction = true;
-  if( category == nullptr ) {
-    category = "BehaviorInstanceParams";
-  }
+  const std::string uniqueName = GetDebugLabel() + "_" + name;
+  const bool unregisterOnDestruction = true;
+  const char* category = "BehaviorInstanceParams";
   // ensure this param isnt already registered
   for( const auto& var : _tunableParams ) {
     if( !ANKI_VERIFY( var->GetID() != uniqueName,
@@ -825,7 +695,7 @@ void ICozmoBehavior::MakeMemberTunable(T& param, const std::string& name, const 
 }
 #endif
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_ICozmoBehavior_H__

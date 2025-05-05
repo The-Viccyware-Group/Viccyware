@@ -16,9 +16,9 @@
 #include "coretech/vision/robot/fiducialDetection.h"
 #include "coretech/vision/robot/fiducialMarkers.h"
 
-#include "coretech/common/shared/array2d.h"
-#include "coretech/common/engine/math/quad.h"
-#include "coretech/common/shared/math/rect.h"
+#include "coretech/common/engine/array2d_impl.h"
+#include "coretech/common/engine/math/quad_impl.h"
+#include "coretech/common/engine/math/rect_impl.h"
 
 #include "coretech/common/robot/array2d.h"
 
@@ -31,6 +31,9 @@
 
 namespace Anki {
 namespace Vision {
+
+// Default to false (and remove?) for VIC-945, when we've switched to dark cubes/charger
+CONSOLE_VAR(bool, kMarkerDetector_DarkOnLight, "Vision.MarkerDetection", true);
   
 struct MarkerDetector::Parameters : public Embedded::FiducialDetectionParameters
 {
@@ -39,6 +42,9 @@ struct MarkerDetector::Parameters : public Embedded::FiducialDetectionParameters
   f32         minSideLengthFraction;
   f32         maxSideLengthFraction;
   bool        isInitialized;
+  
+  // selected when (kMarkerDetector_DarkOnLight==false)
+  s32 scaleImage_thresholdMultiplier_lightOnDark = static_cast<s32>(65536.f * 0.9f);
   
   Parameters();
   void Initialize(); // TODO: Initialize from Json config
@@ -78,7 +84,7 @@ Result MarkerDetector::Memory::ResetBuffers(s32 numRows, s32 numCols, s32 maxMar
   //  _ccmBuffer.resize(CCM_BUFFER_MULTIPLIER * numPixels);
 
   static const s32 OFFCHIP_BUFFER_SIZE = 4000000;
-  static const s32 ONCHIP_BUFFER_SIZE  = 3200000; // Date: 02/10/2022 - Updated to resolve memory issue and handle images captured by new camera
+  static const s32 ONCHIP_BUFFER_SIZE  = 1600000;
   static const s32 CCM_BUFFER_SIZE     = 200000;
 
   _offchipBuffer.resize(OFFCHIP_BUFFER_SIZE);
@@ -99,6 +105,12 @@ Result MarkerDetector::Memory::ResetBuffers(s32 numRows, s32 numCols, s32 maxMar
   return RESULT_OK;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool MarkerDetector::IsDarkOnLight()
+{
+  return kMarkerDetector_DarkOnLight;
+}
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 MarkerDetector::MarkerDetector(const Camera& camera)
 : _camera(camera)
@@ -149,15 +161,9 @@ static Result GetImageHelper(const Vision::Image& srcImage, Embedded::Array<u8>&
     return RESULT_FAIL_INVALID_SIZE;
   }
   
-  // Copy one row at a time (a) to support source ROIs, which have discontinuous memory and (b) to make
-  // sure memory is aligned as expected for the Embedded::Array data structure even for continuous data
-  for(s32 i=0; i<captureHeight; ++i)
-  {
-    const u8* srcRow = srcImage.GetRow(i);
-    u8* destRow = destArray.Pointer(i, 0);
-    
-    memcpy(destRow, srcRow, captureWidth*sizeof(u8));
-  }
+  memcpy(reinterpret_cast<u8*>(destArray.get_buffer()),
+         srcImage.GetDataPointer(),
+         captureHeight*captureWidth*sizeof(u8));
   
   return RESULT_OK;
   
@@ -168,14 +174,9 @@ Result MarkerDetector::Detect(const Image& inputImageGray, std::list<ObservedMar
 {
   ANKI_CPU_PROFILE("MarkerDetector_Detect");
   
-  DEV_ASSERT(_params->isInitialized, "MarkerDetector.Detect.ParamsNotInitialized");
+  DEV_ASSERT(_params->isInitialized, "MarkerDetector.Detect.ParamsNoInitialized");
   
-  const Result memResult = _memory->ResetBuffers(inputImageGray.GetNumRows(), inputImageGray.GetNumCols(), _params->maxMarkers);
-  
-  if(!ANKI_VERIFY(memResult == RESULT_OK, "MarkerDetector.Detect.MemoryResetFailed", ""))
-  {
-    return memResult;
-  }
+  _memory->ResetBuffers(inputImageGray.GetNumRows(), inputImageGray.GetNumCols(), _params->maxMarkers);
   
   // Convert to an Embedded::Array<u8> so the old embedded methods can use the
   // image data.
@@ -201,19 +202,20 @@ Result MarkerDetector::Detect(const Image& inputImageGray, std::list<ObservedMar
   _params->SetComputeComponentMinNumPixels(inputImageGray.GetNumRows(), inputImageGray.GetNumCols());
   _params->SetComputeComponentMaxNumPixels(inputImageGray.GetNumRows(), inputImageGray.GetNumCols());
   
-  // Victor markers are all light-on-dark
-  const bool kDarkOnLightMode = false;
+  if(!kMarkerDetector_DarkOnLight)
+  {
+    _params->scaleImage_thresholdMultiplier = _params->scaleImage_thresholdMultiplier_lightOnDark;
+  }
   
   const Result result = DetectFiducialMarkers(grayscaleImage,
                                               markers,
                                               *_params,
-                                              kDarkOnLightMode,
+                                              kMarkerDetector_DarkOnLight,
                                               _memory->_ccmScratch,
                                               _memory->_onchipScratch,
                                               _memory->_offchipScratch);
   
   if(result != RESULT_OK) {
-    PRINT_NAMED_ERROR("MarkerDetector.Detect.DetectFiducialMarkersFailed", "");
     return result;
   }
   
@@ -275,23 +277,12 @@ void MarkerDetector::Parameters::Initialize()
   useIntegralImageFiltering = true;
   useIlluminationNormalization = true;
   
-  // NOTE: 0.8 was good for dark-on-light (Cozmo) markers, 1.1 for light-on-dark Victor markers
-  scaleImage_thresholdMultiplier = static_cast<s32>(65536.f * 1.1f);
-  
+  scaleImage_thresholdMultiplier = static_cast<s32>(65536.f * 0.8f);
   //scaleImage_thresholdMultiplier = 65536; // 1.0*(2^16)=65536
   //scaleImage_thresholdMultiplier = 49152; // 0.75*(2^16)=49152
   
-  // It seems strange that the number of pyramid levels is only 1, given the desire to compute the
-  // "best" neighborhood size for binarization using characteristic scale computation, but there may be
-  // a deeper bug since this seemed to work best. Punting for now.
   scaleImage_numPyramidLevels = 1;
-  
-  // Smaller window sizes for binarization seem to allow us to break apart nearly-connected regions better,
-  // at the possible expense of hollowing out thick fiducial regions. However, unless we were to completely
-  // hollow out the rounded fiducial rectangle into two separate "rings" (or break it somewhere), this
-  // is likely generally less of a problem than the "leakage" problem when the fiducial is far away and
-  // near another bright region.
-  imagePyramid_baseScale = 2;
+  imagePyramid_baseScale = 4;
   
   component1d_minComponentWidth = 0;
   component1d_maxSkipDistance = 0;
@@ -314,7 +305,7 @@ void MarkerDetector::Parameters::Initialize()
   
   decode_minContrastRatio = 1.01f;
   
-  maxConnectedComponentSegments = 640*360/2;
+  maxConnectedComponentSegments = 39000; // 322*240/2 = 38640
   
   // Maximum number of refinement iterations (i.e. if convergence is not
   // detected in the meantime according to minCornerChange parameter below)

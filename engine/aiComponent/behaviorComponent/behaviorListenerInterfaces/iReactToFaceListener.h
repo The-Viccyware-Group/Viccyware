@@ -16,7 +16,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class SmartFaceID;
 
@@ -27,7 +27,7 @@ public:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_BehaviorListenerInterfaces_IReactToFaceListener_H__

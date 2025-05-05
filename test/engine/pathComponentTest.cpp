@@ -15,9 +15,10 @@
 #define private public
 #define protected public
 
+#include "anki/common/types.h"
 #include "engine/components/pathComponent.h"
 #include "engine/cozmoContext.h"
-#include "engine/xyPlanner.h"
+#include "engine/latticePlanner.h"
 #include "engine/robot.h"
 #include "engine/robotInterface/messageHandler.h"
 #include "engine/robotManager.h"
@@ -25,13 +26,12 @@
 #include "test/engine/helpers/messaging/stubRobotMessageHandler.h"
 
 using namespace Anki;
-using namespace Vector;
+using namespace Cozmo;
 
-extern Anki::Vector::CozmoContext* cozmoContext;
+extern Anki::Cozmo::CozmoContext* cozmoContext;
 
 #define EXPECT_STATUS_EQ(x, y) EXPECT_EQ((x), (y)) << "expected " << ERobotDriveToPoseStatusToString(x) \
                                                    << " got " << ERobotDriveToPoseStatusToString(y)
-
 
 class PathComponentTest : public testing::Test
 {
@@ -42,39 +42,28 @@ protected:
 
     // stub in our own outgoing message handler
     cozmoContext->GetRobotManager()->_robotMessageHandler.reset(_msgHandler);
-
+    
     _robot.reset(new Robot(1, cozmoContext));
     _pathComponent = &(_robot->GetPathComponent());
 
-    _pathComponent->_longPathPlanner.reset(new XYPlanner(_robot.get(), true));
-    XYPlanner* planner = dynamic_cast<XYPlanner*>(_pathComponent->_longPathPlanner.get());
+    LatticePlanner* planner = dynamic_cast<LatticePlanner*>(_pathComponent->_longPathPlanner.get());
     ASSERT_TRUE(planner != nullptr);
 
-    _robot->FakeSyncRobotAck();
+    // default planner to run in main thread
+    planner->SetIsSynchronous(true);
+
+    _robot->FakeSyncTimeAck();
 
     // Fake a state message update for robot
     RobotState stateMsg = _robot->GetDefaultRobotState();
-
+  
     bool result = _robot->UpdateFullRobotState(stateMsg);
     ASSERT_EQ(result, RESULT_OK);
   }
 
-private:
   std::unique_ptr<Robot> _robot;
   PathComponent* _pathComponent = nullptr;
   StubMessageHandler* _msgHandler = nullptr;
-
-  //
-  // Convenience function to execute one tick of path component.
-  // This works because path component doesn't actually have any
-  // dependent components.
-  //
-  void Update(Anki::Vector::PathComponent * pathComponent)
-  {
-    static const Anki::Vector::RobotCompMap dependentComps;
-    pathComponent->UpdateDependent(dependentComps);
-  }
-
 };
 
 TEST_F(PathComponentTest, Create)
@@ -97,7 +86,7 @@ TEST_F(PathComponentTest, BasicPlan)
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::ComputingPath)
     << "planning should be computing for at least one tick";
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "planning should now be complete";
@@ -115,11 +104,11 @@ TEST_F(PathComponentTest, BasicPlan)
   _msgHandler->ClearMsgsToRobot();
 
   for( int i=0; i<10; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "should still be waiting";
-
+  
   {
     // send back following path message
     RobotInterface::PathFollowingEvent startedPathEvent;
@@ -127,17 +116,17 @@ TEST_F(PathComponentTest, BasicPlan)
     startedPathEvent.eventType = PathEventType::PATH_STARTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(startedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::FollowingPath)
     << "should be following now";
 
   for( int i=0; i<10; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::FollowingPath);
 
@@ -148,12 +137,11 @@ TEST_F(PathComponentTest, BasicPlan)
     startedPathEvent.eventType = PathEventType::PATH_COMPLETED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(startedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
-
+  _pathComponent->Update();
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::Ready);
 }
 
@@ -170,7 +158,7 @@ TEST_F(PathComponentTest, AbortPlanBug)
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::ComputingPath)
     << "planning should be computing for at least one tick";
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "planning should now be complete";
@@ -188,7 +176,7 @@ TEST_F(PathComponentTest, AbortPlanBug)
   _msgHandler->ClearMsgsToRobot();
 
   for( int i=0; i<10; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "should still be waiting";
@@ -197,7 +185,7 @@ TEST_F(PathComponentTest, AbortPlanBug)
   const Result res = _pathComponent->Abort();
   EXPECT_EQ(res, Result::RESULT_OK) << "abort failed";
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_FALSE(_pathComponent->IsActive())
     << "path should have been aborted (test bug)";
@@ -210,11 +198,11 @@ TEST_F(PathComponentTest, AbortPlanBug)
     startedPathEvent.eventType = PathEventType::PATH_STARTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(startedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   {
     int cancelPathID;
@@ -225,7 +213,7 @@ TEST_F(PathComponentTest, AbortPlanBug)
   }
 
   for( int i=0; i<4; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
 
   {
@@ -235,12 +223,12 @@ TEST_F(PathComponentTest, AbortPlanBug)
     stoppedPathEvent.eventType = PathEventType::PATH_INTERRUPTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(stoppedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
   for( int i=0; i<4; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::Ready);
@@ -259,7 +247,7 @@ TEST_F(PathComponentTest, AbortPlanComplex)
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::ComputingPath)
     << "planning should be computing for at least one tick";
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "planning should now be complete";
@@ -274,12 +262,12 @@ TEST_F(PathComponentTest, AbortPlanComplex)
     EXPECT_TRUE(found) << "should have send execute path message";
     EXPECT_EQ(pathID0, 1) << "first path should be path id 1";
   }
-
+  
   // clear out messages
   _msgHandler->ClearMsgsToRobot();
 
   for( int i=0; i<10; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath)
     << "should still be waiting";
@@ -288,7 +276,7 @@ TEST_F(PathComponentTest, AbortPlanComplex)
   const Result res = _pathComponent->Abort();
   EXPECT_EQ(res, Result::RESULT_OK) << "abort failed";
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_FALSE(_pathComponent->IsActive())
     << "path should have been aborted (test bug)";
@@ -307,13 +295,13 @@ TEST_F(PathComponentTest, AbortPlanComplex)
     startedPathEvent.eventType = PathEventType::PATH_STARTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(startedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
-  Update(_pathComponent);
-  Update(_pathComponent);
+  _pathComponent->Update();
+  _pathComponent->Update();
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath);
 
@@ -323,7 +311,7 @@ TEST_F(PathComponentTest, AbortPlanComplex)
     EXPECT_TRUE(found) << "should have send execute path message";
     EXPECT_EQ(pathID1, 2) << "second path should be path id 2";
   }
-
+  
   {
     int cancelPathID;
     const bool found = _msgHandler->FindClearPathMsg(cancelPathID);
@@ -333,7 +321,7 @@ TEST_F(PathComponentTest, AbortPlanComplex)
   }
 
   for( int i=0; i<4; ++i ) {
-    Update(_pathComponent);
+    _pathComponent->Update();
   }
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath);
@@ -345,13 +333,13 @@ TEST_F(PathComponentTest, AbortPlanComplex)
     stoppedPathEvent.eventType = PathEventType::PATH_INTERRUPTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(stoppedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
-  Update(_pathComponent);
-  Update(_pathComponent);
+  _pathComponent->Update();
+  _pathComponent->Update();
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::WaitingToBeginPath);
 
@@ -362,11 +350,11 @@ TEST_F(PathComponentTest, AbortPlanComplex)
     startedPathEvent.eventType = PathEventType::PATH_STARTED;
     RobotInterface::RobotToEngine msg;
     msg.Set_pathFollowingEvent(startedPathEvent);
-
-    _msgHandler->Broadcast(msg);
+  
+    _msgHandler->Broadcast(_robot->GetID(), msg);
   }
 
-  Update(_pathComponent);
+  _pathComponent->Update();
 
   EXPECT_STATUS_EQ(_pathComponent->GetDriveToPoseStatus(), ERobotDriveToPoseStatus::FollowingPath);
 }

@@ -1,6 +1,5 @@
 #include "dockingController.h"
 #include "pathFollower.h"
-#include "pickAndPlaceController.h"
 #include "localization.h"
 #include "steeringController.h"
 #include "wheelController.h"
@@ -26,13 +25,9 @@
 // The number of tics desired in between debug prints
 #define DBG_PERIOD 200
 
-// Whether or not path speeds should be automatically
-// clamped to prevent driving off of cliffs
-#define CLAMP_TO_CLIFF_SAFE_SPEEDS 0
-
 namespace Anki
 {
-  namespace Vector
+  namespace Cozmo
   {
     namespace PathFollower
     {
@@ -60,7 +55,7 @@ namespace Anki
         // Whether or not the current path was specified internally or came from an
         // external source (via "execute path" message)
         bool currentPathIsExternal_ = false;
-
+        
         // ID of the current path that is being followed
         // or the last path that was followed if not currently path following
         u16 lastPathID_ = 0;
@@ -92,20 +87,7 @@ namespace Anki
         pathEventMsg.eventType = event;
         RobotInterface::SendMessage(pathEventMsg);
       }
-
-      f32 GetCurrentSegmentTargetSpeed()
-      {
-        f32 speed = path_[currPathSegment_].GetTargetSpeed();
-#if (CLAMP_TO_CLIFF_SAFE_SPEEDS==1)
-        if (path_[currPathSegment_].GetType() != Planning::PST_POINT_TURN) {
-          f32 maxSpeed = PickAndPlaceController::IsCarryingBlock() ? 
-                         MAX_SAFE_WHILE_CARRYING_WHEEL_SPEED_MMPS : 
-                         MAX_SAFE_WHEEL_SPEED_MMPS;
-          speed = CLIP(speed, -maxSpeed, maxSpeed);
-        }
-#endif
-        return speed;
-      }
+      
 
       // Deletes current path
       void ClearPath(bool didCompletePath)
@@ -114,24 +96,24 @@ namespace Anki
         {
           SpeedController::SetBothDesiredAndCurrentUserSpeed(0);
           SpeedController::SetDefaultAccelerationAndDeceleration();
-
+          
           if(!didCompletePath && currentPathIsExternal_)
           {
             // Send a path interruption event iff we were following an externally-specified path when cleared
             SendPathFollowingEvent(PathEventType::PATH_INTERRUPTED);
           }
         }
-
+        
         path_.Clear();
         currPathSegment_ = -1;
         realPathSegment_ = -1;
-
+        
         pointTurnStarted_ = false;
-
+        
         distToPath_mm_ = 0.f;
         radToPath_ = 0.f;
         startedDecelOnSegment_ = false;
-
+        
         currentPathIsExternal_ = false;
 
       } // Update()
@@ -235,10 +217,10 @@ namespace Anki
         {
           SendPathFollowingEvent(PathEventType::PATH_INTERRUPTED);
         }
-
+        
         // Set first path segment
         if (path_.GetNumSegments() > 0) {
-
+          
 #if(DEBUG_PATH_FOLLOWER)
           path_.PrintPath();
 #endif
@@ -252,26 +234,25 @@ namespace Anki
 
           // Set speed
           // (Except for point turns whose speeds are handled at the steering controller level)
-          f32 targetSpeed = GetCurrentSegmentTargetSpeed();
           if (path_[currPathSegment_].GetType() != Planning::PST_POINT_TURN) {
-            SpeedController::SetUserCommandedDesiredVehicleSpeed( targetSpeed );
+            SpeedController::SetUserCommandedDesiredVehicleSpeed( path_[currPathSegment_].GetTargetSpeed() );
             SpeedController::SetUserCommandedAcceleration( path_[currPathSegment_].GetAccel() );
             SpeedController::SetUserCommandedDeceleration( path_[currPathSegment_].GetDecel() );
           }
 
           AnkiDebug( "PathFollower.StartPathTraversal", "Start segment %d, speed = %f, accel = %f, decel = %f",
                 currPathSegment_,
-                targetSpeed,
+                path_[currPathSegment_].GetTargetSpeed(),
                 path_[currPathSegment_].GetAccel(),
                 path_[currPathSegment_].GetDecel());
 
           SteeringController::SetPathFollowMode();
-
+         
         }
-
+      
         // Is newly-specified path from an external source?
         currentPathIsExternal_ = (path_id != 0);
-
+        
         if(currentPathIsExternal_)
         {
           // update the lastPathID and send an event that we're starting a new externally-specified path
@@ -405,7 +386,7 @@ namespace Anki
 
         // For point turns, ignore how far off we may be from the ideal point turn location
         shortestDistanceToPath_mm = 0.f;
-
+        
         return Planning::IN_SEGMENT_RANGE;
       }
 
@@ -417,12 +398,12 @@ namespace Anki
         {
           SendPathFollowingEvent(PathEventType::PATH_COMPLETED);
         }
-
+        
         // Pass in "true" to signify that we _did_ complete the path (so don't send an Interruption event, since
-        // we just sent a Completed event above).
+        // we just sent a Competed event above).
         ClearPath(true);
-
-        AnkiInfo("PathFollower.PathComplete", "");
+        
+        AnkiEvent( "PathFollower.PathComplete", "");
       }
 
 
@@ -475,16 +456,15 @@ namespace Anki
 
           // Command new speed for segment
           // (Except for point turns whose speeds are handled at the steering controller level)
-          f32 targetSpeed = GetCurrentSegmentTargetSpeed();
           if (path_[currPathSegment_].GetType() != Planning::PST_POINT_TURN) {
-            SpeedController::SetUserCommandedDesiredVehicleSpeed( targetSpeed );
+            SpeedController::SetUserCommandedDesiredVehicleSpeed( path_[currPathSegment_].GetTargetSpeed() );
             SpeedController::SetUserCommandedAcceleration( path_[currPathSegment_].GetAccel() );
             SpeedController::SetUserCommandedDeceleration( path_[currPathSegment_].GetDecel() );
           }
 #if(DEBUG_PATH_FOLLOWER)
           AnkiDebug( "PathFollower.Update.SegmentSpeed", "Segment %d, speed = %f, accel = %f, decel = %f",
                 currPathSegment_,
-                targetSpeed,
+                path_[currPathSegment_].GetTargetSpeed(),
                 path_[currPathSegment_].GetAccel(),
                 path_[currPathSegment_].GetDecel());
 #endif
@@ -544,13 +524,13 @@ namespace Anki
           AnkiWarn( "PathFollower.DriveStraight.NegativeFraction", "start: %f, end: %f", acc_start_frac, acc_end_frac);
           return false;
         }
-
+        
         acc_start_frac = MAX(acc_start_frac, 0.01f);
         acc_end_frac   = MAX(acc_end_frac,   0.01f);
-
+        
         if (!vpg.StartProfile_fixedDuration(0, currSpeed, acc_start_frac * duration_sec,
                                             dist_mm, acc_end_frac * duration_sec,
-                                            MAX_SAFE_WHEEL_SPEED_MMPS, MAX_WHEEL_ACCEL_MMPS2,
+                                            MAX_WHEEL_SPEED_MMPS, MAX_WHEEL_ACCEL_MMPS2,
                                             duration_sec, CONTROL_DT) ) {
           AnkiWarn( "PathFollower.DriveStraight.VPGFail", "");
           return false;
@@ -614,10 +594,10 @@ namespace Anki
           AnkiWarn( "PathFollower.DriveArc.NegativeFraction", "start: %f, end: %f", acc_start_frac, acc_end_frac);
           return false;
         }
-
+        
         acc_start_frac = MAX(acc_start_frac, 0.01f);
         acc_end_frac   = MAX(acc_end_frac,   0.01f);
-
+        
         if (!vpg.StartProfile_fixedDuration(0, currAngSpeed, acc_start_frac * duration_sec,
                                             sweep_rad, acc_end_frac * duration_sec,
                                             MAX_BODY_ROTATION_SPEED_RAD_PER_SEC, MAX_BODY_ROTATION_ACCEL_RAD_PER_SEC2,
@@ -687,10 +667,10 @@ namespace Anki
           AnkiWarn( "PathFollower.DrivePointTurn.NegativeFraction", "start: %f, end: %f", acc_start_frac, acc_end_frac);
           return false;
         }
-
+        
         acc_start_frac = MAX(acc_start_frac, 0.01f);
         acc_end_frac   = MAX(acc_end_frac,   0.01f);
-
+        
         if (!vpg.StartProfile_fixedDuration(0, 0, acc_start_frac * duration_sec,
                                             sweep_rad, acc_end_frac * duration_sec,
                                             MAX_BODY_ROTATION_SPEED_RAD_PER_SEC, MAX_BODY_ROTATION_ACCEL_RAD_PER_SEC2,
@@ -732,5 +712,5 @@ namespace Anki
 
 
     } // namespace PathFollower
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

@@ -23,7 +23,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   inline u32 AlphaBlend(const u32 onColor, const u32 offColor, const float alpha)
   {
     const float onRed  = GET_RED(onColor);
@@ -49,40 +49,36 @@ namespace Vector {
     u32 newColor = 0;
     
     // Check for constant color
-    if (ledParams.onPeriod_ms == std::numeric_limits<u16>::max() ||
-        (ledParams.onColor == ledParams.offColor)) {
+    if (ledParams.onFrames == 255 || (ledParams.onColor == ledParams.offColor)) {
       return ledParams.onColor;
     }
     
-    const u32 totalTime_ms = ledParams.transitionOnPeriod_ms +
-                             ledParams.onPeriod_ms +
-                             ledParams.transitionOffPeriod_ms +
-                             ledParams.offPeriod_ms;
+    const u16 totalFrames = ledParams.transitionOnFrames + ledParams.onFrames + ledParams.transitionOffFrames + ledParams.offFrames;
     
-    s32 phaseTime_ms = (currentTime - phaseTime);
+    s32 phaseFrame = (currentTime - phaseTime) / msPerFrame;
 
     // Apply the offset
-    phaseTime_ms -= ledParams.offset_ms;
+    phaseFrame -= ledParams.offset;
 
     // If it's not time to play yet (because of the offset),
     // just return the off color.
-    if (phaseTime_ms < 0) {
+    if (phaseFrame < 0) {
       return ledParams.offColor;
     }
     
     // Modulo to keep phaseFrames in [0, totalFrames)
-    phaseTime_ms %= totalTime_ms;
+    phaseFrame %= totalFrames;
     
-    if (phaseTime_ms < ledParams.transitionOnPeriod_ms) {
+    if (phaseFrame < ledParams.transitionOnFrames) {
       // In the "on transition" period
-      newColor = AlphaBlend(ledParams.onColor, ledParams.offColor, float(phaseTime_ms)/float(ledParams.transitionOnPeriod_ms));
-    } else if (phaseTime_ms < (ledParams.transitionOnPeriod_ms + ledParams.onPeriod_ms)) {
+      newColor = AlphaBlend(ledParams.onColor, ledParams.offColor, float(phaseFrame)/float(ledParams.transitionOnFrames));
+    } else if (phaseFrame < (ledParams.transitionOnFrames + ledParams.onFrames)) {
       // In the "on" period
       newColor = ledParams.onColor;
-    } else if (phaseTime_ms < (ledParams.transitionOnPeriod_ms + ledParams.onPeriod_ms + ledParams.transitionOffPeriod_ms)) {
+    } else if (phaseFrame < (ledParams.transitionOnFrames + ledParams.onFrames + ledParams.transitionOffFrames)) {
       // In the "off transition" period
-      const u16 offPhase = phaseTime_ms - (ledParams.transitionOnPeriod_ms + ledParams.onPeriod_ms);
-      newColor = AlphaBlend(ledParams.offColor, ledParams.onColor, float(offPhase)/float(ledParams.transitionOffPeriod_ms));
+      const u16 offPhase = phaseFrame - (ledParams.transitionOnFrames + ledParams.onFrames);
+      newColor = AlphaBlend(ledParams.offColor, ledParams.onColor, float(offPhase)/float(ledParams.transitionOffFrames));
     } else {
       // In the "off" period
       newColor = ledParams.offColor;
@@ -93,4 +89,4 @@ namespace Vector {
   } // GetCurrentLEDcolor()
 
 } // namespace Anki
-} // namespace Vector
+} // namespace Cozmo

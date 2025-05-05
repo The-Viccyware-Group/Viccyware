@@ -18,17 +18,13 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
 #include "engine/aiComponent/behaviorComponent/iBehavior.h"
 
-#include "util/console/consoleInterface.h"
 #include "util/logging/logging.h"
 
-#define LOG_CHANNEL "Behaviors"
-
 namespace Anki {
-namespace Vector {
-
-namespace {
-  const int kBSTickInterval = 1;
-  CONSOLE_VAR(bool, kDebugActivationState, "Behaviors.ActivationState", false);
+namespace Cozmo {
+  
+namespace{
+static const int kBSTickInterval = 1;
 }
 
 
@@ -42,16 +38,16 @@ IBehavior::IBehavior(const std::string& debugLabel)
 , _currentActivationState(ActivationState::NotInitialized)
 #endif
 {
-
+  
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::Init(BehaviorExternalInterface& behaviorExternalInterface)
 {
-  AssertActivationState_DevOnly(ActivationState::NotInitialized, "IBehavior.Init");
-  SetActivationState_DevOnly(ActivationState::OutOfScope, "IBehavior.Init");
-
+  AssertActivationState_DevOnly(ActivationState::NotInitialized);
+  SetActivationState_DevOnly(ActivationState::OutOfScope);
+  
   _beiWrapper = std::make_unique<BEIWrapper>(behaviorExternalInterface);
   InitInternal();
 }
@@ -60,20 +56,19 @@ void IBehavior::Init(BehaviorExternalInterface& behaviorExternalInterface)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::OnEnteredActivatableScope()
 {
-  AssertNotActivationState_DevOnly(ActivationState::NotInitialized, "IBehavior.OnEnteredActivatableScope");
-
+  AssertNotActivationState_DevOnly(ActivationState::NotInitialized);
+  
   _currentInScopeCount++;
   // If this isn't the first EnteredActivatableScope don't call internal functions
-  if (_currentInScopeCount != 1) {
-    if (kDebugActivationState) {
-      LOG_DEBUG("IBehavior.OnEnteredActivatableScope.AlreadyInScope",
-                "Behavior '%s' is already in scope, ignoring request to enter scope",
-                _debugLabel.c_str());
-    }
+  if(_currentInScopeCount != 1){
+    PRINT_CH_INFO("Behaviors",
+                  "IBehavior.OnEnteredActivatableScope.AlreadyInScope",
+                  "Behavior '%s' is already in scope, ignoring request to enter scope",
+                  _debugLabel.c_str());
     return;
   }
 
-  SetActivationState_DevOnly(ActivationState::InScope, "IBehavior.OnEnteredActivatableScope");
+  SetActivationState_DevOnly(ActivationState::InScope);
 
   // Update should be called immediately after entering activatable scope
   // so set the last tick count as being one tickInterval before the current tickCount
@@ -85,8 +80,8 @@ void IBehavior::OnEnteredActivatableScope()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::Update()
 {
-  AssertNotActivationState_DevOnly(ActivationState::NotInitialized, "IBehavior.Update");
-  AssertNotActivationState_DevOnly(ActivationState::OutOfScope, "IBehavior.Update");
+  AssertNotActivationState_DevOnly(ActivationState::NotInitialized);
+  AssertNotActivationState_DevOnly(ActivationState::OutOfScope);
 
   // Ensure update is ticked every tick while in activatable scope
   const size_t tickCount = BaseStationTimer::getInstance()->GetTickCount();
@@ -97,7 +92,7 @@ void IBehavior::Update()
                 tickCount,
                 _lastTickOfUpdate);
   _lastTickOfUpdate = tickCount;
-
+  
   UpdateInternal();
 }
 
@@ -105,16 +100,7 @@ void IBehavior::Update()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool IBehavior::WantsToBeActivated() const
 {
-#if ANKI_DEV_CHEATS
-  // It's possible that this behavior appears in multiple places in the tree, so it may be active when checking
-  // WantsToBeActivated.
-  DEV_ASSERT_MSG((_currentActivationState == ActivationState::Activated) ||
-                 (_currentActivationState == ActivationState::InScope),
-                 "IBehavior.WantsToBeActivated.InvalidActivationState",
-                 "Behavior '%s' in activation state '%s' should not get WantsToBeActivated call",
-                 _debugLabel.c_str(),
-                 ActivationStateToString(_currentActivationState));
-#endif
+  AssertActivationState_DevOnly(ActivationState::InScope);
   _lastTickWantsToBeActivatedCheckedOn = BaseStationTimer::getInstance()->GetTickCount();
   auto accessGuard = GetBEI().GetComponentWrapper(BEIComponentID::Delegation).StripComponent();
   return WantsToBeActivatedInternal();
@@ -124,7 +110,7 @@ bool IBehavior::WantsToBeActivated() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::OnActivated()
 {
-  AssertActivationState_DevOnly(ActivationState::InScope, "IBehavior.OnActivated");
+  AssertActivationState_DevOnly(ActivationState::InScope);
 
   const size_t tickCount = BaseStationTimer::getInstance()->GetTickCount();
   DEV_ASSERT_MSG(tickCount == _lastTickWantsToBeActivatedCheckedOn,
@@ -133,8 +119,8 @@ void IBehavior::OnActivated()
                   _debugLabel.c_str(),
                   tickCount,
                   _lastTickWantsToBeActivatedCheckedOn);
-
-  SetActivationState_DevOnly(ActivationState::Activated, "IBehavior.OnActivated");
+  
+  SetActivationState_DevOnly(ActivationState::Activated);
   OnActivatedInternal();
 }
 
@@ -142,9 +128,9 @@ void IBehavior::OnActivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::OnDeactivated()
 {
-  AssertActivationState_DevOnly(ActivationState::Activated, "IBehavior.OnDeactivated");
-
-  SetActivationState_DevOnly(ActivationState::InScope, "IBehavior.OnDeactivated");
+  AssertActivationState_DevOnly(ActivationState::Activated);
+  
+  SetActivationState_DevOnly(ActivationState::InScope);
   OnDeactivatedInternal();
 }
 
@@ -152,42 +138,38 @@ void IBehavior::OnDeactivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void IBehavior::OnLeftActivatableScope()
 {
-  AssertActivationState_DevOnly(ActivationState::InScope, "IBehavior.OnLeftActivatableScope");
-
+  AssertActivationState_DevOnly(ActivationState::InScope);
+  
   if(!ANKI_VERIFY(_currentInScopeCount != 0,
                   "", "")){
     return;
   }
   _currentInScopeCount--;
 
-  if (_currentInScopeCount != 0) {
-    if (kDebugActivationState) {
-      LOG_DEBUG("IBehavior.OnLeftActivatableScope.StillInScope",
-                "There's still an in scope count of %d on %s",
-                _currentInScopeCount,
-                _debugLabel.c_str());
-    }
+  if(_currentInScopeCount != 0){
+    PRINT_CH_INFO("Behaviors",
+                  "IBehavior.OnLeftActivatableScope.StillInScope",
+                  "There's still an in scope count of %d on %s",
+                  _currentInScopeCount,
+                  _debugLabel.c_str());
     return;
   }
-
-
-  SetActivationState_DevOnly(ActivationState::OutOfScope, "IBehavior.OnLeftActivatableScope");
+  
+  
+  SetActivationState_DevOnly(ActivationState::OutOfScope);
   OnLeftActivatableScopeInternal();
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void IBehavior::SetActivationState_DevOnly(ActivationState state, const std::string& debugStr)
+void IBehavior::SetActivationState_DevOnly(ActivationState state)
 {
-  if (kDebugActivationState) {
-    PRINT_CH_DEBUG("Behaviors",
-                   "IBehavior.SetActivationState",
-                   "%s: Behavior '%s' Activation state set to %s",
-                   debugStr.c_str(),
-                   _debugLabel.c_str(),
-                   ActivationStateToString(state));
-  }
-
+  PRINT_CH_DEBUG("Behaviors",
+                 "IBehavior.SetActivationState",
+                 "%s: Activation state set to %s",
+                 _debugLabel.c_str(),
+                 ActivationStateToString(state).c_str());
+  
   #if ANKI_DEV_CHEATS
     _currentActivationState = state;
   #endif
@@ -195,45 +177,42 @@ void IBehavior::SetActivationState_DevOnly(ActivationState state, const std::str
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void IBehavior::AssertActivationState_DevOnly(ActivationState state, const std::string& debugStr) const
+void IBehavior::AssertActivationState_DevOnly(ActivationState state) const
 {
   #if ANKI_DEV_CHEATS
   DEV_ASSERT_MSG(_currentActivationState == state,
                  "IBehavior.AssertActivationState_DevOnly.WrongActivationState",
-                 "%s: Behavior '%s' is state %s, but should be in %s",
-                 debugStr.c_str(),
+                 "Behavior '%s' is state %s, but should be in %s",
                  _debugLabel.c_str(),
-                 ActivationStateToString(_currentActivationState),
-                 ActivationStateToString(state));
+                 ActivationStateToString(_currentActivationState).c_str(),
+                 ActivationStateToString(state).c_str());
   #endif
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void IBehavior::AssertNotActivationState_DevOnly(ActivationState state, const std::string& debugStr) const
+void IBehavior::AssertNotActivationState_DevOnly(ActivationState state) const
 {
   #if ANKI_DEV_CHEATS
   DEV_ASSERT_MSG(_currentActivationState != state,
                  "IBehavior.AssertNotActivationState_DevOnly.WrongActivationState",
-                 "%s: Behavior '%s' is state %s, but should not be",
-                 debugStr.c_str(),
+                 "Behavior '%s' is state %s, but should not be",
                  _debugLabel.c_str(),
-                 ActivationStateToString(_currentActivationState));
+                 ActivationStateToString(_currentActivationState).c_str());
   #endif
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const char * IBehavior::ActivationStateToString(ActivationState state) const
+std::string IBehavior::ActivationStateToString(ActivationState state) const
 {
-  switch (state) {
+  switch(state){
     case ActivationState::NotInitialized : return "NotInitialized";
     case ActivationState::OutOfScope     : return "OutOfScope";
     case ActivationState::Activated      : return "Activated";
     case ActivationState::InScope        : return "InScope";
   }
-  return "Invalid";
 }
-
-} // namespace Vector
+  
+} // namespace Cozmo
 } // namespace Anki

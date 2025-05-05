@@ -16,113 +16,30 @@
 
 #include "coretech/messaging/shared/LocalUdpClient.h"
 #include "coretech/messaging/shared/LocalUdpServer.h"
-#include "coretech/messaging/shared/SocketUtils.h"
-#include "coretech/messaging/shared/socketConstants.h"
-#include "util/histogram/histogram.h"
 #include "util/logging/logging.h"
 
-#include <thread>
 #include <stdio.h>
 
 // Log options
-#define LOG_CHANNEL "AnimComms"
+#define LOG_CHANNEL                    "AnimComms"
 
 // Trace options
 // #define LOG_TRACE(name, format, ...)   LOG_DEBUG(name, format, ##__VA_ARGS__)
 #define LOG_TRACE(name, format, ...)   {}
 
-#if ANKI_PROFILE_ANIMCOMMS_SOCKET_BUFFER_STATS
-namespace
-{
-  using Histogram = Anki::Util::Histogram;
-  using HistogramPtr = std::unique_ptr<Histogram>;
-
-  typedef struct SocketBufferStats {
-    HistogramPtr _incoming;
-    HistogramPtr _outgoing;
-  } SocketBufferStats;
-
-  SocketBufferStats _robotStats;
-  SocketBufferStats _engineStats;
-
-}
-#endif
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace AnimComms {
 
 namespace { // "Private members"
 
+  // For comms with engine
   LocalUdpServer _engineComms;
 
   // For comms with robot
   LocalUdpClient _robotComms;
 }
 
-
-#if ANKI_PROFILE_ANIMCOMMS_SOCKET_BUFFER_STATS
-
-void InitSocketBufferStats(SocketBufferStats & stats)
-{
-  constexpr int64_t lowest = 1;
-  constexpr int64_t highest = 256*1024;
-  constexpr int significant_figures = 3;
-  stats._incoming = std::make_unique<Histogram>(lowest, highest, significant_figures);
-  stats._outgoing = std::make_unique<Histogram>(lowest, highest, significant_figures);
-}
-
-void InitSocketBufferStats()
-{
-  InitSocketBufferStats(_robotStats);
-  InitSocketBufferStats(_engineStats);
-}
-
-void UpdateSocketBufferStats(SocketBufferStats & stats, int socket)
-{
-  if (socket >= 0) {
-    const auto incoming = Anki::Messaging::GetIncomingSize(socket);
-    DEV_ASSERT(incoming >= 0, "AnimComms.UpdateSocketBufferStats.InvalidIncoming");
-    if (incoming >= 0) {
-      stats._incoming->Record(incoming);
-    }
-    const auto outgoing = Anki::Messaging::GetOutgoingSize(socket);
-    DEV_ASSERT(outgoing >= 0, "AnimComms.UpdateSocketBufferStats.InvalidOutgoing");
-    if (outgoing >= 0) {
-      stats._outgoing->Record(outgoing);
-    }
-  }
-}
-
-void UpdateSocketBufferStats()
-{
-  UpdateSocketBufferStats(_robotStats, _robotComms.GetSocket());
-  UpdateSocketBufferStats(_engineStats, _engineComms.GetSocket());
-}
-
-
-void ReportSocketBufferStats(const std::string & name, const HistogramPtr & histogram)
-{
-  const int64_t min = histogram->GetMin();
-  const int64_t mean = histogram->GetMean();
-  const int64_t max = histogram->GetMax();
-
-  LOG_INFO("AnimComms.ReportSocketBufferStats", "%s = %lld/%lld/%lld", name.c_str(), min, mean, max);
-}
-
-void ReportSocketBufferStats(const std::string & name, const SocketBufferStats & stats)
-{
-  ReportSocketBufferStats(name + ".incoming", stats._incoming);
-  ReportSocketBufferStats(name + ".outgoing", stats._outgoing);
-}
-
-void ReportSocketBufferStats()
-{
-  ReportSocketBufferStats("robot", _robotStats);
-  ReportSocketBufferStats("engine", _engineStats);
-}
-
-#endif
 
 Result InitRobotComms()
 {
@@ -229,7 +146,7 @@ u32 GetNextPacketFromEngine(u8* buffer, u32 max_length)
   return (u32) dataLen;
 }
 
-
+  
 bool SendPacketToRobot(const void *buffer, const u32 length)
 {
   if (!_robotComms.IsConnected()) {
@@ -257,10 +174,10 @@ u32 GetNextPacketFromRobot(u8* buffer, u32 max_length)
     DisconnectRobot();
     return 0;
   }
-
+    
   return (u32) dataLen;
 }
 
 } // namespace AnimComms
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

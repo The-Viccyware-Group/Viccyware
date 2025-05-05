@@ -229,9 +229,9 @@ AssignmentStatus AnkiLab::ActivateExperimentInternal(const std::string& experime
   }
 
   // If we already have an assignment restored from our profile, use that
-  AssignmentDef* existingAssignment = FindAssignment(_activeAssignments, experimentKey, userId);
-  if (nullptr != existingAssignment) {
-    outVariationKey = existingAssignment->GetVariation_key();
+  AssignmentDef* existingAssigment = FindAssignment(_activeAssignments, experimentKey, userId);
+  if (nullptr != existingAssigment) {
+    outVariationKey = existingAssigment->GetVariation_key();
     return AssignmentStatus::Assigned;
   }
 
@@ -296,12 +296,18 @@ void AnkiLab::ReportExperimentAssignmentResult(const AssignmentDef& assignment,
       (status == AssignmentStatus::ExperimentNotFound) ||
       (status == AssignmentStatus::VariantNotFound)){
     std::string statusInfo = versionString + ":" + statusString;
-    LOG_WARNING("AnkiLab.experiment.invalid",
-                "%s:%s:%s - %s",
-                experimentKey.c_str(),
-                assignment.GetVariation_key().c_str(),
-                assignment.GetUser_id().c_str(),
-                statusInfo.c_str());
+    Anki::Util::sWarning("experiment.invalid", {
+      { "$user", assignment.GetUser_id().c_str() },
+      { DGROUP , assignment.GetVariation_key().c_str() },
+      { DDATA  , statusInfo.c_str() }
+    }, experimentKey.c_str());
+
+    LOG_DEBUG("AnkiLab.experiment.invalid",
+              "%s:%s:%s - %s",
+              experimentKey.c_str(),
+              assignment.GetVariation_key().c_str(),
+              assignment.GetUser_id().c_str(),
+              statusInfo.c_str());
     return;
   }
 
@@ -321,7 +327,7 @@ void AnkiLab::ReportExperimentAssignmentResult(const AssignmentDef& assignment,
       (status == AssignmentStatus::ExperimentNotRunning) ||
       (status == AssignmentStatus::Unassigned)){
     // assignment criteria not met
-    Anki::Util::sInfo("experiment.unassigned", {
+    Anki::Util::sEvent("experiment.unassigned", {
       { "$user", assignment.GetUser_id().c_str() },
       { DGROUP , assignment.GetVariation_key().c_str() },
       { DDATA  , info.c_str() }
@@ -334,7 +340,7 @@ void AnkiLab::ReportExperimentAssignmentResult(const AssignmentDef& assignment,
               assignment.GetUser_id().c_str(),
               info.c_str());
   } else {
-    Anki::Util::sInfo("experiment.assigned", {
+    Anki::Util::sEvent("experiment.assigned", {
       { "$user", assignment.GetUser_id().c_str() },
       { DGROUP , variation->GetKey().c_str() },
       { DDATA  , info.c_str() }

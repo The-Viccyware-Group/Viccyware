@@ -4,14 +4,14 @@
 #include "clad/types/animationEvents.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 AnimTrackFlag {
   NO_TRACKS = 0,
   HEAD_TRACK = 0x01,
   LIFT_TRACK = 0x02,
   BODY_TRACK = 0x04,
-  FACE_TRACK = 0x08,
+  FACE_IMAGE_TRACK = 0x08,
   EVENT_TRACK = 0x10,
   BACKPACK_LIGHTS_TRACK = 0x20,
   AUDIO_TRACK = 0x40,
@@ -25,5 +25,5 @@ enum int_32 AnimConstants
   NUM_TRACKS            = 8
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

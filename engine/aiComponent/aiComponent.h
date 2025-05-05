@@ -26,9 +26,23 @@
 #include <string>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
+// Forward declarations
+class AIInformationAnalyzer;
+class AIWhiteboard;
+class BEIRobotInfo;
+class BehaviorComponent;
 class BehaviorContainer;
+class ContinuityComponent;
+class FaceSelectionComponent;
+class FreeplayDataTracker;
+class ObjectInteractionInfoCache;
+class PuzzleComponent;
+class Robot;
+class TemplatedImageCache;
+class TimerUtility;
+
 
 // AIComponent is updated at the robot component level, same as BehaviorComponent
 // Therefore BCComponents (which are managed by BehaviorComponent) can't declare dependencies on AIComponent
@@ -45,31 +59,23 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override final;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override final;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::Animation); // referenced by UserIntentComponent in its Init
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
-    dependencies.insert(RobotComponentID::CubeComms);
-    dependencies.insert(RobotComponentID::DataAccessor);
-    dependencies.insert(RobotComponentID::FaceWorld);
-    dependencies.insert(RobotComponentID::MicComponent);
-    dependencies.insert(RobotComponentID::MoodManager);
-    dependencies.insert(RobotComponentID::NVStorage);
-    dependencies.insert(RobotComponentID::Vision);
-    dependencies.insert(RobotComponentID::VariableSnapshotComponent);
-    dependencies.insert(RobotComponentID::RobotStatsTracker);
+    dependencies.insert(RobotComponentID::CozmoContext);
   };
-  virtual void UpdateDependent(const RobotCompMap& dependentComps) override;
+  virtual void UpdateDependent(const RobotCompMap& dependentComponents) override;
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {
     dependencies.insert(RobotComponentID::BlockTapFilter);
     dependencies.insert(RobotComponentID::BlockWorld);
     dependencies.insert(RobotComponentID::CliffSensor);
     dependencies.insert(RobotComponentID::FaceWorld);
+    dependencies.insert(RobotComponentID::Inventory);
     dependencies.insert(RobotComponentID::Map);
     dependencies.insert(RobotComponentID::Movement);
     dependencies.insert(RobotComponentID::MoodManager);
     dependencies.insert(RobotComponentID::PetWorld);
     dependencies.insert(RobotComponentID::ProxSensor);
+    dependencies.insert(RobotComponentID::RobotIdleTimeout);
     dependencies.insert(RobotComponentID::TouchSensor);
     dependencies.insert(RobotComponentID::Vision);
     dependencies.insert(RobotComponentID::VisionScheduleMediator);
@@ -80,7 +86,6 @@ public:
   using UnreliableComponent<BCComponentID>::GetInitDependencies;
   using UnreliableComponent<BCComponentID>::UpdateDependent;
   using UnreliableComponent<BCComponentID>::GetUpdateDependencies;
-  using UnreliableComponent<BCComponentID>::IsComponentValid;
   //////
   // end IDependencyManagedComponent functions
   //////
@@ -90,10 +95,10 @@ public:
   // Components
   ////////////////////////////////////////////////////////////////////////////////
   template<typename T>
-  T& GetComponent() const {assert(_aiComponents); return _aiComponents->GetComponent<T>();}
+  T& GetComponent() const {assert(_aiComponents); return _aiComponents->GetValue<T>();}
 
   template<typename T>
-  T* GetComponentPtr() const {assert(_aiComponents); return _aiComponents->GetComponentPtr<T>();}
+  T* GetBasePtr() const {assert(_aiComponents); return _aiComponents->GetBasePtr<T>();}
 
   #if ANKI_DEV_CHEATS
   // For test only
@@ -106,14 +111,13 @@ public:
 
   void OnRobotDelocalized();
   void OnRobotRelocalized();
-  void OnRobotWakeUp();
 
   ////////////////////////////////////////////////////////////////////////////////
   // Accessors
   ////////////////////////////////////////////////////////////////////////////////
 
   inline bool IsSuddenObstacleDetected() const { return _suddenObstacleDetected; }
-  
+
 private:
   Robot* _robot = nullptr;
   using EntityType = DependencyManagedEntity<AIComponentID>;

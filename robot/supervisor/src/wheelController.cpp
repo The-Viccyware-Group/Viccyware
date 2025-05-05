@@ -16,7 +16,7 @@
 #define DEBUG_WHEEL_CONTROLLER 0
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
   namespace WheelController {
 
     // private members
@@ -49,14 +49,28 @@ namespace Anki {
       f32 filterWheelSpeedL_ = 0.f;
       f32 filterWheelSpeedR_ = 0.f;
 
+      // Whether we're in coast mode (not actively running wheel controllers)
+      bool coastMode_ = true;
+
+      // One-shot coast-until-stop flag
+      bool coastUntilStop_ = false;
+
       // Integral gain sums for wheel controllers
       f32 error_sumL_ = 0;
       f32 error_sumR_ = 0;
 
       // Whether or not controller should run
       bool enable_ = true;
+      
+      TimeStamp_t lastMovedTime_ = 0;
+      
+      // Amount of time the wheels have stopped moving for before the wheels
+      // are externally considered to have stopped moving.
+      const u32 HAS_STOPPED_MOVING_THRESHOLD_MS = 200;
 
     } // private namespace
+
+    inline void DoCoastUntilStop() {coastUntilStop_ = true;}
 
     // Resets the integral gain sums
     void ResetIntegralGainSums(void);
@@ -77,15 +91,14 @@ namespace Anki {
     void Disable()
     {
       if(enable_) {
-        SetDesiredWheelSpeeds(0.f, 0.f);
-        ResetIntegralGainSums();
+        enable_ = false;
 
+        ResetIntegralGainSums();
         power_l_ = 0.f;
         power_r_ = 0.f;
+
         HAL::MotorSetPower(MotorID::MOTOR_LEFT_WHEEL, power_l_);
         HAL::MotorSetPower(MotorID::MOTOR_RIGHT_WHEEL, power_r_);
-
-        enable_ = false;
       }
     }
 
@@ -118,11 +131,8 @@ namespace Anki {
     //Run the wheel controller
     void Run()
     {
-      const bool skipActiveControl = NEAR_ZERO(desiredWheelSpeedL_) &&
-                                     NEAR_ZERO(desiredWheelSpeedR_) &&
-                                     !AreWheelsPowered();
-
-      if(!skipActiveControl) {
+      if(1) {
+//      if(!coastMode_ && !coastUntilStop_) {
 
 #if(DEBUG_WHEEL_CONTROLLER)
         AnkiDebug( "WheelController", "speeds: %f (L), %f (R)   (Curr: %d, %d)",
@@ -157,36 +167,30 @@ namespace Anki {
          }
          */
 
-        
-        // Don't power in the opposite direction of the current desired speed,
-        // otherwise encoder position will update with the wrong sign.
-        // The wheel is sufficiently damped that you shouldn't need to apply
-        // opposing power to slow down quickly.
-        if (ABS(desiredWheelSpeedL_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
-          power_l_ = 0.f;
-          error_sumL_ = 0.f;
-        } else if (desiredWheelSpeedL_ > WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
-          power_l_ = CLIP(outl, 0.f, HAL::MOTOR_MAX_POWER);
-        } else {
-          power_l_ = CLIP(outl, -HAL::MOTOR_MAX_POWER, 0.f);
+        power_l_ = CLIP(outl, -HAL::MOTOR_MAX_POWER, HAL::MOTOR_MAX_POWER);
+        power_r_ = CLIP(outr, -HAL::MOTOR_MAX_POWER, HAL::MOTOR_MAX_POWER);
+
+
+        // If considered stopped, force stop
+        if (ABS(desiredWheelSpeedL_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S && ABS(measuredWheelSpeedL_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
+          power_l_ = 0;
+          error_sumL_ = 0;
         }
 
-        if (ABS(desiredWheelSpeedR_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
-          power_r_ = 0.f;
-          error_sumR_ = 0.f;
-        } else if (desiredWheelSpeedR_ > WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
-          power_r_ = CLIP(outr, 0.f, HAL::MOTOR_MAX_POWER);
-        } else {
-          power_r_ = CLIP(outr, -HAL::MOTOR_MAX_POWER, 0.f);
+
+        // If considered stopped, force stop
+        if (ABS(desiredWheelSpeedR_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S && ABS(measuredWheelSpeedR_) <= WHEEL_SPEED_COMMAND_STOPPED_MM_S) {
+          power_r_ = 0;
+          error_sumR_ = 0;
         }
 
         //Sum the error (integrate it). But ONLY, if we are not commading max output already
         //This should prevent the integral term to become to huge
-        if (ABS(power_l_) < Vector::HAL::MOTOR_MAX_POWER) {
+        if (ABS(power_l_) < Cozmo::HAL::MOTOR_MAX_POWER) {
           error_sumL_ = error_sumL_ + errorL;
           error_sumL_ = CLIP(error_sumL_, -MAX_ERROR_SUM_LEFT,MAX_ERROR_SUM_LEFT);
         }
-        if (ABS(power_r_) < Vector::HAL::MOTOR_MAX_POWER) {
+        if (ABS(power_r_) < Cozmo::HAL::MOTOR_MAX_POWER) {
           error_sumR_ = error_sumR_ + errorR;
           error_sumR_ = CLIP(error_sumR_, -MAX_ERROR_SUM_RIGHT,MAX_ERROR_SUM_RIGHT);
         }
@@ -196,6 +200,12 @@ namespace Anki {
         power_r_ = 0;
         error_sumL_ = 0;
         error_sumR_ = 0;
+
+        // Cancel coast until stop if we've stopped.
+        if (coastUntilStop_ &&
+            measuredWheelSpeedL_ == 0 && measuredWheelSpeedR_ == 0) {
+          coastUntilStop_ = FALSE;
+        }
       }
 
 #if(DEBUG_WHEEL_CONTROLLER)
@@ -206,6 +216,11 @@ namespace Anki {
       HAL::MotorSetPower(MotorID::MOTOR_LEFT_WHEEL, power_l_);
       HAL::MotorSetPower(MotorID::MOTOR_RIGHT_WHEEL, power_r_);
 
+      // Update last moved time
+      if (!(NEAR_ZERO(filterWheelSpeedL_) && NEAR_ZERO(filterWheelSpeedR_))) {
+        lastMovedTime_ = HAL::GetTimeStamp();
+      }
+
     } // Run()
 
 
@@ -214,8 +229,8 @@ namespace Anki {
     void EncoderSpeedFilterIteration(void)
     {
       // Get encoder speed measurements
-      measuredWheelSpeedL_ = Vector::HAL::MotorGetSpeed(MotorID::MOTOR_LEFT_WHEEL);
-      measuredWheelSpeedR_ = Vector::HAL::MotorGetSpeed(MotorID::MOTOR_RIGHT_WHEEL);
+      measuredWheelSpeedL_ = Cozmo::HAL::MotorGetSpeed(MotorID::MOTOR_LEFT_WHEEL);
+      measuredWheelSpeedR_ = Cozmo::HAL::MotorGetSpeed(MotorID::MOTOR_RIGHT_WHEEL);
 
       filterWheelSpeedL_ = (measuredWheelSpeedL_ *
                        (1.0f - ENCODER_FILTERING_COEFF) +
@@ -264,14 +279,8 @@ namespace Anki {
     //Set the wheel speeds in mm/sec
     void SetDesiredWheelSpeeds(f32 leftws, f32 rightws)
     {
-      if (enable_) {
-        desiredWheelSpeedL_ = leftws;
-        desiredWheelSpeedR_ = rightws;
-      } else {
-        AnkiDebug("WheelController.SetDesiredWheelSpeeds.Disabled", 
-                  "Ignoring speeds %f and %f while disabled",
-                  leftws, rightws);
-      }
+      desiredWheelSpeedL_ = leftws;
+      desiredWheelSpeedR_ = rightws;
     }
 
     //This function will command a wheel speed to the left and right wheel so that the vehicle follows a trajectory
@@ -292,6 +301,18 @@ namespace Anki {
       SetDesiredWheelSpeeds( (s16)leftspeed, (s16)rightspeed);
     }
 
+
+    // Whether the wheel controller should be coasting (not actively trying to run
+    // wheel controllers
+    void SetCoastMode(const bool isOn)
+    {
+      coastMode_ = isOn;
+
+      if(coastMode_) {
+        ResetIntegralGainSums();
+      }
+    }
+
     bool AreWheelsPowered()
     {
       return (power_l_ != 0 || power_r_ != 0);
@@ -299,7 +320,7 @@ namespace Anki {
 
     bool AreWheelsMoving()
     {
-      return !NEAR_ZERO(filterWheelSpeedL_) || !NEAR_ZERO(filterWheelSpeedR_);
+      return (HAL::GetTimeStamp() - lastMovedTime_) < HAS_STOPPED_MOVING_THRESHOLD_MS;
     }
 
     void ResetIntegralGainSums(void)
@@ -309,5 +330,5 @@ namespace Anki {
     }
 
   } // namespace WheelController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

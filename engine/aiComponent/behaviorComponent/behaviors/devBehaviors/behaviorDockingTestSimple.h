@@ -29,21 +29,14 @@
 #include "clad/robotInterface/messageRobotToEngine.h"
 #include "clad/robotInterface/messageRobotToEngine_hash.h"
 #include "coretech/common/engine/objectIDs.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 #include "coretech/vision/engine/visionMarker.h"
+#include "clad/externalInterface/messageEngineToGame.h"
 #include "util/fileUtils/fileUtils.h"
 #include "util/logging/rollingFileLogger.h"
 #include <fstream>
 
 namespace Anki {
-namespace Vector {
-  
-namespace ExternalInterface {
-  struct RobotObservedObject;
-  struct RobotStopped;
-  struct RobotCompletedAction;
-  struct RobotToEngine;
-}
+namespace Cozmo {
 
 class BehaviorDockingTestSimple : public ICozmoBehavior
 {
@@ -114,7 +107,7 @@ private:
     bool didHM;
     bool failedCurrentAttempt;
 
-    RobotTimeStamp_t attemptStartTime;
+    TimeStamp_t attemptStartTime;
     Pose3d      initialRobotPose;
     Pose3d      initialCubePose;
   };
@@ -156,7 +149,7 @@ private:
   void Write(const std::string& s);
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorDockingTest_H__

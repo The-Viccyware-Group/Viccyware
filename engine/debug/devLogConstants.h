@@ -14,7 +14,7 @@
 #define __Cozmo_Basestation_Debug_DevLogConstants_H__
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace DevLogConstants {
 static constexpr int kNumLogTimestampDigits = 7;

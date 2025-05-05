@@ -13,73 +13,52 @@
 #ifndef __Engine_Behaviors_BehaviorProceduralClock_H__
 #define __Engine_Behaviors_BehaviorProceduralClock_H__
 
-#include "clad/types/compositeImageTypes.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "engine/smartFaceId.h"
 
-
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorProceduralClock : public ICozmoBehavior
 {
 public:
+  // digits of display - numbered left to right
+  enum class DigitID{
+    DigitOne = 0,
+    DigitTwo,
+    DigitThree,
+    DigitFour,
+    Count
+  };
 
-  // Determine the digit to put in a given sprite box
-  // offset specifies a time offset so that values can be pre-computed 
-  using GetDigitsFunction = std::function<std::map<Vision::SpriteBoxName, int>(const int offset)>;
-  
+
   // Specify how each digit on the face should be calculated - must set all 4 values in map
-  void SetGetDigitFunction(GetDigitsFunction&& function);
+  void SetDigitFunctions(std::map<DigitID, std::function<int()>>&& functions);
   // Specify a callback which should be called when the clock is shown on the robot's face
   void SetShowClockCallback(std::function<void()>&& callback)
   {
     _instanceParams.showClockCallback = callback;
   }
 
-  float GetTimeDisplayClock_sec() const { return _instanceParams.totalTimeDisplayClock_sec;}
-
-
 protected:
   // Enforce creation through BehaviorFactory
   friend class BehaviorFactory;  
   BehaviorProceduralClock(const Json::Value& config);
-  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override final {
+  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{
     modifiers.behaviorAlwaysDelegates = false;
     modifiers.wantsToBeActivatedWhenOffTreads = true;
-    GetBehaviorOperationModifiersProceduralClock(modifiers);
   }
+  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
 
-  virtual void GetBehaviorOperationModifiersProceduralClock(BehaviorOperationModifiers& modifiers) const {}
-
-  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override final;
-  virtual void GetBehaviorJsonKeysInternal(std::set<const char*>& expectedKeys) const {};
-
-  virtual void OnBehaviorActivated() override final;
+  virtual void OnBehaviorActivated() override;
   virtual void InitBehavior() override;
-  virtual void BehaviorUpdate() override final;
+  virtual void BehaviorUpdate() override;
   virtual bool WantsToBeActivatedBehavior() const override { return true;}
-
-  virtual bool ShouldDimLeadingZeros() const { return true; }
 
   void TransitionToTurnToFace();
   void TransitionToGetIn();
   void TransitionToShowClock();
   void TransitionToGetOut();
-
-  // Override to display clock differently
-  // Default behavior is to update the clock once per second for the length of display clock
-  virtual void TransitionToShowClockInternal();
-
-  void SetTimeDisplayClock_sec(float displayTime_sec) { _instanceParams.totalTimeDisplayClock_sec = displayTime_sec;}
-
-  // Function which builds and displays the proceduralClock - adds the 4 core digits on top
-  // of any quadrant images passed into the function
-  void BuildAndDisplayProceduralClock(const int clockOffset_s = 0, const int displayOffset_ms = 0);
-  
-  void AddKeyFramesForOffset(const int clockOffset_s = 0, const int displayTime_ms = 0);
-
-  void DisplayClock();
 
 private:
   enum class BehaviorState{
@@ -89,37 +68,46 @@ private:
     GetOut,
   };
 
+
   struct InstanceParams{
-    // User facing properties
+    Json::Value templateJSON;
+    std::map<std::string, std::string> staticElements;
+    // TODO: transition these maps to fullyEnumeratedArrays
+    std::map<DigitID, std::string> digitToTemplateMap;
+    std::map<DigitID, std::function<int()>> getDigitFunctions; 
+    std::map<int, std::string> intsToImages;
     AnimationTrigger getInAnim;
     AnimationTrigger getOutAnim;
+    int totalTimeDisplayClock;
     bool shouldTurnToFace = false;
-    Json::Value layout;
-    float totalTimeDisplayClock_sec;
-    bool shouldPlayAudioOnClockUpdates = true;
-
-    // Playback properties
-    GetDigitsFunction getDigitFunction;
     std::function<void()> showClockCallback; 
   };
 
   struct LifetimeParams{
+    int timeShowClockStarted = 0;
+    int nextUpdateTime_s = 0;
     BehaviorState currentState = BehaviorState::TurnToFace;
     SmartFaceID targetFaceID;
-    bool hasBaseImageBeenSent = false;
-    std::vector<Vision::SpriteBoxKeyFrame> keyFrames;
-    std::vector<int> audioTickTimes;
   };
 
+  
   InstanceParams _instanceParams;
   LifetimeParams _lifetimeParams;
+
+  DigitID StringToDigitID(const std::string& str);
+  // Function which builds and displays the timer - adds the 4 core digits on top
+  // of any quadrant images passed into the function
+  void BuildAndDisplayTimer(std::map<std::string, std::string>& quadrantMap);
 
   // Updates the target face within lifetime params - returns the member face for checking success inline
   SmartFaceID UpdateTargetFace();
 
+
+
+
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

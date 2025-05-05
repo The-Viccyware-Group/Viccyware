@@ -27,7 +27,7 @@ namespace Planning{
   
 }
 
-namespace Vector {
+namespace Cozmo {
   
 //Forward Declaration
 class Robot;
@@ -53,7 +53,7 @@ private:
 }; // class DrivePathAction
   
   
-} // namespace Vector
+} // namespace Cozmo
 }// namespace Anki
 
 #endif // __Anki_Cozmo_Actions_DrivePathAction_H__

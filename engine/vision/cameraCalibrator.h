@@ -13,27 +13,29 @@
 #ifndef __Cozmo_Basestation_Vision_CameraCalibrator_H__
 #define __Cozmo_Basestation_Vision_CameraCalibrator_H__
 
-#include "coretech/common/shared/math/rect_fwd.h"
+#include "coretech/common/engine/math/rect.h"
 
 #include "coretech/vision/engine/cameraCalibration.h"
-#include "coretech/vision/engine/compressedImage.h"
-#include "coretech/vision/engine/debugImageList.h"
 #include "coretech/vision/engine/image.h"
 #include "coretech/vision/engine/visionMarker.h"
 #include "coretech/vision/shared/MarkerCodeDefinitions.h"
 
 #include "coretech/common/shared/types.h"
 
+#include "engine/debugImageList.h"
+
 #include <set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
+ 
+class VisionSystem;
  
 class CameraCalibrator
 {
 public:
   
-  CameraCalibrator();
+  CameraCalibrator(VisionSystem& visionSystem);
   ~CameraCalibrator();
   
   // Enum of various supported calibration targets
@@ -46,14 +48,14 @@ public:
   // Computes camera calibration using stored images of checkerboard target
   // Outputs calibrations and debugImages via reference and returns whether or not calibration succeeded
   Result ComputeCalibrationFromCheckerboard(std::list<Vision::CameraCalibration>& calibration_out,
-                                            Vision::DebugImageList<Vision::CompressedImage>& debugImages_out);
+                                            DebugImageList<Vision::ImageRGB>& debugImageRGBs_out);
   
   // Computes camera calibration using observed markers on either the INVERTED_BOX or QBERT target
   // Outputs calibrations and debugImages via reference and returns whether or not calibration succeeded
   Result ComputeCalibrationFromSingleTarget(CalibTargetType targetType,
                                             const std::list<Vision::ObservedMarker>& observedMarkers,
                                             std::list<Vision::CameraCalibration>& calibration_out,
-                                            Vision::DebugImageList<Vision::CompressedImage>& debugImages_out);
+                                            DebugImageList<Vision::ImageRGB>& debugImageRGBs_out);
   
   // Add an image to be stored for calibration along with a region of interest
   Result AddCalibrationImage(const Vision::Image& calibImg, const Anki::Rectangle<s32>& targetROI);
@@ -96,6 +98,8 @@ private:
                                              std::set<Vision::MarkerType>& markersNeededToBeSeen);
   void GetCalibTargetMarkersTo3dCoords_InvertedBox(std::map<Vision::MarkerType, Quad3f>& markersTo3dCoords,
                                                    std::set<Vision::MarkerType>& markersNeededToBeSeen);
+
+  VisionSystem& _visionSystem;
 
   std::vector<CalibImage> _calibImages;
   std::vector<Pose3d>     _calibPoses;

@@ -15,30 +15,48 @@
 
 #include "engine/actionableObject.h"
 
-#include "coretech/common/engine/math/quad.h"
- 
+#include "coretech/common/engine/math/quad_impl.h"
+#include "coretech/common/engine/math/point_impl.h"
+
 #include "util/math/math.h"
 
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
         
-    ActionableObject::ActionableObject(const ObjectType& type)
-    : Vector::ObservableObject(type)
+    ActionableObject::ActionableObject()
     {
+      
     }
     
     bool ActionableObject::IsPreActionPoseValid(const PreActionPose& preActionPose,
+                                                const Pose3d* reachableFromPose,
                                                 const std::vector<std::pair<Quad2f,ObjectID> >& obstacles) const
     {
       const Pose3d checkPose = preActionPose.GetPose().GetWithRespectToRoot();
       
-      // Allow any rotation around Z, but none around X/Y, in order to keep
-      // vertically-oriented poses
-      const f32 vertAlignThresh = 1.f - std::cos(PreActionPose::ANGLE_TOLERANCE); // TODO: tighten?
-      bool isValid = NEAR(checkPose.GetRotationMatrix()(2,2), 1.f, vertAlignThresh);
-    
+      bool isValid = true;
+      
+      // Overloaded validity checks may use reachableFromPose, but for now, we're
+      // going to disable the default check based on height
+      /* TODO: Consider re-enabling default reachability check
+      if(reachableFromPose != nullptr) {
+        // Pose should be at ground height or it's not reachable. Let the threshold
+        // vary with the distance from the pre-action pose to the object.
+        isValid = NEAR(checkPose.GetTranslation().z(),
+                       reachableFromPose->GetWithRespectToRoot().GetTranslation().z(),
+                       preActionPose.GetHeightTolerance());
+      }
+       */
+      
+      if(isValid) {
+        // Allow any rotation around Z, but none around X/Y, in order to keep
+        // vertically-oriented poses
+        const f32 vertAlignThresh = 1.f - std::cos(PreActionPose::ANGLE_TOLERANCE); // TODO: tighten?
+        isValid = NEAR(checkPose.GetRotationMatrix()(2,2), 1.f, vertAlignThresh);
+      }
+      
       if(isValid && !obstacles.empty()) {
         // Cheap hack for now (until we use the planner to do this check for us):
         //   Walk a straight line from this preActionPose to the parent object
@@ -145,6 +163,7 @@ namespace Anki {
                                                     const std::set<PreActionPose::ActionType>& withAction,
                                                     const std::set<Vision::Marker::Code>& withCode,
                                                     const std::vector<std::pair<Quad2f,ObjectID> >& obstacles,
+                                                    const Pose3d* reachableFromPose,
                                                     const f32 offset_mm,
                                                     bool visualize) const
     {
@@ -232,7 +251,7 @@ namespace Anki {
             currentPose = newPose;
           }
           
-          if(IsPreActionPoseValid(currentPose, obstacles)) {
+          if(IsPreActionPoseValid(currentPose, reachableFromPose, obstacles)) {
             preActionPoses.emplace_back(currentPose);
             
             // Draw the preActionLines in viz
@@ -263,7 +282,7 @@ namespace Anki {
     }
     
     void ActionableObject::VisualizePreActionPoses(const std::vector<std::pair<Quad2f,ObjectID> >& obstacles,
-                                                   const Pose3d& robotPose) const
+                                                   const Pose3d* reachableFrom) const
     {
       // Draw the pre-action poses, using a different color for each type of action
       u32 poseID = 0;
@@ -271,15 +290,15 @@ namespace Anki {
       
       for(PreActionPose::ActionType actionType : {PreActionPose::DOCKING, PreActionPose::ENTRY})
       {
-        GetCurrentPreActionPoses(poses, robotPose, {actionType}, std::set<Vision::Marker::Code>(), obstacles, 0, true);
+        GetCurrentPreActionPoses(poses, *reachableFrom, {actionType}, std::set<Vision::Marker::Code>(), obstacles, reachableFrom, 0, true);
         for(auto & pose : poses) {
           // TODO: In computing poseID to pass to DrawPreDockPose, multiply object ID by the max number of
           //       preaction poses we expect to visualize per object. Currently, hardcoded to 48 (4 dock and
           //       4 roll per side). We probably won't have more than this.
-          _vizPreActionPoseHandles.emplace(_vizManager->DrawPreDockPose(poseID + GetID().GetValue()*48,
-                                                                        pose.GetPose().GetWithRespectToRoot(),
-                                                                        PreActionPose::GetVisualizeColor(actionType)));
-
+          _vizPreActionPoseHandles.emplace_back(_vizManager->DrawPreDockPose(poseID + GetID().GetValue()*48,
+                                                                             pose.GetPose().GetWithRespectToRoot(),
+                                                                             PreActionPose::GetVisualizeColor(actionType)));
+          
           ++poseID;
         }
         
@@ -317,5 +336,5 @@ namespace Anki {
       ObservableObject::SetPose(newPose, fromDistance, newPoseState);
     }
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

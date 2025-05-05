@@ -5,23 +5,19 @@
 #include "timer.h"
 
 #include "mics.h"
+#include "mic_tables.h"
 
 #include "messages.h"
 
-extern "C" {
-  void start_mic_spi(int16_t a, int16_t b, void* tim);
-  void dec_odd(int32_t* acc, const uint16_t* samples, int16_t* output);
-  void dec_even(int32_t* acc, const uint16_t* samples, int16_t* output);
-}
+extern "C" void start_mic_spi(int16_t a, int16_t b, void* tim);
 
-const int SAMPLES_PER_IRQ = 20;
+static const int SAMPLES_PER_IRQ = 20;
 static const int IRQS_PER_FRAME = AUDIO_SAMPLES_PER_FRAME / SAMPLES_PER_IRQ;
 static const int PDM_BYTES_PER_IRQ = SAMPLES_PER_IRQ * AUDIO_DECIMATION * 2 / 8;
-  
+
 static int16_t audio_data[2][AUDIO_SAMPLES_PER_FRAME * 4];
-static uint16_t pdm_data[2][2][PDM_BYTES_PER_IRQ / 2];
+__align(2) static uint8_t pdm_data[2][2][PDM_BYTES_PER_IRQ];
 static int sample_index;
-static bool reduced;
 
 static int16_t MIC_SPI_CR1 = 0
            | SPI_CR1_MSTR                 // Master
@@ -60,20 +56,25 @@ void Mics::init(void) {
 
   // Set our MISO lines to SPI1 and SPI2
   MIC1_MISO::alternate(0);
+  MIC1_MISO::speed(SPEED_HIGH);
   MIC1_MISO::mode(MODE_ALTERNATE);
 
   MIC2_MISO::alternate(0);
+  MIC2_MISO::speed(SPEED_HIGH);
   MIC2_MISO::mode(MODE_ALTERNATE);
 
   // Setup our output clock to TIM15
   MIC_LR::alternate(1);
+  MIC_LR::speed(SPEED_HIGH);
   MIC_LR::mode(MODE_ALTERNATE);
 
   // Set and output clock for the SPI perf so reads work (not connected)
   MIC1_SCK::alternate(0);
+  MIC1_SCK::speed(SPEED_HIGH);
   MIC1_SCK::mode(MODE_ALTERNATE);
 
   MIC2_SCK::alternate(0);
+  MIC2_SCK::speed(SPEED_HIGH);
   MIC2_SCK::mode(MODE_ALTERNATE);
 
   // Start configuring out clock
@@ -95,24 +96,10 @@ void Mics::init(void) {
                      | DMA_CCR_TCIE
                      ;
 
+  NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
   NVIC_SetPriority(DMA1_Channel2_3_IRQn, PRIORITY_MICS);
 
-  reduced = false;
-
   start_mic_spi(TIM_CR1_CEN, MIC_SPI_CR1, (void*)&TIM15->CR1);
-}
-
-void Mics::start(void) {
-  DMA1->IFCR = DMA_IFCR_CGIF2;
-  NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
-}
-
-void Mics::stop(void) {
-  NVIC_DisableIRQ(DMA1_Channel2_3_IRQn);
-}
-
-void Mics::reduce(bool reduce) {
-  reduced = reduce;
 }
 
 void Mics::errorCode(uint16_t* data) {
@@ -124,9 +111,57 @@ void Mics::transmit(int16_t* payload) {
   memcpy(payload, audio_data[sample_index < IRQS_PER_FRAME ? 1 : 0], sizeof(audio_data[0]));
 }
 
-static void decimate(const uint16_t* input, int32_t* acc, int16_t* output) {
-  dec_odd(&acc[0], input, &output[0]);
-  if (!reduced) dec_even(&acc[2], input, &output[1]);
+#define STAGE3(ti) \
+  ptr = &DECIMATION_TABLE[ti+24][*samples]; samples += 2; \
+  acc_2 += *ptr; ptr -= 0xC00; \
+  acc_1 += *ptr; ptr -= 0xC00; \
+  acc_0 += *ptr; \
+
+#define STAGE3A(ti) \
+  ptr = &DECIMATION_TABLE[ti+24][*samples]; samples += 2; \
+  *output = (int16_t)((acc_2 + *ptr) >> 16); output += 4; \
+  ptr -= 0xC00; acc_2 = acc_1 + *ptr; \
+  ptr -= 0xC00; acc_1 = acc_0 + *ptr;
+
+static void dec_loop(int32_t* acc, uint8_t* samples, int16_t* output) {
+  int32_t acc_1 = acc[0];
+  int32_t acc_2 = acc[1];
+
+  const int32_t *ptr;
+  for (int i = 0; i < SAMPLES_PER_IRQ; i++) {
+    int32_t acc_0 = 0;
+
+    STAGE3 ( 0);
+    STAGE3 ( 1);
+    STAGE3 ( 2);
+    STAGE3 ( 3);
+    STAGE3 ( 4);
+    STAGE3 ( 5);
+    STAGE3 ( 6);
+    STAGE3 ( 7);
+    STAGE3 ( 8);
+    STAGE3 ( 9);
+    STAGE3 (10);
+    STAGE3A(11);
+  }
+
+  acc[0] = acc_1;
+  acc[1] = acc_2;
+}
+
+
+static void decimate(const uint8_t* input, int32_t* acc,  int16_t* output) {
+  uint8_t deinter[sizeof(uint16_t) * 12 * SAMPLES_PER_IRQ];
+  uint16_t* target = (uint16_t*)&deinter;
+
+  // Deinterlace the channel data
+  for (int i = 0; i < PDM_BYTES_PER_IRQ; i += 2) {
+    *(target++) = DEINTERLACE_TABLE[0][input[0]] | DEINTERLACE_TABLE[1][input[1]];
+    input += 2;
+  }
+
+  dec_loop(&acc[0], &deinter[0], &output[0]);
+  dec_loop(&acc[2], &deinter[1], &output[1]);
 }
 
 extern "C" void DMA1_Channel2_3_IRQHandler(void) {
@@ -139,14 +174,14 @@ extern "C" void DMA1_Channel2_3_IRQHandler(void) {
   // Note: if this falls behind, it will drop a bunch of samples
   if (isr & DMA_ISR_HTIF2) {
     decimate(pdm_data[0][0], accumulator[0], &output[0]);
-    if (!reduced) decimate(pdm_data[1][0], accumulator[1], &output[2]);
+    decimate(pdm_data[1][0], accumulator[1], &output[2]);
     output += SAMPLES_PER_IRQ * 4;
     sample_index++;
   }
 
   if (isr & DMA_ISR_TCIF2) {
     decimate(pdm_data[0][1], accumulator[0], &output[0]);
-    if (!reduced) decimate(pdm_data[1][1], accumulator[1], &output[2]);
+    decimate(pdm_data[1][1], accumulator[1], &output[2]);
     output += SAMPLES_PER_IRQ * 4;
     sample_index++;
   }

@@ -15,11 +15,10 @@
 
 #include "coretech/common/engine/utils/timer.h"
 #include "coretech/common/engine/jsonTools.h"
-#include "engine/aiComponent/beiConditions/beiConditionDebugFactors.h"
 #include "util/console/consoleInterface.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 CONSOLE_VAR_EXTERN(float, kTimeMultiplier);
   
@@ -65,14 +64,16 @@ bool ConditionTimerInRange::AreConditionsMetInternal(BehaviorExternalInterface& 
   return _params._rangeBegin_s <= ffwdTime && ffwdTime < _params._rangeEnd_s;
 }
   
-void ConditionTimerInRange::BuildDebugFactorsInternal( BEIConditionDebugFactors& factors ) const
+IBEICondition::DebugFactorsList ConditionTimerInRange::GetDebugFactors() const
 {
   const float currTime_s = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   const float timerVal = currTime_s - _timeReset;
   const float ffwdTime = kTimeMultiplier * timerVal;
-  factors.AddFactor( "min_t", _params._rangeBegin_s );
-  factors.AddFactor( "max_t", _params._rangeEnd_s );
-  factors.AddFactor( "cur_t", ffwdTime );
+  DebugFactorsList ret
+    = { {"min_t", std::to_string(_params._rangeBegin_s)},
+        {"max_t", std::to_string(_params._rangeEnd_s)},
+        {"cur_t", std::to_string(ffwdTime)} };
+  return ret;
 }
   
 };

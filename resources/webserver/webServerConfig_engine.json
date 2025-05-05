@@ -1,11 +1,8 @@
 {
   "port": "8888",
-  "title0": "Cozmo Web Server (vic-engine)",
-  "title1": "This web server is running in vic-engine",
+  "title0": "Victor Web Server (Engine process)",
+  "title1": "This web server is running in the Engine process",
   "whichWebServer": 1,
-  "tickBudget_ms": 60,
   "startPage": "page_consolevars",
-  "allowPerfPage": true,
-  "allowPerfMetricPage": true,
-  "allowConsoleVarsPage": true
+  "allowPerfPage": true
 }

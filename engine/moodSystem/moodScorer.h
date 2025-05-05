@@ -23,7 +23,7 @@ namespace Json {
 }
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     //Forward declaration
     class MoodManager;
@@ -72,7 +72,7 @@ namespace Anki {
     };
     
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 

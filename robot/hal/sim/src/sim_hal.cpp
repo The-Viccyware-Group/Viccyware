@@ -33,6 +33,8 @@
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
+#include <set>
 
 // Our Includes
 #include "anki/cozmo/robot/logging.h"
@@ -74,7 +76,7 @@ static const bool kSimulateGyroBias = false;
 #endif
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
 
     namespace { // "Private members"
 
@@ -88,22 +90,19 @@ namespace Anki {
       constexpr auto MOTOR_LIFT = EnumToUnderlyingType(MotorID::MOTOR_LIFT);
       constexpr auto MOTOR_HEAD = EnumToUnderlyingType(MotorID::MOTOR_HEAD);
       constexpr auto MOTOR_COUNT = EnumToUnderlyingType(MotorID::MOTOR_COUNT);
-
+      
       constexpr auto NUM_BACKPACK_LEDS = EnumToUnderlyingType(LEDId::NUM_BACKPACK_LEDS);
-
-
+      
+      
 #pragma mark --- Simulated HardwareInterface "Member Variables" ---
 
       bool isInitialized = false;
 
       u32 tickCnt_ = 0; // increments each robot step (ROBOT_TIME_STEP_MS)
-
+      
       webots::Supervisor webotRobot_;
 
       s32 robotID_ = -1;
-
-      // Power
-      HAL::PowerState powerState_ = HAL::POWER_MODE_ACTIVE;
 
       // Motors
       webots::Motor* leftWheelMotor_;
@@ -143,10 +142,10 @@ namespace Anki {
 
       // Backpack button
       webots::Field* backpackButtonPressedField_ = nullptr;
-
-      // Touch sensor
-      webots::Field* touchSensorTouchedField_;
-
+      
+      // Upper Touch Sensor (for petting)
+      webots::Receiver *backpackTouchSensorReceiver_;
+      
       // For tracking wheel distance travelled
       f32 motorPositions_[MOTOR_COUNT];
       f32 motorPrevPositions_[MOTOR_COUNT];
@@ -155,16 +154,14 @@ namespace Anki {
 
       // Lights
       webots::LED* leds_[NUM_BACKPACK_LEDS] = {0};
-
-      webots::LED* sysLed_ = nullptr;
       
       // Simulated Battery
       webots::Field *batteryVoltsField_ = nullptr;
       const webots::Field *batteryChargeRateField_ = nullptr;
       const webots::Field *batteryDischargeRateField_ = nullptr;
-
+      
       const u32 batteryUpdateRate_tics_ = 50; // How often to update the simulated battery voltage (in robot ticks)
-
+      
       // MicData
       // Use the mac mic as input with AudioCaptureSystem
       constexpr uint32_t kSamplesPerChunk = 80;
@@ -172,14 +169,14 @@ namespace Anki {
       AudioUtil::AudioCaptureSystem audioCaptureSystem_(kSamplesPerChunk, kSampleRate_hz);
 
       // Limit the number of messages that can be sent per robot tic
-      // and toss the rest. Since audio data is generated in
-      // real-time vs. robot time, if Webots processes slow down or
+      // and toss the rest. Since audio data is generated in 
+      // real-time vs. robot time, if Webots processes slow down or 
       // are paused (debugger) then we'll end up flooding the send buffer.
       constexpr uint32_t kMicSendWindow_tics = 6;   // Roughly equivalent to every anim process tic
       constexpr uint32_t kMaxNumMicMsgsAllowedPerSendWindow = 100;
       int _numMicMsgsSent      = 0;        // Num of mic msgs sent in the current window
       int _micSendWindowTicIdx = 0;        // Which tic of the current window we're in
-
+      
       constexpr uint32_t kInterleavedSamplesPerChunk = kSamplesPerChunk * 4;
       using RawChunkArray = std::array<int16_t, kInterleavedSamplesPerChunk>;
       Util::FixedCircularBuffer<RawChunkArray, kMicSendWindow_tics * kMaxNumMicMsgsAllowedPerSendWindow> micData_;
@@ -207,7 +204,7 @@ namespace Anki {
         float rad_per_s = power / 0.05f;
         return rad_per_s;
       }
-
+      
       // Approximate open-loop conversion of head power to angular head speed
       float HeadPowerToAngSpeed(float power)
       {
@@ -239,7 +236,7 @@ namespace Anki {
           }
         }
       }
-
+      
       void UpdateSimBatteryVolts()
       {
         // Grab the charge rate
@@ -247,42 +244,42 @@ namespace Anki {
                                       batteryChargeRateField_ :
                                       batteryDischargeRateField_;
         const float batteryIncreaseRate_voltsPerMin = chargeRateField->getSFFloat();
-
+        
         // Compute delta volts
-        const float updateTime_sec = Util::MilliSecToSec((float) batteryUpdateRate_tics_ * ROBOT_TIME_STEP_MS);
+        const float updateTime_sec = Util::MilliSecToSec((float) batteryUpdateRate_tics_ * ROBOT_TIME_STEP_MS);;
         const float batteryDeltaVolts = (batteryIncreaseRate_voltsPerMin / 60.f) * updateTime_sec;
         float batteryVolts = batteryVoltsField_->getSFFloat() + batteryDeltaVolts;
-
+        
         // Clamp to logical voltages
-        const float minBatteryVolts = 3.4f;
-        const float maxBatteryVolts = 4.21f;
+        const float minBatteryVolts = 3.0f;
+        const float maxBatteryVolts = 4.3f;
         batteryVolts = Util::Clamp(batteryVolts,
                                    minBatteryVolts,
                                    maxBatteryVolts);
-
+        
         batteryVoltsField_->setSFFloat(batteryVolts);
       }
-
+      
       void AudioInputCallback(const AudioUtil::AudioSample* data, uint32_t numSamples)
       {
         std::lock_guard<std::mutex> lock(micDataMutex_);
         micData_.push_back();
         auto* newData = micData_.back().data();
-
+        
         // Duplicate our mono channel input across 4 interleaved channels to simulate 4 mics
         constexpr int kNumChannels = 4;
         for (int j=0; j<kSamplesPerChunk; j++)
         {
           auto* sampleStart = newData + (j * kNumChannels);
           const auto sample = data[j];
-
+          
           for(int i=0; i<kNumChannels; ++i)
           {
             sampleStart[i] = sample;
           }
         }
       }
-
+      
       void AudioInputUpdate()
       {
         // Reset send counter for next send window
@@ -307,7 +304,7 @@ namespace Anki {
     // Forward Declaration
     Result InitRadio();
 
-    Result HAL::Init(const int * shutdownSignal)
+    Result HAL::Init()
     {
       assert(ROBOT_TIME_STEP_MS >= webotRobot_.getBasicTimeStep());
 
@@ -385,12 +382,9 @@ namespace Anki {
       accel_ = webotRobot_.getAccelerometer("accel");
       accel_->enable(ROBOT_TIME_STEP_MS);
 
-      // Proximity sensor	
+      // Proximity sensor
       proxCenter_ = webotRobot_.getDistanceSensor("forwardProxSensor");
-      if(proxCenter_ != nullptr)
-      {
-        proxCenter_->enable(ROBOT_TIME_STEP_MS);
-      }
+      proxCenter_->enable(ROBOT_TIME_STEP_MS);
       
       // Cliff sensors
       cliffSensors_[HAL::CLIFF_FL] = webotRobot_.getDistanceSensor("cliffSensorFL");
@@ -407,20 +401,16 @@ namespace Anki {
       chargeContact_->enablePresence(ROBOT_TIME_STEP_MS);
       wasOnCharger_ = false;
 
+      backpackTouchSensorReceiver_ = webotRobot_.getReceiver("touchSensorUpper");
+      backpackTouchSensorReceiver_->enable(ROBOT_TIME_STEP_MS);
+
       // Backpack button
       backpackButtonPressedField_ =  webotRobot_.getSelf()->getField("backpackButtonPressed");
       if (backpackButtonPressedField_ == nullptr) {
         AnkiError("sim_hal.Init.NoBackpackButtonPressedField", "");
         return RESULT_FAIL;
       }
-
-      // Touch sensor
-      touchSensorTouchedField_ =  webotRobot_.getSelf()->getField("touchSensorTouched");
-      if (touchSensorTouchedField_ == nullptr) {
-        AnkiError("sim_hal.Init.NoTouchSensorTouchedField", "");
-        return RESULT_FAIL;
-      }
-
+      
       if (InitRadio() != RESULT_OK) {
         AnkiError("sim_hal.Init.InitRadioFailed", "");
         return RESULT_FAIL;
@@ -430,19 +420,17 @@ namespace Anki {
       leds_[LED_BACKPACK_FRONT] = webotRobot_.getLED("backpackLED1");
       leds_[LED_BACKPACK_MIDDLE] = webotRobot_.getLED("backpackLED2");
       leds_[LED_BACKPACK_BACK] = webotRobot_.getLED("backpackLED3");
-
-      sysLed_ = webotRobot_.getLED("backpackLED0");
-
+      
       // Simulated Battery
       batteryVoltsField_ = webotRobot_.getSelf()->getField("batteryVolts");
       DEV_ASSERT(batteryVoltsField_ != nullptr, "simHAL.Init.MissingBatteryVoltsField");
-
+      
       batteryChargeRateField_ = webotRobot_.getSelf()->getField("batteryChargeRate_voltsPerMin");
       DEV_ASSERT(batteryChargeRateField_ != nullptr, "simHAL.Init.MissingBatteryChargeRateField");
-
+      
       batteryDischargeRateField_ = webotRobot_.getSelf()->getField("batteryDischargeRate_voltsPerMin");
       DEV_ASSERT(batteryDischargeRateField_ != nullptr, "simHAL.Init.MissingBatteryDischargeRateField");
-
+      
       // Audio Input
       audioCaptureSystem_.SetCallback(std::bind(&AudioInputCallback, std::placeholders::_1, std::placeholders::_2));
       audioCaptureSystem_.Init();
@@ -460,11 +448,6 @@ namespace Anki {
       return RESULT_OK;
 
     } // Init()
-
-    void HAL::Stop()
-    {
-      
-    }
 
     void HAL::Destroy()
     {
@@ -513,17 +496,19 @@ namespace Anki {
 
     } // HAL::UpdateDisplay()
 
-
+    
     bool HAL::IMUReadData(HAL::IMU_DataStructure &IMUData)
     {
-      const double* gyroVals = gyro_->getValues();  // rad/s
-      const double* accelVals = accel_->getValues();   // m/s^2
-      
-      for (int i=0 ; i<3 ; i++) {
-        IMUData.gyro[i]  = (f32)(gyroVals[i]);
-        IMUData.accel[i] = (f32)(accelVals[i] * 1000);
-      }
+      const double* vals = gyro_->getValues();  // rad/s
+      IMUData.rate_x = (f32)(vals[0]);
+      IMUData.rate_y = (f32)(vals[1]);
+      IMUData.rate_z = (f32)(vals[2]);
 
+      vals = accel_->getValues();   // m/s^2
+      IMUData.acc_x = (f32)(vals[0] * 1000);  // convert to mm/s^2
+      IMUData.acc_y = (f32)(vals[1] * 1000);
+      IMUData.acc_z = (f32)(vals[2] * 1000);
+      
       // Compute estimated IMU temperature based on measured data from Victor prototype
 
       // Temperature dynamics approximated by:
@@ -534,21 +519,28 @@ namespace Anki {
       const float T_final = 70.f;    // measured on Victor prototype
       const float k = .0032f;        // constant (measured), units sec^-1
       const float t = HAL::GetTimeStamp() / 1000.f; // current time in seconds
-
+      
       IMUData.temperature_degC = T_final - (T_final - T_initial) * exp(-k * t);
-
+      
       // Apply gyro bias based on temperature:
       if (kSimulateGyroBias) {
         // All worst case values are given in Section 1.2 of BMI160 datasheet
         const float initialBias_dps[3] = {0.f, 0.f, 0.f};     // inital zero-rate offset at startup. worst case is +/- 10 deg/sec
         const float biasChangeDueToTemp_dps_per_degC = 0.08f; // zero-rate offset change as temperature changes. worst case 0.08 deg/sec per degC
         const float biasDueToTemperature_dps = (IMUData.temperature_degC - T_initial) * biasChangeDueToTemp_dps_per_degC;
-
-        for (int i=0 ; i<3 ; i++) {
-          IMUData.gyro[i] += DEG_TO_RAD(initialBias_dps[i] + biasDueToTemperature_dps);
-        }
+        
+        IMUData.rate_x += DEG_TO_RAD(initialBias_dps[0] + biasDueToTemperature_dps);
+        IMUData.rate_y += DEG_TO_RAD(initialBias_dps[1] + biasDueToTemperature_dps);
+        IMUData.rate_z += DEG_TO_RAD(initialBias_dps[2] + biasDueToTemperature_dps);
       }
-
+      
+      static ImageImuData imageImuData;
+      imageImuData.systemTimestamp_ms = HAL::GetTimeStamp();
+      imageImuData.rateX = IMUData.rate_x;
+      imageImuData.rateY = IMUData.rate_y;
+      imageImuData.rateZ = IMUData.rate_z;
+      RobotInterface::SendMessage(imageImuData);
+      
       // Return true if IMU was already read this timestamp
       static TimeStamp_t lastReadTimestamp = 0;
       bool newReading = lastReadTimestamp != HAL::GetTimeStamp();
@@ -667,7 +659,7 @@ namespace Anki {
       con_->disablePresence();
       isGripperEnabled_ = false;
 #     if DEBUG_GRIPPER
-      PRINT_NAMED_DEBUG("simHAL.DisengageGripper.Unlocked", "");
+      PRINT_NAMED_DEBUG("simHAL.DisengageGripper.Unocked", "");
 #     endif
 
     }
@@ -678,7 +670,7 @@ namespace Anki {
     Result HAL::Step(void)
     {
 
-      if(webotRobot_.step(Vector::ROBOT_TIME_STEP_MS) == -1) {
+      if(webotRobot_.step(Cozmo::ROBOT_TIME_STEP_MS) == -1) {
         return RESULT_FAIL;
       } else {
         MotorUpdate();
@@ -702,7 +694,33 @@ namespace Anki {
           webotRobot_.setLabel(robotID_, poseString, 0.5, robotID_*.05, .05, 0xff0000, 0.);
         }
          */
+        
+        
+        // Send block connection state when engine connects
+        static bool wasConnected = false;
+        if (!wasConnected && HAL::RadioIsConnected()) {
 
+          // Send RobotAvailable indicating sim robot
+          RobotInterface::RobotAvailable idMsg;
+          idMsg.serialNumber = 0;
+          idMsg.hwRevision = 0;
+          RobotInterface::SendMessage(idMsg);
+
+          
+          // send firmware info indicating simulated robot
+          {
+            std::string firmwareJson{"{\"version\":0,\"time\":0,\"sim\":1}"};
+            RobotInterface::FirmwareVersion msg;
+            msg.RESRVED = 0;
+            msg.json_length = firmwareJson.size() + 1;
+            std::memcpy(msg.json, firmwareJson.c_str(), firmwareJson.size() + 1);
+            RobotInterface::SendMessage(msg);
+          }
+
+          wasConnected = true;
+        } else if (wasConnected && !HAL::RadioIsConnected()) {
+          wasConnected = false;
+        }
 
         // Check charging status (Debug)
         if (BatteryIsOnCharger() && !wasOnCharger_) {
@@ -716,7 +734,7 @@ namespace Anki {
         if ((tickCnt_ % batteryUpdateRate_tics_) == 0) {
           UpdateSimBatteryVolts();
         }
-
+        
         ++tickCnt_;
         return RESULT_OK;
       }
@@ -724,8 +742,8 @@ namespace Anki {
 
     } // step()
 
-
-
+    
+    
     // Get the number of microseconds since boot
     u32 HAL::GetMicroCounter(void)
     {
@@ -745,6 +763,11 @@ namespace Anki {
       //return timeStamp_;
     }
 
+    void HAL::SetTimeStamp(TimeStamp_t t)
+    {
+      //timeStamp_ = t;
+    };
+
     void HAL::SetLED(LEDId led_id, u32 color) {
       if (leds_[led_id]) {
         leds_[led_id]->set( color >> 8 ); // RGBA -> 0RGB
@@ -753,51 +776,20 @@ namespace Anki {
       }
     }
 
-    void HAL::SetSystemLED(u32 color)
-    {
-      if(sysLed_ != nullptr)
-      {
-        sysLed_->set(color >> 8);
-      }
-      else
-      {
-        PRINT_NAMED_ERROR("simHAL.SetSystemLED.Nullptr", "");
-      }
-    }
-
     u32 HAL::GetID()
     {
       return robotID_;
     }
-
-    ProxSensorDataRaw HAL::GetRawProxData()
+    
+    ProxSensorData HAL::GetRawProxData()
     {
-      ProxSensorDataRaw proxData;
-
-      if(proxCenter_ == nullptr)
-      {
-        return proxData;
-      }
-      
-      if (PowerGetMode() == POWER_MODE_ACTIVE) {
-        proxData.distance_mm = static_cast<u16>( proxCenter_->getValue() );
-        // Note: These fields are spoofed with simple defaults for now, but should be computed
-        // to reflect the actual behavior of the sensor once we do some more testing with it.
-        proxData.signalIntensity  = 25.f;
-        proxData.ambientIntensity = 0.25f;
-        proxData.spadCount        = 90.f;
-        proxData.timestamp_ms     = HAL::GetTimeStamp();
-        proxData.rangeStatus      = RangeStatus::RANGE_VALID;
-      } else {
-        // Calm mode values
-        proxData.distance_mm      = PROX_CALM_MODE_DIST_MM;
-        proxData.signalIntensity  = 0.f;
-        proxData.ambientIntensity = 0.f;
-        proxData.spadCount        = 200.f;
-        proxData.timestamp_ms     = HAL::GetTimeStamp();
-        proxData.rangeStatus      = RangeStatus::RANGE_VALID;
-      }
-
+      ProxSensorData proxData;
+      proxData.distance_mm = static_cast<u16>( proxCenter_->getValue() );
+      // Note: These fields are spoofed with simple defaults for now, but should be computed
+      // to reflect the actual behavior of the sensor once we do some more testing with it.
+      proxData.signalIntensity = 25.f;
+      proxData.ambientIntensity = 0.25f;
+      proxData.spadCount = 90.f;
       return proxData;
     }
 
@@ -805,23 +797,31 @@ namespace Anki {
     {
       switch(button_id) {
         case BUTTON_CAPACITIVE:
-        {        
-          const u16 touchSignal = 5000;
-          const u16 noTouchSignal = 4700;
-          if (touchSensorTouchedField_->getSFBool()) {
-            return touchSignal;
-          } else {
-            return noTouchSignal;
+        {
+          double signalStrength = 0.0;
+
+          while(backpackTouchSensorReceiver_->getQueueLength() > 0) {
+            signalStrength = backpackTouchSensorReceiver_->getSignalStrength();
+            backpackTouchSensorReceiver_->nextPacket();
           }
+
+          // XXX rescale the signal strength to fit within a u16 (to match real sensor)
+          u16 ss = Util::numeric_cast_clamped<u16>(signalStrength);
+          // HACK: Temp scaling to rough actual values
+          const u16 maxPhysSignal = 700;
+          const u16 minPhysSignal = 600;
+          const f32 maxSimSignal  = std::numeric_limits<u16>::max();
+          ss = (u16)((((maxPhysSignal - minPhysSignal) * ss) / maxSimSignal) + minPhysSignal);
+          return ss;
         }
         case BUTTON_POWER:
         {
           return backpackButtonPressedField_->getSFBool() ? 1 : 0;
         }
-        default:
+        default: 
         {
           AnkiError( "sim_hal.GetButtonState.UnexpectedButtonType", "Button ID=%d does not have a sensible return value", button_id);
-          return 0;
+          return 0; 
         }
       }
 
@@ -830,14 +830,18 @@ namespace Anki {
 
     u16 HAL::GetRawCliffData(const CliffID cliff_id)
     {
-      assert(cliff_id < HAL::CLIFF_COUNT);
-      if (PowerGetMode() == POWER_MODE_ACTIVE) {
-        return static_cast<u16>(cliffSensors_[cliff_id]->getValue());
+      if (cliff_id == HAL::CLIFF_COUNT) {
+        PRINT_NAMED_ERROR("simHAL.GetRawCliffData.InvalidCliffID", "");
+        return static_cast<u16>(cliffSensors_[HAL::CLIFF_FL]->getMaxValue());
       }
-
-      return CLIFF_CALM_MODE_VAL;
+      return static_cast<u16>(cliffSensors_[cliff_id]->getValue());
     }
-
+    
+    u16 HAL::GetCliffOffLevel(const CliffID cliff_id)
+    {
+      return 0;
+    }
+    
     bool HAL::HandleLatestMicData(SendDataFunction sendDataFunc)
     {
       // Check if our sim mic thread has delivered more audio for us to send out
@@ -860,16 +864,16 @@ namespace Anki {
           micDataMutex_.unlock();
           return false;
         }
-
+        
         micDataMutex_.unlock();
         return true;
       }
       return false;
     }
-
+    
     f32 HAL::BatteryGetVoltage()
     {
-      return batteryVoltsField_->getSFFloat();
+      return 5;
     }
 
     bool HAL::BatteryIsCharging()
@@ -885,102 +889,16 @@ namespace Anki {
       return HAL::BatteryIsCharging();
     }
 
-    bool HAL::BatteryIsDisconnected()
-    {
-      // NOTE: This doesn't simulate syscon cutoff after 30 min
-      return false;
-    }
-
-    bool HAL::BatteryIsOverheated()
-    {
-      // NOTE: This doesn't simulate syscon cutoff after 30 min
-      return false;
-    }
-
-    u8 HAL::BatteryGetTemperature_C()
-    {
-      return 40;
-    }
-
-    bool HAL::BatteryIsLow()
-    {
-      return (BatteryGetVoltage() < 3.6f);
-    }
-
-    bool HAL::IsShutdownImminent()
-    {
-      // Shutdown not yet implemented in sim
-      return false;
-    }
-
-    f32 HAL::ChargerGetVoltage()
-    {
-      if (BatteryIsOnCharger()) {
-        return 5.f;
-      }
-      return 0.f;
-    }
-
     extern "C" {
     void EnableIRQ() {}
     void DisableIRQ() {}
     }
-
+    
 
     u8 HAL::GetWatchdogResetCounter()
     {
       return 0; // Simulator never watchdogs
     }
-
-    void HAL::PrintBodyData(u32 period_tics, bool motors, bool prox, bool battery)
-    {
-      AnkiWarn("HAL.PrintBodyData.NotSupportedInSim", "");
-    }
-
-    void HAL::Shutdown()
-    {
-
-    } 
-
-    void HAL::PowerSetDesiredMode(const PowerState state)
-    {
-      powerState_ = state;
-      if (powerState_ != POWER_MODE_ACTIVE) {
-        AnkiWarn("HAL.PowerSetDesiredMode.UnsupportedMode", 
-                 "Only POWER_MODE_ACTIVE behavior is actually supported in sim");
-      }
-    }
-
-    HAL::PowerState HAL::PowerGetDesiredMode()
-    {
-      return powerState_;
-    }
-
-    HAL::PowerState HAL::PowerGetMode()
-    {
-      return powerState_;
-    }
-
-    bool HAL::AreEncodersDisabled()
-    {
-      return false;
-    }
-
-    bool HAL::IsHeadEncoderInvalid()
-    {
-      return false;
-    }
-
-    bool HAL::IsLiftEncoderInvalid()
-    {
-      return false;
-    }
-
-    const uint8_t* const HAL::GetSysconVersionInfo()
-    {
-      static const uint8_t arr[16] = {0};
-      return arr;
-    }
-  
-  } // namespace Vector
+    
+  } // namespace Cozmo
 } // namespace Anki

@@ -12,8 +12,6 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/dispatch/helpers/behaviorScoringWrapper.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
-
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
 
@@ -23,7 +21,7 @@
 #include "util/random/randomGenerator.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 static const char* kEmotionScorersKey            = "emotionScorers";
@@ -35,7 +33,6 @@ static const char* kCooldownOnObjectiveKey       = "considerThisHasRunForBehavio
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorScoringWrapper::BehaviorScoringWrapper(const Json::Value& config)
-  : _cooldownOnObjective(BehaviorObjective::Count)
 {
   ReadFromJson(config);  
 }
@@ -140,6 +137,9 @@ float BehaviorScoringWrapper::EvaluateActivatedPenalty() const
 }
 
 
+
+
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorScoringWrapper::HandleBehaviorObjective(const ExternalInterface::BehaviorObjectiveAchieved& msg)
 {
@@ -150,6 +150,7 @@ void BehaviorScoringWrapper::HandleBehaviorObjective(const ExternalInterface::Be
     _lastTimeDeactivated = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   }
 }
+
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -206,7 +207,7 @@ bool BehaviorScoringWrapper::ReadFromJson(const Json::Value& config)
   // - - - - - - - - - -
   // cooldown on other objective
   // - - - - - - - - - -
-   
+  
   const Json::Value& cooldownOnObjectiveJson = config[kCooldownOnObjectiveKey];
   if (!cooldownOnObjectiveJson.isNull()) {
     const char* objectiveStr = cooldownOnObjectiveJson.asCString();
@@ -217,6 +218,7 @@ bool BehaviorScoringWrapper::ReadFromJson(const Json::Value& config)
                           objectiveStr);
     }
   }
+  
   
   // - - - - - - - - - -
   // Activated penalty
@@ -245,5 +247,5 @@ bool BehaviorScoringWrapper::ReadFromJson(const Json::Value& config)
 
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -22,12 +22,15 @@
 
 #include "coretech/common/engine/math/pose.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
+#include "clad/robotInterface/messageRobotToEngine.h"
+#include "clad/robotInterface/messageRobotToEngine_hash.h"
+#include "clad/externalInterface/messageEngineToGame.h"
 #include "util/fileUtils/fileUtils.h"
 #include "util/logging/rollingFileLogger.h"
 #include <fstream>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorLiftLoadTest : public ICozmoBehavior
 {

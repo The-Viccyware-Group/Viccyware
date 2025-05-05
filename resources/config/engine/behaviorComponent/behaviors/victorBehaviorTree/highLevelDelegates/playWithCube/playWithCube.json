@@ -3,7 +3,7 @@
   "behaviorClass" : "DispatcherQueue",
 
   "behaviors" : [
-    "DriveOffChargerCube",
+    "DriveOffCharger",
     "PlayWithCubeInternal",
     "PutDownBlock"
   ],
@@ -13,18 +13,24 @@
   "anonymousBehaviors": [
     {
       "behaviorName" : "PlayWithCubeInternal",
-      "behaviorClass" : "FindCubeAndThen",
-      "associatedActiveFeature" : "FindCube",
-
-      "wantsToBeActivatedCondition": {
-        "conditionType" : "FeatureGate",
-        "feature" : "FindCube",
-        "expected" : true
-      },
-
-      "followUpBehaviorID" : "InteractWithStaticCube",
-
-      "postBehaviorSuggestion" : "Socialize"
+      "behaviorClass" : "DispatcherRandom",
+    
+      "behaviors" : [
+        
+        {
+          "behavior": "PopAWheelie",
+          "cooldown_s": 300.0,
+          "cooldown_random_factor": 0.5,
+          "weight": 1.0
+        },
+        {
+          "behavior": "PlayRollBlock",
+          "cooldown_s": 600.0,
+          "cooldown_random_factor": 0.5,
+          "weight": 1.0
+        }
+        
+      ]
     }
   ]
 }

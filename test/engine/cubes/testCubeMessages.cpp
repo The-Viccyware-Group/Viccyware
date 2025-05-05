@@ -19,7 +19,7 @@
 
 #include "robot/cube_firmware/app/protocol.h"
 
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 // Ensure that CLAD-defined cube messages match those used in the cube firmware
 TEST(CubeMessages, CompareTags)
@@ -33,7 +33,6 @@ TEST(CubeMessages, CompareTags)
   EXPECT_EQ(static_cast<uint8_t>(MessageEngineToCubeTag::lightSequence),  COMMAND_LIGHT_INDEX);
   EXPECT_EQ(static_cast<uint8_t>(MessageEngineToCubeTag::lightKeyframes), COMMAND_LIGHT_KEYFRAMES);
   EXPECT_EQ(static_cast<uint8_t>(MessageCubeToEngineTag::accelData),      COMMAND_ACCEL_DATA);
-  EXPECT_EQ(static_cast<uint8_t>(MessageCubeToEngineTag::voltageData),    COMMAND_VOLTAGE_DATA);
 }
 
 TEST(CubeMessages, CompareSizes)
@@ -59,13 +58,8 @@ TEST(CubeMessages, CompareSizes)
   
     // CubeAccelData (which is TapCommand in cube firmware)
     message.Set_accelData(CubeAccelData());
-    AccelDataCommand accelData;
-    EXPECT_EQ(message.Size(), sizeof(accelData));
-    
-    // CubeVoltageData (which is VoltageCommand in cube firmware)
-    message.Set_voltageData(CubeVoltageData());
-    VoltageCommand voltageData;
-    EXPECT_EQ(message.Size(), sizeof(voltageData));
+    TapCommand tapCommand;
+    EXPECT_EQ(message.Size(), sizeof(tapCommand));
   }
 }
 

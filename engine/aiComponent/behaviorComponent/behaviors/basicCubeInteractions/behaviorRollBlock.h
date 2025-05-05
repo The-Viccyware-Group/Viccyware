@@ -17,21 +17,18 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "engine/aiComponent/objectInteractionInfoCache.h"
 
+#include "clad/types/animationTrigger.h"
+
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BlockWorldFilter;
 class ObservableObject;
 
 class BehaviorRollBlock : public ICozmoBehavior
 {
-public:
-  void SetTargetID(const ObjectID& targetID){
-    _dVars.targetID = targetID;
-    _dVars.idSetExternally = true;
-  }
-  
 protected:
+  using base = ICozmoBehavior;
   // Enforce creation through BehaviorFactory
   friend class BehaviorFactory;
   BehaviorRollBlock(const Json::Value& config);
@@ -59,12 +56,12 @@ private:
   };
 
   struct DynamicVariables{
+    DynamicVariables();
     ObjectID targetID;
-    bool     didAttemptDock        = false;
-    AxisName upAxisOnBehaviorStart = AxisName::X_POS;
-    State    behaviorState         = State::RollingBlock;
-    int      rollRetryCount        = 0;
-    bool     idSetExternally       = false;
+    bool     didAttemptDock;
+    AxisName upAxisOnBehaviorStart;
+    State    behaviorState;
+    int      rollRetryCount;
   };
 
   InstanceConfig _iConfig;

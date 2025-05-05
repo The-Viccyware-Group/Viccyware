@@ -1,0 +1,13 @@
+{
+  "behaviorClass": "ReactToFrustration",
+  "behaviorID": "ExampleFrustration",
+
+  "anim": "FrustratedByFailure",
+  "finalEmotionEvent": "FinishedMinorFrustration",
+
+  "wantsToBeActivatedConditions": [
+    {
+      "conditionType" : "Frustration"
+    }
+  ] 
+}

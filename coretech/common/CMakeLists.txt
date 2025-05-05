@@ -2,11 +2,6 @@
 
 project(cti_common)
 
-option(EMBEDDED_BENCHMARK "Enables BeginBenchmark/EndBenchmark functions" OFF)
-if(EMBEDDED_BENCHMARK)
-  set(additional_defines ANKI_EMBEDDED_BENCHMARK=1)
-endif()
-
 if (NOT DEFINED CORETECH)
   set(CORETECH ${CMAKE_CURRENT_SOURCE_DIR}/..)
 endif()
@@ -14,7 +9,6 @@ endif()
 include(anki_build_cxx)
 
 anki_build_cxx_library(cti_common ${ANKI_SRCLIST_DIR} STATIC)
-anki_build_target_license(cti_common "ANKI" "CC0,${CMAKE_SOURCE_DIR}/licenses/simple-signal.license")
 
 target_compile_definitions(cti_common
   PUBLIC
@@ -24,7 +18,6 @@ target_compile_definitions(cti_common
   ANKICORETECH_EMBEDDED_USE_MATLAB=0
   PRIVATE
   CORETECH_ENGINE
-  ${additional_defines}
 )
 
 target_include_directories(cti_common
@@ -40,8 +33,9 @@ target_compile_options(cti_common
   PRIVATE
   -Os
   ${SYMBOL_VISIBILITY_FLAGS}
-  ${ASAN_CXX_FLAGS}
 )
+
+set_property(TARGET cti_common PROPERTY CXX_STANDARD 11)
 
 target_link_libraries(cti_common
   PUBLIC
@@ -52,15 +46,7 @@ target_link_libraries(cti_common
   ${OPENCV_LIBS}
   PRIVATE
   z
-  ${ASAN_LINKER_FLAGS}
 )
-
-if (VICOS)
-  copy_opencv_android_libs()
-  add_dependencies(cti_common
-    copy_opencv_libs
-  )
-endif()
 
 #
 # CLAD headers must be generated before building library
@@ -72,7 +58,6 @@ add_dependencies(cti_common cti_common_clad)
 #
 
 anki_build_cxx_library(cti_common_robot ${ANKI_SRCLIST_DIR} STATIC)
-anki_build_target_license(cti_common_robot "ANKI")
 
 target_link_libraries(cti_common_robot
   PUBLIC
@@ -80,7 +65,6 @@ target_link_libraries(cti_common_robot
   cti_common_clad_cpplite
   PRIVATE
   opencv_interface
-  ${ASAN_LINKER_FLAGS}
 )
 
 target_compile_definitions(cti_common_robot
@@ -98,36 +82,6 @@ target_include_directories(cti_common_robot
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
 )
 
-#
-# cti_common_shared
-#
-
-anki_build_cxx_library(cti_common_shared ${ANKI_SRCLIST_DIR} STATIC)
-anki_build_target_license(cti_common_shared "ANKI")
-
-target_link_libraries(cti_common_shared
-  PUBLIC
-  util
-  PRIVATE
-  opencv_interface
-  ${ASAN_LINKER_FLAGS}
-)
-
-target_compile_definitions(cti_common_shared
-  PUBLIC
-  ANKICORETECH_USE_OPENCV=1
-  ANKICORETECH_USE_MATLAB=0
-  ANKICORETECH_EMBEDDED_USE_OPENCV=1
-  ANKICORETECH_EMBEDDED_USE_MATLAB=0
-  PRIVATE
-  CORETECH_SHARED
-)
-
-target_include_directories(cti_common_shared
-  PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
-)
-
 
 if (MACOSX)
 
@@ -138,7 +92,6 @@ if (MACOSX)
   #
 
   anki_build_cxx_executable(cti_common_test_shared ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(cti_common_test_shared "ANKI")
 
   target_compile_options(cti_common_test_shared
     PRIVATE
@@ -163,7 +116,6 @@ if (MACOSX)
   #
 
   anki_build_cxx_executable(cti_common_test_engine ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(cti_common_test_engine "ANKI")
 
   target_compile_definitions(cti_common_test_engine
     PRIVATE
@@ -198,3 +150,4 @@ if (MACOSX)
   )
 
 endif()
+

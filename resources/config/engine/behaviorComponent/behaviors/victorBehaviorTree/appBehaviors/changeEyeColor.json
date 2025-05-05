@@ -1,7 +1,0 @@
-{
-  "behaviorClass" : "EyeColor",
-  "behaviorID"    : "ChangeEyeColor",
-
-  "associatedActiveFeature": "EyeColor",
-  "postBehaviorSuggestion"  : "Socialize"
-}

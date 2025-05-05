@@ -17,17 +17,17 @@
 
 #include "coretech/common/engine/utils/timer.h"
 
+#include "engine/activeObject.h"
+#include "engine/activeObjectHelpers.h"
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/aiComponent/objectInteractionInfoCache.h"
-#include "engine/block.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/blockWorld/blockWorldFilter.h"
 #include "engine/cozmoContext.h"
 #include "engine/robot.h"
 
 
 using namespace Anki;
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 extern CozmoContext* cozmoContext;
 
@@ -37,14 +37,19 @@ namespace {
 // TODO refactor this because it's also in blockworld unit tests. This should be a helper
 ObservableObject* CreateObjectLocatedAtOrigin(Robot& robot, ObjectType objectType)
 {
+  // matching activeID happens through objectID automatically on addition
+  const ActiveID activeID = -1;
+  const FactoryID factoryID = 0;
+  
   BlockWorld& blockWorld = robot.GetBlockWorld();
-  Anki::Vector::ObservableObject* objectPtr = new Block(objectType);
+  Anki::Cozmo::ObservableObject* objectPtr = CreateActiveObjectByType(objectType, activeID, factoryID);
   ANKI_VERIFY(nullptr != objectPtr, "CreateObjectLocatedAtOrigin.CreatedNull", "");
   
   // check it currently doesn't exist in BlockWorld
   {
     BlockWorldFilter filter;
     filter.SetAllowedTypes( {objectPtr->GetType()} );
+    filter.SetAllowedFamilies( {objectPtr->GetFamily()} );
     ObservableObject* sameBlock = blockWorld.FindLocatedMatchingObject(filter);
     ANKI_VERIFY(nullptr == sameBlock, "CreateObjectLocatedAtOrigin.TypeAlreadyInUse", "");
   }
@@ -59,6 +64,9 @@ ObservableObject* CreateObjectLocatedAtOrigin(Robot& robot, ObjectType objectTyp
   
   // now they can be added to the world
   blockWorld.AddLocatedObject(std::shared_ptr<ObservableObject>(objectPtr));
+  
+  // need to pretend we observed this object
+  robot.GetObjectPoseConfirmer().AddInExistingPose(objectPtr); // this has to be called after AddLocated just because
   
   // verify they are there now
   ANKI_VERIFY(objectPtr->GetID().IsSet(), "CreateObjectLocatedAtOrigin.IDNotset", "");
@@ -91,12 +99,12 @@ TEST(ObjectInteractionInfoCache, BestObjectConsistency)
   // put the first cube close to the robot, and put the second cube much further away
   {
     const Pose3d obj1Pose(0.0f, Z_AXIS_3D(), {xOffsetObj1, 0, 0}, robot.GetPose());
-    auto result = robot.GetBlockWorld().SetObjectPose(objID1, obj1Pose, PoseState::Known);
+    auto result = robot.GetObjectPoseConfirmer().AddRobotRelativeObservation(object1, obj1Pose, PoseState::Known);
     ASSERT_EQ(RESULT_OK, result);
   }
   {
     const Pose3d obj2Pose(0.0f, Z_AXIS_3D(), {xOffsetObj1 *100, 0, 0}, robot.GetPose());
-    auto result = robot.GetBlockWorld().SetObjectPose(objID2, obj2Pose, PoseState::Known);
+    auto result = robot.GetObjectPoseConfirmer().AddRobotRelativeObservation(object2, obj2Pose, PoseState::Known);
     ASSERT_EQ(RESULT_OK, result);
   }
   
@@ -126,7 +134,7 @@ TEST(ObjectInteractionInfoCache, BestObjectConsistency)
   // Move object 2 in closer - object 1 should still be the best object because
   {
     const Pose3d obj2Pose(0.0f, Z_AXIS_3D(), {xOffsetObj1/2, 0, 0}, robot.GetPose());
-    auto result = robot.GetBlockWorld().SetObjectPose(objID2, obj2Pose, PoseState::Known);
+    auto result = robot.GetObjectPoseConfirmer().AddRobotRelativeObservation(object2, obj2Pose, PoseState::Known);
     ASSERT_EQ(RESULT_OK, result);
   }
   

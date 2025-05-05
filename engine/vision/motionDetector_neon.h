@@ -14,12 +14,12 @@
 
 #include "engine/vision/motionDetector.h"
 
-#include "coretech/common/shared/array2d.h"
+#include "coretech/common/engine/array2d_impl.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
-#if defined(ANDROID) || defined(VICOS)
+#ifdef ANDROID
   
 // Calculates the ratio of channel1 * (1 / channel2) and compares it to 
 // kMotionThresh vector
@@ -89,9 +89,9 @@ inline s32 MotionDetector::RatioTestNeonHelper<Vision::ImageRGB>(const u8*& imag
 
   const u32 kNumElementsProcessedPerLoop = 8;
   const u32 kSizeOfRGBElement = 3;
-  const s32 kNumIterations = numElementsToProcess - (kNumElementsProcessedPerLoop - 1);
+  const u32 kNumIterations = numElementsToProcess - (kNumElementsProcessedPerLoop - 1);
 
-  s32 i;
+  u32 i;
   for(i = 0; i < kNumIterations; i += kNumElementsProcessedPerLoop)
   {
     // Load deinterleaved RGB data from the previous and current image
@@ -240,9 +240,9 @@ inline s32 MotionDetector::RatioTestNeonHelper<Vision::Image>(const u8*& imagePt
   const float32x4_t kMotionThresh  = vdupq_n_f32(kMotionDetection_RatioThreshold);
 
   const u32 kNumElementsProcessedPerLoop = 8;
-  const s32 kNumIterations = numElementsToProcess - (kNumElementsProcessedPerLoop - 1);
+  const u32 kNumIterations = numElementsToProcess - (kNumElementsProcessedPerLoop - 1);
 
-  s32 i;
+  u32 i;
   for(i = 0; i < kNumIterations; i += kNumElementsProcessedPerLoop)
   {
     // Load deinterleaved RGB data from the previous and current image
@@ -346,7 +346,7 @@ s32 MotionDetector::RatioTestNeon(const ImageType& image, Vision::Image& ratioIm
 {  
   s32 numAboveThresh = 0;
 
-#if defined(ANDROID) || defined(VICOS)
+#ifdef ANDROID
 
   const bool isImageContinuous = image.IsContinuous();
   const bool isPrevImageContinuous = _prevImageRGB.IsContinuous();

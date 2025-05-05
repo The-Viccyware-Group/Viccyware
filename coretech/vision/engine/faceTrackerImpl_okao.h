@@ -11,12 +11,11 @@
  * Copyright: Anki, Inc. 2015
  **/
 
-
-#include "coretech/vision/engine/debugImageList.h"
-#include "coretech/vision/engine/eyeContact.h"
+#include "coretech/vision/engine/image.h"
 #include "coretech/vision/engine/faceTracker.h"
-#include "coretech/vision/engine/profiler.h"
+#include "coretech/vision/engine/eyeContact.h"
 #include "coretech/vision/engine/trackedFace.h"
+#include "coretech/vision/engine/profiler.h"
 
 #include "clad/types/loadedKnownFace.h"
 
@@ -32,7 +31,10 @@
 #include "CommonDef.h"
 #include "DetectorComDef.h"
 
+#include "json/json.h"
+
 #include <list>
+#include <ctime>
 
 namespace Anki {
   
@@ -41,8 +43,6 @@ namespace Util {
 }
   
 namespace Vision {
-
-  class CompressedImage;
   
   class FaceTracker::Impl : public Profiler
   {
@@ -55,44 +55,31 @@ namespace Vision {
     void SetRecognitionIsSynchronous(bool isSynchronous);
     
     Result Update(const Vision::Image&        frameOrig,
-                  const float                 cropFactor,
                   std::list<TrackedFace>&     faces,
-                  std::list<UpdatedFaceID>&   updatedIDs,
-                  DebugImageList<CompressedImage>& debugImages);
+                  std::list<UpdatedFaceID>&   updatedIDs);
     
-    // These methods allow to add or clear the contents of the set that
-    // contains the face id's we're allowed to track. All other
-    // face id's we should drop on the floor. We should also not perform
-    // any face recognition when this set is populated. If this set is
-    // empty we should proceed to track and recognize faces as usual.
-    void AddAllowedTrackedFace(const FaceID_t faceID);
-    bool HaveAllowedTrackedFaces() const { return !_allowedTrackedFaceID.empty(); }
-    // This method calls Reset which clears all the allowed tracked
-    // faces and also resets the face tracker as well
-    void ClearAllowedTrackedFaces();
+    void Reset();
     
     void EnableDisplay(bool enabled) { }
     
     static bool IsRecognitionSupported() { return true; }
     static float GetMinEyeDistanceForEnrollment();
     
-    void SetFaceEnrollmentMode(Vision::FaceID_t forFaceID,
-                               s32 numEnrollments,
-                               bool forceNewID);
+    void SetFaceEnrollmentMode(Vision::FaceEnrollmentPose pose,
+                               Vision::FaceID_t forFaceID,
+                               s32 numEnrollments);
 																						      
-    void EnableEmotionDetection(bool enable) { _detectEmotion        = enable; }
-    void EnableSmileDetection(bool enable)   { _detectSmiling        = enable; }
-    void EnableGazeDetection(bool enable)    { _detectGaze           = enable; }
-    void EnableBlinkDetection(bool enable)   { _detectBlinks         = enable; }
-    void EnableRecognition(bool enable)      { _isRecognitionEnabled = enable; }
+    void EnableEmotionDetection(bool enable) { _detectEmotion = enable; }
+    void EnableSmileDetection(bool enable)   { _detectSmiling = enable; }
+    void EnableGazeDetection(bool enable)    { _detectGaze    = enable; }
+    void EnableBlinkDetection(bool enable)   { _detectBlinks  = enable; }
     
-    bool IsEmotionDetectionEnabled() const   { return _detectEmotion;        }
-    bool IsSmileDetectionEnabled()   const   { return _detectSmiling;        }
-    bool IsGazeDetectionEnabled()    const   { return _detectGaze;           }
-    bool IsBlinkDetectionEnabled()   const   { return _detectBlinks;         }
-    bool IsRecognitionEnabled()      const   { return _isRecognitionEnabled; }
+    bool IsEmotionDetectionEnabled() const   { return _detectEmotion;  }
+    bool IsSmileDetectionEnabled()   const   { return _detectSmiling;  }
+    bool IsGazeDetectionEnabled()    const   { return _detectGaze;     }
+    bool IsBlinkDetectionEnabled()   const   { return _detectBlinks;   }
     
-    bool     CanAddNamedFace() const;
+    
     Result   AssignNameToID(FaceID_t faceID, const std::string& name, FaceID_t mergeWithID);
     Result   EraseFace(FaceID_t faceID);
     void     EraseAllFaces();
@@ -111,28 +98,9 @@ namespace Vision {
                              const std::vector<u8>& enrollData,
                              std::list<LoadedKnownFace>& loadedFaces);
 
-#if ANKI_DEVELOPER_CODE
-    // For testing/evaluation:
-    Result DevAddFaceToAlbum(const Image& img, const TrackedFace& face, int albumEntry);
-    Result DevFindFaceInAlbum(const Image& img, const TrackedFace& face, int& albumEntry, float& score) const;
-    Result DevFindFaceInAlbum(const Image& img, const TrackedFace& face, const int maxMatches,
-                              std::vector<std::pair<int, float>>& matches) const;
-    float DevComputePairwiseMatchScore(int faceID1, int faceID2) const;
-    float DevComputePairwiseMatchScore(int faceID1, const Image& img2, const TrackedFace& face2) const;
-#endif
-
-#if ANKI_DEV_CHEATS
-    void SaveAllRecognitionImages(const std::string& imagePathPrefix);
-    void DeleteAllRecognitionImages();
-#endif // ANKI_DEV_CHEATS
-
   private:
     
-    // Creates new face detectors using current parameters
     Result Init();
-
-    // Destructs current face detectors
-    void Deinit();
 
     bool   DetectFaceParts(INT32 nWidth, INT32 nHeight, RAWIMAGE* dataPtr,
                            INT32 detectionIndex, Vision::TrackedFace& face);
@@ -149,15 +117,7 @@ namespace Vision {
     bool DetectEyeContact(const TrackedFace& face,
                           const TimeStamp_t& frameOrig);
   
-    bool IsEnrollable(const DETECTION_INFO& detectionInfo, const TrackedFace& face, const f32 intraEyeDist);
-
-    void Reset();
-    
-    void SetCroppingMask(const INT32 nWidth, const INT32 nHeight, const float cropFactor);
-    
-    // Setting the pose of the face uses the camera's pose as its parent
-    Result SetFacePoseFromParts(const s32 nrows, const s32 ncols, TrackedFace& face, f32& intraEyeDist);
-    Result SetFacePoseWithoutParts(const s32 nrows, const s32 ncols, TrackedFace& face, f32& intraEyeDist);
+    bool IsEnrollable(const DETECTION_INFO& detectionInfo, const TrackedFace& face);
     
     bool _isInitialized = false;
     bool _detectEmotion = false;
@@ -165,9 +125,14 @@ namespace Vision {
     bool _detectGaze    = false;
     bool _detectBlinks  = false;
     
-    bool _isRecognitionEnabled = true;
-    
+    Json::Value _config;
+
     const Camera& _camera;
+    
+    static const s32   MaxFaces = 10; // detectable at once
+    
+    //u8* _workingMemory = nullptr;
+    //u8* _backupMemory  = nullptr;
     
     // Okao Vision Library "Handles"
     // Note that we have two actual handles for part detection so that we can
@@ -178,6 +143,7 @@ namespace Vision {
     HDTRESULT   _okaoDetectionResultHandle      = NULL;
     HPOINTER    _okaoPartDetectorHandle         = NULL;
     HPTRESULT   _okaoPartDetectionResultHandle  = NULL;
+    HPTRESULT   _okaoPartDetectionResultHandle2 = NULL;
     HEXPRESSION _okaoEstimateExpressionHandle   = NULL;
     HEXPRESSION _okaoExpressionResultHandle     = NULL;
     HSMILE      _okaoSmileDetectHandle          = NULL;
@@ -190,14 +156,14 @@ namespace Vision {
     INT32 _facialPartConfs[PT_POINT_KIND_MAX];
     INT32 _expressionValues[EX_EXPRESSION_KIND_MAX];
     
+    FaceEnrollmentPose _enrollPose = FaceEnrollmentPose::LookingStraight;
+    
     // Runs on a separate thread
     FaceRecognizer _recognizer;
     
     std::unique_ptr<Util::RandomGenerator> _rng;
     
     std::map<FaceID_t, EyeContact> _facesEyeContact;
-
-    std::set<FaceID_t> _allowedTrackedFaceID;
   }; // class FaceTracker::Impl
   
 } // namespace Vision

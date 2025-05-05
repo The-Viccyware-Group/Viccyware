@@ -17,15 +17,9 @@
 
 #include "test/engine/behaviorComponent/testBehaviorFramework.h"
 
-#include "clad/types/imu.h"
-#include "clad/types/behaviorComponent/behaviorClasses.h"
-#include "clad/types/behaviorComponent/behaviorIDs.h"
-#include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
-#include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/aiComponent.h"
-#include "engine/aiComponent/behaviorComponent/behaviorsBootLoader.h"
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorEventComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
@@ -33,25 +27,13 @@
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/delegationComponent.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
-#include "engine/aiComponent/behaviorComponent/behaviors/devDelegationRequirements.h"
 #include "engine/aiComponent/behaviorComponent/behaviorSystemManager.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/aiComponent/behaviorComponent/behaviorStack.h"
 #include "engine/aiComponent/behaviorComponent/userIntentComponent.h"
-#include "engine/block.h"
-#include "engine/blockWorld/blockWorld.h"
-#include "engine/blockWorld/blockWorldFilter.h"
-#include "engine/charger.h"
-#include "engine/components/battery/batteryComponent.h"
-#include "engine/components/mics/micComponent.h"
-#include "engine/components/visionComponent.h"
 #include "engine/cozmoContext.h"
-#include "engine/faceWorld.h"
 #include "engine/robot.h"
 #include "engine/robotDataLoader.h"
-#include "engine/unitTestKey.h"
 #include "gtest/gtest.h"
-#include "test/engine/behaviorComponent/testDelegationRequirements.h"
 
 #include <string>
 
@@ -59,17 +41,13 @@ namespace {
 
 }
 
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 
 namespace Anki{
-namespace Vector{
+namespace Cozmo{
 
 namespace {
-
-const std::string kNamedBehaviorStackFileName = "test/aiTests/namedBehaviorStacks.json";
-const char* kStackIsForTestOnlyKey = "stackIsForTestOnly";
-const char* kStackKey = "stack";
 
 template<typename T>
 T* GetFromMap(const BEIComponentMap& map, const BEIComponentID componentID) {
@@ -87,49 +65,35 @@ void InitBEIPartial( const BEIComponentMap& map, BehaviorExternalInterface& bei 
 {
   bei.Init(GetFromMap<AIComponent>(map, BEIComponentID::AIComponent),
            GetFromMap<AnimationComponent>(map, BEIComponentID::Animation),
-           GetFromMap<BeatDetectorComponent>(map, BEIComponentID::BeatDetector),
            GetFromMap<BehaviorContainer>(map, BEIComponentID::BehaviorContainer),
            GetFromMap<BehaviorEventComponent>(map, BEIComponentID::BehaviorEvent),
            GetFromMap<BehaviorTimerManager>(map, BEIComponentID::BehaviorTimerManager),
            GetFromMap<BlockWorld>(map, BEIComponentID::BlockWorld),
-           GetFromMap<BackpackLightComponent>(map, BEIComponentID::BackpackLightComponent),
+           GetFromMap<BodyLightComponent>(map, BEIComponentID::BodyLightComponent),
            GetFromMap<CubeAccelComponent>(map, BEIComponentID::CubeAccel),
-           GetFromMap<CubeCommsComponent>(map, BEIComponentID::CubeComms),
-           GetFromMap<CubeConnectionCoordinator>(map, BEIComponentID::CubeConnectionCoordinator),
-           GetFromMap<CubeInteractionTracker>(map, BEIComponentID::CubeInteractionTracker),
            GetFromMap<CubeLightComponent>(map, BEIComponentID::CubeLight),
-           GetFromMap<CliffSensorComponent>(map, BEIComponentID::CliffSensor),
            GetFromMap<DelegationComponent>(map, BEIComponentID::Delegation),
            GetFromMap<FaceWorld>(map, BEIComponentID::FaceWorld),
-           GetFromMap<HabitatDetectorComponent>(map, BEIComponentID::HabitatDetector),
-           GetFromMap<HeldInPalmTracker>(map, BEIComponentID::HeldInPalmTracker),
            GetFromMap<MapComponent>(map, BEIComponentID::Map),
-           GetFromMap<MicComponent>(map, BEIComponentID::MicComponent),
+           GetFromMap<MicDirectionHistory>(map, BEIComponentID::MicDirectionHistory),
            GetFromMap<MoodManager>(map, BEIComponentID::MoodManager),
-           GetFromMap<MovementComponent>(map, BEIComponentID::MovementComponent),
+           GetFromMap<ObjectPoseConfirmer>(map, BEIComponentID::ObjectPoseConfirmer),
            GetFromMap<PetWorld>(map, BEIComponentID::PetWorld),
-           GetFromMap<PhotographyManager>(map, BEIComponentID::PhotographyManager),
-           GetFromMap<PowerStateManager>(map, BEIComponentID::PowerStateManager),
+           GetFromMap<ProgressionUnlockComponent>(map, BEIComponentID::ProgressionUnlock),
            GetFromMap<ProxSensorComponent>(map, BEIComponentID::ProxSensor),
            GetFromMap<PublicStateBroadcaster>(map, BEIComponentID::PublicStateBroadcaster),
-           GetFromMap<SDKComponent>(map, BEIComponentID::SDK),
            GetFromMap<Audio::EngineRobotAudioClient>(map, BEIComponentID::RobotAudioClient),
            GetFromMap<BEIRobotInfo>(map, BEIComponentID::RobotInfo),
-           GetFromMap<DataAccessorComponent>(map, BEIComponentID::DataAccessor),
-           GetFromMap<TextToSpeechCoordinator>(map, BEIComponentID::TextToSpeechCoordinator),
            GetFromMap<TouchSensorComponent>(map, BEIComponentID::TouchSensor),
-           GetFromMap<VariableSnapshotComponent>(map, BEIComponentID::VariableSnapshotComponent),
            GetFromMap<VisionComponent>(map, BEIComponentID::Vision),
-           GetFromMap<VisionScheduleMediator>(map, BEIComponentID::VisionScheduleMediator),
-           GetFromMap<SettingsCommManager>(map, BEIComponentID::SettingsCommManager),
-           GetFromMap<SettingsManager>(map, BEIComponentID::SettingsManager),
-           GetFromMap<SleepTracker>(map, BEIComponentID::SleepTracker));
+           GetFromMap<VisionScheduleMediator>(map, BEIComponentID::VisionScheduleMediator));
+
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TestBehaviorFramework::TestBehaviorFramework(int robotID,
-                                             Anki::Vector::CozmoContext* context)
+                                             Anki::Cozmo::CozmoContext* context)
 : _behaviorExternalInterface(nullptr)
 , _behaviorSystemManager(nullptr)
 {
@@ -188,18 +152,15 @@ void TestBehaviorFramework::InitializeStandardBehaviorComponent(IBehavior* baseB
     auto entity = std::make_unique<BehaviorComponent::EntityType>();
 
     entity->AddDependentComponent(BCComponentID::AIComponent, _robot->GetComponentPtr<AIComponent>(), false);
-    auto bootLoader = new BehaviorsBootLoader(baseBehavior, {});
-    entity->AddDependentComponent(BCComponentID::BehaviorsBootLoader, bootLoader);
+    auto wrapper = new BaseBehaviorWrapper(baseBehavior);
+    entity->AddDependentComponent(BCComponentID::BaseBehaviorWrapper, wrapper);
     entity->AddDependentComponent(BCComponentID::BehaviorContainer, _behaviorContainer.get(), false);
 
     BehaviorComponent::GenerateManagedComponents(*_robot, entity);
 
     DependencyManagedEntity<RobotComponentID> dependencies;
-    dependencies.AddDependentComponent(RobotComponentID::MicComponent, _robot->GetComponentPtr<MicComponent>(), false);
-    dependencies.AddDependentComponent(RobotComponentID::Vision, _robot->GetComponentPtr<VisionComponent>(), false);
-    dependencies.AddDependentComponent(RobotComponentID::FaceWorld, _robot->GetComponentPtr<FaceWorld>(), false);
     _robot->GetAIComponent().InitDependent(_robot.get(), dependencies);
-    _behaviorComponent = _robot->GetAIComponent().GetComponentPtr<BehaviorComponent>();
+    _behaviorComponent = _robot->GetAIComponent().GetBasePtr<BehaviorComponent>();
 
     _behaviorComponent->SetComponents(std::move(entity));
     DependencyManagedEntity<AIComponentID> dependentComps;
@@ -252,9 +213,7 @@ void TestBehaviorFramework::SetDefaultBaseBehavior()
     const Json::Value& behaviorSystemConfig = (dataLoader != nullptr) ?
            dataLoader->GetVictorFreeplayBehaviorConfig() : blankActivitiesConfig;
 
-    BehaviorID baseBehaviorID = BEHAVIOR_ID(Anonymous);
-    const bool validBehavior = BehaviorIDFromString(behaviorSystemConfig["normalBaseBehavior"].asString(), baseBehaviorID);
-    DEV_ASSERT(validBehavior, "Base behavior not found");
+    BehaviorID baseBehaviorID = ICozmoBehavior::ExtractBehaviorIDFromConfig(behaviorSystemConfig);
     
     auto& bc = GetBehaviorContainer();
     baseBehavior = bc.FindBehaviorByID(baseBehaviorID).get();
@@ -282,8 +241,7 @@ void TestBehaviorFramework::ReplaceBehaviorStack(std::vector<IBehavior*> newStac
 
   if(newStack.size() > 0){
     auto baseBehaviorIter = newStack.begin();
-    bsm._behaviorStack->InitBehaviorStack(*baseBehaviorIter, 
-      GetBehaviorExternalInterface().GetRobotInfo().GetExternalInterface());
+    bsm._behaviorStack->InitBehaviorStack(*baseBehaviorIter);
     newStack.erase(baseBehaviorIter);
   }
   
@@ -306,146 +264,15 @@ void TestBehaviorFramework::AddDelegateToStack(IBehavior* delegate)
   // something
   auto& delegationComponent = GetBehaviorExternalInterface().GetDelegationComponent();
   delegationComponent.CancelDelegates(topOfStack);
-
-  const bool wtba __attribute((unused)) = delegate->WantsToBeActivated();
+  
+  delegate->WantsToBeActivated();
   bsm.Delegate(topOfStack, delegate);
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::ApplyAdditionalRequirementsBeforeDelegation(IBehavior* delegate)
-{
-  if( delegate->WantsToBeActivated() ) {
-    // nothing to do here
-    return;
-  }
-
-  ICozmoBehavior* delCozPtr = dynamic_cast<ICozmoBehavior*>(delegate);
-  if( delCozPtr != nullptr ) {
-    auto& bei = GetBehaviorExternalInterface();
-    
-    // Apply dev requirements from devDelegationRequirements before test requirements
-    ApplyForceDelegationRequirements( delCozPtr, bei );
-    
-    // move on to test requirements
-    if( !delCozPtr->WantsToBeActivated() ) {
-      
-      #define ADD_CASE_FOR_BEHAVIOR( x ) case BehaviorClass::x: { ApplyTestDelegationRequirements<BehaviorClass::x>(delCozPtr, *this); } break
-      // changes required by class
-      switch( delCozPtr->GetClass() ) {
-        
-        ADD_CASE_FOR_BEHAVIOR(AlexaSignInOut);
-        ADD_CASE_FOR_BEHAVIOR(AnimSequenceWithFace);
-        ADD_CASE_FOR_BEHAVIOR(ClearChargerArea);
-        ADD_CASE_FOR_BEHAVIOR(GoHome);
-        ADD_CASE_FOR_BEHAVIOR(VectorPlaysCubeSpinner);
-          
-        default:
-          break;
-      }
-      #undef ADD_CASE_FOR_BEHAVIOR
-      
-      if( !delCozPtr->WantsToBeActivated() ) {
-        #define ADD_CASE_FOR_BEHAVIOR( x ) case BehaviorID::x: { ApplyTestDelegationRequirements<BehaviorID::x>(delCozPtr, *this); } break
-        // changes required by ID
-        switch( delCozPtr->GetID() ) {
-            
-            ADD_CASE_FOR_BEHAVIOR(DriveOffChargerFace);
-            ADD_CASE_FOR_BEHAVIOR(Anonymous);
-            
-          default:
-            break;
-        }
-        #undef ADD_CASE_FOR_BEHAVIOR
-      }
-    }
-  }
-  
-  
-  std::set<IBehavior*> linkedScope;
-  delegate->GetLinkedActivatableScopeBehaviors( linkedScope );
-  for( auto* linkedDelegate : linkedScope ) {
-    ApplyAdditionalRequirementsBeforeDelegation( linkedDelegate );
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::RemoveAdditionalDelegationRequirements(IBehavior* delegate)
-{
-  std::set<IBehavior*> linkedScope;
-  delegate->GetLinkedActivatableScopeBehaviors( linkedScope );
-  for( auto* linkedDelegate : linkedScope ) {
-    RemoveAdditionalDelegationRequirements( linkedDelegate );
-  }
-  
-  ICozmoBehavior* delCozPtr = dynamic_cast<ICozmoBehavior*>(delegate);
-  if( delCozPtr != nullptr ) {
-    // search first by behaviorID, and if that doesn't match, search by debug label
-    auto it = _cachedDelegationReqs.find(BehaviorIDToString(delCozPtr->GetID()));
-    if( it == _cachedDelegationReqs.end() ) {
-      if( delCozPtr->GetID() == BEHAVIOR_ID(Anonymous) ) {
-        it = _cachedDelegationReqs.find(delegate->GetDebugLabel());
-      }
-    }
-    if( it != _cachedDelegationReqs.end() ) {
-      #define ADD_CASE_FOR_BEHAVIOR( x ) case BehaviorID::x: { RemoveTestDelegationRequirements<BehaviorID::x>(delCozPtr, *this, it->second); } break
-      switch( delCozPtr->GetID() ) {
-          
-        ADD_CASE_FOR_BEHAVIOR(DriveOffChargerFace);
-        ADD_CASE_FOR_BEHAVIOR(Anonymous);
-          
-        default:
-          break;
-      }
-      #undef ADD_CASE_FOR_BEHAVIOR
-      _cachedDelegationReqs.erase( it );
-    }
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-std::vector<IBehavior*> TestBehaviorFramework::GetNamedBehaviorStack(const std::string& stackName)
-{
-  if(_namedBehaviorStacks.empty()){
-    LoadNamedBehaviorStacks();
-  }
-
-  ASSERT_NAMED(_namedBehaviorStacks.find(stackName) != _namedBehaviorStacks.end(),
-               ("No namedBehaviorStack exists with name: " + stackName).c_str());
-  return _namedBehaviorStacks[stackName];
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::SetBehaviorStackByName(const std::string& stackName)
-{
-  if(_namedBehaviorStacks.empty()){
-    LoadNamedBehaviorStacks();
-  }
-
-  ASSERT_NAMED(_namedBehaviorStacks.find(stackName) != _namedBehaviorStacks.end(),
-               ("No namedBehaviorStack exists with name: " + stackName).c_str());
-  ReplaceBehaviorStack(_namedBehaviorStacks[stackName]);
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TestBehaviorFramework::FullTreeWalk(std::map<IBehavior*,std::set<IBehavior*>>& delegateMap,
-                                         const std::function<void(void)>& evaluateTreeCallback,
-                                         const std::function<void(IBehavior*)>& evaluatePreDelegationCallback)
-{
-  static std::function<void(bool)> empty;
-  FullTreeWalk(delegateMap,
-               evaluateTreeCallback ? [&](bool leaf){ evaluateTreeCallback(); } : empty,
-               evaluatePreDelegationCallback);
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::FullTreeWalk(std::map<IBehavior*,std::set<IBehavior*>>& delegateMap,
-                                         const std::function<void(bool)>& evaluateTreeCallback,
-                                         const std::function<void(IBehavior*)>& evaluatePreDelegationCallback)
+                                         std::function<void(void)> evaluateTreeCallback)
 {
   if(delegateMap.empty()){
     return;
@@ -455,40 +282,22 @@ void TestBehaviorFramework::FullTreeWalk(std::map<IBehavior*,std::set<IBehavior*
     auto iter = delegateMap.find(topOfStack);
     if(iter != delegateMap.end()){
       for(auto& delegate: iter->second){
-        
-        // Apply special cases to system
-        ApplyAdditionalRequirementsBeforeDelegation(delegate);
-        
-        if(evaluatePreDelegationCallback != nullptr){
-          evaluatePreDelegationCallback(delegate);
-        }
-        
         AddDelegateToStack(delegate);
         // Cancel any behaviors delegated to on activation
         // we'll push them on manually later
         bsm.CancelDelegates(delegate);
-
-        // if we don't have the new delegates in the map yet then add them now
-        auto nextDelegates = delegateMap.find(delegate);
-        if( nextDelegates == delegateMap.end() ) {
-          std::set<IBehavior*> tmpDelegates;
-          delegate->GetAllDelegates(tmpDelegates);
-          nextDelegates = delegateMap.insert(std::make_pair(delegate, std::move(tmpDelegates))).first;
-        }
-
-        ASSERT_NAMED(nextDelegates != delegateMap.end(), "TestBehaviorFramework.TreeWalk.InvalidDelegates");
-        
         if(evaluateTreeCallback != nullptr){
-          const bool isLeaf = nextDelegates->second.empty();
-          evaluateTreeCallback(isLeaf);
+          evaluateTreeCallback();
         }
-        
-        RemoveAdditionalDelegationRequirements(delegate);
-        
-        FullTreeWalk(delegateMap, evaluateTreeCallback, evaluatePreDelegationCallback);
+        FullTreeWalk(delegateMap, evaluateTreeCallback);
       }
       delegateMap.erase(iter);
       bsm.CancelSelf(topOfStack);
+    }else{
+      std::set<IBehavior*> tmpDelegates;
+      topOfStack->GetAllDelegates(tmpDelegates);
+      delegateMap.insert(std::make_pair(topOfStack, std::move(tmpDelegates)));
+      FullTreeWalk(delegateMap, evaluateTreeCallback);
     }
   }
 }
@@ -544,6 +353,31 @@ bool TestBehaviorFramework::CanStackOccurDuringFreeplay(const std::vector<IBehav
   return sawMatch;
 }
 
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool TestBehaviorFramework::TestUserIntentTransition(const std::vector<IBehavior*>& initialStack,
+                                                     UserIntent intentToSend,
+                                                     BehaviorID expectedIntentHandlerID)
+{
+  ReplaceBehaviorStack(initialStack);
+  
+  // Send user intent
+  auto& uic = GetBehaviorComponent().GetComponent<UserIntentComponent>();
+  uic.SetUserIntentPending(std::move(intentToSend));
+
+  // Tick the behavior component so that the behavior can respond to the intent
+  AICompMap emptyMap;
+  GetBehaviorComponent().UpdateDependent(emptyMap);
+
+  // Check the result
+  BehaviorSystemManager& bsm = GetBehaviorSystemManager();
+  IBehavior* topOfStack = bsm._behaviorStack->GetTopOfStack();
+  auto castTopOfStack = dynamic_cast<ICozmoBehavior*>(topOfStack);
+
+  return castTopOfStack->_id == expectedIntentHandlerID;
+}
+
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DoBehaviorComponentTicks(Robot& robot, ICozmoBehavior& behavior, BehaviorComponent& behaviorComponent, int num)
 {
@@ -586,10 +420,9 @@ void InjectBehaviorIntoStack(ICozmoBehavior& injectBehavior, TestBehaviorFramewo
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void IncrementBaseStationTimerTicks()
+void IncrementBaseStationTimerTicks(int numTicks)
 {
-  BaseStationTime_t t = BaseStationTimer::getInstance()->GetCurrentTimeInNanoSeconds() + 1e6f * ROBOT_TIME_STEP_MS;
-  BaseStationTimer::getInstance()->UpdateTime( t );
+  BaseStationTimer::getInstance()->UpdateTime(BaseStationTimer::getInstance()->GetTickCount() + numTicks);
 }
 
 
@@ -612,7 +445,7 @@ void InjectValidDelegateIntoBSM(TestBehaviorFramework& testFramework,
 
   if (shouldMarkAsEnteredScope) {
     delegated->OnEnteredActivatableScope();
-    const bool wtba __attribute((unused)) = delegated->WantsToBeActivated();
+    delegated->WantsToBeActivated();
   }
 }
 
@@ -801,146 +634,6 @@ bool TestBehavior::CallDelegateIfInControlInternalCallbackRobot(Robot& robot,
   new WaitForLambdaAction([&actionCompleteRef](Robot& r){ return actionCompleteRef; });
 
   return DelegateIfInControl(action, &TestBehavior::Bar);
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::LoadNamedBehaviorStacks()
-{
-  ASSERT_NAMED( _namedBehaviorStacks.empty(), "Named Behavior Stacks should be loaded only once");
-
-  Json::Value stackList;
-  const bool readSuccess = cozmoContext->GetDataPlatform()->readAsJson(Util::Data::Scope::Resources,
-                                                                       kNamedBehaviorStackFileName,
-                                                                       stackList);
-  ASSERT_NAMED( readSuccess, ("TestBehaviorFramework error reading file: " + kNamedBehaviorStackFileName).c_str() );
-
-  for (const auto& behaviorStackName : stackList.getMemberNames() ){
-    std::vector<IBehavior*> behaviorStack;
-    Json::Value stackInfo = stackList[behaviorStackName];
-    bool stackIsForTestOnly = stackInfo[kStackIsForTestOnlyKey].asBool();
-    Json::Value jsonStack = stackInfo[kStackKey];
-    for(auto& behaviorName : jsonStack){
-      BehaviorID behaviorId;
-      ASSERT_NAMED(EnumFromString(behaviorName.asString(), behaviorId), 
-                   ("no behavior exists of name: " + behaviorName.asString()).c_str());
-
-      behaviorStack.push_back(GetBehaviorContainer().FindBehaviorByID(behaviorId).get());
-    }
-    const auto& it = _namedBehaviorStacks.find(behaviorStackName);
-    ASSERT_NAMED( it == _namedBehaviorStacks.end(), 
-                 ("Name already exists for behavior stack: " + behaviorStackName).c_str());
-    ASSERT_NAMED(stackIsForTestOnly || CanStackOccurDuringFreeplay(behaviorStack),
-                 ("Named Behavior Stack: " + behaviorStackName + " is not achievable during freeplay").c_str());
-    _namedBehaviorStacks[behaviorStackName] = behaviorStack;
-  }
-}
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::AddFakeFirstFace()
-{
-  auto* faceWorld = _robot->GetComponentPtr<FaceWorld>();
-  if( faceWorld->HasAnyFaces() ) {
-    return;
-  }
-  
-  std::list<Vision::TrackedFace> faceList;
-  // create a fake face and add it to faceList
-  {
-    Vision::TrackedFace face;
-    Pose3d headPose{0, Z_AXIS_3D(), {300.f, 300.f, 300.f}};
-    face.SetID( 255 );
-    face.SetTimeStamp( (TimeStamp_t)faceWorld->_lastObservedFaceTimeStamp );
-    face.SetHeadPose( headPose );
-    
-    faceList.emplace_front( std::move(face) );
-  }
-  
-  if( _robot->GetStateHistory()->GetNumRawStates() == 0 ) {
-    // faceworld needs an update to robot state before adding a face (this should only happen in unit tests)
-    RobotState robotState = Robot::GetDefaultRobotState();
-    _robot->GetStateHistory()->AddRawOdomState(faceWorld->_lastObservedFaceTimeStamp, HistRobotState(_robot->GetPose(), robotState, {}));
-    
-    // a face only gets added if the robot isn't moving much. to check this, there must be some IMU values
-    TimeStamp_t ts = (TimeStamp_t)faceWorld->_lastObservedFaceTimeStamp;
-    _robot->GetImuComponent().AddData( IMUDataFrame{ts, GyroData{0.0f, 0.0f, 0.0f}} );
-    _robot->GetImuComponent().AddData( IMUDataFrame{ts, GyroData{0.0f, 0.0f, 0.0f}} );
-    _robot->GetImuComponent().AddData( IMUDataFrame{ts, GyroData{0.0f, 0.0f, 0.0f}} );
-  }
-  
-  // Update() gets called more than once per tick already whenever multiple robot messages are received, so
-  // calling it again shouldn't be any more of an issue in dev than it is in prod
-  faceWorld->Update( faceList );
-  
-  DEV_ASSERT_MSG( faceWorld->HasAnyFaces(), "TestBehaviorFramework.DevAddFakeFace.NoFaces", "Method failed to add a face" );
-}
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::AddFakeFirstObject( ObjectType objectType, Pose3d* pose )
-{
-  auto* blockWorld = _robot->GetComponentPtr<BlockWorld>();
-  BlockWorldFilter filter;
-  filter.AddAllowedType( objectType );
-  const bool anyObject = (nullptr != blockWorld->FindLocatedMatchingObject(filter));
-  if( anyObject ) {
-    return;
-  }
-  
-  Anki::Pose3d originPose;
-  originPose.SetParent( _robot->GetWorldOrigin() );
-  if( pose == nullptr ) {
-    pose = &originPose;
-  }
-  
-  ObservableObject* objectPtr;
-  switch( objectType ) {
-    case ObjectType::Charger_Basic:
-      objectPtr = new Charger();
-      break;
-    case ObjectType::Block_LIGHTCUBE1:
-    case ObjectType::Block_LIGHTCUBE2:
-    case ObjectType::Block_LIGHTCUBE3:
-      objectPtr = new Block( objectType );
-      break;
-    default:
-      // unsupported
-      ANKI_VERIFY( false, "TestBehaviorFramework.AddFakeFirstObject.Unsupported", "");
-      return;
-  }
-  
-  ANKI_VERIFY(nullptr != objectPtr, "TestBehaviorFramework.AddFakeFirstObject.CreatedNull", "");
-  ANKI_VERIFY(!objectPtr->GetID().IsSet(), "TestBehaviorFramework.AddFakeFirstObject.IDSet", "");
-  ANKI_VERIFY(!objectPtr->HasValidPose(), "TestBehaviorFramework.AddFakeFirstObject.HasValidPose", "");
-  objectPtr->SetID();
-  objectPtr->InitPose( *pose, Anki::PoseState::Known);
-  blockWorld->AddLocatedObject( std::shared_ptr<ObservableObject>(objectPtr) );
-  
-  ANKI_VERIFY( blockWorld->FindLocatedMatchingObject(filter) != nullptr, "TestBehaviorFramework.AddFakeFirstObject.Fail", "" );
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void TestBehaviorFramework::IterateSimpleVoiceResponse(std::function< void( const MetaUserIntent_SimpleVoiceResponse& ) > lambda)
-{
-  if( ANKI_VERIFY(_aiComponent != nullptr, "TestBehaviorFramework.IterateSimpleVoiceResponse.NullAIComponent", "") ) {
-    auto& uic = _aiComponent->GetComponent<BehaviorComponent>().GetComponent<UserIntentComponent>();
-    uic.DEVONLY_IterateSimpleVoiceResponse({}, lambda);
-  }
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool CheckStackSuffixMatch(const std::vector<IBehavior*>& a, const std::vector<IBehavior*>& b)
-{
-  auto aIter = a.rbegin();
-  auto bIter = b.rbegin();
-
-  while( aIter != a.rend() && bIter != b.rend() ) {
-    if( *aIter != *bIter ) {
-      return false;
-    }
-    aIter++;
-    bIter++;
-  }
-
-  return true;
 }
 
 }

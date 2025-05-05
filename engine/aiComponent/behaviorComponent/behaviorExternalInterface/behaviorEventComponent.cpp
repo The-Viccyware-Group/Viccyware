@@ -16,10 +16,9 @@
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/robot.h"
 #include "util/logging/logging.h"
-#include "proto/external_interface/shared.pb.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace{
 
@@ -36,7 +35,7 @@ BehaviorEventComponent::BehaviorEventComponent()
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorEventComponent::InitDependent(Robot* robot, const BCCompMap& dependentComps)
+void BehaviorEventComponent::InitDependent(Robot* robot, const BCCompMap& dependentComponents)
 {
   Init(robot->GetAIComponent().GetComponent<BehaviorComponent>());
 }
@@ -83,18 +82,7 @@ void BehaviorEventComponent::SubscribeToTags(IBehavior* subscriber,
     _messageSubscriber->_ref.SubscribeToTags(subscriber, std::move(tags));
   }
 }
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorEventComponent::SubscribeToTags(IBehavior* subscriber,
-                                             std::set<AppToEngineTag>&& tags) const
-{
-  if(ANKI_VERIFY(_messageSubscriber != nullptr,
-                 "BehaviorEventComponent.SubscribeToTags.NoMessageSubscriber",
-                 "")){
-    _messageSubscriber->_ref.SubscribeToTags(subscriber, std::move(tags));
-  }
-}
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

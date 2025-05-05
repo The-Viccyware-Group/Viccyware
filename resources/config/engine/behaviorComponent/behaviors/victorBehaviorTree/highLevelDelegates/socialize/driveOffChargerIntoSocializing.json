@@ -1,7 +1,6 @@
 {
-  "behaviorClass": "DispatcherPassThrough",
+  "behaviorClass": "DriveOffCharger",
   "behaviorID": "DriveOffChargerIntoSocializing",
-  "associatedActiveFeature": "NoFeature",
-  "resetTimers": ["Socializing"],
-  "delegateID": "DriveOffChargerFace"
+  "extraDistanceToDrive_mm": 60.0,
+  "resetTimers": ["Socializing"]
 }

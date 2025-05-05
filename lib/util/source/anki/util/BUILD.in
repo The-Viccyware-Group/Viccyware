@@ -3,12 +3,12 @@ cxx_project(
     name = 'util',
     srcs = cxx_src_glob(['.'], excludes = ['ptree/*']),
     platform_srcs = [
-        ('vicos', glob(['**/*_vicos.cpp'])),
+        ('android', glob(['**/*_android.cpp'])),
         ('mac', glob(['**/*_iososx.mm']))
     ],
     headers = cxx_header_glob(['.'], excludes = ['ptree/*']),
     platform_headers = [
-        ('vicos', glob(['**/*_vicos.h'])),
+        ('android', glob(['**/*_android.h'])),
         ('mac', glob(['**/*_iososx.h']))
     ]
 )

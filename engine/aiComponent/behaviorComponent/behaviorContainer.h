@@ -31,7 +31,7 @@ namespace Json {
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorExternalInterface;
 class IExternalInterface;
@@ -46,12 +46,10 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Robot* robot, const BCCompMap& dependentComps) override;
-  virtual void UpdateDependent(const BCCompMap& dependentComps) override {};
+  virtual void InitDependent(Robot* robot, const BCCompMap& dependentComponents) override;
+  virtual void UpdateDependent(const BCCompMap& dependentComponents) override {};
   virtual void GetInitDependencies(BCCompIDSet& dependencies) const override {
     dependencies.insert(BCComponentID::BehaviorExternalInterface);
-    // Init the onboardingMessageHandler before BC so the OnboardingCoordinator can subscribe through it
-    dependencies.insert(BCComponentID::OnboardingMessageHandler);
   }
   virtual void GetUpdateDependencies(BCCompIDSet& dependencies) const override {};
   //////
@@ -60,8 +58,7 @@ public:
 
 
   ICozmoBehaviorPtr FindBehaviorByID(BehaviorID behaviorID) const;
-  
-  std::set<ICozmoBehaviorPtr> FindBehaviorsByClass(BehaviorClass behaviorClass) const;
+  ICozmoBehaviorPtr FindBehaviorByExecutableType(ExecutableBehaviorType type) const;
 
   // Sometimes it's necessary to downcast to a behavior to a specific behavior pointer, e.g. so an Activity
   // can access its member functions. This function will help with that and provide a few assert checks along
@@ -90,7 +87,10 @@ public:
 
   void Init(BehaviorExternalInterface& behaviorExternalInterface);
 protected:
-  friend class BehaviorComponentMessageHandler;
+  friend class DevBehaviorComponentMessageHandler;
+  // Check to ensure that the factory only includes one behavior per executable
+  // type
+  void VerifyExecutableBehaviors() const;
 
   using BehaviorIDToBehaviorMap = std::map<BehaviorID, ICozmoBehaviorPtr>;
 
@@ -108,7 +108,7 @@ private:
   // helper to avoid including ICozmoBehavior.h here
   BehaviorClass GetBehaviorClass(ICozmoBehaviorPtr behavior) const;
 
-  // hide behaviorClasses.h file in .cpp
+  // hide behaviorTypes.h file in .cpp
   std::string GetClassString(BehaviorClass behaviorClass) const;
 
   // ============================== Private Member Vars ==============================
@@ -151,7 +151,7 @@ bool BehaviorContainer::FindBehaviorByIDAndDowncast(BehaviorID behaviorID,
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

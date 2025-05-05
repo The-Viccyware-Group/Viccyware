@@ -51,12 +51,12 @@ class CopyResources(object):
                         action='store', default=None, help='where build tools are located')
     parser.add_argument('--externalAssetsPath', dest='externalAssetsPath', required=True,
                         action='store', default=None, help='where external assets are unpackaged at')
-    parser.add_argument('--CladEnumToStringMapsPath', dest='CladEnumToStringMapsPath', required=True,
-                        action='store', default=None, help='where all clad to file maps are located')
+    parser.add_argument('--animationGroupsPath', dest='animationGroupPath', required=True,
+                        action='store', default=None, help='where animation groups are located')
+    parser.add_argument('--cubeAnimationGroupPath', dest='cubeAnimationGroupPath', required=True,
+                        action='store', default=None, help='where cube animation groups are located')
     parser.add_argument('--rewardedActionsPath', dest='rewardedActionsPath', required=True,
                         action='store', default=None, help='Where rewarded actions data is located')
-    parser.add_argument('--compositeImageResourcePath', dest='compositeImageResourcePath', required=True,
-                        action='store', default=None, help='Where composite image specifications are located')
     parser.add_argument('--engineResourcesPath', dest='engineResourcesPath', required=True,
                         action='store', default=None, help='where engine resources are located')
     parser.add_argument('--ttsResourcesPath', dest='ttsResourcesPath', required=True,
@@ -149,12 +149,20 @@ class CopyResources(object):
         if file.endswith(".tar"):
           ankibuild.util.File.rm(os.path.join(root, file))
 
-    # CladEnumToStringMaps
-    CladEnumToStringMapsPath = os.path.join(cozmoResourcesPath, 'assets/cladToFileMaps')
-    if os.path.isdir(CladEnumToStringMapsPath):
-      ankibuild.util.File.rm_rf(CladEnumToStringMapsPath)
-    if not ankibuild.util.File.cptree(self.options.CladEnumToStringMapsPath, CladEnumToStringMapsPath):
-      self.log.error("error copying {0} to {1}".format (self.options.CladEnumToStringMapsPath, CladEnumToStringMapsPath))
+    # animation groups
+    animationGroupPath = os.path.join(cozmoResourcesPath, 'assets/animationGroupMaps')
+    if os.path.isdir(animationGroupPath):
+      ankibuild.util.File.rm_rf(animationGroupPath)
+    if not ankibuild.util.File.cptree(self.options.animationGroupPath, animationGroupPath):
+      self.log.error("error copying {0} to {1}".format (self.options.animationGroupPath, animationGroupPath))
+      return False
+      
+    # cube animation groups
+    cubeAnimationGroupPath = os.path.join(cozmoResourcesPath, 'assets/cubeAnimationGroupMaps')
+    if os.path.isdir(cubeAnimationGroupPath):
+      ankibuild.util.File.rm_rf(cubeAnimationGroupPath)
+    if not ankibuild.util.File.cptree(self.options.cubeAnimationGroupPath, cubeAnimationGroupPath):
+      self.log.error("error copying {0} to {1}".format (self.options.cubeAnimationGroupPath, cubeAnimationGroupPath))
       return False
 
     # rewarded actions
@@ -163,14 +171,6 @@ class CopyResources(object):
       ankibuild.util.File.rm_rf(rewardedActionsPath)
     if not ankibuild.util.File.cptree(self.options.rewardedActionsPath, rewardedActionsPath):
       self.log.error("error copying {0} to {1}".format (self.options.rewardedActionsPath, rewardedActionsPath))
-      return False
-
-    # composite image resources
-   compositeImageResourcePath = os.path.join(cozmoResourcesPath, 'assets/compositeImageResources')
-    if os.path.isdir(compositeImageResourcePath):
-      ankibuild.util.File.rm_rf(compositeImageResourcePath)
-    if not ankibuild.util.File.cptree(self.options.compositeImageResourcePath, compositeImageResourcePath):
-      self.log.error("error copying {0} to {1}".format (self.options.compositeImageResourcePath, compositeImageResourcePath))
       return False
 
     # engine resources
@@ -232,10 +232,16 @@ class CopyResources(object):
     args += [self.options.externalAssetsPath, assetsPath]
     ankibuild.util.File.execute(args)
 
-    # CladEnumToStringMaps
-    CladEnumToStringMapsPath = os.path.join(cozmoResourcesPath, 'assets/cladToFileMaps')
+    # animation groups
+    animationGroupPath = os.path.join(cozmoResourcesPath, 'assets/animationGroupMaps')
     args = baseargs[:]
-    args += [self.options.CladEnumToStringMapsPath, CladEnumToStringMapsPath]
+    args += [self.options.animationGroupPath, animationGroupPath]
+    ankibuild.util.File.execute(args)
+    
+    # cube animation groups
+    cubeAnimationGroupPath = os.path.join(cozmoResourcesPath, 'assets/cubeAnimationGroupMaps')
+    args = baseargs[:]
+    args += [self.options.cubeAnimationGroupPath, cubeAnimationGroupPath]
     ankibuild.util.File.execute(args)
 
     # rewarded actions

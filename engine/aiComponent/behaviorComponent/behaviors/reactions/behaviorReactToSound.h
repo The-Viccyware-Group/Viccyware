@@ -14,15 +14,13 @@
 #define __Cozmo__BehaviorReactToSound_h__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/mics/micDirectionTypes.h"
+#include "engine/micDirectionTypes.h"
 
 #include <vector>
 
 
 namespace Anki {
-namespace Vector {
-
-class BehaviorReactToMicDirection;
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 class BehaviorReactToSound : public ICozmoBehavior
@@ -50,7 +48,6 @@ public:
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  void InitBehavior() override;
   virtual bool WantsToBeActivatedBehavior() const override;
   virtual void GetBehaviorOperationModifiers( BehaviorOperationModifiers& modifiers ) const override;
   virtual void GetBehaviorJsonKeys( std::set<const char*>& expectedKeys ) const override;
@@ -60,15 +57,9 @@ protected:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Behavior Related Functions
 
-  virtual void GetAllDelegates( std::set<IBehavior*>& delegates ) const override;
-
+  virtual void GetAllDelegates( std::set<IBehavior*>& delegates ) const override { }
   virtual void OnBehaviorActivated() override;
   virtual void OnBehaviorDeactivated() override;
-
-  virtual void OnBehaviorEnteredActivatableScope() override;
-  virtual void OnBehaviorLeftActivatableScope() override;
-
-
   virtual void BehaviorUpdate() override;
 
 
@@ -77,21 +68,23 @@ private:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Helper Functions
 
-  void SetTriggerDirection( MicDirectionIndex direction );
-  void ClearTriggerDirection();
+  MicDirectionNodeList GetLatestMicDirectionData() const;
+  DirectionTrigger GetTriggerData( MicDirectionIndex index ) const;
+  DirectionResponse GetResponseData( MicDirectionIndex index ) const;
 
-  // callback function for sound reaction
-  bool OnMicPowerSampleRecorded( double, MicDirectionConfidence, MicDirectionIndex );
+  bool HeardValidSound( MicDirectionIndex& outIndex ) const;
 
-  void OnValidSoundDetected( MicDirectionIndex, double, MicDirectionConfidence );
   void RespondToSound();
   void OnResponseComplete();
 
   bool CanReactToSound() const;
-  bool CanReactToDirection( MicDirectionIndex ) const;
 
-  EngineTimeStamp_t GetCurrentTimeMS() const;
-
+  TimeStamp_t GetCurrentTimeMS() const;
+  TimeStamp_t GetCooldownBeginTime() const;
+  TimeStamp_t GetCooldownEndTime() const;
+  // the earliest timestamp that we'll respond to a sound
+  TimeStamp_t GetReactionWindowBeginTime() const;
+  
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Internal Data Structure Definitions ...
@@ -114,27 +107,14 @@ private:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Member Data
 
-  struct InstanceConfig
-  {
-    InstanceConfig();
 
-    std::string reactionBehaviorString;
-    std::shared_ptr<BehaviorReactToMicDirection> reactionBehavior;
+  static const MicDirectionIndex kInvalidDirectionIndex;
 
-    float absolutePowerThreshold;
-    float minPowerThreshold;
-    MicDirectionConfidence confidenceThresholdAtMinPower;
+  EObservationStatus                    _observationStatus        = EObservationStatus::EObservationStatus_Awake;
+  MicDirectionIndex                     _triggeredDirection       = kInvalidDirectionIndex;
 
-    SoundReactorId  reactorId;
-
-  } _iVars;
-
-  // these are the values that we're reacting to
-  MicDirectionIndex                     _triggeredDirection       = kInvalidMicDirectionIndex;
-  double                                _triggeredMicPower        = 0.0;
-  MicDirectionConfidence                _triggeredConfidence      = 0;
-
-  EngineTimeStamp_t                     _triggerDetectedTime      = 0;
+  TimeStamp_t                           _reactionTriggeredTime    = 0;
+  TimeStamp_t                           _reactionEndedTime        = 0;
 };
 
 }

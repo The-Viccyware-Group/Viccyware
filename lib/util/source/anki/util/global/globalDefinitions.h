@@ -19,50 +19,22 @@
 // testing in release, nor available to players.
 // Use ANKI_DEV_CHEATS to strip down code that should be available to developers in debug and testing in release,
 // but not available to players.
+// Use ANKI_PRIVACY_GUARD and HidePersonallyIdentifiableInfo() for anything that should not be present in shipping mode,
+// such as players' names in logs. NOTE: This is a separate flag from DEV_CHEATS to make it easier to find use cases in
+// the code and in case we want to set it differently via other build flags later without changing code.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #if defined(NDEBUG)
-  #ifndef ANKI_DEVELOPER_CODE
-    #define ANKI_DEVELOPER_CODE     0
-  #endif
-  #ifndef ANKI_DEV_CHEATS
-    #define ANKI_DEV_CHEATS         1 // This is the expected behavior on "release" builds, overridden with command-line defines for shipping builds
-  #endif
-  #ifndef ANKI_PROFILING_ENABLED
-    #define ANKI_PROFILING_ENABLED  0
-  #endif
-
-  // For macros like PRINT_NAMED_ERROR or LOG_ERROR, send these to DAS
-  #ifndef ANKI_REPORT_ERRORS_TO_DAS
-     #define ANKI_REPORT_ERRORS_TO_DAS 1
-  #endif
-
-  // If sending ERRORs to DAS, also include the descriptive message along
-  // with the error name to help in debugging.  It is expected that this
-  // will only be turned on for non-shipping builds.
-  #ifndef ANKI_REPORT_ERRORS_WITH_STRVAL_TO_DAS
-     #define ANKI_REPORT_ERRORS_WITH_STRVAL_TO_DAS 1
-  #endif
+  #define ANKI_DEVELOPER_CODE     0
+  #define ANKI_DEV_CHEATS         1 // enabled as tests are failing in release
+  #define ANKI_PROFILING_ENABLED  1
+  #define ANKI_PRIVACY_GUARD      1 // PII not displayed in release logs!!!
 #else
   #define ANKI_DEVELOPER_CODE     1
   #define ANKI_DEV_CHEATS         1
   #define ANKI_PROFILING_ENABLED  1
-  #define ANKI_REPORT_ERRORS_TO_DAS 1
-  #define ANKI_REPORT_ERRORS_WITH_STRVAL_TO_DAS 1
+  #define ANKI_PRIVACY_GUARD      0 // PII displayed in debug logs!!!
 #endif
 
-//
-// Use ANKI_PRIVACY_GUARD and HidePersonallyIdentifiableInfo() for anything that should not be present in shipping mode,
-// such as players' names in logs. NOTE: This is a separate flag from DEV_CHEATS to make it easier to find use cases in
-// the code and in case we want to set it differently via other build flags later without changing code.
-//
-// ANKI_PRIVACY_GUARD is OFF by default for debug and release builds.
-// This means PII will be displayed for developers and QA testing.
-//
-// Privacy guard must be enabled with -DANKI_PRIVACY_GUARD=1 for shipping builds.
-//
-#ifndef ANKI_PRIVACY_GUARD
-#define ANKI_PRIVACY_GUARD 0
-#endif
 
 #if ANKI_DEVELOPER_CODE
   #define ANKI_DEVELOPER_CODE_ONLY(expr)      expr
@@ -79,26 +51,7 @@ namespace Anki {
 namespace Util {
 
   // Simply returns given string unless ANKI_PRIVACY_GUARD is enabled, in which case "<PII>" is returned.
-  inline const char * HidePersonallyIdentifiableInfo(const char* str);
-
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// inlined definitions ...
-
-const char * HidePersonallyIdentifiableInfo(const char* str)
-{
-  #if ANKI_PRIVACY_GUARD
-  {
-    static const char * const kPrivacyString = "<PII>";
-    return kPrivacyString;
-  }
-  #else
-  {
-    return str;
-  }
-  #endif // ANKI_PRIVACY_GUARD
-}
+  const char * HidePersonallyIdentifiableInfo(const char* str);
 
 }
 }

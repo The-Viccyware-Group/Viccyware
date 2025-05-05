@@ -73,7 +73,7 @@
         <LExpSel>0</LExpSel>
       </OPTXL>
       <OPTFL>
-        <tvExp>1</tvExp>
+        <tvExp>0</tvExp>
         <tvExpOptDlg>0</tvExpOptDlg>
         <IsCurrentTarget>1</IsCurrentTarget>
       </OPTFL>
@@ -177,19 +177,34 @@
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>values</ItemText>
+          <ItemText>Analog::values[0] * 2.8 / 4096.0</ItemText>
         </Ww>
         <Ww>
           <count>1</count>
           <WinNumber>1</WinNumber>
-          <ItemText>values[1] * 2.8f / * 2048.0f</ItemText>
+          <ItemText>Analog::values[1] * 2.8 / 4096.0</ItemText>
+        </Ww>
+        <Ww>
+          <count>2</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>Analog::values[2] * 2.8 / 2048.0</ItemText>
+        </Ww>
+        <Ww>
+          <count>3</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>Analog::values[4] * 2.8 / 4096.0</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>button_pressed</ItemText>
         </Ww>
       </WatchWindow1>
       <MemoryWindow1>
         <Mm>
           <WinNumber>1</WinNumber>
           <SubType>0</SubType>
-          <ItemText>0x08002000</ItemText>
+          <ItemText>0x8003000</ItemText>
           <AccSizeX>0</AccSizeX>
         </Mm>
       </MemoryWindow1>
@@ -316,8 +331,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\crypto\sha256.cpp</PathWithFileName>
-      <FilenameWithoutPath>sha256.cpp</FilenameWithoutPath>
+      <PathWithFileName>.\boot\power.cpp</PathWithFileName>
+      <FilenameWithoutPath>power.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -328,8 +343,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\boot\analog.cpp</PathWithFileName>
-      <FilenameWithoutPath>analog.cpp</FilenameWithoutPath>
+      <PathWithFileName>.\crypto\sha256.cpp</PathWithFileName>
+      <FilenameWithoutPath>sha256.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -348,8 +363,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\common\flash.cpp</PathWithFileName>
-      <FilenameWithoutPath>flash.cpp</FilenameWithoutPath>
+      <PathWithFileName>.\common\analog.cpp</PathWithFileName>
+      <FilenameWithoutPath>analog.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -360,8 +375,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\boot\power.cpp</PathWithFileName>
-      <FilenameWithoutPath>power.cpp</FilenameWithoutPath>
+      <PathWithFileName>.\common\flash.cpp</PathWithFileName>
+      <FilenameWithoutPath>flash.cpp</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

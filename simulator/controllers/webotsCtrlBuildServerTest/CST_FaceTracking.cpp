@@ -13,7 +13,7 @@
 #include "simulator/game/cozmoSimTestController.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 enum class TestState {
   Init,
   WaitToObserveFace,
@@ -137,5 +137,5 @@ void CST_FaceTracking::HandleRobotObservedFace(ExternalInterface::RobotObservedF
   _faceIsObserved = true;
 }
 
-}  // namespace Vector
+}  // namespace Cozmo
 }  // namespace Anki

@@ -1,11 +1,10 @@
 PROTO CozmoAnim [
   field SFString name "CozmoAnim"
   field SFInt32 robotID 0
-  field SFBool isWhiskey FALSE
-
+  
   field SFVec3f translation 0 0 0
   field SFRotation rotation 0 0 1 0
-
+  
   field SFBool filterLogs FALSE
   field SFBool colorizeStderrOutput FALSE
 ]
@@ -17,20 +16,13 @@ Supervisor {
   controller "webotsCtrlAnim"
 
   # append optional command line parameters
-  %{
-    if fields.filterLogs.value then end
-    if fields.colorizeStderrOutput.value then end
-    if fields.isWhiskey.value then end
-
-    local package = require('package')
-    -- Directly append our custom module path to the package search paths
-    -- This will allow 'require' to find our module without the search path getting
-    -- mangled where all `.` are replaced with `/`
-    package.path = context.project_path .. "protos/lua/?.lua;" .. package.path
-
-    protoHelper = require("protoHelper")
-    ctrlArgs = protoHelper.setCtrlOptArgs(fields)
-  }%
+  %{ ctrlArgs="" }%
+  %{ if fields.filterLogs.value then }%
+    %{ ctrlArgs = ctrlArgs .. " --applyLogFilter"}%
+  %{ end }%
+  %{ if fields.colorizeStderrOutput.value then }%
+    %{ ctrlArgs = ctrlArgs .. " --colorizeStderrOutput"}%
+  %{ end }%
 
   controllerArgs "%{=ctrlArgs}%"
 
@@ -39,6 +31,14 @@ Supervisor {
       translation 0.012 0 0
     }
   ]
+  
+  boundingObject Box {
+    size 0.000001 0.000001 0.000001
+  }
+  physics Physics {
+    mass 0.00001
+    density -1
+  }
 
 } # Supervisor definition
 } # PROTO definition

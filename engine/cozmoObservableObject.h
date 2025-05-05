@@ -6,7 +6,7 @@
  *
  *
  * Description: Extends Vision::ObservableObject to add some Cozmo-specific
- *              stuff, like object types.
+ *              stuff, like object families and types.
  *
  * Copyright: Anki, Inc. 2015
  *
@@ -15,53 +15,53 @@
 #ifndef __Anki_Cozmo_ObservableObject_H__
 #define __Anki_Cozmo_ObservableObject_H__
 
-#include "engine/blockWorld/blockWorld.h"
-
+#include "engine/objectPoseConfirmer.h"
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
 
-#include "coretech/common/engine/robotTimeStamp.h"
 #include "coretech/vision/engine/observableObject.h"
 
+#include "clad/types/objectFamilies.h"
 #include "clad/types/objectTypes.h"
 
 #include "util/helpers/noncopyable.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Fwd decl
 class VizManager;
 
 // Aliases
 using ActiveID = s32;  // TODO: Change this to u32 and use 0 as invalid
-using FactoryID = std::string;
+using FactoryID = u32;
 
 class ObservableObject : public Vision::ObservableObject, private Util::noncopyable
 {
 public:
 
   static const ActiveID InvalidActiveID = -1;
-  static const FactoryID InvalidFactoryID;
+  static const FactoryID InvalidFactoryID = 0;
   
-  ObservableObject(ObjectType type)
-  : _type(type)
+  ObservableObject(ObjectFamily family, ObjectType type)
+  : _family(family)
+  , _type(type)
   {
     
   }
   
   virtual ObservableObject* CloneType() const override = 0;
   
-  // Can only be called once and only before SetPose is called. Will assert otherwise, since this indicates programmer
-  // error. The parameter fromDistance_mm is the distance from which the object was visually observed, if applicable.
-  // A value of -1 indicates that the pose is not being initiailized from a visual observation.
-  void InitPose(const Pose3d& pose, PoseState poseState, const float fromDistance_mm = -1.f);
+  // Can only be called once and only before SetPose is called. Will assert otherwise,
+  // since this indicates programmer error.
+  void InitPose(const Pose3d& pose, PoseState poseState);
   
   // Override base class SetID to use unique ID for each type (base class has no concept of ObjectType)
   virtual void SetID() override;
   
+  ObjectFamily  GetFamily()  const { return _family; }
   ObjectType    GetType()    const { return _type; }
   
-  // Overload base IsSameAs() to first compare type
+  // Overload base IsSameAs() to first compare type and family
   // (Note that we have to overload all if we overload one)
   bool IsSameAs(const ObservableObject& otherObject,
                 const Point3f& distThreshold,
@@ -89,29 +89,22 @@ public:
   // Can we assume there is exactly one of these objects at a give time?
   virtual bool IsUnique()                     const   { return false; }
 
-  // Defines the maximum distance from which we can observe the object and update its pose. In other words, if the
-  // camera observes the object from a distance greater than this, we will discard the observation as untrustworthy.
-  virtual f32 GetMaxObservationDistance_mm() const;
-  
-  // CTI SetIsMoving/IsMoving methods with TimeStamp_t are forwarded to cozmo methods and marked as
-  // final to force child classes to use RobotTimeStamp_t
-  virtual bool IsMoving(TimeStamp_t* t = (TimeStamp_t*)nullptr) const override final;
-  virtual void SetIsMoving(bool isMoving, TimeStamp_t t) override final { SetIsMoving(isMoving, RobotTimeStamp_t{t}); }
-  
-  // These match the CTI ObservableObject (base class)'s default implementation
-  virtual bool IsMoving(RobotTimeStamp_t* t) const { return false; }
-  virtual void SetIsMoving(bool isMoving, RobotTimeStamp_t t) {}
+  // Get the distance within which we are allowed to localize to objects
+  // (This will probably need to be updated with COZMO-9672)
+  static f32 GetMaxLocalizationDistance_mm();
   
 protected:
-
-  // Set the object's pose. newPose should be with respect to world origin. Note: we make SetPose protected and friend
-  // BlockWorld, so that only BlockWorld can update objects' poses
+  
+  // Make SetPose protected and friend ObjectPoseConfirmer so only it can
+  // update objects' poses
   virtual void SetPose(const Pose3d& newPose, f32 fromDistance, PoseState newPoseState) override;
-  friend class BlockWorld;
+  using Vision::ObservableObject::SetPoseState;
+  friend ObjectPoseConfirmer;
   
   ActiveID _activeID = -1;
-  FactoryID _factoryID = "";
+  FactoryID _factoryID = 0;
   
+  ObjectFamily  _family = ObjectFamily::Unknown;
   ObjectType    _type   = ObjectType::UnknownObject;
   
   bool _poseHasBeenSet = false;
@@ -131,7 +124,7 @@ inline bool ObservableObject::IsSameAs(const ObservableObject& otherObject,
                                        Radians& angleDiff) const
 {
   // The two objects can't be the same if they aren't the same type!
-  bool isSame = this->GetType() == otherObject.GetType();
+  bool isSame = this->GetType() == otherObject.GetType() && this->GetFamily() == otherObject.GetFamily();
   
   if(isSame) {
     isSame = Vision::ObservableObject::IsSameAs(otherObject, distThreshold, angleThreshold, Tdiff, angleDiff);
@@ -178,7 +171,7 @@ inline void ObservableObject::SetFactoryID(FactoryID factoryID)
   _factoryID = factoryID;
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_ObservableObject_H__

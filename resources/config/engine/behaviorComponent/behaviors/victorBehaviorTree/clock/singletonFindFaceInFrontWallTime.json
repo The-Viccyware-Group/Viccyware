@@ -1,4 +1,0 @@
-{
-  "behaviorID": "SingletonFindFaceInFrontWallTime",  
-  "behaviorClass" : "LookAtFaceInFront"
-}

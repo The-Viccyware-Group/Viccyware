@@ -15,7 +15,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class BEIRobotInfo;
 class IFistBumpListener;
@@ -36,7 +36,7 @@ protected:
     modifiers.wantsToBeActivatedWhenCarryingObject = true;
     modifiers.behaviorAlwaysDelegates = false;
     modifiers.wantsToBeActivatedWhenOnCharger = false;
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::Low });
+    modifiers.visionModesForActiveScope->insert({ VisionMode::DetectingFaces, EVisionUpdateFrequency::Low });
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
 
@@ -103,7 +103,7 @@ private:
 }; // class BehaviorFistBump
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorFistBump_H__

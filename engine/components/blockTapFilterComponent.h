@@ -21,15 +21,17 @@
 #include "util/global/globalDefinitions.h"
 #include "clad/externalInterface/messageGameToEngine.h"
 #include "util/entityComponent/iDependencyManagedComponent.h"
-#include "engine/engineTimeStamp.h"
 #include "engine/events/ankiEvent.h"
 #include "engine/robotComponents_fwd.h"
 #include "coretech/common/engine/objectIDs.h"
 
+
+
+
 #include <list>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class Robot;
 namespace ExternalInterface {
@@ -46,9 +48,9 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
+    dependencies.insert(RobotComponentID::CozmoContext);
   };
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {
     dependencies.insert(RobotComponentID::CubeComms);
@@ -61,37 +63,42 @@ public:
   
   bool ShouldIgnoreMovementDueToDoubleTap(const ObjectID& objectID);
   
-  void HandleObjectTapped(const ExternalInterface::ObjectTapped& message);
-  
-  template<typename T>
-  void HandleMessage(const T& msg);
+  void HandleActiveObjectTapped(const ExternalInterface::ObjectTapped& message);
+  void HandleActiveObjectMoved(const ExternalInterface::ObjectMoved& message);
+  void HandleActiveObjectStopped(const ExternalInterface::ObjectStoppedMoving& message);
 
 private:
+  
+  void HandleEnableTapFilter(const AnkiEvent<ExternalInterface::MessageGameToEngine>& message);
   
   void CheckForDoubleTap(const ObjectID& objectID);
   
   Robot* _robot = nullptr;
-  
-  std::list<Signal::SmartHandle> _eventHandles;
-  
+
+  Signal::SmartHandle _gameToEngineSignalHandle;
   bool _enabled;
-  EngineTimeStamp_t _waitToTime;
+  Anki::TimeStamp_t _waitToTime;
   
   struct DoubleTapInfo {
     // The time we should stop waiting for a double tap
-    EngineTimeStamp_t doubleTapTime = 0;
+    TimeStamp_t doubleTapTime = 0;
     
     // Whether or not the object is moving
     bool isMoving = false;
     
     // The time we should stop ignoring move messages for the objectID this DoubleTapInfo
     // maps to
-    EngineTimeStamp_t ignoreNextMoveTime = 0;
+    TimeStamp_t ignoreNextMoveTime = 0;
     bool isIgnoringMoveMessages = false;
   };
   
   std::map<ObjectID, DoubleTapInfo> _doubleTapObjects;
-  std::vector<ExternalInterface::ObjectTapped> _tapInfo;
+  std::list<ExternalInterface::ObjectTapped> _tapInfo;
+  
+#if ANKI_DEV_CHEATS
+  void HandleSendTapFilterStatus(const AnkiEvent<ExternalInterface::MessageGameToEngine>& message);
+  Signal::SmartHandle _debugGameToEngineSignalHandle;
+#endif
 
 };
 

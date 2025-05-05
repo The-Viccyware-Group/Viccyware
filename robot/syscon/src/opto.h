@@ -5,7 +5,6 @@
 
 namespace Opto {
   extern FailureCode failure;
-  extern bool active;
 
   void start(void);
   void stop(void);

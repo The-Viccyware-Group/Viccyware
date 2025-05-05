@@ -117,9 +117,7 @@ namespace Anki
       AnkiAssert(this->imageWidth == image.get_size(1));
 
       AnkiConditionalErrorAndReturnValue(numRowsToScroll > 0 && numRowsToScroll <= integralImageHeight,
-                                         RESULT_FAIL_INVALID_PARAMETER, "ScrollingIntegralImage_u8_s32::ScrollDown",
-                                         "numRowsToScroll is too high or low: %d (intImgHeight: %d)",
-                                         numRowsToScroll, integralImageHeight);
+        RESULT_FAIL_INVALID_PARAMETER, "ScrollingIntegralImage_u8_s32::ScrollDown", "numRowsToScroll is to high or low");
 
       Array<u8> paddedRow(1, integralImageWidth, scratch);
       u8 * restrict pPaddedRow = paddedRow.Pointer(0, 0);

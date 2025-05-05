@@ -12,11 +12,10 @@
 
 
 #include "engine/vision/visionModeSchedule.h"
-#include "engine/vision/visionModesHelpers.h"
 #include "util/logging/logging.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 VisionModeSchedule::VisionModeSchedule()
 : VisionModeSchedule(true)
@@ -56,54 +55,18 @@ VisionModeSchedule::VisionModeSchedule(int onFrequency, int frameOffset)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Result VisionModeSchedule::SetFromJSON(const Json::Value& jsonSchedule)
+bool VisionModeSchedule::CheckTimeToProcessAndAdvance()
 {
-  if(jsonSchedule.isArray())
+  const bool isTimeToProcess = _schedule[_index++];
+  
+  if(_index == _schedule.size())
   {
-    _schedule.reserve(jsonSchedule.size());
-    for(auto jsonIter = jsonSchedule.begin(); jsonIter != jsonSchedule.end(); ++jsonIter)
-    {
-      _schedule.push_back(jsonIter->asBool());
-    }
-  }
-  else if(jsonSchedule.isInt())
-  {
-    *this = VisionModeSchedule(jsonSchedule.asInt());
-  }
-  else if(jsonSchedule.isBool())
-  {
-    _schedule = {jsonSchedule.asBool()};
-  }
-  else
-  {
-    PRINT_NAMED_ERROR("VisionModeSchedule.SetFromJSON.UnrecognizedModeScheduleValue",
-                      "Expecting int, bool, or array of bools");
-    return RESULT_FAIL;
+    _index = 0;
   }
   
-  return RESULT_OK;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool VisionModeSchedule::IsTimeToProcess(u32 index) const
-{
-  const bool isTimeToProcess = _schedule[index % _schedule.size()];
   return isTimeToProcess;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool VisionModeSchedule::WillEverRun() const
-{
-  for(bool isScheduled : _schedule)
-  {
-    if(isScheduled) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Static member initialization
 AllVisionModesSchedule::ScheduleArray AllVisionModesSchedule::sDefaultSchedules = AllVisionModesSchedule::InitDefaultSchedules();
@@ -133,7 +96,7 @@ AllVisionModesSchedule::AllVisionModesSchedule(const std::list<std::pair<VisionM
 AllVisionModesSchedule::ScheduleArray AllVisionModesSchedule::InitDefaultSchedules()
 {
   ScheduleArray defaultInitialArray;
-  std::fill(defaultInitialArray.begin(), defaultInitialArray.end(), VisionModeSchedule(false));
+  std::fill(defaultInitialArray.begin(), defaultInitialArray.end(), VisionModeSchedule(true));
   return defaultInitialArray;
 }
   
@@ -150,41 +113,20 @@ const VisionModeSchedule& AllVisionModesSchedule::GetScheduleForMode(VisionMode 
 }
   
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool AllVisionModesSchedule::IsTimeToProcess(VisionMode mode, u32 index) const
+bool AllVisionModesSchedule::CheckTimeToProcessAndAdvance(VisionMode mode)
 {
-  const bool isTimeToProcess = GetScheduleForMode(mode).IsTimeToProcess(index);
+  VisionModeSchedule& schedule = GetScheduleForMode(mode); // Note that we return a reference!
+  const bool isTimeToProcess = schedule.CheckTimeToProcessAndAdvance();
   return isTimeToProcess;
 }
- 
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void AllVisionModesSchedule::SetDefaultSchedule(VisionMode mode, VisionModeSchedule&& schedule)
 {
   sDefaultSchedules[(size_t)mode] = std::move(schedule);
 }
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Result AllVisionModesSchedule::SetDefaultSchedulesFromJSON(const Json::Value& config)
-{
-  for(VisionMode mode = VisionMode(0); mode < VisionMode::Count; ++mode)
-  {
-    const char* modeStr = EnumToString(mode);
-    
-    if(config.isMember(modeStr))
-    {
-      const Json::Value& jsonSchedule = config[modeStr];
-      
-      VisionModeSchedule schedule;
-      const Result result = schedule.SetFromJSON(jsonSchedule);
-      if(RESULT_OK != result) {
-        return result;
-      }
-      
-      AllVisionModesSchedule::SetDefaultSchedule(mode, std::move(schedule));
-    }
-  }
   
-  return RESULT_OK;
-}
+  
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

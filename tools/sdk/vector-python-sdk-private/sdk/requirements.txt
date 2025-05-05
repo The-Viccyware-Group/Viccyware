@@ -1,7 +1,0 @@
-aiogrpc>=1.4
-cryptography
-flask
-googleapis-common-protos
-numpy>=1.11
-Pillow>=3.3
-requests

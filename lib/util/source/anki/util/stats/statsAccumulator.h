@@ -14,8 +14,8 @@
 #ifndef BASESTATION_GENERAL_STATS_ACCUMULATOR_H_
 #define BASESTATION_GENERAL_STATS_ACCUMULATOR_H_
 
+#include <float.h>
 #include <math.h>
-#include <cfloat>
 
 namespace Anki {
 namespace Util {
@@ -61,7 +61,6 @@ public:
   int GetIntVal() const {return (int)round(val_);};
   int GetIntMax() const {return (int)round(max_);};
   int GetIntMin() const {return (int)round(min_);};
-  int GetIntMean() const {return (int)round(ak_);};
 
   void Clear() {
     val_ = 0.0;

@@ -11,11 +11,12 @@
  */
 
 #include "simulator/game/cozmoSimTestController.h"
+#include "coretech/common/engine/math/point_impl.h"
 #include "engine/actions/basicActions.h"
 #include "engine/robot.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     enum class TestState {
       MoveLiftUp,
@@ -55,9 +56,6 @@ namespace Anki {
       void StartingAction(const RobotActionType& actionType);
       
       const Point3f _poseToVerify = {200, 0, 22};
-      
-      // Position tolerance to use when visually verifying (no) object at pose
-      const float kVisuallyVerifyTolerance_mm = 20.f;
       
       // to keep track of relative turns of more than one revolution:
       Radians _prevAngle;
@@ -262,12 +260,7 @@ namespace Anki {
             ExternalInterface::QueueSingleAction m;
             m.position = QueueActionPosition::NOW;
             m.idTag = 9;
-            m.action.Set_visuallyVerifyNoObjectAtPose(ExternalInterface::VisuallyVerifyNoObjectAtPose(GetRobotPose().GetTranslation().x(),
-                                                                                                      GetRobotPose().GetTranslation().y() + 100,
-                                                                                                      NECK_JOINT_POSITION[2],
-                                                                                                      kVisuallyVerifyTolerance_mm,
-                                                                                                      kVisuallyVerifyTolerance_mm,
-                                                                                                      kVisuallyVerifyTolerance_mm));
+            m.action.Set_visuallyVerifyNoObjectAtPose(ExternalInterface::VisuallyVerifyNoObjectAtPose(GetRobotPose().GetTranslation().x(), GetRobotPose().GetTranslation().y() + 100, NECK_JOINT_POSITION[2], 10, 10, 10));
             ExternalInterface::MessageGameToEngine message;
             message.Set_QueueSingleAction(m);
             SendMessage(message);
@@ -289,12 +282,7 @@ namespace Anki {
             ExternalInterface::QueueSingleAction m;
             m.position = QueueActionPosition::NOW;
             m.idTag = 10;
-            m.action.Set_visuallyVerifyNoObjectAtPose(ExternalInterface::VisuallyVerifyNoObjectAtPose(_poseToVerify.x(),
-                                                                                                      _poseToVerify.y(),
-                                                                                                      _poseToVerify.z(),
-                                                                                                      kVisuallyVerifyTolerance_mm,
-                                                                                                      kVisuallyVerifyTolerance_mm,
-                                                                                                      kVisuallyVerifyTolerance_mm));
+            m.action.Set_visuallyVerifyNoObjectAtPose(ExternalInterface::VisuallyVerifyNoObjectAtPose(_poseToVerify.x(), _poseToVerify.y(), _poseToVerify.z(), 10, 10, 10));
             ExternalInterface::MessageGameToEngine message;
             message.Set_QueueSingleAction(m);
             SendMessage(message);
@@ -338,16 +326,19 @@ namespace Anki {
             m.position = QueueActionPosition::NOW;
             m.idTag = 8;
             
-            // Face the Block_LIGHTCUBE1
-            std::vector<s32> lightCubeIDs = GetAllObjectIDsByType(ObjectType::Block_LIGHTCUBE1);
-            CST_ASSERT(!lightCubeIDs.empty(), "Found no cubes of type Block_LIGHTCUBE1");
-            CST_ASSERT(lightCubeIDs.size() == 1, "Found too many cubes of type Block_LIGHTCUBE1");
+            // Face first matching light cube
+            std::vector<s32> lightCubeIDs = GetAllObjectIDsByFamily(ObjectFamily::LightCube);
+            if (!lightCubeIDs.empty()) {
+              m.action.Set_turnTowardsObject(ExternalInterface::TurnTowardsObject(lightCubeIDs[0], M_PI_F, 0, 0, 0, 0, 0, 0, true, false));
+              ExternalInterface::MessageGameToEngine message;
+              message.Set_QueueSingleAction(m);
+              SendMessage(message);
+              SET_TEST_STATE(TurnRightRelative_540);
+            } else {
+              PRINT_NAMED_ERROR("CST_BasicActions.FaceObjectHasNoTargets",
+                                "lightCubeIDs is empty, FaceObject test will fail on timeout");
+            }
 
-            m.action.Set_turnTowardsObject(ExternalInterface::TurnTowardsObject(lightCubeIDs[0], M_PI_F, 0, 0, 0, 0, 0, 0, true, false));
-            ExternalInterface::MessageGameToEngine message;
-            message.Set_QueueSingleAction(m);
-            SendMessage(message);
-            SET_TEST_STATE(TurnRightRelative_540);
           }
           break;
         }
@@ -447,6 +438,6 @@ namespace Anki {
     
     // ================ End of message handler callbacks ==================
     
-  } // end namespace Vector
+  } // end namespace Cozmo
 } // end namespace Anki
 

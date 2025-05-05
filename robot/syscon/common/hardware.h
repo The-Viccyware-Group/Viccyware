@@ -12,42 +12,24 @@ TIM6  Byte counter (uart DMA)
 TIM14 Main-exec / Backpack
 TIM15 SPI Master clock
 TIM16 Touch Sense 1
-TIM17 Backpack LEDs
+TIM17
 */
 
-//#define DEBUG
-
 static const uint32_t SYSTEM_CLOCK = 48000000;
-static const uint32_t CONTACT_BAUDRATE = 115200;
+static const uint32_t CONTACT_BAUDRATE = 57600;
 static const uint32_t COMMS_BAUDRATE = 3000000;
 
 static const uint32_t WATCHDOG_CLOCK  = 10000;
 static const uint32_t WATCHDOG_LIMIT  = WATCHDOG_CLOCK / 200 * 10; // 10 main execution frames
 
-static const uint32_t* HW_REVISION    = (uint32_t*)0x08000010;
-static const uint32_t* HW_MODEL       = (uint32_t*)0x08000014;
-static const uint32_t  WHISKEY_MIN_VERSION = 7;
-static const uint32_t  XRAY_MIN_VERSION = 1;
-static const uint32_t  XRAY_MAX_VERSION = 1;
-
-// had to pack a version in to existing field so we don't break
-// Whiskey's in the field. To do that we took over the MSB from
-// the model field. from model, MSB = REV2, LSB = MODEL. 
-// Currently Xray is the only robot with REV2 > 0
-
-#define IS_WHISKEY (*HW_REVISION >= WHISKEY_MIN_VERSION)
-#define IS_XRAY (((*HW_MODEL >> 8) >= XRAY_MIN_VERSION) && (((*HW_MODEL >> 8) <= XRAY_MAX_VERSION)))
-
 enum IRQ_Priority {
-  PRIORITY_ADC = 0,
-  PRIORITY_ENCODERS = 1,
-  PRIORITY_TOUCH_SENSE = 1,
-  PRIORITY_LIGHTS = 1,
+  PRIORITY_ENCODERS = 0,
   PRIORITY_MAIN_EXEC = 2,
   PRIORITY_I2C_TRANSMIT = 2,
   PRIORITY_SPINE_COMMS = 2,
   PRIORITY_CONTACTS_COMMS = 2,
   PRIORITY_MICS = 3,
+  PRIORITY_TOUCH_SENSE = 3
 };
 
 // H-Bridge
@@ -77,13 +59,16 @@ namespace LTENC GPIO_DEFINE(C, 15);
 
 // Power
 namespace POWER_EN GPIO_DEFINE(A, 6);
-namespace nCHG_PWR GPIO_DEFINE(B, 9);
+namespace POWER_B GPIO_DEFINE(A, 6);
 namespace nVENC_EN GPIO_DEFINE(C, 13);
 namespace VEXT_SENSE GPIO_DEFINE(A, 2);
 namespace VMAIN_SENSE GPIO_DEFINE(A, 4);
+namespace MAIN_EN GPIO_DEFINE(A, 3);
+namespace CHG_EN GPIO_DEFINE(A, 15);
+namespace CHG_PWR GPIO_DEFINE(B, 9);
 
-namespace MAIN_EN_VIC GPIO_DEFINE(A, 3);
-namespace MAIN_EN_WIS GPIO_DEFINE(A, 12);
+namespace CHRG1 GPIO_DEFINE(F, 1);
+namespace CHRG2 GPIO_DEFINE(F, 0);
 
 // Microphones
 namespace MIC_LR      GPIO_DEFINE(B, 15);
@@ -93,8 +78,8 @@ namespace MIC2_SCK    GPIO_DEFINE(A, 5);
 namespace MIC1_SCK    GPIO_DEFINE(B, 13);
 
 // Cap Sense
-namespace CAPI GPIO_DEFINE(B, 8);
-namespace CAPO_VIC GPIO_DEFINE(A, 14);
+namespace CAP1I GPIO_DEFINE(B, 8);
+namespace CAPO GPIO_DEFINE(A, 14);
 
 // Communication
 namespace VEXT_TX GPIO_DEFINE(A, 2);
@@ -107,10 +92,6 @@ namespace SDA2 GPIO_DEFINE(F, 7);
 
 // Lights
 namespace LED_DAT GPIO_DEFINE(A, 13);
-namespace LED_CLK_VIC GPIO_DEFINE(A, 12);
-namespace LED_CLK_WIS GPIO_DEFINE(A, 14);
-
-#define DFU_ENTRY_POINT (0xC0C35473)
-#define DFU_FLAG (*(uint32_t*)0x20001FFC)
+namespace LED_CLK GPIO_DEFINE(A, 12);
 
 #endif

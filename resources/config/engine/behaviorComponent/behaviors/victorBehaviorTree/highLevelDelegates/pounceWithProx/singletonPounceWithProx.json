@@ -1,19 +1,11 @@
 {
   "behaviorClass": "PounceWithProx",
   "behaviorID": "SingletonPounceWithProx",
-  "associatedActiveFeature": "PounceOnMotion",
-  "wantsToBeActivatedCondition": {
-    "conditionType": "Compound",
-    "and": [
-      {
-        "conditionType"       : "ProxInRange",
-        "minProxDist_mm"      : 40.0,
-        "maxProxDist_mm"      : 60.0
-      },
-      {
-        "conditionType": "OffTreadsState",
-        "targetState": "OnTreads"
-      }
-    ]
-  }
+  "wantsToBeActivatedConditions": [
+    {
+      "conditionType"       : "ProxInRange",
+      "minProxDist_mm"      : 105.0,
+      "maxProxDist_mm"      : 136.0
+    }
+  ]
 }

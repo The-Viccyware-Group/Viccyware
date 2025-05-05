@@ -1,32 +1,19 @@
 {
   "behaviorClass": "AnimSequenceWithObject",
   "behaviorID": "AcknowledgeCharger",
+  "displayNameKey":"behavior.AcknowledgeCharger",
 
   "objectType" : "Charger_Basic",
   "animTriggers" : ["ChargerReaction"],
   "num_loops" : 1,
-  
-  "wantsToBeActivatedCondition": {
-    "conditionType": "Compound",
-    "and": [
-      {
-        "conditionType" : "ObjectInitialDetection",
-        "objectTypes" : ["Charger_Basic"],
-        "firstTimeOnly" : true
-      },
-      {
-        "conditionType": "Compound",
-        "not": {
-          "conditionType": "CarryingCube"
-        }
-      },
-      {
-        "conditionType": "Compound",
-        "not": {
-          "conditionType": "OnChargerPlatform"
-        }
-      }
-    ]
-  }
+  "playOnChargerWithoutBody" : true,
+
+  "wantsToBeActivatedConditions": [
+    {
+      "conditionType" : "ObjectInitialDetection",
+      "objectType" : "Charger_Basic",
+      "firstTimeOnly" : false
+    }
+  ]
 
 }

@@ -18,7 +18,7 @@ function check_dep()
 {
     CHECK_CMD="$*"
     eval $CHECK_CMD && return 0
-
+    
     echo "Depdendency check failed: $CHECK_CMD"
     echo "If you have apt-get, you should make sure you have the following deps"
     echo ""
@@ -29,31 +29,35 @@ function check_dep()
     echo ""
     echo "sudo apt install gawk chrpath texinfo p7zip-full android-tools-fsutils"
     echo ""
-    echo "sudo apt install ruby ninja-build subversion libssl-dev nodejs"
+    echo "sudo apt install libsndfile-dev ruby ninja-build subversion libssl-dev nodejs"
     echo ""
     exit 1
 }
 
 pushd "${TOPLEVEL}" > /dev/null 2>&1
 
+$GIT config --global url."git@github.com:".insteadOf https://github.com
+
 # Check for required programs
 check_dep which python2
 check_dep which python3
 check_dep which ninja
-#check_dep which git-lfs
-
+check_dep pkg-config sndfile
 
 echo `pwd`
 
-vlog "vicos-sdk"
-./tools/build/tools/ankibuild/vicos.py --install 4.0.0-r05
+vlog "Android SDK"
+# BRC: r3 is not supported on Linux. AndroidSDK is not required for build, but adb is currently required for deploy
+#./tools/build/tools/ankibuild/android.py --install-sdk r3
+
+vlog "Android NDK"
+./tools/build/tools/ankibuild/android.py --install-ndk r15b
 
 vlog "CMake"
 ./tools/build/tools/ankibuild/cmake.py
 
-#vlog "git lfs"
-#$GIT lfs install
-#$GIT lfs pull
+vlog "Go"
+./tools/build/tools/ankibuild/go.py
 
 vlog "Build output dirs"
 mkdir -p generated

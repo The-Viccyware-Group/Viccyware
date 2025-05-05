@@ -16,7 +16,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorPounceWithProx : public ICozmoBehavior
 {
@@ -76,7 +76,7 @@ private:
 
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorPounceWithProx_H__

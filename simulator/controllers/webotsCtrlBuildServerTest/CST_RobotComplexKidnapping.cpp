@@ -33,7 +33,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   enum class TestState {
     MoveHead,                    // Look up to see Object A
@@ -176,9 +176,9 @@ namespace Vector {
       {
         // Sending the delocalize message one tic after actually moving the robot to be sure that no images
         // from the previous pose are processed after the delocalization.
-        SendForceDelocalize();
+        SendForceDeloc();
         
-        _kidnapStartTime = GetSupervisor().getTime();
+        _kidnapStartTime = GetSupervisor()->getTime();
         SET_TEST_STATE(Kidnap);
         break;
       }
@@ -193,7 +193,7 @@ namespace Vector {
           _turnInPlaceDone = false;
           SendTurnInPlace(DEG_TO_RAD(_turnAngle_deg));
           
-          _kidnapStartTime = GetSupervisor().getTime();
+          _kidnapStartTime = GetSupervisor()->getTime();
           SET_TEST_STATE(FinishTurn);
         }
         break;
@@ -411,6 +411,6 @@ namespace Vector {
     }
   }
   
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 

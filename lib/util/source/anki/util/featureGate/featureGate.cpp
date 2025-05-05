@@ -21,8 +21,7 @@ namespace Util {
 
 void FeatureGate::Init(const std::string& jsonContents)
 {
-  // use permissive reader for comments
-  Json::Reader reader{Json::Features::all()};
+  Json::Reader reader;
   Json::Value root;
 
   bool success = reader.parse(jsonContents, root);

@@ -10,44 +10,38 @@
  *
  **/
 
-#include "engine/components/movementComponent.h"
-
 #include "coretech/common/robot/utilities.h"
 #include "coretech/common/shared/types.h"
-#include "coretech/common/engine/math/fastPolygon2d.h"
-#include "coretech/common/engine/math/polygon.h"
-
 #include "engine/ankiEventUtil.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/navMap/memoryMap/data/memoryMapData.h"
-#include "engine/navMap/mapComponent.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
+#include "engine/blockWorld/blockWorld.h"
 #include "engine/components/animationComponent.h"
 #include "engine/components/animTrackHelpers.h"
-#include "engine/components/battery/batteryComponent.h"
+#include "engine/components/batteryComponent.h"
 #include "engine/components/dockingComponent.h"
-#include "engine/components/robotStatsTracker.h"
+#include "engine/components/movementComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/events/ankiEvent.h"
 #include "engine/externalInterface/externalInterface.h"
+#include "engine/markerlessObject.h"
 #include "engine/robot.h"
-#include "engine/robotManager.h"
 #include "engine/robotStateHistory.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "clad/externalInterface/messageGameToEngine.h"
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "util/console/consoleInterface.h"
-#include "util/logging/DAS.h"
-
 
 #define LOG_CHANNEL    "Movement"
 
 #define DEBUG_ANIMATION_LOCKING 0
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 CONSOLE_VAR(bool, kDebugTrackLocking, "Robot", false);
 CONSOLE_VAR(bool, kCreateUnexpectedMovementObstacles, "Robot", true);
+CONSOLE_VAR(bool, kAllowMovementOnChargerInSdkMode, "Robot", false);
   
 using namespace ExternalInterface;
 
@@ -58,10 +52,9 @@ MovementComponent::MovementComponent()
 
 }
  
-void MovementComponent::InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps)
+void MovementComponent::InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents)
 {
   _robot = robot;
-  _animComponent = dependentComps.GetComponentPtr<AnimationComponent>();
   if (_robot->HasExternalInterface())
   {
     InitEventHandlers(*(_robot->GetExternalInterface()));
@@ -76,37 +69,15 @@ void MovementComponent::InitEventHandlers(IExternalInterface& interface)
   // Game to engine (in alphabetical order)
   helper.SubscribeGameToEngine<MessageGameToEngineTag::DriveArc>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::DriveWheels>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::EnterSdkMode>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::ExitSdkMode>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::MoveHead>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::MoveLift>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::StopAllMotors>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::TurnInPlaceAtSpeed>();
-}
-
   
-void MovementComponent::AllowExternalMovementCommands(const bool enable, const std::string& requester)
-{
-  auto& requesters = _allowExternalMovementCommandNames;
-  if (enable) {
-    requesters.insert(requester);
-    SetAllowExternalMovementCommands(true);
-  } else {
-    requesters.erase(requester);
-    if (requesters.empty()) {
-      SetAllowExternalMovementCommands(false);
-    }
-  }
-}
-
-
-void MovementComponent::SetAllowExternalMovementCommands(const bool enable)
-{
-  if (enable != _allowExternalMovementCommands) {
-    LOG_INFO("MovementComponent.SetAllowExternalMovementCommands.AllowedToHandleActions",
-             "Setting _allowExternalMovementCommands to %s",
-             enable ? "true" : "false");
-    
-    _allowExternalMovementCommands = enable;
-  }
+  // Engine to game
+  helper.SubscribeEngineToGame<MessageEngineToGameTag::ChargerEvent>();
 }
 
 void MovementComponent::OnRobotDelocalized()
@@ -114,48 +85,12 @@ void MovementComponent::OnRobotDelocalized()
   _unexpectedMovement.Reset();
 }
   
-void MovementComponent::NotifyOfRobotState(const Vector::RobotState& robotState)
+void MovementComponent::NotifyOfRobotState(const Cozmo::RobotState& robotState)
 {
-  #define IS_STATUS_FLAG_SET(x) ((robotState.status & (uint32_t)RobotStatusFlag::x) != 0)
-
-  _isMoving            =  IS_STATUS_FLAG_SET(IS_MOVING);
-  _isHeadMoving        = !IS_STATUS_FLAG_SET(HEAD_IN_POS);
-  _isLiftMoving        = !IS_STATUS_FLAG_SET(LIFT_IN_POS);
-  _areWheelsMoving     =  IS_STATUS_FLAG_SET(ARE_WHEELS_MOVING);
-  _areEncodersDisabled =  IS_STATUS_FLAG_SET(ENCODERS_DISABLED);
-
-  const bool isHeadEncoderInvalid = IS_STATUS_FLAG_SET(ENCODER_HEAD_INVALID);
-  const bool isLiftEncoderInvalid = IS_STATUS_FLAG_SET(ENCODER_LIFT_INVALID);
-  
-  // Print DAS message when head or lift go out of calibration according to syscon
-  if (isHeadEncoderInvalid && !_isHeadEncoderInvalid) {
-    DASMSG(head_motor_uncalibrated, "head_motor_uncalibrated", "Head is uncalibrated. (Inverse msg: head_motor_calibrated)");
-    DASMSG_SEND();
-  }
-  if (isLiftEncoderInvalid && !_isLiftEncoderInvalid) {
-    DASMSG(lift_motor_uncalibrated, "lift_motor_uncalibrated", "Lift is uncalibrated. (Inverse msg: lift_motor_calibrated)");
-    DASMSG_SEND();
-  }
-
-  _isHeadEncoderInvalid =  isHeadEncoderInvalid;
-  _isLiftEncoderInvalid =  isLiftEncoderInvalid;
-
-
-
-  // NOTE(GB): In the future, the meaning of `_isMoving` may change, and may not be coupled to
-  // _isHeadMoving, _isLiftMoving, or _areWheelsMoving, so check if we can set each timestamp individually.
-  if (_isMoving) {
-    _lastTimeWasMoving = robotState.timestamp;
-  }
-  if (_isHeadMoving) {
-    _lastTimeHeadWasMoving = robotState.timestamp;
-  }
-  if (_isLiftMoving) {
-    _lastTimeLiftWasMoving = robotState.timestamp;
-  }
-  if (_areWheelsMoving) {
-    _lastTimeWheelsWereMoving = robotState.timestamp;
-  }
+  _isMoving     =  static_cast<bool>(robotState.status & (uint16_t)RobotStatusFlag::IS_MOVING);
+  _isHeadMoving = !static_cast<bool>(robotState.status & (uint16_t)RobotStatusFlag::HEAD_IN_POS);
+  _isLiftMoving = !static_cast<bool>(robotState.status & (uint16_t)RobotStatusFlag::LIFT_IN_POS);
+  _areWheelsMoving = static_cast<bool>(robotState.status & (uint16_t)RobotStatusFlag::ARE_WHEELS_MOVING);
   
   for (auto layerIter = _eyeShiftToRemove.begin(); layerIter != _eyeShiftToRemove.end(); )
   {
@@ -173,13 +108,13 @@ void MovementComponent::NotifyOfRobotState(const Vector::RobotState& robotState)
   if (kDebugTrackLocking)
   {
     // Flip logic from enabled to locked here, since robot stores bits as enabled and 1 means locked here.
-    u8 robotLockedTracks = GetLockedTracks();
+    u8 robotLockedTracks = _robot->GetAnimationComponent().GetLockedTracks();
     const bool isRobotHeadTrackLocked = (robotLockedTracks & (u8)AnimTrackFlag::HEAD_TRACK) != 0;
     if (isRobotHeadTrackLocked != AreAnyTracksLocked((u8)AnimTrackFlag::HEAD_TRACK))
     {
       LOG_WARNING("MovementComponent.Update.HeadLockUnmatched",
                   "TrackRobot:%d, TrackEngineCount:%zu",
-                  ~GetLockedTracks(),
+                  ~_robot->GetAnimationComponent().GetLockedTracks(),
                   _trackLockCount[GetFlagIndex((u8)AnimTrackFlag::HEAD_TRACK)].size());
     }
     const bool isRobotLiftTrackLocked = (robotLockedTracks & (u8)AnimTrackFlag::LIFT_TRACK) != 0;
@@ -187,7 +122,7 @@ void MovementComponent::NotifyOfRobotState(const Vector::RobotState& robotState)
     {
       LOG_WARNING("MovementComponent.Update.LiftLockUnmatched",
                   "TrackRobot:%d, TrackEngineCount:%zu",
-                  ~GetLockedTracks(),
+                  ~_robot->GetAnimationComponent().GetLockedTracks(),
                   _trackLockCount[GetFlagIndex((u8)AnimTrackFlag::LIFT_TRACK)].size());
     }
     const bool isRobotBodyTrackLocked = (robotLockedTracks & (u8)AnimTrackFlag::BODY_TRACK) != 0;
@@ -195,39 +130,21 @@ void MovementComponent::NotifyOfRobotState(const Vector::RobotState& robotState)
     {
       LOG_WARNING("MovementComponent.Update.BodyLockUnmatched",
                   "TrackRobot:%d, TrackEngineCount:%zu",
-                  ~GetLockedTracks(),
+                  ~_robot->GetAnimationComponent().GetLockedTracks(),
                   _trackLockCount[GetFlagIndex((u8)AnimTrackFlag::BODY_TRACK)].size());
     }
   }
   
-  UpdateOdometers(robotState);
-
   CheckForUnexpectedMovement(robotState);
+
+  if (kAllowMovementOnChargerInSdkMode) {
+    UnlockTracks(GetTracksLockedBy(kOnChargerInSdkStr), kOnChargerInSdkStr); //Unlock only if the SDK locked the tracks
+  }
+
 }
 
-void MovementComponent::UpdateOdometers(const Vector::RobotState& robotState)
+void MovementComponent::CheckForUnexpectedMovement(const Cozmo::RobotState& robotState)
 {
-  const float lWheelSpeed_mmps  = robotState.lwheel_speed_mmps;
-  const float rWheelSpeed_mmps  = robotState.rwheel_speed_mmps;
-  const float bodySpeed_mmps    = 0.5f * (lWheelSpeed_mmps + rWheelSpeed_mmps);
-
-  // Convert speeds into absolute distances
-  static const float dt = Util::MilliSecToSec(static_cast<float>(STATE_MESSAGE_FREQUENCY * ROBOT_TIME_STEP_MS));
-  const float lWheelDelta_mm = std::fabs(lWheelSpeed_mmps) * dt;
-  const float rWheelDelta_mm = std::fabs(rWheelSpeed_mmps) * dt;
-  const float bodyDelta_mm   = std::fabs(bodySpeed_mmps)   * dt;
-
-  _lWheel_odom_mm += lWheelDelta_mm;
-  _rWheel_odom_mm += rWheelDelta_mm;
-  _body_odom_mm   += bodyDelta_mm;
-
-  _robot->GetComponent<RobotStatsTracker>().IncreaseOdometer(lWheelDelta_mm, rWheelDelta_mm, bodyDelta_mm);
-}
-
-void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& robotState)
-{
-  const bool wasUnexpectedMovementDetected = _unexpectedMovement.IsDetected();
-  
   // Disabling for sim robot due to odd behavior of measured wheel speeds and the lack
   // of wheel slip that is what allows this detection to work on the real robot
   if (!_robot->IsPhysical())
@@ -241,51 +158,36 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
   if ((_robot->GetAnimationComponent().IsAnimating() && !AreAllTracksLocked((u8)AnimTrackFlag::BODY_TRACK))
       || _robot->GetDockingComponent().IsPickingOrPlacing())
   {
-    _unexpectedMovement.Reset();
     return;
   }
+
+  f32 lWheelSpeed_mmps = robotState.lwheel_speed_mmps;
+  f32 rWheelSpeed_mmps = robotState.rwheel_speed_mmps;
+  f32 zGyro_radps = robotState.gyro.z;
   
-  const bool isPickedUp = robotState.status & (uint32_t)RobotStatusFlag::IS_PICKED_UP;
-  // Don't check for unexpected movement under the following conditions
-  if (robotState.status & (uint32_t)RobotStatusFlag::IS_FALLING     ||
-      robotState.status & (uint32_t)RobotStatusFlag::IS_ON_CHARGER  ||
-      (isPickedUp && !_heldInPalmModeEnabled) )
+  // Don't check for unexpected movement when picked up, on charger, or while a cliff is detected
+  if (robotState.status & (uint16_t)RobotStatusFlag::IS_PICKED_UP ||
+      robotState.status & (uint16_t)RobotStatusFlag::IS_ON_CHARGER ||
+      robotState.status & (uint16_t)RobotStatusFlag::CLIFF_DETECTED)
   {
     _unexpectedMovement.Reset();
     return;
   }
   
-  const f32 lWheelSpeed_mmps = robotState.lwheel_speed_mmps;
-  const f32 rWheelSpeed_mmps = robotState.rwheel_speed_mmps;
-  const f32 zGyro_radps      = robotState.gyro.z;
-  
-  const f32 speedDiff = rWheelSpeed_mmps - lWheelSpeed_mmps;
-  const f32 omega = std::abs(speedDiff / WHEEL_DIST_MM);
+  f32 speedDiff = rWheelSpeed_mmps - lWheelSpeed_mmps;
+  f32 omega = ABS(speedDiff / WHEEL_DIST_MM);
   
   UnexpectedMovementType unexpectedMovementType = UnexpectedMovementType::TURNED_BUT_STOPPED;
   
-  bool rotatingWithoutMotorsDetected = false;
-  const bool noGyroRotation = NEAR(zGyro_radps, 0, kGyroTol_radps);
   // Wheels aren't moving (using kMinWheelSpeed_mmps as a dead band)
   if (ABS(lWheelSpeed_mmps) + ABS(rWheelSpeed_mmps) < kMinWheelSpeed_mmps)
   {
-    if (noGyroRotation || !_enableRotatedWithoutMotors)
-    {
-      _unexpectedMovement.Decrement();
-      return;
-    }
-    else
-    {
-      // Increment by 5 here to get this case to trigger faster than other cases
-      // The intuition is that this case is easier and more reliable to detect so there should not be any false positives
-      _unexpectedMovement.Increment(5, lWheelSpeed_mmps, rWheelSpeed_mmps, robotState.timestamp);
-      unexpectedMovementType = UnexpectedMovementType::ROTATING_WITHOUT_MOTORS;
-      rotatingWithoutMotorsDetected = true;
-    }
+    _unexpectedMovement.Decrement();
+    return;
   }
   
   // Gyro says we aren't turning
-  if (noGyroRotation)
+  if (NEAR(zGyro_radps, 0, kGyroTol_radps))
   {
     // But wheels say we are turning (the direction of the wheels are different like during a point turn)
     if (signbit(lWheelSpeed_mmps) != signbit(rWheelSpeed_mmps))
@@ -305,7 +207,7 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
     }
   }
   // Wheel speeds and gyro agree on the direction we are turning
-  else if ((signbit(speedDiff) == signbit(zGyro_radps)) && !rotatingWithoutMotorsDetected)
+  else if (signbit(speedDiff) == signbit(zGyro_radps))
   {
     // This check is for detecting if we are being turned in the direction we are already turning
     // this is difficult to detect due to physics. For example, we spin faster when carrying a block
@@ -323,8 +225,8 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
     _unexpectedMovement.Decrement();
     return;
   }
-  // Otherwise gyro says we are turning but our non-zero wheel speeds don't agree
-  else if (!rotatingWithoutMotorsDetected)
+  // Otherwise gyro says we are turning but our wheel speeds don't agree
+  else
   {
     // Increment by 2 here to get this case to trigger twice as fast as other cases
     // The intuition is that this case is easier and more reliable to detect so there should not be any false positives
@@ -332,12 +234,11 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
     unexpectedMovementType = UnexpectedMovementType::TURNED_IN_OPPOSITE_DIRECTION;
   }
   
-  if (_unexpectedMovement.IsDetected() &&
-      !wasUnexpectedMovementDetected)
+  if (_unexpectedMovement.GetCount() > kMaxUnexpectedMovementCount)
   {
-    LOG_INFO("MovementComponent.CheckForUnexpectedMovement.Detected",
-             "Unexpected movement detected %s",
-             EnumToString(unexpectedMovementType));
+    LOG_WARNING("MovementComponent.CheckForUnexpectedMovement",
+                "Unexpected movement detected %s",
+                EnumToString(unexpectedMovementType));
     
     // Only create obstacles for certain types of unexpected movement, and only when
     // enabled by the console var and when ReactToUnexpectedMovement is enabled
@@ -345,13 +246,12 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
     // adding of obstacles gets turned off too. This is kind of a hack to avoid
     // needing another message/system for turning this on and off.
 
-    _unexpectedMovementSide = UnexpectedMovementSide::UNKNOWN;
+    UnexpectedMovementSide unexpectedMovementSide = UnexpectedMovementSide::UNKNOWN;
     
-    // don't create obstacles for ROTATING_WITHOUT_MOTORS or TURNED_IN_SAME_DIRECTION
     const bool isValidTypeOfUnexpectedMovement = (unexpectedMovementType == UnexpectedMovementType::TURNED_BUT_STOPPED ||
                                                   unexpectedMovementType == UnexpectedMovementType::TURNED_IN_OPPOSITE_DIRECTION);
     
-    if (kCreateUnexpectedMovementObstacles && isValidTypeOfUnexpectedMovement && !_heldInPalmModeEnabled)
+    if (kCreateUnexpectedMovementObstacles && isValidTypeOfUnexpectedMovement)
     {
       // Add obstacle based on when this started and how robot was trying to turn
       // TODO: Broadcast sufficient information to blockworld and do it there?
@@ -362,7 +262,7 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
       const bool rightGoingForward = FLT_GT(avgRightWheelSpeed_mmps, 0.f);
       
       HistRobotState histState;
-      RobotTimeStamp_t historicalTime;
+      TimeStamp_t historicalTime;
       Result poseResult = _robot->GetStateHistory()->ComputeStateAt(_unexpectedMovement.GetStartTime(), historicalTime,
                                                                  histState, true);
       
@@ -372,19 +272,20 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
         // a warning, just an info
         LOG_INFO("MovementComponent.CheckForUnexpectedMovement.PoseHistoryOriginMismatch",
                  "Could not get robot pose at t=%u",
-                 (TimeStamp_t)_unexpectedMovement.GetStartTime());
+                 _unexpectedMovement.GetStartTime());
       }
       else if (RESULT_OK != poseResult)
       {
         LOG_WARNING("MovementComponent.CheckForUnexpectedMovement.PoseHistoryFailure",
                     "Could not get robot pose at t=%u",
-                    (TimeStamp_t)_unexpectedMovement.GetStartTime());
+                    _unexpectedMovement.GetStartTime());
       }
       else
       {
         Pose3d obstaclePoseWrtRobot;
         
-        const f32 obstaclePositionPad_mm = 25.f;
+        const f32 extraPad_mm = 5.f; // fudge factor
+        const f32 obstaclePositionPad_mm = MarkerlessObject::GetSizeByType(ObjectType::CollisionObstacle).x() + extraPad_mm;
         
         const char *debugStr = "";
         
@@ -395,7 +296,7 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
           if (leftGoingForward)
           {
             // Put obstacle on right side
-            _unexpectedMovementSide = UnexpectedMovementSide::RIGHT;
+            unexpectedMovementSide = UnexpectedMovementSide::RIGHT;
             obstaclePoseWrtRobot.SetRotation(-M_PI_2_F, Z_AXIS_3D());
             obstaclePoseWrtRobot.SetTranslation({0.f, -0.5f*ROBOT_BOUNDING_Y - obstaclePositionPad_mm, 0.f});
             debugStr = "to right of";
@@ -403,7 +304,7 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
           else
           {
             // Put obstacle on left side
-            _unexpectedMovementSide = UnexpectedMovementSide::LEFT;
+            unexpectedMovementSide = UnexpectedMovementSide::LEFT;
             obstaclePoseWrtRobot.SetRotation(M_PI_2_F, Z_AXIS_3D());
             obstaclePoseWrtRobot.SetTranslation({0.f, 0.5f*ROBOT_BOUNDING_Y + obstaclePositionPad_mm, 0.f});
             debugStr = "to left of";
@@ -416,14 +317,14 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
           if (leftGoingForward && rightGoingForward)
           {
             // Put obstacle in front of robot (note: leave unrotated)
-            _unexpectedMovementSide = UnexpectedMovementSide::FRONT;
+            unexpectedMovementSide = UnexpectedMovementSide::FRONT;
             obstaclePoseWrtRobot.SetTranslation({ROBOT_BOUNDING_X_FRONT + obstaclePositionPad_mm, 0.f, 0.f});
             debugStr = "in front of";
           }
           else
           {
             // Put obstacle behind robot
-            _unexpectedMovementSide = UnexpectedMovementSide::BACK;
+            unexpectedMovementSide = UnexpectedMovementSide::BACK;
             obstaclePoseWrtRobot.SetTranslation({ROBOT_BOUNDING_X_FRONT - ROBOT_BOUNDING_X - obstaclePositionPad_mm, 0.f, 0.f});
             debugStr = "behind";
           }
@@ -450,29 +351,19 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
                  "Adding obstacle %s robot",
                  debugStr);
         
-        //        p1-p4
-        //        |   |         NOTE: add depth after the the detected pose otherwise the
-        //      pose  |               robot footprint will override part of the obstacle
-        //        |   |               with `ClearOfCliff`
-        //        p2-p3
-
-        const Rotation3d id = Rotation3d(0.f, Z_AXIS_3D());
-        const Point2f p1 = (obstaclePose.GetTransform() * Transform3d(id, {  0.f, -15.f, 0.f })).GetTranslation();
-        const Point2f p2 = (obstaclePose.GetTransform() * Transform3d(id, {  0.f,  15.f, 0.f })).GetTranslation(); 
-        const Point2f p3 = (obstaclePose.GetTransform() * Transform3d(id, { 10.f,  15.f, 0.f })).GetTranslation();
-        const Point2f p4 = (obstaclePose.GetTransform() * Transform3d(id, { 10.f, -15.f, 0.f })).GetTranslation();
-
-        MemoryMapData data(MemoryMapTypes::EContentType::ObstacleUnrecognized, robotState.timestamp);
-        _robot->GetMapComponent().InsertData( FastPolygon({p1, p2, p3, p4}), data);
+        _robot->GetBlockWorld().AddCollisionObstacle(obstaclePose);
       }
       
-    } // if(kCreateUnexpectedMovementObstacles && isValidTypeOfUnexpectedMovement)
+    } // if(unexpectedMovementType == UnexpectedMovementType::TURNED_BUT_STOPPED)
     
     {
       // Broadcast the associated event
-      ExternalInterface::UnexpectedMovement msg(robotState.timestamp, unexpectedMovementType, _unexpectedMovementSide);
+      ExternalInterface::UnexpectedMovement msg(robotState.timestamp, unexpectedMovementType, unexpectedMovementSide);
       _robot->Broadcast(ExternalInterface::MessageEngineToGame(std::move(msg)));
     }
+    
+    _unexpectedMovement.Reset();
+    
   }
 }
 
@@ -484,21 +375,19 @@ void MovementComponent::RemoveEyeShiftWhenHeadMoves(const std::string& name, Tim
   _eyeShiftToRemove[name].duration_ms  = duration_ms;
   _eyeShiftToRemove[name].headWasMoving = _isHeadMoving;
 }
-  
-void MovementComponent::EnableHeldInPalmMode(const bool enabled)
-{
-  _heldInPalmModeEnabled = enabled;
-  _unexpectedMovement.EnableHeldInPalmMode(enabled);
-}
 
+  
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::DriveWheels& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.DriveWheels.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::DriveWheels since external motor commands are not allowed.");
+  if (_ignoreDirectDrive)
+  {
+    LOG_INFO("MovementComponent.EventHandler.DriveWheels",
+             "Ignoring DriveWheels message while direct drive is disabled");
+    return;
   }
-  else if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
+  
+  if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
     LOG_INFO("MovementComponent.EventHandler.DriveWheels.WheelsLocked",
              "Ignoring ExternalInterface::DriveWheels while wheels are locked.");
   } else {
@@ -515,11 +404,14 @@ void MovementComponent::HandleMessage(const ExternalInterface::DriveWheels& msg)
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::TurnInPlaceAtSpeed& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.TurnInPlaceAtSpeed.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::TurnInPlaceAtSpeed since external motor commands are not allowed.");
+  if (_ignoreDirectDrive)
+  {
+    LOG_INFO("MovementComponent.EventHandler.TurnInPlaceAtSpeed",
+             "Ignoring TurnInPlaceAtSpeed message while direct drive is disabled");
+    return;
   }
-  else if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
+  
+  if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
     LOG_INFO("MovementComponent.EventHandler.TurnInPlaceAtSpeed.WheelsLocked",
              "Ignoring ExternalInterface::TurnInPlaceAtSpeed while wheels are locked.");
   } else {
@@ -542,11 +434,14 @@ void MovementComponent::HandleMessage(const ExternalInterface::TurnInPlaceAtSpee
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::MoveHead& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.MoveHead.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::MoveHead since external motor commands are not allowed.");
+  if (_ignoreDirectDrive)
+  {
+    LOG_INFO("MovementComponent.EventHandler.MoveHead",
+             "Ignoring MoveHead message while direct drive is disabled");
+    return;
   }
-  else if (!_drivingHead && AreAnyTracksLocked((u8)AnimTrackFlag::HEAD_TRACK)) {
+  
+  if (!_drivingHead && AreAnyTracksLocked((u8)AnimTrackFlag::HEAD_TRACK)) {
     LOG_INFO("MovementComponent.EventHandler.MoveHead.HeadLocked",
              "Ignoring ExternalInterface::MoveHead while head is locked.");
   } else {
@@ -562,11 +457,14 @@ void MovementComponent::HandleMessage(const ExternalInterface::MoveHead& msg)
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::MoveLift& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.MoveLift.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::MoveLift since external motor commands are not allowed.");
+  if (_ignoreDirectDrive)
+  {
+    LOG_INFO("MovementComponent.EventHandler.MoveLift",
+             "Ignoring MoveLift message while direct drive is disabled");
+    return;
   }
-  else if (!_drivingLift && AreAnyTracksLocked((u8)AnimTrackFlag::LIFT_TRACK)) {
+  
+  if (!_drivingLift && AreAnyTracksLocked((u8)AnimTrackFlag::LIFT_TRACK)) {
     LOG_INFO("MovementComponent.EventHandler.MoveLift.LiftLocked",
              "Ignoring ExternalInterface::MoveLift while lift is locked.");
   } else {
@@ -582,11 +480,14 @@ void MovementComponent::HandleMessage(const ExternalInterface::MoveLift& msg)
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::DriveArc& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.DriveArc.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::DriveArc since external motor commands are not allowed.");
+  if (_ignoreDirectDrive)
+  {
+    LOG_INFO("MovementComponent.EventHandler.DriveArc",
+             "Ignoring DriveArc message while direct drive is disabled");
+    return;
   }
-  else if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
+  
+  if (!_drivingWheels && AreAnyTracksLocked((u8)AnimTrackFlag::BODY_TRACK)) {
     LOG_INFO("MovementComponent.EventHandler.DriveArc.WheelsLocked",
              "Ignoring ExternalInterface::DriveArc while wheels are locked.");
   } else {
@@ -604,12 +505,6 @@ void MovementComponent::HandleMessage(const ExternalInterface::DriveArc& msg)
 template<>
 void MovementComponent::HandleMessage(const ExternalInterface::StopAllMotors& msg)
 {
-  if (!_allowExternalMovementCommands) {
-    LOG_WARNING("MovementComponent.EventHandler.StopAllMotors.ExternalMovementCommandsNotAllowed",
-              "Ignoring ExternalInterface::StopAllMotors since external motor commands are not allowed.");
-    return;
-  }
-
   StopAllMotors();
 }
 
@@ -645,11 +540,54 @@ void MovementComponent::DirectDriveCheckSpeedAndLockTracks(f32 speed, bool& flag
   }
 }
   
+template<>
+void MovementComponent::HandleMessage(const ExternalInterface::ChargerEvent& msg)
+{
+  if (!kAllowMovementOnChargerInSdkMode && _robot->GetContext()->IsInSdkMode())
+  {
+    if (msg.onCharger)
+    {
+      if(!AreAllTracksLockedBy(kAllMotorTracks, kOnChargerInSdkStr))
+      {
+        // Just got put on charger while in SDK mode (and not already locked): Lock motors.
+        LockTracks(kAllMotorTracks, kOnChargerInSdkStr, kOnChargerInSdkStr);
+      }
+    }
+    else
+    {
+      // Just came off charger while in SDK mode: Unlock motors.
+      UnlockTracks(kAllMotorTracks, kOnChargerInSdkStr);
+    }
+  }
+}
+  
+template<>
+void MovementComponent::HandleMessage(const ExternalInterface::EnterSdkMode& msg)
+{
+  if (!kAllowMovementOnChargerInSdkMode &&
+      _robot->GetBatteryComponent().IsOnChargerContacts() &&
+      !AreAllTracksLockedBy(kAllMotorTracks, kOnChargerInSdkStr))
+  {
+    // If SDK mode starts _while_ we are on the charger (and not already locked), lock tracks
+    LockTracks(kAllMotorTracks, kOnChargerInSdkStr, kOnChargerInSdkStr);
+  }
+}
+
+template<>
+void MovementComponent::HandleMessage(const ExternalInterface::ExitSdkMode& msg)
+{
+  if (!kAllowMovementOnChargerInSdkMode && _robot->GetBatteryComponent().IsOnChargerContacts())
+  {
+    // If SDK ends _while_ we are on the charger, make sure to unlock tracks
+    UnlockTracks(kAllMotorTracks, kOnChargerInSdkStr);
+  }
+}
+  
 // =========== Motor commands ============
 
-Result MovementComponent::CalibrateMotors(bool head, bool lift, const MotorCalibrationReason& reason)
+Result MovementComponent::CalibrateMotors(bool head, bool lift)
 {
-  return _robot->SendRobotMessage<RobotInterface::StartMotorCalibration>(head, lift, reason);
+  return _robot->SendRobotMessage<RobotInterface::StartMotorCalibration>(head, lift);
 }
   
 
@@ -665,78 +603,13 @@ Result MovementComponent::EnableHeadPower(bool enable)
   
 MovementComponent::MotorActionID MovementComponent::GetNextMotorActionID(MotorActionID* actionID_out)
 {
-  // Increment actionID
-  // 0 is reserved as it means the robot process should not ack it
-  if (++_lastMotorActionID == 0) {
-    ++_lastMotorActionID;
-  }
-
+  ++_lastMotorActionID;
   if (actionID_out != nullptr) {
     *actionID_out = _lastMotorActionID;
   }
   return _lastMotorActionID;
 }
-
-u8 MovementComponent::GetTracksLockedAtRelativeStreamTime(const TimeStamp_t relativeStreamTime_ms) const
-{
-  // NOTE: This implementation assumes that no tracks are locked during the time that there is a delayed track message
-  // to lock as well. If this assumption is violated delayed messages may be sent that override track locking already sent
-  // To handle this properly would require a large number of contract re-writes between the animation process and movement
-  // component API, so for now just don't lock tracks after queueing delayed track locks
-  u8 trackState = GetLockedTracks();
-  std::multimap<std::string, int> lockCountMap;
-
-  // Lock tracks
-  for(const auto& entry: _delayedTracksToLock){
-    if(entry.first <= relativeStreamTime_ms){
-      trackState |= entry.second.tracksToLock;
-      auto iter = lockCountMap.find(entry.second.who);
-      if(iter == lockCountMap.end()){
-        lockCountMap.emplace(entry.second.who, 1);
-      }else{
-        iter->second++;
-      }
-    }else{
-      break;
-    }
-  }
-
-  // unlock, checking count
-  for(const auto& entry: _delayedTracksToUnlock){
-    if(entry.first <= relativeStreamTime_ms){
-      auto iter = lockCountMap.find(entry.second.who);
-      if(iter == lockCountMap.end()){
-        PRINT_NAMED_ERROR("MovementComponent.GetTracksLockedAtRelativeStreamTime.IllegalUnlock",
-                          "%s is attempting to unlock a track that is not locked",
-                          entry.second.who.c_str());
-      }else{
-        iter->second--;
-        if(iter->second == 0){
-          trackState &= ~entry.second.tracksToLock;
-        }
-      }
-    }else{
-      break;
-    }
-  }
-
-  return trackState;
-}
-
-// Sends a message to the robot to move the lift to the specified angle
-Result MovementComponent::MoveLiftToAngle(const f32 angle_rad,
-                                          const f32 max_speed_rad_per_sec,
-                                          const f32 accel_rad_per_sec2,
-                                          const f32 duration_sec,
-                                          MotorActionID* actionID_out)
-{
-  return _robot->SendRobotMessage<RobotInterface::SetLiftAngle>(angle_rad,
-                                                                max_speed_rad_per_sec,
-                                                                accel_rad_per_sec2,
-                                                                duration_sec,
-                                                                GetNextMotorActionID(actionID_out));
-}
-
+  
 // Sends a message to the robot to move the lift to the specified height
 Result MovementComponent::MoveLiftToHeight(const f32 height_mm,
                                            const f32 max_speed_rad_per_sec,
@@ -764,18 +637,6 @@ Result MovementComponent::MoveHeadToAngle(const f32 angle_rad,
                                                                duration_sec,
                                                                GetNextMotorActionID(actionID_out));
 }
-
-Result MovementComponent::DriveWheels(const f32 lWheel_speed_mmps,
-                                      const f32 rWheel_speed_mmps,
-                                      const f32 lWheel_accel_mmps2,
-                                      const f32 rWheel_accel_mmps2)
-{
-  return _robot->SendRobotMessage<RobotInterface::DriveWheels>(lWheel_speed_mmps,
-                                                               rWheel_speed_mmps,
-                                                               lWheel_accel_mmps2,
-                                                               rWheel_accel_mmps2);
-
-}
   
 Result MovementComponent::TurnInPlace(const f32 angle_rad,
                                       const f32 max_speed_rad_per_sec,
@@ -785,16 +646,8 @@ Result MovementComponent::TurnInPlace(const f32 angle_rad,
                                       bool use_shortest_direction,
                                       MotorActionID* actionID_out)
 {
-  f32 max_speed_capped_radps = max_speed_rad_per_sec;
-  if (_heldInPalmModeEnabled && max_speed_rad_per_sec > kMaxHeldInPalmTurnSpeed_radps) {
-    LOG_INFO("MovementComponent.TurnInPlace.CappingSpeed",
-              "Point-turn with max turn speed of %.1f[rad/s] requested, "
-              "but capping max speed to %.1f [rad/s] instead, HeldInPalmMode enabled.",
-              max_speed_rad_per_sec, kMaxHeldInPalmTurnSpeed_radps);
-    max_speed_capped_radps = kMaxHeldInPalmTurnSpeed_radps;
-  }
   return _robot->SendRobotMessage<RobotInterface::SetBodyAngle>(angle_rad,
-                                                                max_speed_capped_radps,
+                                                                max_speed_rad_per_sec,
                                                                 accel_rad_per_sec2,
                                                                 angle_tolerance,
                                                                 num_half_revolutions,
@@ -880,20 +733,6 @@ uint8_t MovementComponent::GetTracksLockedBy(const std::string& who) const
   return lockedTracks;
 }
 
-uint8_t MovementComponent::GetLockedTracks() const 
-{
-  uint8_t lockedTracks = 0;
-  for (int i=0; i < (int)AnimConstants::NUM_TRACKS; i++)
-  {
-    if (!_trackLockCount[i].empty())
-    {
-      lockedTracks |= (1 << i);
-    }
-  }
-  return lockedTracks;
-}
-
-
 bool MovementComponent::AreAnyTracksLocked(u8 tracks) const
 {
   for (int i = 0; i < (int)AnimConstants::NUM_TRACKS; i++)
@@ -944,7 +783,7 @@ bool MovementComponent::AreAllTracksLockedBy(u8 tracks, const std::string& who) 
   return true;
 }
 
-void MovementComponent::UnlockAllTracks()
+void MovementComponent::CompletelyUnlockAllTracks()
 {
   for (int i = 0; i < (int)AnimConstants::NUM_TRACKS; i++)
   {
@@ -956,8 +795,7 @@ void MovementComponent::UnlockAllTracks()
       _trackLockCount[i].clear();
     }
   }
-
-  _robot->SendRobotMessage<RobotInterface::SetFullAnimTrackLockState>(GetLockedTracks());
+  _robot->GetAnimationComponent().UnlockAllTracks();
 }
 
 void MovementComponent::LockTracks(uint8_t tracks, const std::string& who, const std::string& debugName)
@@ -980,7 +818,7 @@ void MovementComponent::LockTracks(uint8_t tracks, const std::string& who, const
   
   if (tracksToDisable > 0)
   {
-    _robot->SendRobotMessage<RobotInterface::SetFullAnimTrackLockState>(GetLockedTracks());
+    _robot->GetAnimationComponent().LockTracks(tracksToDisable);
   }
   
   if (DEBUG_ANIMATION_LOCKING) {
@@ -990,18 +828,6 @@ void MovementComponent::LockTracks(uint8_t tracks, const std::string& who, const
              debugName.c_str(),
              who.c_str());
     PrintLockState();
-  }
-}
-
-void MovementComponent::RecordTracksLocked(u8 tracks, const std::string& who)
-{
-  for (int i=0; i < (int)AnimConstants::NUM_TRACKS; i++)
-  {
-    uint8_t curTrack = (1 << i);
-    if ((tracks & curTrack) == curTrack)
-    {
-      _trackLockCount[i].insert({who, who});
-    }
   }
 }
 
@@ -1039,7 +865,7 @@ bool MovementComponent::UnlockTracks(uint8_t tracks, const std::string& who)
   
   if (tracksToEnable > 0)
   {
-    _robot->SendRobotMessage<RobotInterface::SetFullAnimTrackLockState>(GetLockedTracks());
+    _robot->GetAnimationComponent().UnlockTracks(tracksToEnable);
   }
   
   if (DEBUG_ANIMATION_LOCKING) {
@@ -1050,76 +876,6 @@ bool MovementComponent::UnlockTracks(uint8_t tracks, const std::string& who)
     PrintLockState();
   }
   return locksLeft;
-}
-
-
-void MovementComponent::ApplyUpdatesForStreamTime(const TimeStamp_t relativeStreamTime_ms, const bool shouldClearUnusedLocks)
-{
-  if(!_delayedTracksToLock.empty()){
-    auto delayedIter = _delayedTracksToLock.begin();
-    while(delayedIter != _delayedTracksToLock.end()){
-      if(delayedIter->first <= relativeStreamTime_ms){
-        LockTracks(delayedIter->second.tracksToLock, delayedIter->second.who, delayedIter->second.who);
-        delayedIter = _delayedTracksToLock.erase(delayedIter);
-      }else{
-        break;
-      }
-    }
-  }
-
-
-  if(!_delayedTracksToUnlock.empty()){
-    auto delayedIter = _delayedTracksToUnlock.begin();
-    while(delayedIter != _delayedTracksToUnlock.end()){
-      if(delayedIter->first <= relativeStreamTime_ms){
-        UnlockTracks(delayedIter->second.tracksToLock, delayedIter->second.who);
-        delayedIter = _delayedTracksToUnlock.erase(delayedIter);
-      }else{
-        break;
-      }
-    }
-  }
-
-  if(shouldClearUnusedLocks){
-    _delayedTracksToLock.clear();
-    _delayedTracksToUnlock.clear();
-  }
-
-}
-
-
-void MovementComponent::LockTracksAtStreamTime(const u8 tracks, const TimeStamp_t relativeStreamTime_ms, 
-                                               const bool applyBeforeTick, 
-                                               const std::string& who, const std::string& debugName)
-{
-  // Figure out what the track state will be at the given time so that the full anim track lock set is correct
-  _delayedTracksToLock.emplace(relativeStreamTime_ms, DelayedTrackLockInfo(tracks, who));
-  u8 lockedAtStreamTime = GetTracksLockedAtRelativeStreamTime(relativeStreamTime_ms);
-  lockedAtStreamTime |= tracks;
-
-  RobotInterface::SetFullAnimTrackLockState msg(lockedAtStreamTime);
-  RobotInterface::EngineToRobot wrapper(std::move(msg));
-  _animComponent->AlterStreamingAnimationAtTime(std::move(wrapper), 
-                                                relativeStreamTime_ms,
-                                                applyBeforeTick,
-                                                this);
-}
-
-
-void MovementComponent::UnlockTracksAtStreamTime(const u8 tracks, const TimeStamp_t relativeStreamTime_ms, 
-                                                 const bool applyBeforeTick, const std::string& who)
-{
-  // Figure out what the track state will be at the given time so that the full anim track lock set is correct
-  _delayedTracksToUnlock.emplace(relativeStreamTime_ms, DelayedTrackLockInfo(tracks, who));
-  u8 lockedAtStreamTime = GetTracksLockedAtRelativeStreamTime(relativeStreamTime_ms);
-  lockedAtStreamTime &= ~tracks;
-
-  RobotInterface::SetFullAnimTrackLockState msg(lockedAtStreamTime);
-  RobotInterface::EngineToRobot wrapper(std::move(msg));
-  _animComponent->AlterStreamingAnimationAtTime(std::move(wrapper), 
-                                                relativeStreamTime_ms,
-                                                applyBeforeTick,
-                                                this);
 }
 
 void MovementComponent::PrintLockState() const
@@ -1137,7 +893,7 @@ void MovementComponent::PrintLockState() const
     }
   }
 
-  LOG_INFO("MovementComponent.LockState", "%s", ss.str().c_str());
+  LOG_DEBUG("MovementComponent.LockState", "%s", ss.str().c_str());
 }
 
 std::string MovementComponent::WhoIsLocking(u8 trackFlags) const
@@ -1160,25 +916,20 @@ std::string MovementComponent::WhoIsLocking(u8 trackFlags) const
   }
   return ss.str();
 }
-  
-RobotTimeStamp_t MovementComponent::GetLastTimeCameraWasMoving() const
-{
-  return std::max(_lastTimeWheelsWereMoving, _lastTimeHeadWasMoving);
-}
 
-  static inline bool WasMovingHelper(Robot& robot, RobotTimeStamp_t atTime, const std::string& debugStr,
+  static inline bool WasMovingHelper(Robot& robot, TimeStamp_t atTime, const std::string& debugStr,
                                      std::function<bool(const HistRobotState&)>&& wasMovingFcn)
   {
     bool wasMoving = false;
     
-    RobotTimeStamp_t t_hist = 0;
+    TimeStamp_t t_hist = 0;
     HistRobotState histState;
     const bool kWithInterpolation = true;
     const Result result = robot.GetStateHistory()->GetRawStateAt(atTime, t_hist, histState, kWithInterpolation);
     if (RESULT_OK != result)
     {
       LOG_WARNING(("MovementComponent." + debugStr + ".GetHistoricalPoseFailed").c_str(),
-                  "t=%u", (TimeStamp_t)atTime);
+                  "t=%u", atTime);
       wasMoving = true;
     }
     else
@@ -1189,35 +940,35 @@ RobotTimeStamp_t MovementComponent::GetLastTimeCameraWasMoving() const
     return wasMoving;
   }
   
-  bool MovementComponent::WasMoving(RobotTimeStamp_t atTime)
+  bool MovementComponent::WasMoving(TimeStamp_t atTime)
   {
     const bool wasMoving = WasMovingHelper(*_robot, atTime, "WasMoving",
                                            [](const HistRobotState& s) { return s.WasMoving(); });
     return wasMoving;
   }
   
-  bool MovementComponent::WasHeadMoving(RobotTimeStamp_t atTime)
+  bool MovementComponent::WasHeadMoving(TimeStamp_t atTime)
   {
     const bool wasHeadMoving = WasMovingHelper(*_robot, atTime, "WasHeadMoving",
                                                [](const HistRobotState& s) { return s.WasHeadMoving(); });
     return wasHeadMoving;
   }
   
-  bool MovementComponent::WasLiftMoving(RobotTimeStamp_t atTime)
+  bool MovementComponent::WasLiftMoving(TimeStamp_t atTime)
   {
     const bool wasLiftMoving = WasMovingHelper(*_robot, atTime, "WasLiftMoving",
                                                [](const HistRobotState& s) { return s.WasLiftMoving(); });
     return wasLiftMoving;
   }
   
-  bool MovementComponent::WereWheelsMoving(RobotTimeStamp_t atTime)
+  bool MovementComponent::WereWheelsMoving(TimeStamp_t atTime)
   {
     const bool wereWheelsMoving = WasMovingHelper(*_robot, atTime, "WereWheelsMoving",
                                                   [](const HistRobotState& s) { return s.WereWheelsMoving(); });
     return wereWheelsMoving;
   }
   
-  bool MovementComponent::WasCameraMoving(RobotTimeStamp_t atTime)
+  bool MovementComponent::WasCameraMoving(TimeStamp_t atTime)
   {
     const bool wasCameraMoving = WasMovingHelper(*_robot, atTime, "WasCameraMoving",
                                                  [](const HistRobotState& s) { return s.WasCameraMoving(); });
@@ -1225,24 +976,15 @@ RobotTimeStamp_t MovementComponent::GetLastTimeCameraWasMoving() const
   }
   
 #pragma mark -
-#pragma mark Unexpected Movement
-
-const u8 MovementComponent::UnexpectedMovement::kMaxUnexpectedMovementCount = 11;
-CONSOLE_VAR(u8, kMaxUnexpectedMovementCountWhileHeldInPalm, "Robot", 200);
-
-bool MovementComponent::UnexpectedMovement::IsDetected() const
-{
-  return _count >= GetMaxCount();
-}
-
-void MovementComponent::UnexpectedMovement::Increment(u8 countInc, f32 leftSpeed_mmps, f32 rightSpeed_mmps, RobotTimeStamp_t currentTime)
+#pragma mark Unexpected Movement 
+  
+void MovementComponent::UnexpectedMovement::Increment(u8 countInc, f32 leftSpeed_mmps, f32 rightSpeed_mmps, TimeStamp_t currentTime)
 {
   if (_count == 0)
   {
     _startTime = currentTime;
   }
   _count += countInc;
-  _count = std::min(_count, GetMaxCount());
   _sumWheelSpeedL_mmps += (f32)countInc * leftSpeed_mmps;
   _sumWheelSpeedR_mmps += (f32)countInc * rightSpeed_mmps;
 }
@@ -1269,10 +1011,5 @@ void MovementComponent::UnexpectedMovement::GetAvgWheelSpeeds(f32& left, f32& ri
   right = _sumWheelSpeedR_mmps / (f32) _count;
 }
 
-u8 MovementComponent::UnexpectedMovement::GetMaxCount() const
-{
-  return _heldInPalmModeEnabled ? kMaxUnexpectedMovementCountWhileHeldInPalm : kMaxUnexpectedMovementCount;
-}
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

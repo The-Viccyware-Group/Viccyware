@@ -8,7 +8,7 @@
 #include "clad/types/pathMotionProfile.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     /***************************************************************************
      *
@@ -93,7 +93,7 @@ namespace Anki {
     const f32 DEFAULT_POSE_EQUAL_ANGLE_THRESHOLD_RAD = DEG_TO_RAD(10);
 
     // Default maximum amount of time to let the planner run
-    const f32 DEFAULT_MAX_PLANNER_COMPUTATION_TIME_S = 6.f;
+    const f32 DEFAULT_MAX_PLANNER_COMPUTATION_TIME_S = 4.f;
 
     // A different default used for replanning (while we are already following a path)
     const f32 DEFAULT_MAX_PLANNER_REPLAN_COMPUTATION_TIME_S = 1.f;
@@ -134,7 +134,7 @@ namespace Anki {
     // Default values in clad
     const PathMotionProfile DEFAULT_PATH_MOTION_PROFILE = PathMotionProfile();
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 

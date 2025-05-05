@@ -3,7 +3,7 @@
  */
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 structure CubeLightKeyframe
 {

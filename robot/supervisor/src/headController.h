@@ -22,21 +22,17 @@
 #ifndef COZMO_HEAD_CONTROLLER_H_
 #define COZMO_HEAD_CONTROLLER_H_
 
-#include "clad/types/motorTypes.h"
 #include "coretech/common/shared/types.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace HeadController {
       
       // TODO: Add if/when needed?
       // Result Init();
 
-      // begins the calibration routine, and if a non-empty calibration
-      // reason is provided, it will send up a DAS event for it
-      void StartCalibrationRoutine(const bool autoStarted, const MotorCalibrationReason& reason);
-      
+      void StartCalibrationRoutine(bool autoStarted = false);
       bool IsCalibrated();
       bool IsCalibrating();
       
@@ -87,17 +83,12 @@ namespace Anki {
       
       void Brace();
       void Unbrace();
-      bool IsBracing();
       
       // Stop nodding or any movement immediately
       void Stop();
-
-      // Returns true if motor hasn't been calibrated since the last time
-      // sycon reported that the encoder is invalid
-      bool IsEncoderInvalid();
-
+      
     } // namespace HeadController
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // COZMO_HEAD_CONTROLLER_H_

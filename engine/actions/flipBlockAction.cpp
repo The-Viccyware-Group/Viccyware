@@ -22,10 +22,9 @@
 #include "engine/faceWorld.h"
 #include "engine/robot.h"
 
-#define LOG_CHANNEL "Actions"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 // Utility function to check if the robot is within a threshold of a preAction pose
@@ -117,7 +116,7 @@ ActionResult DriveAndFlipBlockAction::GetPossiblePoses(const Pose3d& robotPose,
                                                        bool& alreadyInPosition,
                                                        const bool shouldDriveToClosestPose)
 {
-  LOG_INFO("DriveAndFlipBlockAction.GetPossiblePoses", "Getting possible preActionPoses");
+  PRINT_NAMED_INFO("DriveAndFlipBlockAction.GetPossiblePoses", "Getting possible preActionPoses");
   const IDockAction::PreActionPoseInput preActionPoseInput(object,
                                                            PreActionPose::FLIPPING,
                                                            false,
@@ -137,7 +136,7 @@ ActionResult DriveAndFlipBlockAction::GetPossiblePoses(const Pose3d& robotPose,
   }
   
   Pose3d facePose;
-  RobotTimeStamp_t faceTime = faceWorld.GetLastObservedFace(facePose);
+  TimeStamp_t faceTime = faceWorld.GetLastObservedFace(facePose);
   
   if(preActionPoseOutput.preActionPoses.empty())
   {
@@ -147,7 +146,7 @@ ActionResult DriveAndFlipBlockAction::GetPossiblePoses(const Pose3d& robotPose,
   
   if(shouldDriveToClosestPose)
   {
-    LOG_INFO("DriveAndFlipBlockAction.GetPossiblePoses", "Selecting closest preAction pose");
+    PRINT_NAMED_INFO("DriveAndFlipBlockAction.GetPossiblePoses", "Selecting closest preAction pose");
     possiblePoses.push_back(preActionPoseOutput.preActionPoses[preActionPoseOutput.closestIndex].GetPose());
     return ActionResult::SUCCESS;
   }
@@ -282,7 +281,7 @@ void FlipBlockAction::SetShouldCheckPreActionPose(bool shouldCheck)
 
 void FlipBlockAction::GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const
 {
-  requests.insert({ VisionMode::Markers, EVisionUpdateFrequency::Low });
+  requests.insert({ VisionMode::DetectingMarkers, EVisionUpdateFrequency::Low });
 }
 
 ActionResult FlipBlockAction::Init()
@@ -338,15 +337,15 @@ ActionResult FlipBlockAction::CheckIfDone()
   const ActionResult result = _compoundAction.Update();
   
   // grab object now because we use regardless of result
-  auto* block = GetRobot().GetBlockWorld().GetLocatedObjectByID(_objectID);
+  ObservableObject* bottomBlock = GetRobot().GetBlockWorld().GetLocatedObjectByID(_objectID);
   
   if(result != ActionResult::RUNNING)
   {
-    // After flipping the block, it will definitely be in a new pose, but it will be _pretty close_ to its previous
-    // pose. Therefore, mark the pose as dirty, but do not remove the object entirely.
-    if ( nullptr != block )
+    // Purposely forget where the bottom block is, and any currently on top
+    if ( nullptr != bottomBlock )
     {
-      GetRobot().GetBlockWorld().MarkObjectDirty(block);
+      const bool propagateStack = true;
+      GetRobot().GetObjectPoseConfirmer().MarkObjectUnknown(bottomBlock, propagateStack);
     }
     else
     {
@@ -355,14 +354,14 @@ ActionResult FlipBlockAction::CheckIfDone()
     return result;
   }
   
-  if(nullptr == block)
+  if(nullptr == bottomBlock)
   {
     PRINT_NAMED_WARNING("FlipBlockAction.CheckIfDone.NullObject", "ObjectID=%d", _objectID.GetValue());
     return ActionResult::BAD_OBJECT;
   }
   
   Pose3d p;
-  block->GetPose().GetWithRespectTo(GetRobot().GetPose(), p);
+  bottomBlock->GetPose().GetWithRespectTo(GetRobot().GetPose(), p);
   if((p.GetTranslation().Length() < kDistToObjectToFlip_mm && _flipTag == -1))
   {
     IAction* action = new MoveLiftToHeightAction(MoveLiftToHeightAction::Preset::CARRY);

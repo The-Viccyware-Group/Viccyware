@@ -10,7 +10,7 @@
  **/
 
 #include "coretech/vision/engine/imageBrightnessHistogram.h"
-#include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/image_impl.h"
 
 namespace Anki {
 namespace Vision {
@@ -19,20 +19,6 @@ void ImageBrightnessHistogram::Reset()
 {
   ImageBrightnessHistogram emptyHist;
   std::swap(*this, emptyHist);
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void ImageBrightnessHistogram::IncrementBin(u8 bin)
-{
-  ++(_counts[bin]);
-  ++_totalCount;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void ImageBrightnessHistogram::IncrementBin(u8 bin, s32 byAmount)
-{
-  _counts[bin] += byAmount;
-  _totalCount  += byAmount;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

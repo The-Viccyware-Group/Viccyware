@@ -5,14 +5,14 @@ project(osState)
 include(anki_build_cxx)
 
 anki_build_cxx_library(osState ${ANKI_SRCLIST_DIR})
-anki_build_target_license(osState "ANKI")
 
 set(PLATFORM_LIBS "")
+set(PLATFORM_INCLUDES "")
 set(PLATFORM_COMPILE_DEFS "")
-if (VICOS)
+if (ANDROID)
     set(PLATFORM_LIBS
-        log
-        libcutils.so.0)
+        android
+        log)
 elseif (MACOSX)
     include(webots)
     set(PLATFORM_LIBS
@@ -27,13 +27,12 @@ PRIVATE
   cti_common
 # platform
   ${PLATFORM_LIBS}
-  ${ASAN_LINKER_FLAGS}
 )
 
-anki_build_strip(TARGET osState)
+android_strip(TARGET osState)
 
 target_compile_definitions(osState
-  PUBLIC
+  PRIVATE
   ${PLATFORM_COMPILE_DEFS}
 )
 
@@ -43,5 +42,6 @@ target_include_directories(osState
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
   PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../robot/include>
+  ${PLATFORM_INCLUDES}
 )
 

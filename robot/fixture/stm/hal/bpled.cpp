@@ -7,7 +7,6 @@
 #include "meter.h"
 #include "portable.h"
 #include "tests.h"
-#include "testcommon.h"
 #include "timer.h"
 
 //signal map (aliases)
@@ -15,12 +14,11 @@
 #define BP_LED_CLK    DUT_SWC
 
 //shift register bits<->signals
-#define SR_BIT_BPA3   0x80
-#define SR_BIT_BPA2   0x40
-#define SR_BIT_BPA1   0x20
-#define SR_BIT_BPA0   0    /*dummy*/
-#define SR_BIT_BLUE   0x10
-#define SR_BIT_RED    0x08
+#define SR_BIT_Q7     0x80 //NC
+#define SR_BIT_BPA4   0x40
+#define SR_BIT_BPA3   0x20
+#define SR_BIT_BPA1   0x10
+#define SR_BIT_BPA2   0x08
 #define SR_BIT_BPBL   0x04
 #define SR_BIT_BPGN   0x02
 #define SR_BIT_BPRD   0x01
@@ -35,18 +33,18 @@ namespace BPLED
   
   //map logical led # <n> to debug info and shift register bit pattern
   static const bpled_t bpled[BPLED::num] = {
-    {1, BPLED::COLOR_RED, (SR_BIT_BPA0 | 0           | 0           | 0           | SR_BIT_BLUE | 0          ) },
-    {1, BPLED::COLOR_GRN, (SR_BIT_BPA0 | 0           | 0           | 0           | SR_BIT_BLUE | SR_BIT_RED ) },
-    {1, BPLED::COLOR_BLU, (SR_BIT_BPA0 | 0           | 0           | 0           | 0           | SR_BIT_RED ) },
-    {2, BPLED::COLOR_RED, (SR_BIT_BPA1 | 0           | SR_BIT_BPGN | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {2, BPLED::COLOR_GRN, (SR_BIT_BPA1 | SR_BIT_BPRD | 0           | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {2, BPLED::COLOR_BLU, (SR_BIT_BPA1 | SR_BIT_BPRD | SR_BIT_BPGN | 0           | SR_BIT_BLUE | SR_BIT_RED ) },
-    {3, BPLED::COLOR_RED, (SR_BIT_BPA2 | 0           | SR_BIT_BPGN | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {3, BPLED::COLOR_GRN, (SR_BIT_BPA2 | SR_BIT_BPRD | 0           | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {3, BPLED::COLOR_BLU, (SR_BIT_BPA2 | SR_BIT_BPRD | SR_BIT_BPGN | 0           | SR_BIT_BLUE | SR_BIT_RED ) },
-    {4, BPLED::COLOR_RED, (SR_BIT_BPA3 | 0           | SR_BIT_BPGN | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {4, BPLED::COLOR_GRN, (SR_BIT_BPA3 | SR_BIT_BPRD | 0           | SR_BIT_BPBL | SR_BIT_BLUE | SR_BIT_RED ) },
-    {4, BPLED::COLOR_BLU, (SR_BIT_BPA3 | SR_BIT_BPRD | SR_BIT_BPGN | 0           | SR_BIT_BLUE | SR_BIT_RED ) }
+    {1, BPLED::COLOR_RED, (SR_BIT_BPA1 | 0           | SR_BIT_BPGN | SR_BIT_BPBL) },
+    {1, BPLED::COLOR_GRN, (SR_BIT_BPA1 | SR_BIT_BPRD | 0           | SR_BIT_BPBL) },
+    {1, BPLED::COLOR_BLU, (SR_BIT_BPA1 | SR_BIT_BPRD | SR_BIT_BPGN | 0          ) },
+    {2, BPLED::COLOR_RED, (SR_BIT_BPA2 | 0           | SR_BIT_BPGN | SR_BIT_BPBL) },
+    {2, BPLED::COLOR_GRN, (SR_BIT_BPA2 | SR_BIT_BPRD | 0           | SR_BIT_BPBL) },
+    {2, BPLED::COLOR_BLU, (SR_BIT_BPA2 | SR_BIT_BPRD | SR_BIT_BPGN | 0          ) },
+    {3, BPLED::COLOR_RED, (SR_BIT_BPA3 | 0           | SR_BIT_BPGN | SR_BIT_BPBL) },
+    {3, BPLED::COLOR_GRN, (SR_BIT_BPA3 | SR_BIT_BPRD | 0           | SR_BIT_BPBL) },
+    {3, BPLED::COLOR_BLU, (SR_BIT_BPA3 | SR_BIT_BPRD | SR_BIT_BPGN | 0          ) },
+    {4, BPLED::COLOR_RED, (SR_BIT_BPA4 | 0           | SR_BIT_BPGN | SR_BIT_BPBL) },
+    {4, BPLED::COLOR_GRN, (SR_BIT_BPA4 | SR_BIT_BPRD | 0           | SR_BIT_BPBL) },
+    {4, BPLED::COLOR_BLU, (SR_BIT_BPA4 | SR_BIT_BPRD | SR_BIT_BPGN | 0          ) }
   };
   
   //write 8 bits to the shift register
@@ -61,34 +59,28 @@ namespace BPLED
       BP_LED_CLK::reset();
       val <<= 1;
     }
-    Timer::wait(SHIFT_DELAY);
     BP_LED_DAT::reset();
   }
   
-  static bool bpled_enabled = 0;
   void enable()
   {
-    if( !bpled_enabled )
-    {
-      //init pins
-      BP_LED_DAT::reset();
-      BP_LED_CLK::reset();
-      BP_LED_DAT::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_HIGH);
-      BP_LED_CLK::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_HIGH);
-      
-      Board::powerOff(PWR_VBAT);
-      TestCommon::powerOnProtected(PWR_VBAT, 100/*ms*/, 50/*mA*/, 2); //power on + short circuit check
-      writeShiftReg(0);
-    }
-    bpled_enabled = 1;
+    //init pins
+    BP_LED_DAT::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_HIGH);
+    BP_LED_CLK::init(MODE_OUTPUT, PULL_NONE, TYPE_PUSHPULL, SPEED_HIGH);
+    BP_LED_DAT::reset();
+    BP_LED_CLK::reset();
+    
+    Board::enableVBAT(); //turn on power to shift reg
+    Timer::wait(10*1000);
+    
+    writeShiftReg(0);
   }
 
   void disable()
   {
-    Board::powerOff(PWR_VBAT);
+    Board::disableVBAT();
     BP_LED_DAT::mode(MODE_INPUT);
     BP_LED_CLK::mode(MODE_INPUT);
-    bpled_enabled = 0;
   }
   
   void on(uint8_t n) {
@@ -103,11 +95,12 @@ namespace BPLED
   {
     for (int n = 0; n < BPLED::num; n++)
     {
-      if( frame & (1<<n) )
+      if( frame & 1 )
         BPLED::on(n);
       else
         BPLED::off();
       
+      frame >>= 1;
       Timer::wait( display_time_us );
     }
     BPLED::off();

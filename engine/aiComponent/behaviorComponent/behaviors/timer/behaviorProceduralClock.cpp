@@ -13,209 +13,136 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/timer/behaviorProceduralClock.h"
 
-#include "cannedAnimLib/proceduralFace/proceduralFace.h"
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/aiComponent/faceSelectionComponent.h"
+#include "engine/aiComponent/templatedImageCache.h"
 #include "engine/aiComponent/timerUtility.h"
 #include "engine/components/animationComponent.h"
 #include "engine/faceWorld.h"
 
 
 #include "coretech/common/engine/jsonTools.h"
-#include "coretech/common/engine/utils/timer.h"
-#include "coretech/vision/shared/spritePathMap.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
-const char* kGetInTriggerKey        = "getInAnimTrigger";
-const char* kGetOutTriggerKey       = "getOutAnimTrigger";
-const char* kDisplayClockSKey       = "displayClockFor_s";
-const char* kShouldTurnToFaceKey    = "shouldTurnToFace";
-const char* kShouldPlayAudioKey     = "shouldPlayAudioOnClockUpdates";
-
-const Vision::SpritePathMap::AssetID kClockEmptyGridSpriteID = 
-  Vision::SpritePathMap::GetAssetID("clock_empty_grid");
-
-const std::vector<Vision::SpritePathMap::AssetID> kDigitMap = 
-{
-  Vision::SpritePathMap::GetAssetID("clock_00"),
-  Vision::SpritePathMap::GetAssetID("clock_01"),
-  Vision::SpritePathMap::GetAssetID("clock_02"),
-  Vision::SpritePathMap::GetAssetID("clock_03"),
-  Vision::SpritePathMap::GetAssetID("clock_04"),
-  Vision::SpritePathMap::GetAssetID("clock_05"),
-  Vision::SpritePathMap::GetAssetID("clock_06"),
-  Vision::SpritePathMap::GetAssetID("clock_07"),
-  Vision::SpritePathMap::GetAssetID("clock_08"),
-  Vision::SpritePathMap::GetAssetID("clock_09")
-};
-
-// SpriteBoxKeyFrame Definitions
-const Vision::SpriteBoxKeyFrame kTensLeftOfColonKeyFrame(
-  Vision::SpriteBox(
-    100.0f,
-    27,
-    26,
-    29,
-    43,
-    Vision::SpriteBoxName::SpriteBox_1,
-    Anki::Vision::LayerName::Layer_6,
-    Anki::Vision::SpriteRenderMethod::EyeColor,
-    0
-  ),
-  0.0f,
-  kClockEmptyGridSpriteID,
-  Anki::Vision::SpriteSeqEndType::Clear,
-  0
-);
-
-const Vision::SpriteBoxKeyFrame kOnesLeftOfColonKeyFrame(
-  Vision::SpriteBox(
-    100.0f,
-    57,
-    26,
-    29,
-    43,
-    Vision::SpriteBoxName::SpriteBox_2,
-    Anki::Vision::LayerName::Layer_6,
-    Anki::Vision::SpriteRenderMethod::EyeColor,
-    0
-  ),
-  0.0f,
-  kClockEmptyGridSpriteID,
-  Anki::Vision::SpriteSeqEndType::Clear,
-  0
-);
-
-const Vision::SpriteBoxKeyFrame kColonKeyFrame(
-  Vision::SpriteBox(
-    100.0f,
-    87,
-    27,
-    10,
-    43,
-    Vision::SpriteBoxName::SpriteBox_3,
-    Anki::Vision::LayerName::Layer_6,
-    Anki::Vision::SpriteRenderMethod::EyeColor,
-    0
-  ),
-  0.0f,
-  Vision::SpritePathMap::GetAssetID("clock_colon"),
-  Anki::Vision::SpriteSeqEndType::Clear,
-  0
-);
-
-const Vision::SpriteBoxKeyFrame kTensRightOfColonKeyFrame(
-  Vision::SpriteBox(
-    100.0f,
-    98,
-    26,
-    29,
-    43,
-    Vision::SpriteBoxName::SpriteBox_4,
-    Anki::Vision::LayerName::Layer_6,
-    Anki::Vision::SpriteRenderMethod::EyeColor,
-    0
-  ),
-  0.0f,
-  kClockEmptyGridSpriteID,
-  Anki::Vision::SpriteSeqEndType::Clear,
-  0
-);
-
-const Vision::SpriteBoxKeyFrame kOnesRightOfColonKeyFrame(
-  Vision::SpriteBox(
-    100.0f,
-    128,
-    26,
-    29,
-    43,
-    Vision::SpriteBoxName::SpriteBox_5,
-    Anki::Vision::LayerName::Layer_6,
-    Anki::Vision::SpriteRenderMethod::EyeColor,
-    0
-  ),
-  0.0f,
-  kClockEmptyGridSpriteID,
-  Anki::Vision::SpriteSeqEndType::Clear,
-  0
-);
-
-const std::map<Vision::SpriteBoxName, Vision::SpriteBoxKeyFrame> kKeyFrameMap =
-{
-  {Vision::SpriteBoxName::SpriteBox_1,  kTensLeftOfColonKeyFrame},
-  {Vision::SpriteBoxName::SpriteBox_2,  kOnesLeftOfColonKeyFrame},
-  {Vision::SpriteBoxName::SpriteBox_3,            kColonKeyFrame},
-  {Vision::SpriteBoxName::SpriteBox_4, kTensRightOfColonKeyFrame},
-  {Vision::SpriteBoxName::SpriteBox_5, kOnesRightOfColonKeyFrame}
-};
-
-} // namespace
+const char* kClockTemplateKey    = "clockTemplate";
+const char* kDigitMapKey         = "digitImageMap";
+const char* kGetInTriggerKey     = "getInAnimTrigger";
+const char* kGetOutTriggerKey    = "getOutAnimTrigger";
+const char* kDisplayClockSKey    = "displayClockFor_s";
+const char* kStaticElementsKey   = "staticElements";
+const char* kTimerElementsKey    = "timerElementsMap";
+const char* kShouldTurnToFaceKey = "shouldTurnToFace";
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorProceduralClock::BehaviorProceduralClock(const Json::Value& config)
 : ICozmoBehavior(config)
 {
+  // load in digit to image map
+  {
+    int i = 0;
+    for(auto& digit: config[kDigitMapKey]){
+      _instanceParams.intsToImages[i] = digit.asString();
+      i++;
+    }
+    ANKI_VERIFY(i == 10, 
+                "BehaviorProceduralClock.Constructor.InvalidDigitMap",
+                "Expected exactly 10 images in digit map, found %d",
+                i);
+  }
+
+  {
+    for(auto& key : config[kTimerElementsKey].getMemberNames()){
+      _instanceParams.digitToTemplateMap[StringToDigitID(key)] = config[kTimerElementsKey][key].asString();
+    }
+    ANKI_VERIFY(_instanceParams.digitToTemplateMap.size() == Util::EnumToUnderlying(DigitID::Count),
+                "BehaviorProceduralClock.Constructor.MissingElements",
+                "Expected digit map to have %zu elements, but it has %d",
+                _instanceParams.digitToTemplateMap.size(),
+                Util::EnumToUnderlying(DigitID::Count));
+  }
+
   const std::string kDebugStr = "BehaviorProceduralClock.ParsingIssue";
 
+  _instanceParams.templateJSON = config[kClockTemplateKey];
   _instanceParams.getInAnim = AnimationTriggerFromString(JsonTools::ParseString(config, kGetInTriggerKey, kDebugStr));
   _instanceParams.getOutAnim = AnimationTriggerFromString(JsonTools::ParseString(config, kGetOutTriggerKey, kDebugStr));
-  _instanceParams.totalTimeDisplayClock_sec = static_cast<float>(JsonTools::ParseUint8(config, kDisplayClockSKey, kDebugStr));
+  _instanceParams.totalTimeDisplayClock = JsonTools::ParseUint8(config, kDisplayClockSKey, kDebugStr);
   JsonTools::GetValueOptional(config, kShouldTurnToFaceKey, _instanceParams.shouldTurnToFace);
-  JsonTools::GetValueOptional(config, kShouldPlayAudioKey, _instanceParams.shouldPlayAudioOnClockUpdates);
+
+  // add all static elements
+  if(config.isMember(kStaticElementsKey)){
+    for(auto& key: config[kStaticElementsKey].getMemberNames()){
+      _instanceParams.staticElements[key] = config[kStaticElementsKey][key].asString();
+    }
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorProceduralClock::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
 {
   const char* list[] = {
+    kDigitMapKey,
+    kTimerElementsKey,
+    kClockTemplateKey,
     kGetInTriggerKey,
     kGetOutTriggerKey,
     kDisplayClockSKey,
     kShouldTurnToFaceKey,
-    kShouldPlayAudioKey
+    kStaticElementsKey,
   };
   expectedKeys.insert( std::begin(list), std::end(list) );
-  GetBehaviorJsonKeysInternal(expectedKeys);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorProceduralClock::InitBehavior()
 {
-  auto& timerUtility = GetBEI().GetAIComponent().GetComponent<TimerUtility>();
-  if(_instanceParams.getDigitFunction == nullptr){
-    GetDigitsFunction countUpFunction = [&timerUtility](const int offset){
-      std::map<Vision::SpriteBoxName, int> outMap;
-      const int currentTime_s = timerUtility.GetSystemTime_s() + offset;
-      // Ten Mins Digit
-      {          
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_1, 
-                                      TimerHandle::SecondsToDisplayMinutes(currentTime_s)/10));
-      }
-      // One Mins Digit
-      {
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_2, 
-                                            TimerHandle::SecondsToDisplayMinutes(currentTime_s) % 10));
-      }
-      // Ten seconds digit
-      {
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_4, 
-                                      TimerHandle::SecondsToDisplaySeconds(currentTime_s)/10));
-      }
-      // One seconds digit
-      {
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_5, 
-                       TimerHandle::SecondsToDisplaySeconds(currentTime_s) % 10));
-      }
-      return outMap;
-    };
-
-    SetGetDigitFunction(std::move(countUpFunction));
+  if(_instanceParams.getDigitFunctions.size() == 0){
+    // TODO: find a way to load this in from data - for now init the clock as one that counts up based on time
+    // and allow behaviors to re-set functionality in code only
+    auto& timerUtility = GetBEI().GetAIComponent().GetComponent<TimerUtility>();
+    
+    std::map<DigitID, std::function<int()>> countUpFuncs;
+    // Ten Mins Digit
+    {
+      auto tenMinsFunc = [&timerUtility](){
+        const int currentTime_s = timerUtility.GetSystemTime_s();
+        return TimerHandle::SecondsToDisplayMinutes(currentTime_s)/10;
+      };
+      countUpFuncs.emplace(std::make_pair(DigitID::DigitOne, tenMinsFunc));
+    }
+    // One Mins Digit
+    {
+      auto oneMinsFunc = [&timerUtility](){
+        const int currentTime_s = timerUtility.GetSystemTime_s();
+        return TimerHandle::SecondsToDisplayMinutes(currentTime_s) % 10;
+      };
+      countUpFuncs.emplace(std::make_pair(DigitID::DigitTwo, oneMinsFunc));
+    }
+    // Ten seconds digit
+    {
+      auto tenSecsFunc = [&timerUtility](){
+        const int currentTime_s = timerUtility.GetSystemTime_s();
+        return TimerHandle::SecondsToDisplaySeconds(currentTime_s)/10;
+      };
+      countUpFuncs.emplace(std::make_pair(DigitID::DigitThree, tenSecsFunc));
+    }
+    // One seconds digit
+    {
+      auto oneSecsFunc = [&timerUtility](){
+        const int currentTime_s = timerUtility.GetSystemTime_s();
+        return TimerHandle::SecondsToDisplaySeconds(currentTime_s) % 10;
+      };
+      countUpFuncs.emplace(std::make_pair(DigitID::DigitFour, oneSecsFunc));
+    }
+    
+    SetDigitFunctions(std::move(countUpFuncs));
   }
 }
 
@@ -224,15 +151,6 @@ void BehaviorProceduralClock::InitBehavior()
 void BehaviorProceduralClock::OnBehaviorActivated() 
 {
   _lifetimeParams = LifetimeParams();
-
-  // Set up the colon keyframes and use them to set the animation duration
-  Vision::SpriteBoxKeyFrame colonStartKeyFrame = kKeyFrameMap.at(Vision::SpriteBoxName::SpriteBox_3);
-  Vision::SpriteBoxKeyFrame colonEndKeyFrame = kKeyFrameMap.at(Vision::SpriteBoxName::SpriteBox_3);
-
-  int timeToDisplay_ms = Util::SecToMilliSec(_instanceParams.totalTimeDisplayClock_sec);
-  colonEndKeyFrame.triggerTime_ms = timeToDisplay_ms - (timeToDisplay_ms % ANIM_TIME_STEP_MS);
-  _lifetimeParams.keyFrames.push_back(std::move(colonStartKeyFrame));
-  _lifetimeParams.keyFrames.push_back(std::move(colonEndKeyFrame));
 
   if(_instanceParams.shouldTurnToFace && UpdateTargetFace().IsValid()){
     TransitionToTurnToFace();
@@ -270,18 +188,9 @@ void BehaviorProceduralClock::TransitionToShowClock()
   }
 
   _lifetimeParams.currentState = BehaviorState::ShowClock;
-  TransitionToShowClockInternal();
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorProceduralClock::TransitionToShowClockInternal()
-{
-  int numUpdates = std::round(_instanceParams.totalTimeDisplayClock_sec);
-  for(int i = 0; i < numUpdates; i++){
-    AddKeyFramesForOffset(i, i*1000);
-  }
-  DisplayClock();
+  auto& timerUtility = GetBEI().GetAIComponent().GetComponent<TimerUtility>();
+  _lifetimeParams.timeShowClockStarted = timerUtility.GetSystemTime_s();
+  // displaying time on face handled in update loop
 }
 
 
@@ -289,6 +198,7 @@ void BehaviorProceduralClock::TransitionToShowClockInternal()
 void BehaviorProceduralClock::TransitionToGetOut()
 {
   _lifetimeParams.currentState = BehaviorState::GetOut;
+  // Cancel the looping show clock body motion animation
   DelegateNow(new TriggerAnimationAction(_instanceParams.getOutAnim), 
                      [this](){ CancelSelf(); });
 }
@@ -300,124 +210,107 @@ void BehaviorProceduralClock::BehaviorUpdate()
   if(!IsActivated()){
     return;
   }
+
+  if(_lifetimeParams.currentState == BehaviorState::ShowClock){
+    auto& timerUtility = GetBEI().GetAIComponent().GetComponent<TimerUtility>();
+    const int currentTime_s = timerUtility.GetSystemTime_s();
+
+    if(currentTime_s >= (_lifetimeParams.timeShowClockStarted + _instanceParams.totalTimeDisplayClock)){
+      TransitionToGetOut();
+    }else if(currentTime_s >= _lifetimeParams.nextUpdateTime_s){
+      _lifetimeParams.nextUpdateTime_s = currentTime_s + 1;
+      std::map<std::string, std::string> quadrantMap;
+      BuildAndDisplayTimer(quadrantMap);      
+    }
+  }
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorProceduralClock::AddKeyFramesForOffset(const int clockOffset_s, const int displayTime_ms)
+auto BehaviorProceduralClock::StringToDigitID(const std::string& str) -> DigitID
 {
-  // TODO(str): Could optimize by enforcing "animation chronological" order when adding keyframes, then
-  // check for change against the last keyframe for each given spritebox to prevent sending redundant
-  // keyframes if e.g. only one of the four digits changes. As it is, the SpriteBoxKeyFrame technique
-  // requires many fewer messages than the CompositeImage approach, so we can probably forgo the complexity
+  if(str == "DigitOne"){ return DigitID::DigitOne;}
+  else if(str == "DigitTwo"){ return DigitID::DigitTwo;}
+  else if(str == "DigitThree"){ return DigitID::DigitThree;}
+  else if(str == "DigitFour"){ return DigitID::DigitFour;}
+  else { 
+    PRINT_NAMED_WARNING("BehaviorProceduralClock.StringToDigitID.NoMatchFound",
+                        "Digit %s not found in enum", str.c_str());
+    return DigitID::Count;
+  }
 
-  // Truncate to the nearest valid frame time for the triggerTime
-  const int triggerTime_ms = displayTime_ms - (displayTime_ms % ANIM_TIME_STEP_MS);
+}
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorProceduralClock::BuildAndDisplayTimer(std::map<std::string, std::string>& quadrantMap)
+{
+  // set static quadrants
+  for(auto& entry : _instanceParams.staticElements){
+    quadrantMap[entry.first] = entry.second;
+  }
 
   // set digits
-  bool isLeadingZero = ShouldDimLeadingZeros();
-
-  const std::map<Vision::SpriteBoxName, int> digitMap = _instanceParams.getDigitFunction(clockOffset_s);
-
-  for(auto& pair : digitMap){
-    Vision::SpriteBoxKeyFrame newKeyFrame = kKeyFrameMap.at(pair.first);
-    newKeyFrame.triggerTime_ms = triggerTime_ms;
-
-     int digit = pair.second;
-     if (digit < 0) { digit = 0; };  // The timer is shorted than the initial diplay time
-     
-    isLeadingZero &= (pair.second == 0);
-    if(!isLeadingZero){
-      newKeyFrame.assetID = kDigitMap.at(digit);
+  bool isLeadingZero = true;
+  for(int enumIdx = 0; enumIdx < Util::EnumToUnderlying(DigitID::Count); enumIdx++){
+    const DigitID enumVal = DigitID(enumIdx);
+    const int digitToDisplay = _instanceParams.getDigitFunctions[enumVal]();
+    isLeadingZero &= (digitToDisplay == 0);
+    if(isLeadingZero){
+      quadrantMap[_instanceParams.digitToTemplateMap[enumVal]] = "empty_grid";
+    }else{
+      quadrantMap[_instanceParams.digitToTemplateMap[enumVal]] = _instanceParams.intsToImages[digitToDisplay];
     }
-      
-    _lifetimeParams.keyFrames.push_back(std::move(newKeyFrame));
   }
-
-  if(_instanceParams.shouldPlayAudioOnClockUpdates){
-    _lifetimeParams.audioTickTimes.push_back(triggerTime_ms);
-  }
+  // build the full image
+  auto& imageCache = GetBEI().GetAIComponent().GetComponent<TemplatedImageCache>();
+  const auto& image = imageCache.BuildImage(GetDebugLabel(), 
+                                            FACE_DISPLAY_WIDTH, FACE_DISPLAY_HEIGHT, 
+                                            _instanceParams.templateJSON, quadrantMap);
+  
+  auto grey = image.ToGray();
+  // draw it to the face
+  GetBEI().GetAnimationComponent().DisplayFaceImage(grey, 1000.0f, true);
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorProceduralClock::DisplayClock()
+void BehaviorProceduralClock::SetDigitFunctions(std::map<DigitID, std::function<int()>>&& functions)
 {
-  std::vector<Vision::SpriteBoxKeyFrame> residualKeyFrames;
-  RobotInterface::PlayAnimWithSpriteBoxKeyFrames dummyPlayMsg;
-  const size_t maxFramesForPlayAnimMsg = dummyPlayMsg.spriteBoxKeyFrames.size();
-
-  // Pull off excess keyframes for later transmission
-  if(_lifetimeParams.keyFrames.size() > maxFramesForPlayAnimMsg){
-    auto firstKeyFrameIter = _lifetimeParams.keyFrames.begin() + maxFramesForPlayAnimMsg;
-    auto lastKeyFrameIter = _lifetimeParams.keyFrames.end();
-    std::move(firstKeyFrameIter, lastKeyFrameIter, std::back_inserter(residualKeyFrames));
-    _lifetimeParams.keyFrames.erase(firstKeyFrameIter, lastKeyFrameIter);
-  }
-
-  // Start the base animation
-  auto animationCallback = [this](const AnimationComponent::AnimResult res, u32 streamTimeAnimEnded){
-    TransitionToGetOut();
-  };
-  GetBEI().GetAnimationComponent().PlayAnimWithSpriteBoxKeyFrames("", 
-                                                                  _lifetimeParams.keyFrames,
-                                                                  true,
-                                                                  animationCallback);
-
-  // If there were excess keyframes, send them now
-  if(!residualKeyFrames.empty()){
-    RobotInterface::AddSpriteBoxKeyFrames dummyAddMsg;
-    const size_t maxFramesForAddKeyFramesMsg = dummyAddMsg.spriteBoxKeyFrames.size(); 
-    while(!residualKeyFrames.empty()){
-      const size_t numToSend = std::min(residualKeyFrames.size(), maxFramesForAddKeyFramesMsg);
-      auto firstKeyFrameIter = residualKeyFrames.begin();
-      auto lastKeyFrameIter = firstKeyFrameIter + numToSend;
-      std::vector<Vision::SpriteBoxKeyFrame> keyFramesToSend;
-      std::move(firstKeyFrameIter, lastKeyFrameIter, std::back_inserter(keyFramesToSend));
-      residualKeyFrames.erase(firstKeyFrameIter, lastKeyFrameIter);
-      GetBEI().GetAnimationComponent().AddSpriteBoxKeyFramesToRunningAnim(keyFramesToSend);
+  _instanceParams.getDigitFunctions = functions;
+  if(ANKI_DEV_CHEATS){
+    std::set<DigitID> digits;
+    for(auto& entry: _instanceParams.getDigitFunctions){
+      digits.insert(entry.first);
     }
+    ANKI_VERIFY(Util::EnumToUnderlying(DigitID::Count) == digits.size(),
+                "BehaviorProceduralClock.SetDigitFunctions.ImproperNumberOfFunctions",
+                "Expected %d functions, received %zu",
+                Util::EnumToUnderlying(DigitID::Count), digits.size());
   }
-
-  // TODO(str): This will still send one message for every update, and ends up being handled by the 
-  // StreamingAnimationModifier. We could/should provide keyframe based handling for these audio events,
-  // and any other keyframe types we need, if we really want to "build animations" from the engine like 
-  // we're doing here. The StreamingAnimationModifier obfuscates logical flow in the AnimationStreamer. 
-  if(_instanceParams.shouldPlayAudioOnClockUpdates){
-    // Have the animation process send ticks at the appropriate time stamp 
-    for(const auto& triggerTime_ms : _lifetimeParams.audioTickTimes){
-      AudioEngine::Multiplexer::PostAudioEvent audioMessage;
-      audioMessage.gameObject = Anki::AudioMetaData::GameObjectType::Animation;
-      audioMessage.audioEvent = AudioMetaData::GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Timer_Countdown;
-
-      RobotInterface::EngineToRobot wrapper(std::move(audioMessage));
-      GetBEI().GetAnimationComponent().AlterStreamingAnimationAtTime(std::move(wrapper), triggerTime_ms);
-    }
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorProceduralClock::SetGetDigitFunction(GetDigitsFunction&& function)
-{
-  _instanceParams.getDigitFunction = function;
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SmartFaceID BehaviorProceduralClock::UpdateTargetFace()
 {
-  auto smartFaces = GetBEI().GetFaceWorld().GetSmartFaceIDs(0);
+  const bool considerTrackingOnlyFaces = false;
+  std::set< Vision::FaceID_t > faces = GetBEI().GetFaceWorld().GetFaceIDs(considerTrackingOnlyFaces);
+  
+  std::set<SmartFaceID> smartFaces;
+  for(auto& entry : faces){
+    smartFaces.insert(GetBEI().GetFaceWorld().GetSmartFaceID(entry));
+  }
 
   const auto& faceSelection = GetAIComp<FaceSelectionComponent>();
   FaceSelectionComponent::FaceSelectionFactorMap criteriaMap;
-  criteriaMap.insert(std::make_pair(FaceSelectionPenaltyMultiplier::RelativeHeadAngleRadians, 1));
-  criteriaMap.insert(std::make_pair(FaceSelectionPenaltyMultiplier::RelativeBodyAngleRadians, 3));
+  criteriaMap.insert(std::make_pair(FaceSelectionComponent::FaceSelectionPenaltyMultiplier::RelativeHeadAngleRadians, 1));
+  criteriaMap.insert(std::make_pair(FaceSelectionComponent::FaceSelectionPenaltyMultiplier::RelativeBodyAngleRadians, 3));
   _lifetimeParams.targetFaceID = faceSelection.GetBestFaceToUse(criteriaMap, smartFaces);
 
   return _lifetimeParams.targetFaceID;
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

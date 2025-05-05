@@ -27,7 +27,7 @@
 #include "util/helpers/noncopyable.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ObservableObject;
 class Robot;
@@ -40,7 +40,7 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
   //////
@@ -67,9 +67,15 @@ public:
   
   // TODO Define better API for (un)setting carried objects: they are confused easily with SetCarriedObjectAsUnattached
   void SetCarryingObject(ObjectID carryObjectID, Vision::Marker::Code atMarkerCode);
-  void UnSetCarryingObject();
+  void UnSetCarryingObjects(bool topOnly = false);
   
-  const ObjectID&            GetCarryingObjectID()    const {return _carryingObjectID;}
+  // If objID == carryingObjectOnTopID, only that object's carry state is unset.
+  // If objID == carryingObjectID, all carried objects' carry states are unset.
+  void UnSetCarryObject(ObjectID objID);
+  
+  const ObjectID&            GetCarryingObject()      const {return _carryingObjectID;}
+  const ObjectID&            GetCarryingObjectOnTop() const {return _carryingObjectOnTopID;}
+  const std::set<ObjectID>   GetCarryingObjects()     const;
   const Vision::Marker::Code GetCarryingMarkerCode()  const {return _carryingMarkerCode;}
   
   bool IsCarryingObject() const {return _carryingObjectID.IsSet(); }
@@ -85,6 +91,7 @@ private:
   
   ObjectID                  _carryingObjectID;
   Vision::KnownMarker::Code _carryingMarkerCode = Vision::MARKER_INVALID;
+  ObjectID                  _carryingObjectOnTopID;
   
 };
 

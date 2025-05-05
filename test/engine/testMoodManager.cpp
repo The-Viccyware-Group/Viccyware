@@ -39,7 +39,7 @@
 
 
 using namespace Anki;
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 
 const double kTickTimestep = 0.01;
@@ -47,19 +47,14 @@ double gCurrentTime = 0.0; // Fake time for update calls
 
 Anki::Util::GraphEvaluator2d kTestDefaultRepetitionPenaltyGraph({{0.0f, 0.0}, {10.0f, 1.0f}}); // no-repetition penalty
   
-Anki::Util::GraphEvaluator2d kTestGraphTimeRatio({{0.0f, 1.0f }, {0.5f, 1.0f }, {1.0f, 0.9f }, {1.5f, 0.8f },
-                                                  {2.0f, 0.5f }, {2.5f, 0.5f }, {3.0f, 0.4f }, {3.5f, 0.0f } });
-
-Anki::Util::GraphEvaluator2d kTestGraphValueSlope({ {-1.0f, 60.0f}, {-0.8f, 6.0f}, {-0.2f, 6.0f}, {0.0f, 0.6f},
-                                                    {0.93999f, 0.6f}, {0.93999f, 0.0f} });
+Anki::Util::GraphEvaluator2d kTestDecayGraph({{0.0f, 1.0f }, {0.5f, 1.0f }, {1.0f, 0.9f }, {1.5f, 0.8f },
+                                              {2.0f, 0.5f }, {2.5f, 0.5f }, {3.0f, 0.4f }, {3.5f, 0.0f } });
 
 
-const EmotionType kTestEmoType0 = EmotionType::Happy;
-const EmotionType kTestEmoType1 = EmotionType::Confident;
-const EmotionType kTestEmoType2 = EmotionType::Social;
-const EmotionType kTestEmoType3 = EmotionType::Stimulated;
-
-using DGT = MoodDecayEvaulator::DecayGraphType;
+const EmotionType kTestEmoType0 = EmotionType::Happy; // was happy
+const EmotionType kTestEmoType1 = EmotionType::Confident; // was calm
+const EmotionType kTestEmoType2 = EmotionType::Social; // was brave
+const EmotionType kTestEmoType3 = EmotionType::Stimulated; // was confident
 
 // Helper - tick mood manager for N ticks with a given timestep
 void TickMoodManager(MoodManager& moodManager, uint32_t numTicks, float tickTimeStep)
@@ -74,27 +69,18 @@ void TickMoodManager(MoodManager& moodManager, uint32_t numTicks, float tickTime
 }
 
 
-void InitStaticMoodData(const MoodDecayEvaulator::DecayGraphType graphType)
+void InitStaticMoodData()
 {
   StaticMoodData& staticMoodData = MoodManager::GetStaticMoodData();
-
-  switch(graphType)
-  {
-    case DGT::TimeRatio:
-      staticMoodData.SetDecayEvaluator(kTestEmoType0, kTestGraphTimeRatio, DGT::TimeRatio);
-      break;
-    case DGT::ValueSlope:
-      staticMoodData.SetDecayEvaluator(kTestEmoType0, kTestGraphValueSlope, DGT::ValueSlope);
-      break;
-  }
-  
+ 
+  staticMoodData.SetDecayGraph(kTestEmoType0, kTestDecayGraph);
   staticMoodData.SetDefaultRepetitionPenalty(kTestDefaultRepetitionPenaltyGraph);
 }
 
 
 TEST(MoodManager, AddEmotionNoPenalty)
 {
-  InitStaticMoodData(DGT::TimeRatio);
+  InitStaticMoodData();
   
   MoodManager moodManager;
 
@@ -127,7 +113,7 @@ TEST(MoodManager, AddEmotionNoPenalty)
 
 TEST(MoodManager, AddEmotionRepeatPenalty)
 {
-  InitStaticMoodData(DGT::TimeRatio);
+  InitStaticMoodData();
   
   MoodManager moodManager;
   
@@ -162,8 +148,8 @@ TEST(MoodManager, AddEmotionRepeatPenalty)
 
 TEST(MoodManager, AddEmotionNoPenaltyEachTick)
 {
-  InitStaticMoodData(DGT::TimeRatio);
-
+  InitStaticMoodData();
+  
   MoodManager moodManager;
   
   TickMoodManager(moodManager, 1, kTickTimestep);
@@ -186,72 +172,77 @@ TEST(MoodManager, AddEmotionNoPenaltyEachTick)
   TickMoodManager(moodManager, 1, kTickTimestep);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 0.5f);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType1),  0.1f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  0),  0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  0.5f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 98),  0.5f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1,  0),   0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1,  1),   0.1f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1, 98),   0.1f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  2),  0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 99),  0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1,  1),   0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1,  2),   0.1f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType1, 99),   0.1f, 0.0f);
   
   moodManager.AddToEmotion(kTestEmoType0, 0.5f, "Test3", gCurrentTime);
-  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  0),  0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 98),  1.0f, 0.0f);
-  TickMoodManager(moodManager, 1, kTickTimestep);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  0.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  2),  1.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 99),  1.0f, 0.0f);
+  TickMoodManager(moodManager, 1, kTickTimestep);
+  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  2),  0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  3),  1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 99),  1.0f, 0.0f);
   
   moodManager.AddToEmotion(kTestEmoType0, 0.5f, "Test4", gCurrentTime);
-  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   0),  0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1),  0.5f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2),  1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  98),  1.0f, 0.0f);
-  TickMoodManager(moodManager, 1, kTickTimestep);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1),  0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2),  0.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3),  1.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99),  1.0f, 0.0f);
+  TickMoodManager(moodManager, 1, kTickTimestep);
+  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 1.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3),  0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   4),  1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99),  1.0f, 0.0f);
   
   moodManager.AddToEmotion(kTestEmoType0, -1.5f, "Test5", gCurrentTime);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), -0.5f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   0),  0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1), -1.5f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3), -0.5f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  98), -0.5f, 0.0f);
-  TickMoodManager(moodManager, 1, kTickTimestep);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1), -1.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -1.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3), -1.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   4), -0.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99), -0.5f, 0.0f);
-  
-  moodManager.AddToEmotion(kTestEmoType0, -1.5f, "Test6", gCurrentTime);
-  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), -1.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   0),  0.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1), -2.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -2.0f, 0.0f);
+  TickMoodManager(moodManager, 1, kTickTimestep);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -1.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3), -1.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   4), -1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  98), -1.0f, 0.0f);
-  TickMoodManager(moodManager, 1, kTickTimestep);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   5), -0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99), -0.5f, 0.0f);
+  
+  moodManager.AddToEmotion(kTestEmoType0, -1.5f, "Test6", gCurrentTime);
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), -1.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1), -0.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -2.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3), -2.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   4), -1.5f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   5), -1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  98), -1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99), -1.0f, 0.0f);
+  TickMoodManager(moodManager, 1, kTickTimestep);
+  EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType0), -1.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   1),  0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   2), -0.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   3), -2.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   4), -2.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   5), -1.5f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,   6), -1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  99), -1.0f, 0.0f);
 }
+
 
 TEST(MoodManager, DecayFromPositive)
 {
-  InitStaticMoodData(DGT::TimeRatio);
+  InitStaticMoodData();
   
   MoodManager moodManager;
   TickMoodManager(moodManager, 1, kTickTimestep);
@@ -263,8 +254,8 @@ TEST(MoodManager, DecayFromPositive)
   TickMoodManager(moodManager, 10, kTickTimestep); // now = 0.1f
   EXPECT_NEAR(moodManager.GetEmotionValue(kTestEmoType0), 1.0f,  0.000001f);
 
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 10), 1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  9), 0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 11), 1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 10), 0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1), 0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  0), 0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.2f   ), 1.0f, 0.0f);
@@ -276,27 +267,26 @@ TEST(MoodManager, DecayFromPositive)
   EXPECT_NEAR(moodManager.GetEmotionValue(kTestEmoType0), 1.0f,  0.000001f);
   
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 41), 1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 40), 1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 39), 0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 40), 0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.391f ),  1.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.39f   ), 0.0f, 0.0f);
   
   TickMoodManager(moodManager, 10, kTickTimestep); // now = 0.5f
   EXPECT_NEAR(moodManager.GetEmotionValue(kTestEmoType0), 1.0f,  0.000001f);
   
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 50), 1.0f, 0.0f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 49), 0.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 51), 1.0f, 0.0f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 50), 0.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.491f ),  1.0f, 0.0f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.49f   ), 0.0f, 0.0f);
 
   TickMoodManager(moodManager, 30, kTickTimestep); // now = 0.8f
   EXPECT_NEAR(moodManager.GetEmotionValue(kTestEmoType0), 0.94f, 0.000001f);
   
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 80),  0.94f, 0.0001f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 79), -0.06f, 0.0001f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 30), -0.06f, 0.0001f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 15), -0.03f, 0.0001f);
-  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  0),  0.00f, 0.0001f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 81),  0.94f, 0.0001f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 80), -0.06f, 0.0001f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 31), -0.06f, 0.0001f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0, 16), -0.03f, 0.0001f);
+  EXPECT_NEAR(moodManager.GetEmotionDeltaRecentTicks(kTestEmoType0,  1),  0.00f, 0.0001f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.791f ),   0.94f, 0.0001f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.79f  ),  -0.06f, 0.0001f);
   EXPECT_NEAR(moodManager.GetEmotionDeltaRecentSeconds(kTestEmoType0, 0.3f   ),  -0.06f, 0.0001f);
@@ -331,9 +321,10 @@ TEST(MoodManager, DecayFromPositive)
   EXPECT_FLOAT_EQ(moodManager.GetEmotionValue(kTestEmoType0), 0.0f);
 }
 
+
 TEST(MoodManager, DecayFromNegative)
 {
-  InitStaticMoodData(DGT::TimeRatio);
+  InitStaticMoodData();
   
   MoodManager moodManager;
   TickMoodManager(moodManager, 1, kTickTimestep);
@@ -380,7 +371,7 @@ TEST(MoodManager, DecayFromNegative)
 
 TEST(MoodManager, DecayResetFromAwards)
 {
-  InitStaticMoodData(DGT::TimeRatio);
+  InitStaticMoodData();
   
   MoodManager moodManager;
   TickMoodManager(moodManager, 1, kTickTimestep);
@@ -891,15 +882,12 @@ TEST(MoodManager, EmotionEventMapperReadJson)
 TEST(MoodManager, StaticMoodDataRoundTripJson)
 {
   StaticMoodData testStaticData;
-
+  
   Anki::Util::GraphEvaluator2d kTestNoDecayGraph({{0.0f, 1.0f}, {1.0f, 1.0f}});
-  Anki::Util::GraphEvaluator2d kTestLinearGraph({{-1.0f, 1.0f}, {1.0f, 1.0f}});
-
-  testStaticData.InitDecayEvaluators();
-  testStaticData.SetDecayEvaluator(kTestEmoType0, kTestGraphTimeRatio, DGT::TimeRatio);
-  testStaticData.SetDecayEvaluator(kTestEmoType1, kTestNoDecayGraph, DGT::TimeRatio);
-  // leave 2 at default
-  testStaticData.SetDecayEvaluator(kTestEmoType3, kTestLinearGraph, DGT::ValueSlope);
+  
+  testStaticData.InitDecayGraphs();
+  testStaticData.SetDecayGraph(kTestEmoType0, kTestDecayGraph);
+  testStaticData.SetDecayGraph(kTestEmoType1,  kTestNoDecayGraph);
   testStaticData.SetDefaultRepetitionPenalty(kTestDefaultRepetitionPenaltyGraph);
   
   {
@@ -921,45 +909,6 @@ TEST(MoodManager, StaticMoodDataRoundTripJson)
     testStaticData.GetEmotionEventMapper().AddEvent(newEvent);
   }
 
-  auto moodTestHelper = [](const StaticMoodData& smd) {
-    float wasteRate = 0.0f;
-    float wasteAccel = 0.0f;
-    {
-      const auto& eval = smd.GetDecayEvaluator(kTestEmoType0);
-      ASSERT_FALSE(eval.Empty());
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.4f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(0.9f, 1.0f, 0.5f, wasteRate, wasteAccel), 0.8f);
-    }
-
-    {
-      const auto& eval = smd.GetDecayEvaluator(kTestEmoType1);
-      ASSERT_FALSE(eval.Empty());
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.4f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 100.0f, 0.5f, wasteRate, wasteAccel), 1.0f);
-    }
-
-    {
-      const auto& eval = smd.GetDecayEvaluator(kTestEmoType2);
-      ASSERT_FALSE(eval.Empty());
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 10.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 15.0f, 45.0f, wasteRate, wasteAccel), 0.9f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(0.9f, 60.0f, 90.0f, wasteRate, wasteAccel), 0.6f);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(0.6f, 150.0f, 150.0f, wasteRate, wasteAccel), 0.0f);
-    }
-
-    {
-      const auto& eval = smd.GetDecayEvaluator(kTestEmoType3);
-      ASSERT_FALSE(eval.Empty());
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.0f, 15.0f, wasteRate, wasteAccel), 0.75);
-      EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 1000.0f, 15.0f, wasteRate, wasteAccel), 0.75);
-    }
-  };
-
-  moodTestHelper(testStaticData);
-  
   Json::Value testJson;
   const bool writeRes = testStaticData.WriteToJson(testJson);
   
@@ -969,8 +918,26 @@ TEST(MoodManager, StaticMoodDataRoundTripJson)
   const bool readRes = testStaticData2.ReadFromJson(testJson);
   
   EXPECT_TRUE(readRes);
-
-  moodTestHelper(testStaticData2);
+  
+  {
+    const Anki::Util::GraphEvaluator2d& happyGraph = testStaticData2.GetDecayGraph(kTestEmoType0);
+    ASSERT_EQ(happyGraph.GetNumNodes(), kTestDecayGraph.GetNumNodes());
+    for (int i=0; i < kTestDecayGraph.GetNumNodes(); ++i)
+    {
+      EXPECT_EQ(happyGraph.GetNode(i)._x, kTestDecayGraph.GetNode(i)._x);
+      EXPECT_EQ(happyGraph.GetNode(i)._y, kTestDecayGraph.GetNode(i)._y);
+    }
+  }
+  
+  {
+    const Anki::Util::GraphEvaluator2d& calmGraph = testStaticData2.GetDecayGraph(kTestEmoType1);
+    ASSERT_EQ(calmGraph.GetNumNodes(), kTestNoDecayGraph.GetNumNodes());
+    for (int i=0; i < kTestNoDecayGraph.GetNumNodes(); ++i)
+    {
+      EXPECT_EQ(calmGraph.GetNode(i)._x, kTestNoDecayGraph.GetNode(i)._x);
+      EXPECT_EQ(calmGraph.GetNode(i)._y, kTestNoDecayGraph.GetNode(i)._y);
+    }
+  }
   
   {
     const EmotionEvent* foundEvent1 = testStaticData2.GetEmotionEventMapper().FindEvent("TestEvent1");
@@ -997,161 +964,88 @@ TEST(MoodManager, StaticMoodDataRoundTripJson)
 
 
 // Valid Json
-static const char* kTestStaticMoodDataJson = R"json(
-{
-  "decayGraphs" : [
-    {
-      "emotionType" : "default",
-      "graphType": "TimeRatio",
-      "nodes" : [
-        {
-          "x" : 0,
-          "y" : 1
-        },
-        {
-          "x" : 10,
-          "y" : 1
-        },
-        {
-          "x" : 30,
-          "y" : 0.9
-        },
-        {
-          "x" : 120,
-          "y" : 0
-        }
-      ]
-    },
-    {
-      "emotionType": "Social",
-      "graphType": "TimeRatio",
-      "nodes": [
-        {
-          "x": 0,
-          "y": 1
-        },
-        {
-          "x": 2,
-          "y": 1
-        },
-        {
-          "x": 12,
-          "y": 0.5
-        },
-        {
-          "x": 30,
-          "y": 0
-        }
-      ]
-    },
-    {
-      "emotionType": "Stimulated",
-      "graphType": "ValueSlope",
-      "nodes": [
-        {
-          "x": 0,
-          "y": 0.6
-        },
-        {
-          "x": 0.2,
-          "y": 0.06
-        },
-        {
-          "x": 0.8,
-          "y": 0.06
-        },
-        {
-          "x": 0.8,
-          "y": 1.2
-        },
-        {
-          "x": 0.99,
-          "y": 1.2
-        },
-        {
-          "x": 0.99,
-          "y": 0.0
-        }
-      ]
-    }
-  ],
+static const char* kTestStaticMoodDataJson =
+"{"
+"   \"decayGraphs\" : ["
+"      {"
+"         \"emotionType\" : \"Happy\","
+"         \"nodes\" : ["
+"            {"
+"               \"x\" : 0,"
+"               \"y\" : 1"
+"            },"
+"            {"
+"               \"x\" : 1.0,"
+"               \"y\" : 0.95"
+"            },"
+"            {"
+"               \"x\" : 2.0,"
+"               \"y\" : 0.5"
+"            }"
+"         ]"
+"      },"
+"      {"
+"         \"emotionType\" : \"Confident\","
+"         \"nodes\" : ["
+"            {"
+"               \"x\" : 0,"
+"               \"y\" : 1"
+"            },"
+"            {"
+"               \"x\" : 1.5,"
+"               \"y\" : 0.8"
+"            }"
+"         ]"
+"      }"
+"   ],"
+"   \"eventMapper\" : {"
+"      \"emotionEvents\" : ["
+"          {"
+"             \"emotionAffectors\" : ["
+"                {"
+"                   \"emotionType\" : \"Social\","
+"                   \"value\" : 0.11"
+"                },"
+"                {"
+"                   \"emotionType\" : \"Happy\","
+"                   \"value\" : -0.22"
+"                },"
+"                {"
+"                   \"emotionType\" : \"Confident\","
+"                   \"value\" : 0.33"
+"                }"
+"             ],"
+"             \"name\" : \"TestEvent1\""
+"          },"
+"          {"
+"             \"emotionAffectors\" : ["
+"                {"
+"                   \"emotionType\" : \"Confident\","
+"                   \"value\" : -0.44"
+"                },"
+"                {"
+"                   \"emotionType\" : \"Happy\","
+"                   \"value\" : 0.55"
+"                }"
+"             ],"
+"             \"name\" : \"TestEvent2\""
+"          }"
+"       ]"
+"    },"
+"   \"defaultRepetitionPenalty\" : {"
+"      \"nodes\" : ["
+"            {"
+"               \"x\" : 0.0,"
+"               \"y\" : 0.0"
+"            },"
+"            {"
+"               \"x\" : 30.0,"
+"               \"y\" : 1.0"
+"            }"
+"       ]"
+"    }"
+"}";
 
-  "valueRanges": [
-    {
-      "emotionType": "Stimulated",
-      "min": 0.0,
-      "max": 1.0
-    }
-  ],
-  "eventMapper" : {
-    "emotionEvents" : [
-      {
-        "emotionAffectors" : [
-          {
-            "emotionType" : "Social",
-            "value" : 0.11
-          },
-          {
-            "emotionType" : "Happy",
-            "value" : -0.22
-          },
-          {
-            "emotionType" : "Confident",
-            "value" : 0.33
-          }
-        ],
-        "name" : "TestEvent1"
-      },
-      {
-        "emotionAffectors" : [
-          {
-            "emotionType" : "Confident",
-            "value" : -0.44
-          },
-          {
-            "emotionType" : "Happy",
-            "value" : 0.55
-          }
-        ],
-        "name" : "TestEvent2"
-      }
-    ]
-  },
-  "audioParameterMap": {
-    "Happy": "Robot_Vic_Happy",
-    "Confident": "Robot_Vic_Confident",
-    "Social": "Robot_Vic_Social",
-    "Stimulated": "Robot_Vic_Stimulation"
-  },
-  "defaultRepetitionPenalty" : {
-    "nodes" : [
-      {
-        "x" : 0.0,
-        "y" : 0.0
-      },
-      {
-        "x" : 0.5,
-        "y" : 0.0
-      },
-      {
-        "x" : 10.0,
-        "y" : 1.0
-      }
-    ]
-  },
-  "actionResultEmotionEvents": {
-    "DRIVE_TO_POSE": {
-      "RETRY": "DrivingActionFailedWithRetry",
-      "ABORT": "DrivingActionFailedWithAbort"
-    },
-    "PICKUP_OBJECT_LOW": {
-      "SUCCESS": "PickupSucceeded",
-      "RETRY": "PickingOrPlacingActionFailedWithRetry",
-      "ABORT": "PickingOrPlacingActionFailedWithAbort"
-    }
-  }
-}
-)json";
 
 TEST(MoodManager, StaticMoodDataReadJson)
 {
@@ -1164,55 +1058,22 @@ TEST(MoodManager, StaticMoodDataReadJson)
   const bool readRes = testStaticMoodData.ReadFromJson(staticMoodDataJson);
   
   EXPECT_TRUE(readRes);
-
-  static const float kNearTolerance = 0.001f;
-  
-  // only check Social and Stimulated rate and accel values (to hit distinct decay evaluators), and the rest are dummy params
-  float wasteRate = 0.0f;
-  float wasteAccel = 0.0f;
-  
-  auto compare = [](const MoodDecayEvaulator& eval, float currentVal, float timeSinceEvent, float deltaTime_s,
-                    float expectedValue, float expectedRate, float expectedAccel)
-  {
-    float rate;
-    float accel;
-    EXPECT_FLOAT_EQ(eval.EvaluateDecay(currentVal, timeSinceEvent, deltaTime_s, rate, accel), expectedValue);
-    EXPECT_FLOAT_EQ(expectedRate, rate);
-    EXPECT_FLOAT_EQ(expectedAccel, accel);
-  };
   
   {
-    const auto& eval = testStaticMoodData.GetDecayEvaluator(EmotionType::Social);
-    ASSERT_FALSE(eval.Empty());
-    compare(eval, 1.0f,  0.0f, 0.1f,   1.0f , 0.0f, 0.0f);
-    compare(eval, 1.0f,  1.9f, 0.1f,   1.0f , 0.0f, 0.0f);
-    compare(eval, 0.9f,  4.0f, 1.0f,   0.85f, -0.05*1.0f, 0.0f);
-    compare(eval, 1.0f, 30.0f, 0.1f,   0.0f , 0.0f, 0.0f);
-    compare(eval, 0.0f, 30.0f, 0.1f,   0.0f , 0.0f, 0.0f);
-  }
+    const Anki::Util::GraphEvaluator2d& happyGraph = testStaticMoodData.GetDecayGraph(kTestEmoType0);
+    ASSERT_EQ(happyGraph.GetNumNodes(), 3);
 
+    EXPECT_FLOAT_EQ(happyGraph.GetNode(2)._x, 2.0f);
+    EXPECT_FLOAT_EQ(happyGraph.GetNode(2)._y, 0.5f);
+  }
+  
   {
-    const auto& eval = testStaticMoodData.GetDecayEvaluator(EmotionType::Happy);
-    ASSERT_FALSE(eval.Empty());
-    EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 0.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-    EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 9.0f, 0.1f, wasteRate, wasteAccel), 1.0f);
-    EXPECT_NEAR(eval.EvaluateDecay(0.9f, 30.0f, 10.0f, wasteRate, wasteAccel), 0.8f, kNearTolerance);
-    EXPECT_FLOAT_EQ(eval.EvaluateDecay(1.0f, 140.0f, 0.1f, wasteRate, wasteAccel), 0.0f);
-    EXPECT_FLOAT_EQ(eval.EvaluateDecay(0.0f, 30.0f, 0.1f, wasteRate, wasteAccel), 0.0f);
+    const Anki::Util::GraphEvaluator2d& calmGraph = testStaticMoodData.GetDecayGraph(kTestEmoType1);
+    ASSERT_EQ(calmGraph.GetNumNodes(), 2);
+
+    EXPECT_FLOAT_EQ(calmGraph.GetNode(1)._x, 1.5f);
+    EXPECT_FLOAT_EQ(calmGraph.GetNode(1)._y, 0.8f);
   }
-
-  {
-    const auto& eval = testStaticMoodData.GetDecayEvaluator(EmotionType::Stimulated);
-    ASSERT_FALSE(eval.Empty());
-    compare(eval, 1.0f,  0.0f, 60.0f,   1.0f, 0.0f, 0.0f);
-    compare(eval, 1.0f,  9.0f, 60.0f,   1.0f, 0.0f, 0.0f);
-    compare(eval, 1.0f, 30.0f, 60.0f,   1.0f, 0.0f, 0.0f);
-
-    compare(eval, 0.9f, 0.0f,  1.0f,   0.88f, -0.02f,  0.0f);
-    compare(eval, 0.5f, 0.0f, 60.0f,   0.44f, -0.001f, 0.0f);
-    compare(eval, 0.0f, 0.0f, 60.0f,    0.0f, -0.01f,  0.0f);
-  }
-
 
   MoodManager moodManager;
   EXPECT_EQ(moodManager.GetEmotionValue(kTestEmoType2), 0.0f);
@@ -1228,53 +1089,4 @@ TEST(MoodManager, StaticMoodDataReadJson)
   EXPECT_FLOAT_EQ(moodManager.GetEmotionValue(kTestEmoType1),  -0.11f);
 }
 
-TEST(MoodManager, SimpleMood)
-{
-  InitStaticMoodData(DGT::TimeRatio);
-  
-  MoodManager moodManager;
-  TickMoodManager(moodManager, 1, kTickTimestep);
 
-  EXPECT_EQ(moodManager.GetSimpleMood(), SimpleMoodType::LowStim);
-
-  // contains (stim level, confident level, expected mood)
-  const std::vector<std::tuple<float, float, SimpleMoodType>> expectations = {
-    {1.0f, 1.0f, SimpleMoodType::HighStim},
-    {1.0f, 1.0f, SimpleMoodType::HighStim},
-    {1.0f, 0.5f, SimpleMoodType::HighStim},
-    {1.0f, 0.0f, SimpleMoodType::HighStim},
-    {1.0f, -0.1f, SimpleMoodType::HighStim},
-    {1.0f, -0.5f, SimpleMoodType::Frustrated},
-    {1.0f, -1.0f, SimpleMoodType::Frustrated},
-    
-    {0.5f, 1.0f, SimpleMoodType::MedStim},
-    {0.5f, 1.0f, SimpleMoodType::MedStim},
-    {0.5f, 0.5f, SimpleMoodType::MedStim},
-    {0.5f, 0.0f, SimpleMoodType::MedStim},
-    {0.5f, -0.1f, SimpleMoodType::MedStim},
-    {0.5f, -0.5f, SimpleMoodType::Frustrated},
-    {0.5f, -1.0f, SimpleMoodType::Frustrated},
-
-    {0.0f, 1.0f, SimpleMoodType::LowStim},
-    {0.0f, 1.0f, SimpleMoodType::LowStim},
-    {0.0f, 0.5f, SimpleMoodType::LowStim},
-    {0.0f, 0.0f, SimpleMoodType::LowStim},
-    {0.0f, -0.1f, SimpleMoodType::LowStim},
-    {0.0f, -0.5f, SimpleMoodType::LowStim},
-    {0.0f, -1.0f, SimpleMoodType::LowStim} };
-
-
-  for( const auto& tpl : expectations ) {
-    moodManager.SetEmotion(EmotionType::Stimulated, std::get<0>(tpl));
-    moodManager.SetEmotion(EmotionType::Confident,  std::get<1>(tpl));
-    EXPECT_EQ(moodManager.GetSimpleMood(), std::get<2>(tpl))
-      << "before tick: stim=" << std::get<0>(tpl) << " conf=" << std::get<1>(tpl) << " expcted "
-      << SimpleMoodTypeToString(std::get<2>(tpl)) << " got " <<SimpleMoodTypeToString(moodManager.GetSimpleMood());
-      
-    TickMoodManager(moodManager, 1, kTickTimestep);
-    EXPECT_EQ(moodManager.GetSimpleMood(), std::get<2>(tpl))
-      << "after tick: stim=" << std::get<0>(tpl) << " conf=" << std::get<1>(tpl) << " expcted "
-      << SimpleMoodTypeToString(std::get<2>(tpl)) << " got " <<SimpleMoodTypeToString(moodManager.GetSimpleMood());
-
-  }  
-}

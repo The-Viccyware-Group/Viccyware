@@ -20,7 +20,7 @@
 #include "clad/types/actionTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 //Forward declaration
 class FlipBlockAction;

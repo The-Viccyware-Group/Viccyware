@@ -15,7 +15,7 @@
 #include "coretech/vision/engine/faceIdTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IReactToPetListener {
 public:
@@ -26,7 +26,7 @@ public:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_BehaviorListenerInterfaces_IReactToPetListener_H__

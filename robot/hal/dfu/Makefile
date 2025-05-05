@@ -1,44 +1,37 @@
 
-VICOS_BUILD_TOOL_VER:=1.1.0-r04
+#
+# Use android.py to locate Android NDK
+#
+TOPLEVEL := ../../..
+ANDROID_PY := $(TOPLEVEL)/tools/build/tools/ankibuild/android.py
+ANDROID_NDK_ROOT := $(shell $(ANDROID_PY))
 
-
-VICOS_ARM_TOOLS_ROOT:=~/.anki/vicos-sdk/dist/$(VICOS_BUILD_TOOL_VER)
-
-VICOS_ARM_TOOLS_BIN:=$(VICOS_ARM_TOOLS_ROOT)/prebuilt/bin
-
-# Compilation Tools
-
-CROSS_COMPILE = $(VICOS_ARM_TOOLS_BIN)/arm-oe-linux-gnueabi-
-
-CFLAGS = -c -fPIC -Wall -Werror
-
+ANDROID_ARM_TOOLS_ROOT := $(TOPLEVEL)/generated/android/tools/arm
+ANDROID_ARM_TOOLS_BIN := $(ANDROID_ARM_TOOLS_ROOT)/bin
 
 # Compilation Tools
-CC := $(CROSS_COMPILE)clang
+CC := $(ANDROID_ARM_TOOLS_BIN)/arm-linux-androideabi-gcc
+CPP := $(ANDROID_ARM_TOOLS_BIN)/arm-linux-androideabi-g++
+AR := $(ANDROID_ARM_TOOLS_BIN)/arm-linux-androideabi-ar
 
 # Compiler flags
 # Specify all the flags below which you want to use for your compilation, For this simple example, we only need to specify the include directory path
-CFLAGS          += -I.
+CFLAGS          := -I.
 CFLAGS          += -I../../generated/clad/robot
 CFLAGS          += -I../../syscon
 CFLAGS          += -DPLATFORM_ANDROID=1
 
 
-DEPS = ../spine/spine_hal.h ../spine/spine_crc.h
+DEPS = ../spine/spine_hal.h ../spine/spine_crc.h 
 SRCS = ../spine/spine_hal.c ../spine/spine_crc.c dfu.c
 OBJ = ../spine/spine_hal.o ../spine/spine_crc.o dfu.o
 
 APP = dfu
 
-all: $(VICOS_ARM_TOOLS_BIN) $(APP)
+all: $(ANDROID_ARM_TOOLS_ROOT) $(APP)
 
-$(VICOS_ARM_TOOLS_BIN):
-	../../../tools/build/tools/ankibuild/vicos.py --install $(VICOS_BUILD_TOOL_VER)
-
-$(OBJDIR)/%.o: $(SRCDIR)/%.c
-	mkdir -p $(OBJDIR)
-	$(CROSS_COMPILE)clang $(CFLAGS) $<  -o $@
-
+$(ANDROID_ARM_TOOLS_ROOT):
+	$(ANDROID_NDK_ROOT)/build/tools/make_standalone_toolchain.py --arch arm --install-dir $(ANDROID_ARM_TOOLS_ROOT) --api 24
 
 $(APP):  $(OBJ)
 	$(CC) -pie -llog $(OBJ) -o $(APP)

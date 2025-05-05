@@ -15,46 +15,38 @@
 #include "engine/aiComponent/beiConditions/conditions/conditionLambda.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
-ConditionLambda::ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                                 const std::string& ownerDebugLabel)
+ConditionLambda::ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc)
   : IBEICondition(IBEICondition::GenerateBaseConditionConfig(BEIConditionType::Lambda))
   , _lambda(areConditionsMetFunc)
 {
-  SetOwnerDebugLabel(ownerDebugLabel);
 }
 
 ConditionLambda::ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                                 const VisionModeSet& requiredVisionModes,
-                                 const std::string& ownerDebugLabel)
+                                 std::set<VisionModeRequest>& requiredVisionModes)
   : IBEICondition(IBEICondition::GenerateBaseConditionConfig(BEIConditionType::Lambda))
   , _lambda(areConditionsMetFunc)
   , _requiredVisionModes(requiredVisionModes)
 {
-  SetOwnerDebugLabel(ownerDebugLabel);
 }
 
 ConditionLambda::ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                                 std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc,
-                                 const std::string& ownerDebugLabel)
+                                 std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc)
   : IBEICondition(IBEICondition::GenerateBaseConditionConfig(BEIConditionType::Lambda))
   , _lambda(areConditionsMetFunc)
   , _setActiveFunc(setActiveFunc)
 {
-  SetOwnerDebugLabel(ownerDebugLabel);
 }
 
 ConditionLambda::ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
                                  std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc,
-                                 const VisionModeSet& requiredVisionModes,
-                                 const std::string& ownerDebugLabel)
+                                 std::set<VisionModeRequest>& requiredVisionModes)
   : IBEICondition(IBEICondition::GenerateBaseConditionConfig(BEIConditionType::Lambda))
   , _lambda(areConditionsMetFunc)
   , _setActiveFunc(setActiveFunc)
   , _requiredVisionModes(requiredVisionModes)
 {
-  SetOwnerDebugLabel(ownerDebugLabel);
 }
 
 void ConditionLambda::SetActiveInternal(BehaviorExternalInterface& behaviorExternalInterface, bool setActive)
@@ -64,7 +56,7 @@ void ConditionLambda::SetActiveInternal(BehaviorExternalInterface& behaviorExter
   }
 }
 
-void ConditionLambda::GetRequiredVisionModes(VisionModeSet& requests) const
+void ConditionLambda::GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const
 {
   if(!_requiredVisionModes.empty()){
     requests = _requiredVisionModes;

@@ -1,11 +1,9 @@
 from struct import pack
 from xxtea import encrypt, decrypt
-import sys, datetime,re 
+import sys, datetime
 
 BLOCK_SIZE = 20
-
-with open(sys.argv[3], "r") as fo:
-	key = bytes([int(c, 16) for c in re.split(r'\s*,\s*', fo.read())])
+key = b'\x88\xdb\x37\x96\x76\x8f\x86\x91\x42\x24\xf4\x35\xc1\xfd\x7f\xd3'
 
 ts = datetime.datetime.today().isoformat(timespec='minutes').encode() + (b'\x00' * 16)
 

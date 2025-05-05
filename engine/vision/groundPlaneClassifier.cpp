@@ -17,8 +17,8 @@
 #include "coretech/common/engine/math/logisticRegression.h" // TODO this is temporary only for calculateError
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "engine/cozmoContext.h"
+#include "engine/groundPlaneROI.h"
 #include "engine/overheadEdge.h"
-#include "engine/vision/groundPlaneROI.h"
 #include "util/fileUtils/fileUtils.h"
 
 #include <opencv2/core.hpp>
@@ -27,13 +27,13 @@
 #define DEBUG_DISPLAY_IMAGES false
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 /****************************************************************
  *                     Helper Functions                         *
  ****************************************************************/
 
-void ClassifyImage(const RawPixelsClassifier& clf, const Anki::Vector::IFeaturesExtractor& extractor,
+void ClassifyImage(const RawPixelsClassifier& clf, const Anki::Cozmo::IFeaturesExtractor& extractor,
                    const Vision::ImageRGB& image, Vision::Image& outputMask)
 {
   s32 nrows = image.GetNumRows();
@@ -101,7 +101,7 @@ GroundPlaneClassifier::GroundPlaneClassifier(const Json::Value& config, const Co
 }
 
 Result GroundPlaneClassifier::Update(const Vision::ImageRGB& image, const VisionPoseData& poseData,
-                                     Vision::DebugImageList<Vision::CompressedImage>& debugImages,
+                                     DebugImageList<Vision::ImageRGB>& debugImageRGBs,
                                      std::list<OverheadEdgeFrame>& outEdges)
 {
 
@@ -178,7 +178,7 @@ Result GroundPlaneClassifier::Update(const Vision::ImageRGB& image, const Vision
 
   if(DEBUG_DISPLAY_IMAGES)
   {
-    debugImages.emplace_back("OverheadImage", groundPlaneImage);
+    debugImageRGBs.emplace_back("OverheadImage", groundPlaneImage);
 
     Vision::ImageRGB leadingEdgeDisp(classifiedMask);
 
@@ -211,7 +211,7 @@ Result GroundPlaneClassifier::Update(const Vision::ImageRGB& image, const Vision
       }
     }
 
-    debugImages.emplace_back("LeadingEdges", leadingEdgeDisp);
+    debugImageRGBs.emplace_back("LeadingEdges", std::move(leadingEdgeDisp));
 
     // Draw Ground plane on the camera image and display it
     Vision::ImageRGB toDisplay;
@@ -226,7 +226,7 @@ Result GroundPlaneClassifier::Update(const Vision::ImageRGB& image, const Vision
       toDisplay.DrawQuad(quad, NamedColors::WHITE, 3);
     }
     // still send an image with no ground plane drawn on it. Courtesy of Al (see VIC-793)
-    debugImages.emplace_back("GroundQuadImage", toDisplay);
+    debugImageRGBs.emplace_back("GroundQuadImage", toDisplay);
   }
 
   // Actually return the resulting edges in the provided list
@@ -276,8 +276,8 @@ void GroundPlaneClassifier::TrainClassifier(const std::string& path)
     const std::vector<u8> responses = _classifier->PredictClass(values);
     const cv::Mat responsesMat(responses);
 
-    PRINT_CH_DEBUG("VisionSystem", "GroundPlaneClassifier.Train.ErrorLevel",
-                   "Error after training is: %f", Anki::calculateError(responsesMat, trainingLabels));
+    const float error = Anki::calculateError(responsesMat, trainingLabels);
+    PRINT_CH_DEBUG("VisionSystem", "GroundPlaneClassifier.Train.ErrorLevel", "Error after training is: %f", error);
   }
   _initialized = true;
 
@@ -397,5 +397,5 @@ Array2d<RawPixelsClassifier::FeatureType> SinglePixelFeaturesExtraction::Extract
   return Array2d<RawPixelsClassifier::FeatureType>(toRet);
 
 }
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

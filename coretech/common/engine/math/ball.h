@@ -16,12 +16,11 @@
 #define __COMMON_ENGINE_MATH_BALL_H__
 
 #include "coretech/common/engine/math/pointSet.h"
-#include "coretech/common/engine/math/axisAlignedHyperCube.h"
 
 namespace Anki {
 
 template <DimType N, typename T>
-class Ball : public BoundedConvexSet<N, T>
+class Ball : public ConvexPointSet<N, T>
 {
 public:
   // construction/destruction
@@ -59,24 +58,6 @@ public:
     }
 
     return ( FLT_LE(dSq, _rSq) );
-  }
-
-  // return true if the ball intersects the hypercube
-  virtual bool Intersects(const AxisAlignedHyperCube<N,T>& cube) const override {
-    if ( Contains(cube.GetCentroid()) ) { return true; }
-    
-    // get the closest point in the ball to the hypercube center
-    Point<N,T> vec = cube.GetCentroid() - GetCentroid();
-    vec.MakeUnitLength(); // this needs to be on its own line, since it returns the original length, not a point.
-    return cube.Contains( GetCentroid() + (vec * GetRadius()) );
-  }
-
-  // return smallest AABB that contains the ball
-  virtual AxisAlignedHyperCube<N,T> GetAxisAlignedBoundingBox() const override 
-  {
-    // initialize corner offset to radius
-    Point<N,T> offset(_r);
-    return AxisAlignedHyperCube<N,T>(_p - offset, _p + offset);
   }
 
 protected:

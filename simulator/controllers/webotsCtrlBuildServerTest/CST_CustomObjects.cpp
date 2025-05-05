@@ -10,22 +10,25 @@
 *              4. Wall should be unique and only seen once.
 *              5. Cube is not unique so there should now be two.
 *              6. Delocalize robot and see two custom cubes.
-*              7. Undefine objects and make sure they are removed.
+*              7. Rejigger to a lightcube to verify custom (passive) objects get updated correctly
+*                 - One cube from (6) should match to existing based on pose
+*                 - The other cube from (6) should get rejiggered
 *
 *
 * Copyright: Anki, inc. 2017
 *
 */
 
+#include "coretech/common/engine/math/point_impl.h"
 #include "engine/actions/basicActions.h"
-#include "engine/charger.h"
+#include "engine/activeCube.h"
 #include "engine/customObject.h"
 #include "engine/robot.h"
 #include "simulator/game/cozmoSimTestController.h"
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum class TestState {
   Init,
@@ -35,6 +38,8 @@ enum class TestState {
   NotifyKidnap,
   Kidnap,
   SeeCubeInNewOrigin,
+  Rejigger,
+  Redefine,
   Undefine
 };
 
@@ -63,10 +68,10 @@ private:
   webots::Node* _cube1     = nullptr;
   webots::Node* _cube2     = nullptr;
   webots::Node* _cube3     = nullptr;
-  webots::Node* _charger   = nullptr;
+  webots::Node* _lightCube = nullptr;
   
   ObjectID _wallID;
-  ObjectID _chargerID;
+  ObjectID _lightCubeID;
   
   const Pose3d kPoseOrigin;
   const Pose3d kKidnappedRobotPose;
@@ -76,7 +81,7 @@ private:
   Pose3d _cubePose1;
   Pose3d _cubePose2;
   Pose3d _cubePose3;
-  Pose3d _chargerPose;
+  Pose3d _lightCubePose;
   
   static const size_t kNumDefinitions = 4;
   
@@ -87,7 +92,7 @@ private:
   f32 _wallMarkerWidth_mm   = 0.f;
   f32 _wallMarkerHeight_mm  = 0.f;
   
-  static constexpr const f32 kDefaultTimeout_sec   = 6.f;
+  static constexpr const f32 kDefaultTimeout_sec   = 3.f;
   static constexpr const f32 kRobotAngleTol_deg    = 5.f;
   static constexpr const f32 kDistTolerance_mm     = 15.f;
   static constexpr const f32 kAngleTolerance_deg   = 10.f;
@@ -124,13 +129,13 @@ s32 CST_CustomObjects::UpdateSimInternal()
       _cube1     = GetNodeByDefName("CustomCube1");
       _cube2     = GetNodeByDefName("CustomCube2");
       _cube3     = GetNodeByDefName("CustomCube3");
-      _charger   = GetNodeByDefName("Charger");
+      _lightCube = GetNodeByDefName("LightCube");
      
       CST_ASSERT(nullptr != _wall,      "CST_CustomObjects.Init.MissingWallNode");
       CST_ASSERT(nullptr != _cube1,     "CST_CustomObjects.Init.MissingCube1Node");
       CST_ASSERT(nullptr != _cube2,     "CST_CustomObjects.Init.MissingCube2Node");
       CST_ASSERT(nullptr != _cube3,     "CST_CustomObjects.Init.MissingCube3Node");
-      CST_ASSERT(nullptr != _charger,   "CST_CustomObjects.Init.MissingCharger");
+      CST_ASSERT(nullptr != _lightCube, "CST_CustomObjects.Init.MissingLightCube");
       
       GetDimension(_wall, "width",        _wallWidth_mm);
       GetDimension(_wall, "height",       _wallHeight_mm);
@@ -157,20 +162,16 @@ s32 CST_CustomObjects::UpdateSimInternal()
       _cubePose1     = GetPose3dOfNode(_cube1);
       _cubePose2     = GetPose3dOfNode(_cube2);
       _cubePose3     = GetPose3dOfNode(_cube3);
-      _chargerPose   = GetPose3dOfNode(_charger);
+      _lightCubePose = GetPose3dOfNode(_lightCube);
       
       _wallPose1.SetParent(kPoseOrigin);
       _cubePose1.SetParent(kPoseOrigin);
       _cubePose2.SetParent(kPoseOrigin);
       _cubePose3.SetParent(kPoseOrigin);
-      _chargerPose.SetParent(kPoseOrigin);
+      _lightCubePose.SetParent(kPoseOrigin);
       
       // Define the custom objects
       DefineObjects();
-      
-      // Request a cube connection
-      SendForgetPreferredCube();
-      SendConnectToCube();
       
       SendMoveHeadToAngle(0, 100.f, 100.f);
       SET_TEST_STATE(LookAtObjects);
@@ -235,9 +236,8 @@ s32 CST_CustomObjects::UpdateSimInternal()
       IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
                                             !IsRobotStatus(RobotStatusFlag::IS_MOVING),
                                             NEAR(GetRobotHeadAngle_rad(), 0, HEAD_ANGLE_TOL),
-                                            GetNumObjects() == 5,
-                                            IsLocalizedToObject(),
-                                            HasXSecondsPassedYet(2.0)) // Allow some time to observe the wall in its new pose
+                                            GetNumObjects() == 4, // Note: not 5! Only one wall exists
+                                            IsLocalizedToObject())
       {
         CheckPoses();
         
@@ -256,7 +256,7 @@ s32 CST_CustomObjects::UpdateSimInternal()
     {
       // Sending the delocalize message one tic after actually moving the robot to be sure that no images
       // from the previous pose are processed after the delocalization.
-      SendForceDelocalize();
+      SendForceDeloc();
       SET_TEST_STATE(Kidnap);
       break;
     }
@@ -282,6 +282,51 @@ s32 CST_CustomObjects::UpdateSimInternal()
       IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
                                             GetNumObjects() == 2)
       {
+        // Turn to see light cube to relocalize
+        SendTurnInPlace(DEG_TO_RAD(kReLocRotAngle_deg));
+        
+        SET_TEST_STATE(Rejigger);
+      }
+      break;
+    }
+      
+    case TestState::Rejigger:
+    {
+      // Wait for robot to stop turning and re-localizaiton to occur
+      IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
+                                            !IsRobotStatus(RobotStatusFlag::IS_MOVING),
+                                            IsLocalizedToObject(),
+                                            GetNumObjects() == 5) // 1 custom cube should match based on pose during rejigger
+      {
+        // Make sure poses are still correct after re-localizing to the light cube
+        CheckPoses();
+        
+        // Redefine CustomObject00 (the cube) differently. That should delete all existing objects of that type.
+        using namespace ExternalInterface;
+        
+        DefineCustomCube defineCube(ObjectType::CustomType00,
+                                    CustomObjectMarker::Hexagons4,
+                                    2.f*_cubeSize_mm,
+                                    .5f*_cubeMarkerSize_mm, .5f*_cubeMarkerSize_mm,
+                                    false);
+        
+        SendMessage(MessageGameToEngine(std::move(defineCube)));
+        
+        // Also look down, just so we stop seeing the Circles2 markers on the old redefined cubes, which will produce
+        // warnings in the log that might look suspicious but are in fact red herrings (they are expected after we
+        // redefine the marker). We may still see a few while the head goes down, but at least they won't spam.
+        SendMoveHeadToAngle(MIN_HEAD_ANGLE, 100.f, 100.f);
+        
+        SET_TEST_STATE(Redefine);
+      }
+      break;
+    }
+      
+    case TestState::Redefine:
+    {
+      // Wait for the three cubes to be deleted thanks to the redefinition of their type
+      IF_CONDITION_WITH_TIMEOUT_ASSERT(GetNumObjects()==2, kDefaultTimeout_sec)
+      {
         SendMoveHeadToAngle(0.f, 100.f, 100.f);
         
         using namespace ExternalInterface;
@@ -294,8 +339,10 @@ s32 CST_CustomObjects::UpdateSimInternal()
       
     case TestState::Undefine:
     {
+      // Wait for the only object left to exist to be the LightCube, since all custom objects
+      // have been undefined
       IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
-                                            GetNumObjects()==0,
+                                            GetNumObjects()==1,
                                             _numDefinesReceived==0)
       {
         // TODO: Add test state where we look at a custom object but no longer instantiate it?
@@ -403,7 +450,7 @@ void CST_CustomObjects::CheckPoses()
 {
   // Check wall:
   {
-    auto wallIDs = GetAllObjectIDsByType(ObjectType::CustomType01);
+    auto wallIDs = GetAllObjectIDsByFamilyAndType(ObjectFamily::CustomObject, ObjectType::CustomType01);
     CST_ASSERT(wallIDs.size() == 1, "CST_CustomObjects.CheckPoses.ExpectingOneWall");
     
     CustomObject *customObj = CustomObject::CreateWall(ObjectType::CustomType01,
@@ -420,6 +467,7 @@ void CST_CustomObjects::CheckPoses()
         break;
     
       case TestState::LookBackUp:
+      case TestState::Rejigger:
         whichWallPose = &_wallPose2;
         break;
         
@@ -446,7 +494,7 @@ void CST_CustomObjects::CheckPoses()
   
   // Check cube:
   {
-    auto customCubeIDs = GetAllObjectIDsByType(ObjectType::CustomType00);
+    auto customCubeIDs = GetAllObjectIDsByFamilyAndType(ObjectFamily::CustomObject, ObjectType::CustomType00);
     
     struct PoseAndID {
       const Pose3d* cubePose;
@@ -459,7 +507,12 @@ void CST_CustomObjects::CheckPoses()
     {
       posesAndIDs.emplace_back(PoseAndID{ .cubePose = &_cubePose2, .objectID = customCubeIDs[1] });
     }
-
+    
+    if(_testState >= TestState::Rejigger)
+    {
+      posesAndIDs.emplace_back(PoseAndID{ .cubePose = &_cubePose3, .objectID = customCubeIDs[2] });
+    }
+   
     for(auto & poseAndID : posesAndIDs)
     {
       CustomObject* customCube = CustomObject::CreateCube(ObjectType::CustomType00,
@@ -475,6 +528,29 @@ void CST_CustomObjects::CheckPoses()
     }
   }
   
+  // Check LightCube
+  if(_testState > TestState::LookAtObjects)
+  {
+    auto lightcubeIDs = GetAllObjectIDsByFamily(ObjectFamily::LightCube);
+    CST_ASSERT(lightcubeIDs.size() == 1, "CST_CustomObjects.CheckPoses.ExpectingOneLightCube");
+    
+    ActiveCube* activeCube = new ActiveCube(ObjectType::Block_LIGHTCUBE1);
+    activeCube->InitPose(_lightCubePose, PoseState::Known);
+    
+    if(_lightCubeID.IsUnknown())
+    {
+      // First time set _lightCubeID
+      _lightCubeID = lightcubeIDs.front();
+    }
+    else
+    {
+      // Remaining times, verify the ID has remained consistent, since it is unique
+      CST_ASSERT(_lightCubeID == lightcubeIDs.front(), "CST_CustomObject.CheckPoses.LightCubeIDChanged");
+    }
+    
+    CheckPoseHelper(activeCube, _lightCubeID);
+    Util::SafeDelete(activeCube);
+  }
 }
 
 // ================ Message handler callbacks ==================
@@ -492,6 +568,6 @@ void CST_CustomObjects::HandleRobotDeletedCustomMarkerObjects(const ExternalInte
 
 // ================ End of message handler callbacks ==================
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 

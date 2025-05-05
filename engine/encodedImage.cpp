@@ -11,7 +11,7 @@
 
 #include "engine/encodedImage.h"
 #include "coretech/vision/engine/image.h"
-#include "coretech/common/shared/array2d.h"
+#include "coretech/common/engine/array2d_impl.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 
 #include "util/fileUtils/fileUtils.h"
@@ -23,7 +23,7 @@
 #endif
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   EncodedImage::EncodedImage()
   : _timestamp(0)
@@ -31,7 +31,7 @@ namespace Vector {
   , _imgWidth(0)
   , _imgHeight(0)
   , _imgID(std::numeric_limits<u32>::max())
-  , _encoding(Vision::ImageEncoding::NoneImageEncoding)
+  , _encoding(ImageEncoding::NoneImageEncoding)
   , _expectedChunkId(0)
   , _isImgValid(false)
   , _numChunksReceived(0)
@@ -44,7 +44,7 @@ namespace Vector {
   , _imgWidth(imgGray.GetNumCols())
   , _imgHeight(imgGray.GetNumRows())
   , _imgID(imageID)
-  , _encoding(Vision::ImageEncoding::RawGray)
+  , _encoding(ImageEncoding::RawGray)
   , _isImgValid(!imgGray.IsEmpty())
   {
     _buffer.reserve(imgGray.GetNumElements());
@@ -57,7 +57,7 @@ namespace Vector {
   , _imgWidth(imgRGB.GetNumCols())
   , _imgHeight(imgRGB.GetNumRows())
   , _imgID(imageID)
-  , _encoding(Vision::ImageEncoding::RawRGB)
+  , _encoding(ImageEncoding::RawRGB)
   , _isImgValid(!imgRGB.IsEmpty())
   {
     _buffer.reserve(imgRGB.GetNumElements() * 3);
@@ -105,14 +105,14 @@ namespace Vector {
       // (The encoding is hard coded deep within firmware code and can't easily be changed so this is a work
       // around)
       // If it is in color then update the encoding
-      if(chunk.data[0] != 0 && _encoding == Vision::ImageEncoding::JPEGMinimizedGray)
+      if(chunk.data[0] != 0 && _encoding == ImageEncoding::JPEGMinimizedGray)
       {
-        _encoding = Vision::ImageEncoding::JPEGMinimizedColor;
+        _encoding = ImageEncoding::JPEGMinimizedColor;
       }
 
       _buffer.clear();
       
-      if(chunk.imageEncoding == Vision::ImageEncoding::JPEGGray)
+      if(chunk.imageEncoding == ImageEncoding::JPEGGray)
       {
         _buffer.reserve(_imgWidth*_imgHeight);
       }
@@ -156,8 +156,8 @@ namespace Vector {
         {
           PRINT_NAMED_WARNING("EncodedImage.AddChunk.TimestampNotIncreasing",
                               "Got last chunk but current timestamp %u is less than previous timestamp %u",
-                              (TimeStamp_t)_timestamp,
-                              (TimeStamp_t)_prevTimestamp);
+                              _timestamp,
+                              _prevTimestamp);
           _isImgValid = false;
         }
       }
@@ -182,26 +182,25 @@ namespace Vector {
   {
     switch(_encoding)
     {
-      case Vision::ImageEncoding::NoneImageEncoding:
+      case ImageEncoding::NoneImageEncoding:
       {
         ANKI_VERIFY(false, "EncodedImage.IsColor.UnsupportedImageEncoding", "%s", EnumToString(_encoding));
         // Intentional fallthrough!
       }
         
-      case Vision::ImageEncoding::JPEGGray:
-      case Vision::ImageEncoding::JPEGMinimizedGray:
-      case Vision::ImageEncoding::RawGray:
+      case ImageEncoding::JPEGGray:
+      case ImageEncoding::JPEGMinimizedGray:
+      case ImageEncoding::RawGray:
       {
         return false;
       }
         
-      case Vision::ImageEncoding::JPEGColor:
-      case Vision::ImageEncoding::JPEGMinimizedColor:
-      case Vision::ImageEncoding::JPEGColorHalfWidth:
-      case Vision::ImageEncoding::RawRGB:
-      case Vision::ImageEncoding::YUYV:
-      case Vision::ImageEncoding::YUV420sp:
-      case Vision::ImageEncoding::BAYER:
+      case ImageEncoding::JPEGColor:
+      case ImageEncoding::JPEGMinimizedColor:
+      case ImageEncoding::JPEGColorHalfWidth:
+      case ImageEncoding::RawRGB:
+      case ImageEncoding::YUYV:
+      case ImageEncoding::BAYER:
       {
         return true;
       }
@@ -250,8 +249,8 @@ namespace Vector {
   {
     switch(_encoding)
     {
-      case Vision::ImageEncoding::JPEGColor:
-      case Vision::ImageEncoding::JPEGGray:
+      case ImageEncoding::JPEGColor:
+      case ImageEncoding::JPEGGray:
       {
         // Simple case: just decode directly into the passed-in image's buffer.
         // Note that this will take a buffer with grayscale data in it and
@@ -260,7 +259,7 @@ namespace Vector {
         break;
       }
         
-      case Vision::ImageEncoding::JPEGMinimizedGray:
+      case ImageEncoding::JPEGMinimizedGray:
       {
         // Convert our special minimized JPEG format to regular JPEG buffer and
         // decode that
@@ -270,7 +269,7 @@ namespace Vector {
         break;
       }
       
-      case Vision::ImageEncoding::RawGray:
+      case ImageEncoding::RawGray:
       {
         // Already decompressed.
         Vision::Image grayImg(_imgHeight, _imgWidth, const_cast<u8*>(&(_buffer[0])));
@@ -278,7 +277,7 @@ namespace Vector {
         break;
       }
         
-      case Vision::ImageEncoding::RawRGB:
+      case ImageEncoding::RawRGB:
       {
         // Already decompressed.
         Vision::ImageRGB rgbImg(_imgHeight, _imgWidth, const_cast<u8*>(&(_buffer[0])));
@@ -286,7 +285,7 @@ namespace Vector {
         break;
       }
         
-      case Vision::ImageEncoding::JPEGColorHalfWidth:
+      case ImageEncoding::JPEGColorHalfWidth:
       {
         DecodeHelper(_buffer, decodedImg);
         cv::copyMakeBorder(decodedImg.get_CvMat_(), decodedImg.get_CvMat_(),
@@ -294,7 +293,7 @@ namespace Vector {
         break;
       }
       
-      case Vision::ImageEncoding::JPEGMinimizedColor:
+      case ImageEncoding::JPEGMinimizedColor:
       {
         // Convert our special minimized JPEG format to regular JPEG buffer and
         // decode that
@@ -325,7 +324,7 @@ namespace Vector {
       return RESULT_FAIL;
     }
     
-    decodedImg.SetTimestamp((TimeStamp_t)_timestamp);
+    decodedImg.SetTimestamp(_timestamp);
     
     return RESULT_OK;
   }
@@ -346,7 +345,7 @@ namespace Vector {
     const std::vector<u8>* bufferPtr = &_buffer;
     std::vector<u8> tempBuffer;
     
-    if(_encoding == Vision::ImageEncoding::JPEGMinimizedGray)
+    if(_encoding == ImageEncoding::JPEGMinimizedGray)
     {
       // If this buffer is encoded as our homebrew "MinimizedGray" JPEG,
       // we need to convert it for storage so it can be read by normal
@@ -354,7 +353,7 @@ namespace Vector {
       MiniGrayToJpeg(_buffer, _imgHeight, _imgWidth, tempBuffer);
       bufferPtr = &tempBuffer;
     }
-    else if(_encoding == Vision::ImageEncoding::JPEGMinimizedColor)
+    else if(_encoding == ImageEncoding::JPEGMinimizedColor)
     {
       // Special case: our homebrew "MinimizedColor" images are half width,
       // so have to fully decode, which resizes to full size, and then save
@@ -554,5 +553,5 @@ namespace Vector {
     bufferOut.push_back(0xD9);
   }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

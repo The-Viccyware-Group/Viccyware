@@ -103,6 +103,17 @@ cxx_project(
 )
 
 cxx_project(
+    name = 'webotsCtrlHandEmitter',
+    srcs = cxx_src_glob(['controllers/webotsCtrlHandEmitter'],
+                        ),
+    platform_srcs = [],
+    headers = cxx_header_glob(['controllers/webotsCtrlHandEmitter'],
+                              ),
+    platform_headers = [
+    ]
+)
+
+cxx_project(
     name = 'webotsCtrlBuildServerTest',
     srcs = cxx_src_glob(['controllers/webotsCtrlBuildServerTest', 'game'],
                         ),
@@ -121,30 +132,6 @@ cxx_project(
     platform_srcs = [],
     headers = cxx_header_glob(['controllers/webotsCtrlDevLog'],
                               ),
-    platform_headers = [
-    ]
-)
-
-cxx_project(
-    name = 'webotsCtrlGateway',
-    srcs = cxx_src_glob(['controllers/webotsCtrlGateway'],
-                        ),
-    platform_srcs = [],
-    headers = cxx_header_glob(['controllers/webotsCtrlGateway'],
-                              ),
-    platform_headers = [
-    ]
-)
-
-# NOTE: uses same "main.cpp" file as vic-neuralnets and thus grabs that from coretech/neuralnets
-cxx_project(
-    name = 'webotsCtrlNeuralNets',
-    srcs = cxx_src_glob(['controllers/webotsCtrlNeuralNets'],
-                        ),
-    platform_srcs = [
-    ],
-    headers = [
-    ],
     platform_headers = [
     ]
 )

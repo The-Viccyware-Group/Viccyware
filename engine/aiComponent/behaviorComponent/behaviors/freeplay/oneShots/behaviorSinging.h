@@ -16,17 +16,12 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorSinging_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/actionableObject.h"
-#include "engine/actions/actionInterface.h"
-#include "engine/actions/compoundActions.h"
-#include "engine/components/cubes/cubeAccelListeners/shakeListener.h"
-#include "engine/engineTimeStamp.h"
+#include "engine/components/cubeAccelComponentListeners.h"
 
 #include "clad/audio/audioSwitchTypes.h"
-#include "clad/types/animationTrigger.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class BehaviorSinging : public ICozmoBehavior
 {
@@ -51,7 +46,7 @@ private:
   using AudioSwitchGroup = AudioMetaData::SwitchState::SwitchGroupType;
   AudioSwitchGroup _audioSwitchGroup;
   AudioMetaData::SwitchState::GenericSwitch _audioSwitch;
-  AnimationTrigger _songAnimTrigger   = AnimationTrigger::Count;
+  AnimationTrigger _songAnimTrigger = AnimationTrigger::Count;
   
   // Vector of cubeAccelListeners that are running each light cube's accel data
   std::vector<std::pair<ObjectID, std::shared_ptr<CubeAccelListeners::ICubeAccelListener>>> _cubeAccelListeners;
@@ -80,7 +75,7 @@ private:
   float _vibratoScaleFilt = 0;
   
   // Keep track of when cubes start being shaken
-  EngineTimeStamp_t _cubeShakingStartTime_ms = 0;
+  TimeStamp_t _cubeShakingStartTime_ms = 0;
 };
   
 }

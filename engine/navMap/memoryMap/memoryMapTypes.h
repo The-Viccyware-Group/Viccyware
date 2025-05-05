@@ -12,18 +12,18 @@
 #ifndef ANKI_COZMO_MEMORY_MAP_TYPES_H
 #define ANKI_COZMO_MEMORY_MAP_TYPES_H
 
-#include "engine/navMap/quadTree/quadTreeTypes.h"
-
+#include "coretech/common/engine/math/point.h"
 #include "util/helpers/fullEnumToValueArrayChecker.h"
 #include "util/helpers/templateHelpers.h"
 #include "clad/types/memoryMap.h"
+#include "engine/navMap/memoryMap/data/memoryMapDataWrapper.h"
 
 #include <cstdint>
 #include <vector>
 #include <unordered_set>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class MemoryMapData;
 
@@ -39,6 +39,9 @@ enum class EContentType : uint8_t {
   ClearOfObstacle,       // an area without obstacles
   ClearOfCliff,          // an area without obstacles or cliffs
   ObstacleObservable,    // an area with obstacles we recognize as observable
+  // we should roll charger types into ObstacleObservable class now that it can fully support it (COZMO-16117)
+  ObstacleCharger,       // an area with obstacles we recognize as a charger
+  ObstacleChargerRemoved,// an area that used to have a charger and now the charger has moved somewhere else
   ObstacleProx,          // an area with an obstacle found with the prox sensor
   ObstacleUnrecognized,  // an area with obstacles we do not recognize
   Cliff,                 // an area with cliffs or holes
@@ -47,11 +50,46 @@ enum class EContentType : uint8_t {
   _Count // Flag, not a type
 };
 
+// each segment in a border region
+struct BorderSegment
+{
+  using DataType = MemoryMapDataWrapper<MemoryMapData>;
+  BorderSegment(const Point3f& f, const Point3f& t, const Vec3f& n, const DataType& data) :
+    from(f), to(t), normal(n), extraData(data) {}
+  
+  // -- attributes
+  Point3f from;
+  Point3f to;
+  // Note the normal could be embedded in the order 'from->to', but a separate variable makes it easier to use
+  Vec3f normal; // perpendicular to the segment, in outwards direction with respect to the content.
+  // additional information for this segment. Can be null if no additional data is available
+  DataType extraData;
+  
+  // calculate segment center point
+  inline Point3f GetCenter() const { return (from + to) * 0.5f; }
+};
+
+// each region detected between content types
+struct BorderRegion {
+  using BorderSegmentList = std::vector<BorderSegment>;
+  BorderRegion() : area_m2(-1.0f) {}
+
+  // when a region is finished (no more segments) we need to specify the area
+  void Finish(float area) { area_m2 = area; };
+  // deduct if the region is finished by checking the area
+  bool IsFinished() const { return area_m2 >= 0.0f; }
+  
+  // -- attributes
+  // area of the region in square meters
+  float area_m2;
+  // all the segments that define the given region (do not necessarily define a closed region)
+  BorderSegmentList segments;
+};
+
 struct MapBroadcastData {
   MapBroadcastData() : mapInfo(), quadInfo() {}
   ExternalInterface::MemoryMapInfo                  mapInfo;
   std::vector<ExternalInterface::MemoryMapQuadInfo> quadInfo;
-  std::vector<ExternalInterface::MemoryMapQuadInfoFull> quadInfoFull;
 };
 
 // Provide a custom hasher for unordered sets
@@ -67,19 +105,17 @@ struct MemoryMapDataHasher
 // Common Aliases
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-using MemoryMapRegion        = QuadTreeTypes::FoldableRegion;
-
 using MemoryMapDataPtr       = MemoryMapDataWrapper<MemoryMapData>;
 using MemoryMapDataConstPtr  = MemoryMapDataWrapper<const MemoryMapData>;
 
 using MemoryMapDataList      = std::unordered_set<MemoryMapDataPtr, MemoryMapDataHasher<MemoryMapData>>;
 using MemoryMapDataConstList = std::unordered_set<MemoryMapDataConstPtr, MemoryMapDataHasher<const MemoryMapData>>;
 
-using NodeTransformFunction  = QuadTreeTypes::NodeTransformFunction;
-using NodePredicate          = std::function<bool (MemoryMapDataConstPtr)>;
+using BorderRegionVector     = std::vector<BorderRegion>;
+using NodeTransformFunction  = std::function<MemoryMapDataPtr (MemoryMapDataPtr)>;
+using NodePredicate          = std::function<bool (MemoryMapDataPtr)>;
 
 using QuadInfoVector         = std::vector<ExternalInterface::MemoryMapQuadInfo>;
-using QuadInfoFullVector     = std::vector<ExternalInterface::MemoryMapQuadInfoFull>;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Helper Functions
@@ -91,6 +127,13 @@ bool ExpectsAdditionalData(EContentType type);
 
 // String representing ENodeContentType for debugging purposes
 const char* EContentTypeToString(EContentType contentType);
+
+// convert between our internal node content type and an external content type
+ExternalInterface::ENodeContentTypeEnum ConvertContentType(EContentType contentType);
+
+// returns true if type is a removal type, false otherwise. Removal types are not expected to be stored in the memory
+// map, but rather reset other types to defaults.
+bool IsRemovalType(EContentType type);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Array of content that provides an API with compilation checks for algorithms that require combinations
@@ -109,14 +152,11 @@ using EContentTypePackedType = uint32_t;
 // packed variable
 EContentTypePackedType EContentTypeToFlag(EContentType nodeContentType);
 
-// Converts and array of EContentType values into flag bits
-EContentTypePackedType ConvertContentArrayToFlags(const MemoryMapTypes::FullContentArray& array);
-
 // returns true if contentType is in PackedTypes
 bool IsInEContentTypePackedType(EContentType contentType, EContentTypePackedType contentPackedTypes);
 
 } // namespace MemoryMapTypes
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // 

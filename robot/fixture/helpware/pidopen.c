@@ -1,22 +1,18 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
 #include <fcntl.h>
-#include <string.h>
 #include <sys/wait.h>
 
 #include "core/clock.h"
 
 
-#define SHELLNAME "/bin/sh"
-
-#define MAX_ARGS 16+3
+#define SHELLNAME "/system/bin/sh"
 
 
-int pidopen(const char* processname, const char* argstr, pid_t* pid_out)
+int pidopen(const char* processname, pid_t* pid_out)
 {
   pid_t pid = 0;
   int pipefd[2];
@@ -25,24 +21,10 @@ int pidopen(const char* processname, const char* argstr, pid_t* pid_out)
   pid = fork(); //span a child process
   if (pid == 0)
   {
-    //space separate argstr into args array
-    char* argcopy = strdup(argstr); //make a writeable copy
-    char* args[MAX_ARGS];
-
-    int i = 0;
-    args[i++]= SHELLNAME;
-    args[i++] = (char*)processname;
-    char** ap = &args[i++];
-    while (ap < &args[MAX_ARGS] && (*ap = strsep(&argcopy, " ")) != NULL) {
-      if (**ap != '\0') { ap++; }
-    }
-    free(argcopy);
-
     // Child. redirect std output to pipe, launch script
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
-//    execv(SHELLNAME, args);
-    execv(args[0], args);
+    execl(SHELLNAME, SHELLNAME, processname, NULL);
   }
   //Only parent gets here. make tail nonblocking and return;
   *pid_out = pid;
@@ -61,7 +43,6 @@ int pidclose(pid_t pid, bool force)
   int status;
   //or wait for the child process to terminate
   waitpid(pid, &status, 0);
-  printf("waitpid returned \n");
   return force?-70:WEXITSTATUS(status);
 }
 

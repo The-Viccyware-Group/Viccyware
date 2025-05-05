@@ -18,7 +18,7 @@
 #define __Engine_Components_iVisionModeSubscriber_H__
 
 namespace Anki{
-namespace Vector{
+namespace Cozmo{
 
 class IVisionModeSubscriber
 {
@@ -29,7 +29,7 @@ protected:
   IVisionModeSubscriber() {};
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif //__Engine_Components_iVisionModeSubscriber_H__

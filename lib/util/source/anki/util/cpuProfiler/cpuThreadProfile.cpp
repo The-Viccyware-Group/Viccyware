@@ -14,18 +14,12 @@
 #include "util/cpuProfiler/cpuThreadProfile.h"
 #include "util/logging/logging.h"
 #include "util/math/math.h"
-#include "util/time/universalTime.h"
 
 #include <pthread.h>
 #include <unistd.h>
 
-#include "json/json.h"
-
 #if ANKI_CPU_PROFILER_ENABLED
 
-#if defined(VICOS)
-  #include <sys/syscall.h>
-#endif
 
 namespace Anki {
 namespace Util {
@@ -165,8 +159,6 @@ void CpuThreadProfile::SaveChromeTracingProfile(FILE* fp, uint32_t threadIndex) 
 
 #if defined(ANDROID)
   uint64_t tid = (uint64_t)gettid();
-#elif defined(VICOS)
-  uint64_t tid = (uint64_t)syscall(SYS_gettid);
 #else
   uint64_t tid;
   pthread_threadid_np(NULL, &tid);
@@ -219,51 +211,6 @@ void CpuThreadProfile::SaveChromeTracingProfile(FILE* fp, uint32_t threadIndex) 
             tid);
     --sampleStackDepth;
   }
-}
-
-
-void CpuThreadProfile::PublishToWebService(const std::function<void(const Json::Value&)>& callback,
-                                           const char* threadName,
-                                           uint32_t threadIndex,
-                                           const std::vector<CpuProfileSampleShared*>& samplesCalledFromThread) const
-{
-  std::vector<CpuProfileSampleShared*> sortedSamples = samplesCalledFromThread;
-
-  const uint32_t recentTickCount = GetLargestRecentTickCount();
-  const float oneOverRecentTickCount = (recentTickCount > 0) ? (1.0f / float(recentTickCount)) : 1.0f;
-
-  std::sort(sortedSamples.begin(),
-            sortedSamples.end(),
-            [threadIndex, oneOverRecentTickCount]( const CpuProfileSampleShared* lhs, const CpuProfileSampleShared* rhs )
-            {
-              // Sort from highest average-per-tick to lowest
-              const float avgMsPerTickL = CalcAvgMsPerTick(lhs->GetRecentStats(threadIndex), oneOverRecentTickCount);
-              const float avgMsPerTickR = CalcAvgMsPerTick(rhs->GetRecentStats(threadIndex), oneOverRecentTickCount);
-              return avgMsPerTickL > avgMsPerTickR;
-            }
-            );
-
-
-  Json::Value data;
-  data["threadIndex"] = threadIndex;
-  data["threadName"] = threadName;
-  data["time"] = GetTickNum();
-
-  auto& sampleJson = data["sample"];
-
-  for (const CpuProfileSampleShared* sample : sortedSamples)
-  {
-    const CpuSampleStats& sampleStats = sample->GetSampleStats(threadIndex);
-    const Stats::StatsAccumulator& recentStats = sampleStats.GetRecentStats();
-
-    Json::Value entry;
-    entry["name"] = sample->GetName();
-    entry["min"] = recentStats.GetMinSafe();
-    entry["max"] = recentStats.GetMaxSafe();
-    entry["mean"] = recentStats.GetMean();
-    sampleJson.append( entry );
-  }
-  callback(data);
 }
 
 } // end namespace Util

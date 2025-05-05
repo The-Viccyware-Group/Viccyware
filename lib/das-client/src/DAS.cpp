@@ -16,7 +16,6 @@
 #include "dasLogFileAppender.h"
 #include "dasAppender.h"
 #include "dasFilter.h"
-#include "dasPostToServer.h"
 #include "stringUtils.h"
 #include "json/json.h"
 #include <cassert>
@@ -28,9 +27,6 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include <sys/stat.h>
-#include <cstring>
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,7 +153,7 @@ static Anki::Das::ThreadId_t _DASThreadId() {
   assert(nullptr != p);
   return *p;
 }
-
+  
 static void _freeDASThreadId(void* arg) {
   Anki::Das::ThreadId_t* p = (Anki::Das::ThreadId_t*) arg;
   delete p;
@@ -165,7 +161,7 @@ static void _freeDASThreadId(void* arg) {
 
 DASLogLevel DASLogLevelNameToEnum(const std::string& logLevelName) {
   DASLogLevel logLevel = DASLogLevel_NumLevels;
-
+  
   if (AnkiUtil::StringCaseInsensitiveEquals(logLevelName, "debug")) {
     logLevel = DASLogLevel_Debug;
   } else if (AnkiUtil::StringCaseInsensitiveEquals(logLevelName, "info")) {
@@ -203,7 +199,7 @@ void getDASLogLevelName(DASLogLevel logLevel, std::string& outLogLevelName) {
     break;
   }
 }
-
+  
 void getDASTimeString(std::string& outTimeString) {
   std::chrono::system_clock::time_point now {std::chrono::system_clock::now()};
   std::time_t nowTime{std::chrono::system_clock::to_time_t(now)};
@@ -214,9 +210,8 @@ void getDASTimeString(std::string& outTimeString) {
                                     "%H:%M:%S", std::localtime(&nowTime));
   assert(timeStrLen > 0);
   size_t remainingLen = sizeof(timeStr) - timeStrLen;
-  uint64_t msCount = ms.count();
   int printfResult __attribute((unused)) = snprintf(timeStr + timeStrLen, remainingLen,
-                                                    "%" PRIu64 "", msCount % 1000);
+                                                    ":%03llu", ms.count() % 1000);
   assert(printfResult <= remainingLen);
   outTimeString = timeStr;
 }
@@ -247,19 +242,19 @@ void DASConfigure(const char* configurationJsonFilePath,
   if (nullptr != configurationJsonFilePath) {
     // load configuration
     std::string config = AnkiUtil::StringFromContentsOfFile(configurationJsonFilePath);
-    Json::Value root;
-    Json::Reader reader;
+    DASClient::Json::Value root;
+    DASClient::Json::Reader reader;
     bool parsingSuccessful = reader.parse(config, root);
     if (parsingSuccessful) {
       DASLogLevel localMinLogLevel = DASLogLevelNameToEnum(root["dasConfig"]
                                                            .get("localMinLogLevel", "info")
                                                            .asString());
       sDASLevelOverride.SetRootLogLevel(localMinLogLevel);
-      const Json::Value& localOverrides = root["dasConfig"].get("localMinLogLevelOverrides",
-                                                                Json::objectValue);
+      const DASClient::Json::Value& localOverrides = root["dasConfig"].get("localMinLogLevelOverrides",
+                                                                DASClient::Json::objectValue);
       for (const std::string& key : localOverrides.getMemberNames()) {
         DASLogLevel levelForKey = DASLogLevelNameToEnum(localOverrides
-                                                        .get(key, Json::stringValue).asString());
+                                                        .get(key, DASClient::Json::stringValue).asString());
         sDASLevelOverride.SetMinLogLevel(key, levelForKey);
       }
 
@@ -273,21 +268,21 @@ void DASConfigure(const char* configurationJsonFilePath,
         uint flush_interval = Anki::Das::DasAppender::kDefaultFlushIntervalSeconds;
         if( root["dasConfig"].isMember("flushInterval") )
         {
-          flush_interval = root["dasConfig"].get("flushInterval", Json::uintValue).asUInt();
+          flush_interval = root["dasConfig"].get("flushInterval", DASClient::Json::uintValue).asUInt();
         }
-
+        
         size_t maxLogLength = Anki::Das::kDefaultMaxLogLength;
         if( root["dasConfig"].isMember("maxLogLength") )
         {
-          maxLogLength = root["dasConfig"].get("maxLogLength", Json::uintValue).asUInt();
+          maxLogLength = root["dasConfig"].get("maxLogLength", DASClient::Json::uintValue).asUInt();
         }
-
+        
         size_t maxLogFiles = Anki::Das::kDasDefaultMaxLogFiles;
         if( root["dasConfig"].isMember("maxLogFiles") )
         {
-          maxLogFiles = root["dasConfig"].get("maxLogFiles", Json::uintValue).asUInt();
+          maxLogFiles = root["dasConfig"].get("maxLogFiles", DASClient::Json::uintValue).asUInt();
         }
-
+        
         sRemoteAppender.reset(new Anki::Das::DasAppender(sDasLogDir, url,flush_interval,
                                                          maxLogLength, maxLogFiles,
                                                          sLogFileArchiveFunc,
@@ -394,14 +389,14 @@ void _DAS_LogInternal(DASLogLevel level, const char* eventName, const char* even
   // Scream if the client passes a null or empty event name and replace it with "noname"
   // If a "noname" event is seen on the server, open a bug
   if (nullptr == eventName || '\0' == *eventName) {
-    LOGD("DAS ERROR: EVENT WITH A NULL OR BLANK NAME PASSED (value=%s file=%s funct=%s line=%d)",
-      (eventValue ? eventValue : ""),
-      (file ? file : ""),
-      (funct ? funct : ""),
+    LOGD("DAS ERROR: EVENT WITH A NULL OR BLANK NAME PASSED (value=%s file=%s funct=%s line=%d)", 
+      (eventValue ? eventValue : ""), 
+      (file ? file : ""), 
+      (funct ? funct : ""), 
       line);
     eventName = "noname";
   }
-
+  
   std::string logLevel;
   getDASLogLevelName(level, logLevel);
   data[Anki::Das::kMessageLevelGlobalKey] = logLevel;
@@ -607,10 +602,6 @@ void DASDisableNetwork(DASDisableNetworkReason reason) {
   DASNetworkingDisabled |= reason;
 }
 
-int DASGetNetworkingDisabled() {
-  return DASNetworkingDisabled;
-}
-
 void _DAS_SetLevel(const char* eventName, DASLogLevel level) {
   std::lock_guard<std::mutex> lock(sDASLevelOverrideMutex);
   sDASLevelOverride.SetMinLogLevel(eventName, level);
@@ -674,13 +665,6 @@ void getDASGlobalsAndDataString(const std::map<std::string,std::string>* globals
     outGlobalsAndData = oss.str();
   }
 }
-
-#if defined(VICOS)
-bool PostToServer(const std::string & url, const std::string & body, std::string & response)
-{
-  return dasPostToServer(url, body, response);
-}
-#endif
 
 #ifdef __cplusplus
 } // extern "C"

@@ -11,7 +11,6 @@
  **/
 
 #include "DAS.h"
-#include "portableTypes.h"
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -28,7 +27,6 @@ int main(int argc, char *argv[]) {
   uuid_generate(gameUUID);
   uuid_string_t gameID;
   uuid_unparse_upper(gameUUID, gameID);
-
 
   DASConfigure("DASConfig.json", "./dasLogs", gameLogDir.c_str());
   DAS_SetGlobal("$game", gameID);

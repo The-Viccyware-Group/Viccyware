@@ -1,6 +1,3 @@
-#
-# simulator/CMakeLists.txt
-#
 cmake_minimum_required(VERSION 3.6)
 
 project(webots_controllers)
@@ -9,17 +6,11 @@ if (NOT MACOSX)
   return()
 endif()
 
-include(opencv)
-include(protobuf)
-include(symlink_target)
-include(anki_build_cxx)
-include(webots)
-
-# Path to controllers
 set(CONTROLLERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/controllers")
-
-# Path to resources
 set(BUILT_RESOURCES_DIR "${CMAKE_BINARY_DIR}/data/assets/cozmo_resources")
+
+include(opencv)
+include(symlink_target)
 
 set(PLATFORM_LIBS "")
 set(PLATFORM_INCLUDES "")
@@ -33,7 +24,6 @@ if (MACOSX)
   set(PLATFORM_LIBS
     ${FOUNDATION}
     ${OPENGL}
-    ${PROTOBUF_LIBS}
     ${GLUT}
     ${WEBOTS_LIBS}
     ${WEBOTS_SIM_LIBS}
@@ -41,13 +31,13 @@ if (MACOSX)
   )
 endif()
 
+include(anki_build_cxx)
 
 #
 # webots plugins
 #
 
 anki_build_cxx_library(cozmo_physics ${ANKI_SRCLIST_DIR})
-anki_build_target_license(cozmo_physics "ANKI")
 
 #
 # suppress warnings about old GLUT declarations used by webots
@@ -80,41 +70,23 @@ symlink_target(
 #
 
 anki_build_cxx_library(webotsCtrlCommon ${ANKI_SRCLIST_DIR} STATIC)
-anki_build_target_license(webotsCtrlCommon "ANKI")
 
 target_link_libraries(webotsCtrlCommon
   PUBLIC
   util
   cti_common
-  robot_interface # for emrHelper.h
   ${PLATFORM_LIBS}
 )
 
 target_compile_definitions(webotsCtrlCommon
   PUBLIC
-  WEBOTS_VER=\"${WEBOTS_VER}\"
-  SIMULATOR
 )
-
-#
-# webots controller macros
-#
-
-macro(webots_build_cxx_executable target srclist_dir)
-  # Build the executable
-  anki_build_cxx_executable(${target} ${srclist_dir})
-  # Sign executable for use with webots firewall certificate
-  if (WEBOTS_SETUP_FIREWALL)
-    webots_setup_target(${target})
-  endif(WEBOTS_SETUP_FIREWALL)
-endmacro(webots_build_cxx_executable)
 
 #
 # webots controller executables
 #
 
-webots_build_cxx_executable(webotsCtrlLightCube ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlLightCube "ANKI")
+anki_build_cxx_executable(webotsCtrlLightCube ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlLightCube
   PRIVATE
@@ -144,8 +116,7 @@ symlink_target(
 )
 
 
-webots_build_cxx_executable(webotsCtrlViz ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlViz "ANKI")
+anki_build_cxx_executable(webotsCtrlViz ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlViz
   PRIVATE
@@ -167,11 +138,8 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlViz/resources
 )
 
-#
-# webotsCtrlRobot2
-#
-webots_build_cxx_executable(webotsCtrlRobot2 ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlRobot2 "ANKI")
+
+anki_build_cxx_executable(webotsCtrlRobot2 ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlRobot2
   PRIVATE
@@ -206,12 +174,8 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlRobot2/resources
 )
 
-#
-# webotsCtrlAnim
-#
 
-webots_build_cxx_executable(webotsCtrlAnim ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlAnim "ANKI")
+anki_build_cxx_executable(webotsCtrlAnim ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlAnim
   PRIVATE
@@ -245,12 +209,7 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlAnim/resources
 )
 
-#
-# webotsCtrlWebServer
-#
-
-webots_build_cxx_executable(webotsCtrlWebServer ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlWebServer "ANKI")
+anki_build_cxx_executable(webotsCtrlWebServer ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlWebServer
   PRIVATE
@@ -276,19 +235,13 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlWebServer/resources
 )
 
-#
-# webotsCtrlGameEngine2
-#
-
-webots_build_cxx_executable(webotsCtrlGameEngine2 ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlGameEngine2 "ANKI")
+anki_build_cxx_executable(webotsCtrlGameEngine2 ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlGameEngine2
   PRIVATE
   util
   kazmath
   cameraService
-  whiskeyToF
   cti_common
   cti_common_robot
   cti_vision
@@ -318,12 +271,8 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlGameEngine2/resources
 )
 
-#
-# webotsCtrlKeyboard
-#
 
-webots_build_cxx_executable(webotsCtrlKeyboard ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlKeyboard "ANKI")
+anki_build_cxx_executable(webotsCtrlKeyboard ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlKeyboard
   PRIVATE
@@ -356,12 +305,8 @@ symlink_target(
   DST ${CONTROLLERS_DIR}/webotsCtrlKeyboard/resources
 )
 
-#
-# webotsCtrlBuildServerTest
-#
 
-webots_build_cxx_executable(webotsCtrlBuildServerTest ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlBuildServerTest "ANKI")
+anki_build_cxx_executable(webotsCtrlBuildServerTest ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlBuildServerTest
   PRIVATE
@@ -393,13 +338,27 @@ symlink_target(
   DST "${CONTROLLERS_DIR}/webotsCtrlBuildServerTest/"
 )
 
+# Webots Ctrl Hand Emitter
 
-#
-# webotsCtrlDevLog
-#
+anki_build_cxx_executable(webotsCtrlHandEmitter ${ANKI_SRCLIST_DIR})
+target_include_directories(webotsCtrlHandEmitter
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}
+)
 
-webots_build_cxx_executable(webotsCtrlDevLog ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlDevLog "ANKI")
+target_link_libraries(webotsCtrlHandEmitter
+  PRIVATE
+  ${PLATFORM_LIBS}
+)
+
+symlink_target(
+  TARGET webotsCtrlHandEmitter
+  DST "${CONTROLLERS_DIR}/webotsCtrlHandEmitter/"
+)
+
+# end -- Webots Controller Hand Emitter
+
+anki_build_cxx_executable(webotsCtrlDevLog ${ANKI_SRCLIST_DIR})
 
 target_link_libraries(webotsCtrlDevLog
   PRIVATE
@@ -429,33 +388,5 @@ target_compile_definitions(webotsCtrlDevLog
 symlink_target(
   TARGET webotsCtrlDevLog
   DST "${CONTROLLERS_DIR}/webotsCtrlDevLog/"
-)
-
-#
-# webotsCtrlGateway
-#
-
-webots_build_cxx_executable(webotsCtrlGateway ${ANKI_SRCLIST_DIR})
-anki_build_target_license(webotsCtrlGateway "ANKI")
-
-target_link_libraries(webotsCtrlGateway
-  PRIVATE
-  webotsCtrlCommon
-)
-
-target_compile_definitions(webotsCtrlGateway
-  PRIVATE
-  SIMULATOR
-)
-
-symlink_target(
-  TARGET webotsCtrlGateway
-  DST "${CONTROLLERS_DIR}/webotsCtrlGateway/"
-)
-
-symlink_target(
-  TARGET webotsCtrlGateway
-  SRC ${CMAKE_BINARY_DIR}/bin/vic-gateway
-  DST "${CONTROLLERS_DIR}/webotsCtrlGateway/"
 )
 

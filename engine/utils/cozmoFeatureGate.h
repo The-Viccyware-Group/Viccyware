@@ -14,11 +14,6 @@
 #define ANKI_COZMO_BASESTATION_COZMO_FEATURE_GATE_H
 
 #include "util/featureGate/featureGate.h"
-#include "util/signals/simpleSignal_fwd.h"
-
-namespace Json {
-  class Value;
-}
 
 namespace Anki {
 
@@ -28,26 +23,15 @@ class DataPlatform;
 }
 }
 
-namespace Vector {
+namespace Cozmo {
 
-class CozmoContext;
 enum class FeatureType : uint8_t;
 
 class CozmoFeatureGate : public Util::FeatureGate
 {
-  using Base = Util::FeatureGate;
 public:
-  CozmoFeatureGate( Util::Data::DataPlatform* platform );
-  
-  void Init(const CozmoContext* context, const std::string& jsonContents);
-
   bool IsFeatureEnabled(FeatureType feature) const;
   void SetFeatureEnabled(FeatureType feature, bool enabled);
-private:
-  
-  void SendFeaturesToWebViz(const std::function<void(const Json::Value&)>& sendFunc) const;
-  
-  std::vector<::Signal::SmartHandle> _signalHandles;
 };
 
 }

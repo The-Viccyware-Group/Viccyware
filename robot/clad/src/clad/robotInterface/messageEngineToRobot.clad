@@ -6,27 +6,23 @@
  */
 
 #include "clad/audio/audioMessage.clad"
+#include "clad/robotInterface/otaMessages.clad"
 #include "clad/types/animationTypes.clad"
-#include "clad/types/backpackAnimationTriggers.clad"
 #include "clad/types/cameraFOVInfo.clad"
-#include "clad/types/compositeImageTypes.clad"
 #include "clad/types/controllerChannels.clad"
 #include "clad/types/dockingSignals.clad"
 #include "clad/types/imu.clad"
-#include "clad/types/lcdTypes.clad"
+#include "clad/types/keepFaceAliveParameters.clad"
 #include "clad/types/ledTypes.clad"
 #include "clad/types/motorTypes.clad"
 #include "clad/types/proceduralFaceTypes.clad"
 #include "clad/types/proxMessages.clad"
 #include "clad/types/robotStatusAndActions.clad"
 #include "clad/types/robotTestModes.clad"
-#include "clad/types/switchboardToRobot.clad"
-#include "clad/types/textToSpeechTypes.clad"
-#include "clad/types/tofDisplayTypes.clad"
-#include "clad/types/sdkAudioTypes.clad"
+#include "clad/types/sayTextStyles.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace RobotInterface {
 
@@ -35,15 +31,10 @@ namespace RobotInterface {
  * and to make debugging from message dumps more sane.
  */
 
-message CheckCloudConnectivity
-{
-}
-
 message StartMotorCalibration
 {
   bool calibrateHead,
-  bool calibrateLift,
-  MotorCalibrationReason reason,
+  bool calibrateLift
 }
 
 message DriveWheels
@@ -84,16 +75,7 @@ message SetLiftHeight
   float_32 max_speed_rad_per_sec,
   float_32 accel_rad_per_sec2,
   float_32 duration_sec,
-  uint_8   actionID = 0,
-}
-
-message SetLiftAngle
-{
-  float_32 angle_rad,
-  float_32 max_speed_rad_per_sec,
-  float_32 accel_rad_per_sec2,
-  float_32 duration_sec,
-  uint_8   actionID = 0,
+  uint_8   actionID,
 }
 
 message SetHeadAngle
@@ -102,7 +84,12 @@ message SetHeadAngle
   float_32 max_speed_rad_per_sec,
   float_32 accel_rad_per_sec2,
   float_32 duration_sec,
-  uint_8   actionID = 0,
+  uint_8   actionID,
+}
+
+message HeadAngleUpdate
+{
+  float_32 newAngle,
 }
 
 // This is a turn in place to an absolute angle
@@ -117,7 +104,7 @@ message SetBodyAngle
                                    // the sign of max_speed and num_half_revolutions. If false, consider sign
                                    // of max_speed and num_half_revolutions to determine which direction to
                                    // turn and how far to turn (e.g. for turns longer than 360 deg)
-  uint_8   actionID = 0,
+  uint_8   actionID,
 }
 
 message TurnInPlaceAtSpeed
@@ -200,24 +187,13 @@ message ForceDelocalizeSimulatedRobot
 
 }
 
-message SyncRobot
+message SyncTime
 {
+  uint_32 syncTime,
 
-}
-
-message EngineFullyLoaded
-{
-
-}
-
-message CalmPowerMode
-{
-  bool enable,
-}
-
-// Tells syscon to pull the plug
-message Shutdown
-{
+  // Other random things to send to robot on init
+  // which can eventually be made constant
+  float_32 driveCenterOffset
 }
 
 message ControllerGains
@@ -238,26 +214,6 @@ message RollActionParams
    float_32 backupDist_mm,
 }
 
-message PlaypenStart
-{
-
-}
-
-message SelfTestEnd
-{
-
-}
-
-message PrintBodyData
-{
-  // Print syscon body data to log every specified number of tics.
-  // 0 means disable print.
-  uint_32 period_tics,
-  bool motors,
-  bool prox,
-  bool battery,
-}
-
 message SetMotionModelParams
 {
   float_32 slipFactor,
@@ -266,6 +222,10 @@ message SetMotionModelParams
 message BackpackSetLayer
 {
   uint_8 layer
+}
+
+message GetManufacturingInfo
+{
 }
 
 message CheckLiftLoad
@@ -281,12 +241,11 @@ message EnableMotorPower
   bool    enable
 }
 
-// Message for ACKing the RobotStopped message from robot process
-// which re-enables the SteeringController/WheelController which
-// were disabled upon encountering cliff so as not to accidentally
-// drive off it.
-message RobotStoppedAck
+message EnableReadToolCodeMode
 {
+  float_32 headPower,
+  float_32 liftPower,
+  bool enable
 }
 
 message EnableStopOnCliff
@@ -294,58 +253,40 @@ message EnableStopOnCliff
   bool enable
 }
 
-// When enabled stops the robot whenever it encounters a
-// cliff reading that is higher than MIN_CLIFF_STOP_ON_WHITE_VAL
-message EnableStopOnWhite
-{
-  bool enable
-}
-
-// Message to start/stop action that aligns the cliffs sensors with a white line.
-// Assumes at least one of the front cliffs sensors is already detecting
-// a value greater than MIN_CLIFF_STOP_ON_WHITE_VAL.
-message CliffAlignToWhiteAction
-{
-  bool start
-}
-
-
 message EnableBraceWhenFalling
 {
   bool enable
 }
-
 
 // ========== V2 Animation process messages ===========
 
 message PlayAnim
 {
   uint_32 numLoops = 1,
-  uint_32 startAt_ms = 0, // time to start the animation playback at
   uint_8  tag,
-  bool renderInEyeHue = 1,
-  string animName, // must be last
+  string animName,
 }
 
-// Aborts the specified animation.
-// If tag == 0 (i.e. kNotAnimatingTag), cancels whatever animation is currently playing.
+// Aborts the currently executing animation
 message AbortAnimation
 {
-  uint_8  tag,
 }
 
-// Disables Face Keepalive and neutral eyes keepalive
 message EnableKeepFaceAlive
 {
   uint_32 disableTimeout_ms,  // If enable == false, the amount of time to wait before actually disabling
   bool    enable
 }
 
-// Enable/disable "focused" mode for KeepFaceAlive, which limits the eye dart distance to keep the
-// eyes roughly centered (but still moving, rather than "dead" still)
-message SetKeepFaceAliveFocus
+message SetDefaultKeepFaceAliveParameters
 {
-  bool enable
+}
+
+message SetKeepFaceAliveParameter
+{
+  float_32               value,
+  KeepFaceAliveParameter param,
+  bool                   setToDefault = 0, // If true, value is ignored
 }
 
 message AddOrUpdateEyeShift
@@ -382,9 +323,9 @@ message RemoveSquint
 }
 
 
-message SetFullAnimTrackLockState
+message LockAnimTracks
 {
-  uint_8 trackLockState    // See AnimTrackFlags
+  uint_8 whichTracks    // See AnimTrackFlags
 }
 
 message AddAnim
@@ -413,64 +354,11 @@ message SetBackpackLights
   uint_8 layer = 0      // 0 is BPL_USER
 }
 
-message SetSystemLight
-{
-  LightState light
-}
-
-message StartRecordingMicsRaw
+message StartRecordingMics
 {
   uint_32 duration_ms,
   bool    runFFT,
   string  path
-}
-
-message StartRecordingMicsProcessed
-{
-  uint_32 duration_ms,
-  string  path
-}
-
-message StartPlaybackAudio
-{
-  string  path
-}
-
-message StartWakeWordlessStreaming
-{
-  uint_8 streamType,
-  bool   playGetInFromAnimProcess
-}
-
-message SetTriggerWordResponse
-{
-  AudioEngine::Multiplexer::PostAudioEvent postAudioEvent,
-  int_32 minStreamingDuration_ms = -1,
-  bool shouldTriggerWordStartStream = 0,
-  bool shouldTriggerWordSimulateStream = 0,
-  uint_8 getInAnimationTag = 0,
-  string getInAnimationName,
-}
-
-message SetAlexaUXResponses
-{
-  // each array value is for a transition from Idle to
-  // 0: Listening
-  // 1: Thinking
-  // 2: Speaking
-  // 3: Error
-  AudioEngine::Multiplexer::PostAudioEvent postAudioEvents[4],
-  uint_8 getInAnimTags[4],
-  string csvGetInAnimNames, // comma separated animation names (cpp-lite can't handle more than one string per message)
-}
-
-message ResetBeatDetector
-{
-}
-
-message SetAlexaUsage
-{
-  bool optedIn
 }
 
 structure ColorRGB
@@ -490,21 +378,6 @@ message DrawTextOnScreen
   string   text
 }
 
-message ShowUrlFace
-{
-  bool show
-}
-
-message ExitCCScreen
-{
-}
-
-// Switch to the debug screen used for the vision system's "MirrorMode"
-message EnableMirrorModeScreen
-{
-  bool enable
-}
-
 // DisplayProceduralFace
 message DisplayProceduralFace
 {
@@ -518,47 +391,11 @@ message SetFaceHue
     float_32 hue // [0,1]
 }
 
-// SetFaceSaturation
-message SetFaceSaturation
+message StartDoom
 {
-    float_32 saturation // [0,1]
+    
 }
 
-message SetButtonWakeWord
-{
-    // no enum for now unless we add a third wakeword. true if alexa, false if "hey vector"
-    bool isAlexa,
-}
-
-structure SpriteBoxRemap
-{
-  Vision::SpriteBoxName spriteBoxName,
-  uint_8                padding,
-  uint_16               remappedAssetID
-}
-
-message PlayAnimWithSpriteBoxRemaps
-{
-  uint_8         tag,
-  uint_8         numRemaps,
-  SpriteBoxRemap spriteBoxRemaps[150],
-  bool           lockFaceAtEndOfAnim,
-  string         animName
-}
-
-message PlayAnimWithSpriteBoxKeyFrames
-{
-  Vision::SpriteBoxKeyFrame spriteBoxKeyFrames[40],
-  uint_8                    tag,
-  uint_8                    numKeyFrames,
-  string                    animName
-}
-
-message AddSpriteBoxKeyFrames
-{
-  Vision::SpriteBoxKeyFrame spriteBoxKeyFrames[50],
-  uint_8                    numKeyFrames,
-}
 
 // TODO: Move to messageGameToEngine.clad or shared file
 // DisplayFaceImageBinaryChunk
@@ -594,11 +431,6 @@ message DisplayFaceImageRGBChunk {
     uint_8   chunkIndex
 }
 
-// FakeWakeWordFromExternalInterface - used to trigger wakeword reactions in the anim process from Webots
-message FakeWakeWordFromExternalInterface
-{
-}
-
 // SetDebugConsoleVarMessage - for getting console vars to AnimProcess (until we have nicer web interface)
 message SetDebugConsoleVarMessage {
   uint_8 varName[64],   // Array of chars, zero-terminated
@@ -611,131 +443,21 @@ message RunDebugConsoleFuncMessage {
 }
 
 //
-// Sent from engine to robot (anim process) to prepare TTS audio
+// Sent from engine to robot (anim process) to initiate TTS
 //
-message TextToSpeechPrepare {
-  AudioMetaData::SwitchState::Robot_Vic_External_Processing style, // Audio processing style
-  float_32 durationScalar,             // Duration adjustment (0.5 = slow, 5.0 = fast)
-  float_32 pitchScalar,                // Pitch adjustment (-1.0 = low, +1.0 = high)
-  TextToSpeechTriggerMode triggerMode, // Trigger mode
-  uint_8 ttsID,                        // ID of utterance
-  int_8 text[1024]                     // Text to be pronounced
+message TextToSpeechStart {
+  float_32 durationScalar, // Duration adjustment
+  float_32 pitchScalar,    // Pitch adjustment
+  SayTextVoiceStyle style, // Audio processing style
+  uint_8 ttsID,            // ID of utterance
+  string text              // Text to be pronounced
 }
 
 //
-// Sent from engine to robot (anim process) to play a prepared TTS
+// Sent from robot (anim process) to engine to cancel TTS
 //
-message TextToSpeechPlay {
-  uint_8 ttsID // ID of utterance
-}
-
-//
-// Sent from engine to robot (anim process) to cancel TTS
-//
-message TextToSpeechCancel {
+message TextToSpeechStop {
   uint_8 ttsID  // ID of utterance
-}
-
-// If this delay message is sent before a message with the specified tag, when that tag is
-// received the message will be delayed until the animation streamer reaches the specified time
-// These delays:
-//   1) will queue
-//   2) will be applied to messages in the order they are received
-//   3) messages will be dropped if the animation is cleared before reaching the specified timestamp
-// If applyBeforeTick is true the messages will be applied and then the animationStreamer will be ticked
-// otherwise, they will be applied immediately after the animationStreamer tick
-//   (e.g. lock face track as soon as it's updated)
-
-// This message wraps other messages related to streaming animations, and rather than applying the message
-// when it's received the message will be applied when the current streaming animation reaches the specified stream time
-// If the streaming animation is canceled before it hits the stream time this message will be dropped
-// When applyBeforeTick is true the alteration is displayed to the user that tick (e.g. display a new image)
-// When false, the alteration is applied after the keyframe's processed (e.g. lock face track after drawing an image)
-message AlterStreamingAnimationAtTime {
-  uint_32 relativeStreamTime_ms,
-  bool    applyBeforeTick = 1,
-  uint_8  internalTag, // Indicates which message below is set
-  SetFullAnimTrackLockState setFullAnimTrackLockState,
-  uint_8 padding[1],
-  AudioEngine::Multiplexer::PostAudioEvent postAudioEvent,
-  TextToSpeechPlay textToSpeechPlay
-}
-
-//
-// Sent from engine to robot (anim process) to set locale preference.
-// Locale string has the format "en-US" for use with Anki::Util::Locale.
-//
-message SetLocale {
-  string locale
-}
-
-message SetLCDBrightnessLevel {
-  LCDBrightness level
-}
-
-message BatteryStatus {
-  bool isLow,
-  bool isCharging,
-  bool onChargerContacts,
-  bool isBatteryFull,
-  bool isBatteryDisconnected  // happens when it is too hot to charge (needs to cooldown)
-                              // the robot reports charging, when it actually is not
-}
-
-message TriggerBackpackAnimation {
-  BackpackAnimationTrigger trigger,
-}
-
-message AcousticTestEnabled {
-  bool enabled,
-}
-
-//
-// Sent from engine to robot (anim process) to prepare for streaming audio data to the robot speaker
-//
-message ExternalAudioPrepare {
-  uint_16 audio_volume,
-  uint_16 audio_rate
-}
-
-//
-// Sent from engine to robot (anim process) to stream audio data to the robot speaker
-//
-message ExternalAudioChunk {
-  uint_16 audio_chunk_size,       //size in bytes
-  uint_16 audio_chunk_data[512]   //16-bit little-endian data
-}
-
-//
-// Sent from engine to robot (anim process) to signal end of streaming data
-//
-message ExternalAudioComplete {
-}
-
-//
-// Sent from engine to robot (anim process) to cancel streaming audio playback
-//
-message ExternalAudioCancel {
-}
-
-// Because we're running low on message tags, expand this enum and message as we add more settings
-// that we want to send to anim/robot.  To expand, update the Process_updatedSettings() method.
-// We're not using the proto enums for the settings here, because it's proto, not clad, and because
-// we're already dealing with two types of settings (robot settings and account settings)
-enum uint_8 SettingBeingChanged {
-  SETTING_ENABLE_DATA_COLLECTION,
-  SETTING_TIME_ZONE,
-}
-
-message UpdatedSettings {
-  SettingBeingChanged settingBeingChanged,
-  bool                enableDataCollection,
-  string              timeZone,
-}
-
-message RangeDataToDisplay
-{
-  RangeDataDisplay data
 }
 
 // ====================================================
@@ -766,17 +488,14 @@ union EngineToRobot
   // 0x01 to 0x4f: Messages to robot (supervisor) process
 
   // Init
-  SyncRobot                     syncRobot                   = 0x02,
-  Shutdown                      shutdown                    = 0x03,
-  CalmPowerMode                 calmPowerMode               = 0x04,
+  GetManufacturingInfo          getMfgInfo                  = 0x01,
+  SyncTime                      syncTime                    = 0x02,
 
   // Debug / Test
   StartControllerTestMode       startControllerTestMode     = 0x0A,
   ControllerGains               setControllerGains          = 0x0B,
   SetMotionModelParams          setMotionModelParams        = 0x0C,
   RollActionParams              rollActionParams            = 0x0D,
-  PlaypenStart                  playpenStart                = 0x0E,
-  PrintBodyData                 printBodyData               = 0x0F,
 
   // Motor control
   DriveWheels                   drive                       = 0x10,
@@ -785,7 +504,7 @@ union EngineToRobot
   MoveHead                      moveHead                    = 0x13,
   SetLiftHeight                 liftHeight                  = 0x14,
   SetHeadAngle                  headAngle                   = 0x15,
-  SetLiftAngle                  setLiftAngle                = 0x16,
+  HeadAngleUpdate               headAngleUpdate             = 0x16,
   SetBodyAngle                  setBodyAngle                = 0x17,
   TurnInPlaceAtSpeed            turnInPlaceAtSpeed          = 0x18,
   RecordHeading                 recordHeading               = 0x19,
@@ -796,7 +515,6 @@ union EngineToRobot
   // Lights
   BackpackSetLayer              setBackpackLayer            = 0x1D,
   SetBackpackLights             setBackpackLights           = 0x1E,
-  SetSystemLight                setSystemLight              = 0x1F,
 
   // Path messages
   ClearPath                     clearPath                   = 0x20,
@@ -822,47 +540,38 @@ union EngineToRobot
   IMURequest                    imuRequest                  = 0x30,
   CheckLiftLoad                 checkLiftLoad               = 0x31,
   SetCliffDetectThresholds      setCliffDetectThresholds    = 0x32,
-  SetWhiteDetectThresholds      setWhiteDetectThresholds    = 0x39,
 
   // Calibration
-  StartMotorCalibration         startMotorCalibration       = 0x33,
+  EnableReadToolCodeMode        enableReadToolCodeMode      = 0x33,
+  StartMotorCalibration         startMotorCalibration       = 0x34,
 
   // Reactions
-  EnableStopOnCliff             enableStopOnCliff           = 0x34,
-  EnableBraceWhenFalling        enableBraceWhenFalling      = 0x35,
-  RobotStoppedAck               robotStoppedAck             = 0x36,
-  CliffAlignToWhiteAction       cliffAlignToWhiteAction     = 0x37,
-  EnableStopOnWhite             enableStopOnWhite           = 0x38,
+  EnableStopOnCliff             enableStopOnCliff           = 0x35,
+  EnableBraceWhenFalling        enableBraceWhenFalling      = 0x36,
 
   // 0x50 to 0xAF: To Anim Process
   PlayAnim                      playAnim                    = 0x50,
-  SetFullAnimTrackLockState     setFullAnimTrackLockState   = 0x51,
+  LockAnimTracks                lockAnimTracks              = 0x51,
   AddAnim                       addAnim                     = 0x52,
   AbortAnimation                abortAnimation              = 0x53,
-  SetLocale                     setLocale                   = 0x54,
+
+  StartRecordingMics            startRecordingMics          = 0x54,
   DrawTextOnScreen              drawTextOnScreen            = 0x55,
 
   DisplayProceduralFace         displayProceduralFace       = 0x56,
   SetFaceHue                    setFaceHue                  = 0x57,
-  SetFaceSaturation             setFaceSaturation           = 0x58,
-  DisplayFaceImageBinaryChunk   displayFaceImageBinaryChunk = 0x59,
-  DisplayFaceImageRGBChunk      displayFaceImageRGBChunk    = 0x5A,
+  DisplayFaceImageBinaryChunk   displayFaceImageBinaryChunk = 0x58,
+  DisplayFaceImageRGBChunk      displayFaceImageRGBChunk    = 0x59,
 
-  // Available                                              = 0x5B,
-  SetKeepFaceAliveFocus         setKeepFaceAliveFocus       = 0x5C,
-  EnableKeepFaceAlive           enableKeepFaceAlive         = 0x5D,
-  AddOrUpdateEyeShift           addOrUpdateEyeShift         = 0x5E,
-  RemoveEyeShift                removeEyeShift              = 0x5F,
-  AddSquint                     addSquint                   = 0x60,
-  RemoveSquint                  removeSquint                = 0x61,
-
-  DisplayFaceImageGrayscaleChunk   displayFaceImageGrayscaleChunk      = 0x62,
-  PlayAnimWithSpriteBoxRemaps      playAnimWithSpriteBoxRemaps         = 0x63,
-  PlayAnimWithSpriteBoxKeyFrames   playAnimWithSpriteBoxKeyFrames      = 0x64, 
-  AddSpriteBoxKeyFrames            addSpriteBoxKeyFrames               = 0x65,
-  EnableMirrorModeScreen           enableMirrorModeScreen              = 0x66,
-
-  SetButtonWakeWord                setButtonWakeWord                   = 0x67,
+  SetDefaultKeepFaceAliveParameters setDefaultKeepFaceAliveParameters = 0x5A,
+  SetKeepFaceAliveParameter     setKeepFaceAliveParameter   = 0x5B,
+  EnableKeepFaceAlive           enableKeepFaceAlive         = 0x5C,
+  AddOrUpdateEyeShift           addOrUpdateEyeShift         = 0x5D,
+  RemoveEyeShift                removeEyeShift              = 0x5E,
+  AddSquint                     addSquint                   = 0x5F,
+  RemoveSquint                  removeSquint                = 0x60,
+  
+  DisplayFaceImageGrayscaleChunk   displayFaceImageGrayscaleChunk      = 0x61,
 
   AudioEngine::Multiplexer::PostAudioEvent        postAudioEvent       = 0x70,
   AudioEngine::Multiplexer::StopAllAudioEvents    stopAllAudioEvents   = 0x71,
@@ -870,61 +579,17 @@ union EngineToRobot
   AudioEngine::Multiplexer::PostAudioSwitchState  postAudioSwitchState = 0x73,
   AudioEngine::Multiplexer::PostAudioParameter    postAudioParameter   = 0x74,
 
-  ExternalAudioPrepare          externalAudioPrepare        = 0x75,
-  ExternalAudioChunk            externalAudioChunk          = 0x76,
-  ExternalAudioComplete         externalAudioComplete       = 0x77,
-  ExternalAudioCancel           externalAudioCancel         = 0x78,
-
-  FakeWakeWordFromExternalInterface fakeWakeWordFromExternalInterface = 0x80,
-  ShowUrlFace                   showUrlFace                 = 0x81,
-  ExitCCScreen                  exitCCScreen                = 0x82,
-
   SetDebugConsoleVarMessage     setDebugConsoleVarMessage   = 0x90,
   RunDebugConsoleFuncMessage    runDebugConsoleFuncMessage  = 0x91,
-  TextToSpeechPrepare           textToSpeechPrepare         = 0x92,
-  // Available                                              = 0x93,
-  TextToSpeechPlay              textToSpeechPlay            = 0x94,
-  TextToSpeechCancel            textToSpeechCancel          = 0x95,
+  TextToSpeechStart             textToSpeechStart           = 0x92,
+  TextToSpeechStop              textToSpeechStop            = 0x93,
 
-  StartRecordingMicsRaw         startRecordingMicsRaw       = 0x96,
-  StartRecordingMicsProcessed   startRecordingMicsProcessed = 0x97,
-  StartPlaybackAudio            playbackAudioStart          = 0x98,
-
-  StartWakeWordlessStreaming    startWakeWordlessStreaming = 0x99,
-  SetTriggerWordResponse        setTriggerWordResponse     = 0x9A,
-  SetAlexaUXResponses           setAlexaUXResponses        = 0x9B,
-
-  ResetBeatDetector             resetBeatDetector           = 0x9C,
-
-  SetAlexaUsage                 setAlexaUsage               = 0x9D,
-
-  SwitchboardInterface::SetConnectionStatus     setConnectionStatus = 0xA0,
-  SwitchboardInterface::SetBLEPin               setBLEPin                 = 0xA1,
-  AlterStreamingAnimationAtTime                 alterStreamingAnimation   = 0xA2,
-  SwitchboardInterface::SendBLEConnectionStatus sendBLEConnectionStatus   = 0xA3,
-
-  SelfTestEnd               selfTestEnd               = 0xA4,
-
-  AcousticTestEnabled       acousticTestEnabled       = 0xA5,
-
-  RangeDataToDisplay        rangeDataToDisplay        = 0xA6,
-
-  SetLCDBrightnessLevel     setLCDBrightnessLevel     = 0xAA,
-
-  BatteryStatus             batteryStatus             = 0xAB,
-
-  TriggerBackpackAnimation  triggerBackpackAnimation  = 0xAC,
-
-  EngineFullyLoaded         engineFullyLoaded         = 0xAD,
-
-  CheckCloudConnectivity    checkCloudConnectivity    = 0xAE,
-
-  UpdatedSettings           updatedSettings           = 0xAF,
+  StartDoom startDoom = 0x94,
 
   // 0xB0 to 0xFE: To engine, see messageRobotToEngine.clad
 }
 
 
 } // namespace RobotInterface
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

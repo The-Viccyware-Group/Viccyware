@@ -29,37 +29,11 @@ extern "C" {
   {
     isLogSilent_ = isLogSilent;
   }
-  
-  inline static bool ShouldLog(int logLevel)
-  {
-    if(isLogSilent_)
-    {
-      return false;
-    }
-    
-    using namespace Anki::Embedded;
-    switch(static_cast<LogLevel>(logLevel))
-    {
-      case ANKI_LOG_LEVEL_DEBUG:
-      case ANKI_LOG_LEVEL_INFO:
-      case ANKI_LOG_LEVEL_EVENT:
-        return (ANKI_DEBUG_LEVEL <= ANKI_DEBUG_ALL);
-        
-      case ANKI_LOG_LEVEL_WARN:
-        return (ANKI_DEBUG_LEVEL <= ANKI_DEBUG_ERRORS_AND_WARNS);
-        
-      case ANKI_LOG_LEVEL_ASSERT:
-        return (ANKI_DEBUG_LEVEL <= ANKI_DEBUG_ERRORS_AND_WARNS_AND_ASSERTS);
-        
-      case ANKI_LOG_LEVEL_ERROR:
-      case ANKI_LOG_LEVEL_NUMLEVELS:
-        return (ANKI_DEBUG_LEVEL <= ANKI_DEBUG_ERRORS);
-    }
-  }
-  
+
   void _Anki_Log(int logLevel, const char* eventName, const char* eventValue, const char* file, const char* funct, int line, ...)
   {
-    if(ShouldLog(logLevel)) {
+#if ANKI_OUTPUT_DEBUG_LEVEL == ANKI_OUTPUT_DEBUG_PRINTF
+    if(!isLogSilent_) {
       va_list argList;
 
       // Don't print all the path of the file
@@ -86,6 +60,7 @@ extern "C" {
       Anki::CoreTechPrint("\n");
       //fflush(stdout);
     }
+#endif // #if ANKI_OUTPUT_DEBUG_LEVEL == ANKI_OUTPUT_DEBUG_PRINTF
   }
 
 #ifdef _MSC_VER

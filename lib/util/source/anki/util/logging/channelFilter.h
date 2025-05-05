@@ -28,23 +28,13 @@ namespace Util {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // ChannelVar: console var
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-struct ChannelVar : public ConsoleVar<bool> {
+struct ChannelVar {
   ChannelVar(const std::string& name, bool defaultEnable, bool unregisterInDestructor)
-  : ConsoleVar<bool>(enable, name.c_str(), "Channels", unregisterInDestructor)
-  , enable(defaultEnable) {
-    // We must re-set the default value here, after the call to ConsoleVar constructor,
-    // because that constructor uses a reference to "enable", but enable isn't set until
-    // after that constructor call.  VIC-13609
-    this->_defaultValue = enable;
-  }
-
-  virtual void ToggleValue() override {
-    ConsoleVar<bool>::ToggleValue();
-
-    // report back to channel filter if required
-  }
-
+  : enable(defaultEnable)
+  , cvar(enable, name.c_str(), "Channels", unregisterInDestructor) {}
+  
   bool enable; // variable where the value is stored
+  ConsoleVar<bool> cvar; // consoleVar provider (for console var menu) that links to the storage variable 'enable'
 };
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -55,13 +45,15 @@ public:
   ChannelFilter() : _initialized(false){}
   ~ChannelFilter();
   
-  // initialize with an optional json configuration (can be empty)
+  // initialize with an optinal json configuration (can be empty)
   void Initialize(const Json::Value& config = Json::Value());
   inline bool IsInitialized() const{ return _initialized; }
   
   void EnableChannel(const std::string& channelName);
   void DisableChannel(const std::string& channelName);
-
+  void RegisterChannel(const std::string& channelName, bool defaultEnableStatus, bool unregisterInDestructor);
+  bool IsChannelRegistered(const std::string& channelName) const;
+  
   // IChannelFilter API
   virtual bool IsChannelEnabled(const std::string& channelName) const override;
   

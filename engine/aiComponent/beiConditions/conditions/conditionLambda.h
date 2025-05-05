@@ -18,33 +18,27 @@
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionLambda : public IBEICondition
 {
 public:
-
-  using VisionModeSet = std::set<VisionModeRequest>;
   
   // NOTE: this strategy takes no config, because it can't be data defined
-  ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                  const std::string& ownerDebugLabel);
+  ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc);
 
   // Alternative constructor for Lambda's which have VisionModeRequirements
   ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                  const VisionModeSet& requiredVisionModes,
-                  const std::string& ownerDebugLabel);
+                  std::set<VisionModeRequest>& requiredVisionModes);
 
   // Alternative constructor for Lambda's with specialized Active State
   ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
-                  std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc,
-                  const std::string& ownerDebugLabel);
+                  std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc);
 
   // Alternative constructor for Lambda's with specialized Active State AND VisionModeRequirements
   ConditionLambda(std::function<bool(BehaviorExternalInterface& bei)> areConditionsMetFunc,
                   std::function<void(BehaviorExternalInterface& bei, bool setActive)> setActiveFunc,
-                  const VisionModeSet& requiredVisionModes,
-                  const std::string& ownerDebugLabel);
+                  std::set<VisionModeRequest>& requiredVisionModes);
 
 protected:
 
@@ -52,13 +46,13 @@ protected:
 
   virtual void SetActiveInternal(BehaviorExternalInterface& bei, bool setActive) override;
 
-  virtual void GetRequiredVisionModes(VisionModeSet& requests) const override;
+  virtual void GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const override;
 
 private:
 
   std::function<bool(BehaviorExternalInterface& bei)> _lambda;
   std::function<void(BehaviorExternalInterface& bei, bool setActive)> _setActiveFunc;
-  VisionModeSet _requiredVisionModes;
+  std::set<VisionModeRequest> _requiredVisionModes;
 
 };
 

@@ -25,7 +25,7 @@
 #include <map>
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     // Interface for compound actions, which are fixed sets of actions to be
     // run together or in order (determined by derived type)
@@ -64,9 +64,6 @@ namespace Anki {
       // Sets whether or not to delete actions from the compound action when they complete
       // By default actions will be destroyed on completion
       void SetDeleteActionOnCompletion(bool deleteOnCompletion);
-      
-      // Return the number of constituent actions in this compound action
-      size_t GetNumActions() const { return _actions.size(); }
 
     protected:
       
@@ -147,24 +144,13 @@ namespace Anki {
       CompoundActionParallel();
       CompoundActionParallel(const std::list<IActionRunner*>& actions);
       
-      // By default, CompoundActionParallel continues as long as its longest sub-action. Setting this
-      // to false will end the CompoundActionParallel the moment any of its sub-actions end
-      void SetShouldEndWhenFirstActionCompletes(bool shouldEnd) { _endWhenFirstActionCompletes = shouldEnd; }
-      
-      // Called at the very beginning of UpdateInternal, so derived classes can
-      // do additional work. If this does not return RESULT_OK, then UpdateInternal
-      // will return ActionResult::UPDATE_DERIVED_FAILED.
-      virtual Result UpdateDerived() { return RESULT_OK; }
-      
     protected:
       
       virtual ActionResult UpdateInternal() override final;
-    private:
-      bool _endWhenFirstActionCompletes = false;
       
     }; // class CompoundActionParallel
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_COMPOUND_ACTIONS_H

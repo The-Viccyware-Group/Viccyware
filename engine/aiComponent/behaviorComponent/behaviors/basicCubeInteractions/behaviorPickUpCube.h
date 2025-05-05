@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declarations:
 template<typename TYPE> class AnkiEvent;
@@ -44,6 +44,8 @@ public:
   }
 
 protected:  
+  using super = ICozmoBehavior;
+
   // Enforce creation through BehaviorFactory
   friend class BehaviorFactory;
   BehaviorPickUpCube(const Json::Value& config);
@@ -63,14 +65,12 @@ private:
   {
     DoingInitialReaction,
     PickingUpCube,
-    DoingRetryReaction,
     DoingFinalReaction
   };
 
   struct InstanceConfig{
     InstanceConfig();
     int pickupRetryCount;
-    bool skipInitialReactionAnim;
   };
 
   struct DynamicVariables{
@@ -85,13 +85,12 @@ private:
   
   void TransitionToDoingInitialReaction();
   void TransitionToPickingUpCube();
-  void TransitionToRetryReaction();
   void TransitionToSuccessReaction();
 
 
 }; // class BehaviorPickUpCube
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif

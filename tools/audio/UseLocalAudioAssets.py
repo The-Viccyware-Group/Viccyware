@@ -7,7 +7,7 @@ Date:   12/06/17
 Description: This script allows sound designers to use locally generated sound banks in local Victor project builds.
              Audio build server scripts are used to generate metadata and package assets similar to how they are
              delivered by Victor's package manager process. This script will simply replace the assets in the
-             EXTERNALS/local-audio-assets directory. After replacing the audio assets build-victor.sh must be ran to
+             EXTERNALS/victor-audio-assets directory. After replacing the audio assets build-victor.sh must be ran to
              copy the assets to the projects deliverables. Likewise, you must run deploy-assets.py to copy new assets
              to robot. For convenience this script has arguments to update audio CLAD files, build victor and deploy
              changes.
@@ -36,14 +36,13 @@ __script_dir = path.dirname(path.realpath(__file__))
 __project_root_path = path.join(__script_dir, '..', '..')
 __audio_lib_path = path.join(__project_root_path, 'lib', 'audio')
 __audio_build_script_path = path.join(__audio_lib_path, 'build-scripts')
-__victor_external_path = path.join(__project_root_path, 'EXTERNALS', 'local-audio-assets')
+__victor_external_path = path.join(__project_root_path, 'EXTERNALS', 'victor-audio-assets')
 
 
 # Import Audio Build Scripts
 sys.path.append(__audio_build_script_path)
 import bundle_metadata_products
 import bundle_soundbank_products
-import convert_csv_to_json
 import organize_soundbank_products
 
 
@@ -52,7 +51,6 @@ __audio_project_name = 'VictorAudio'
 __sound_bank_dir_name = 'GeneratedSoundBanks'
 __audio_metadata_dir_name = 'metadata'
 __victor_bank_list_file_name = 'victor-banks-list.json'
-__audio_behavior_scene_event_file_name = 'audioBehaviorSceneEvents'
 
 
 
@@ -117,25 +115,10 @@ def main(args):
     bundle_soundbank_products.main([path.join(sound_bank_path, 'Dev_Mac'), tmp_dev_mac_dir] + script_commands)
     Logger.info('Complete: bundle_soundbank_products')
 
-    # Organize Sound Banks in project & unzip assets
-    script_commands.append('--unzip-bundles')
+    # Organize Sound Banks in project
     organize_soundbank_products.main([tmp_linux_dir, dest_linux_dir, bank_list_filepath] + script_commands)
     organize_soundbank_products.main([tmp_dev_mac_dir, dest_dev_mac_dir, bank_list_filepath] + script_commands)
     Logger.info('Complete: organize_soundbank_products')
-
-    # Copy audio behavior scene metadata
-    behavior_metadata_filepath = path.join(args.audio_project_repo_dir, __audio_metadata_dir_name, __audio_behavior_scene_event_file_name + '.csv')
-    if not path.exists(behavior_metadata_filepath):
-        Logger.error('Behavior Audio Secene metadata does NOT exist: \'{0}\''.format(behavior_metadata_filepath))
-    else:
-        Logger.debug('Behavior Audio Secene metadata found: \'{0}\''.format(behavior_metadata_filepath))
-        # Victor Robot
-        linux_path = path.join(dest_linux_dir, __audio_behavior_scene_event_file_name + '.json')
-        convert_csv_to_json.main([behavior_metadata_filepath, linux_path])
-        # Mac
-        mac_path = path.join(dest_dev_mac_dir, __audio_behavior_scene_event_file_name + '.json')
-        convert_csv_to_json.main([behavior_metadata_filepath, mac_path])
-        Logger.info('Complete: convert_csv_to_json')
 
 
     # Remove tmp dir
@@ -146,16 +129,15 @@ def main(args):
 
     # Update & generate audio CLAD
     if args.update_clad:
-        Logger.info('Updating audio event list. Do NOT check in updated audio files!!!')
+        Logger.info('Updating audio event list and CLAD files. Do NOT check in updated audio files!!!')
 
         # Update audio event list
-        result = UpdateAudioAssets.main(['update-alt-workspace', __victor_external_path])
+        result = UpdateAudioAssets.main(['update', '-'])
         if result != os.EX_OK:
             Logger.error('\'{0}\' Failed'.format('UpdateAudioAssets.py update'))
             return os.EX_SOFTWARE
         # Generate audio CLAD
-        Logger.info('Generate CLAD files. Do NOT check in updated audio files!!!')
-        result = UpdateAudioAssets.main(['generate', '--soundBankDir', __victor_external_path])
+        result = UpdateAudioAssets.main(['generate'])
         if result != os.EX_OK:
             Logger.error('\'{0}\' Failed'.format('UpdateAudioAssets.py generate'))
             return os.EX_SOFTWARE
@@ -167,7 +149,7 @@ def main(args):
         Logger.info('Run build-victor.sh')
         victor_project_dir = path.join('project', 'victor')
         victor_build_script = path.join(victor_project_dir, 'build-victor.sh')
-        build_commands = [victor_build_script, '-f', '-a', '-DUSE_LOCAL_AUDIO_ASSETS=ON']
+        build_commands = [victor_build_script, '-f', '-I']
         is_mac_build = False;
         if args.configuration:
             build_commands.append('-c')
@@ -185,24 +167,20 @@ def main(args):
 
         if not is_mac_build:
             # Deploy bins
-            victor_project_script_dir = path.join(victor_project_dir, 'scripts')
-            Logger.info('Stop victor process')
-            victor_stop_script = path.join(victor_project_script_dir, 'victor_stop.sh')
-            result = subprocess.call([victor_stop_script], cwd=__project_root_path)
+            Logger.info('Run deploy.sh')
+            victor_deploy_script = path.join(victor_project_dir, 'scripts', 'deploy.sh')
+            result = subprocess.call([victor_deploy_script], cwd=__project_root_path)
             if result != os.EX_OK:
-                Logger.error('\'{0}\' Failed'.format(victor_stop_script))
+                Logger.error('\'{0}\' Failed'.format(victor_deploy_script))
                 return os.EX_SOFTWARE
 
-            Logger.info('Run victor_deploy.sh')
-            victor_deploy_script = path.join(victor_project_script_dir, 'victor_deploy.sh')
-            build_commands = [victor_deploy_script]
-            if args.configuration:
-                build_commands.append('-c')
-                build_commands.append(args.configuration)
-
-            result = subprocess.call(build_commands, cwd=__project_root_path)
+            # Deploy assets
+            Logger.info('Run deploy-assets.sh')
+            victor_deploy_assets_script = path.join(victor_project_dir, 'scripts', 'deploy-assets.sh')
+            # Deploy assets on device and remove all old assets
+            result = subprocess.call([victor_deploy_assets_script, '-x'], cwd=__project_root_path)
             if result != os.EX_OK:
-                Logger.error('\'{0}\' Failed'.format(build_commands))
+                Logger.error('\'{0}\' Failed'.format(victor_deploy_assets_script))
                 return os.EX_SOFTWARE
 
     # Success!
@@ -234,9 +212,9 @@ def parse_args(argv=[], print_usage=False):
     parser.add_argument('--build-deploy', '-b', dest='build_deploy', action='store_true',
                         help='Force Build Victor and deploy updated assets')
     parser.add_argument('--configuration', '-c', dest='configuration', metavar='configuration',
-                        help='Build configuration {Debug, Release}')
+                        help='Build configuration {Debug,Release}')
     parser.add_argument('--platform', '-p', dest='platform', metavar='platform',
-                        help='Build target platform {mac, vicos}')
+                        help='Build target platform {android,mac}')
 
     if print_usage:
         parser.print_help()

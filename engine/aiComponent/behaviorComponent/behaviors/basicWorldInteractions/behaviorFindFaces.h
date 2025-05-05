@@ -15,10 +15,9 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorFindFaces_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class BehaviorFindFaces : public ICozmoBehavior
 {
@@ -36,8 +35,7 @@ public:
   
 
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::High });
-    modifiers.wantsToBeActivatedWhenOffTreads = true;
+    modifiers.visionModesForActiveScope->insert({ VisionMode::DetectingFaces, EVisionUpdateFrequency::Med });
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
 
@@ -72,7 +70,7 @@ private:
     bool searchingForFaces;
     // The robot's image timestamp at the time the behavior was activated
     // (used to determine if new faces have been observed since the behavior started)
-    RobotTimeStamp_t imageTimestampWhenActivated;
+    TimeStamp_t imageTimestampWhenActivated;
     std::set<Vision::FaceID_t> startingFaces;
   };
 
@@ -83,7 +81,7 @@ private:
   const char* StoppingConditionToString(StoppingCondition) const;
 };
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorFindFaces_H__

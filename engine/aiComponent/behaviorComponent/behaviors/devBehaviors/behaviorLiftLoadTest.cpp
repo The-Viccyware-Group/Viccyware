@@ -17,20 +17,17 @@
  * Copyright: Anki, Inc. 2016
  **/
 
-#include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorLiftLoadTest.h"
-#include "clad/externalInterface/messageEngineToGame.h"
-#include "clad/externalInterface/messageGameToEngine.h"
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "coretech/common/engine/utils/timer.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorLiftLoadTest.h"
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
-#include "engine/components/battery/batteryComponent.h"
+#include "engine/components/batteryComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/robot.h"
 #include "engine/robotToEngineImplMessaging.h"
-#include "osState/osState.h"
 #include "util/console/consoleInterface.h"
 #include <ctime>
 
@@ -42,15 +39,15 @@ namespace{
   // This macro uses PRINT_NAMED_INFO if the supplied define (first arg) evaluates to true, and PRINT_NAMED_DEBUG otherwise
   // All args following the first are passed directly to the chosen print macro
 #define BEHAVIOR_VERBOSE_PRINT(_BEHAVIORDEF, ...) do { \
-if ((_BEHAVIORDEF)) { PRINT_CH_INFO("Behaviors",  __VA_ARGS__ ); } \
-else { PRINT_CH_DEBUG("Behaviors",  __VA_ARGS__ ); } \
+if ((_BEHAVIORDEF)) { PRINT_NAMED_INFO( __VA_ARGS__ ); } \
+else { PRINT_NAMED_DEBUG( __VA_ARGS__ ); } \
 } while(0) \
 
 }
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 CONSOLE_VAR(u32, kNumLiftRaises,              "LiftLoadTest", 50);
 
@@ -126,10 +123,25 @@ void BehaviorLiftLoadTest::OnBehaviorActivated()
   
   
   Write("=====Start LiftLoadTest=====");
+  const RobotInterface::FWVersionInfo& fw = robot.GetRobotToEngineImplMessaging().GetFWVersionInfo();
   std::stringstream ss;
   ss << "RobotSN: " << robot.GetHeadSerialNumber() << "\n";
   ss << "Battery(V): " << robot.GetBatteryComponent().GetBatteryVoltsRaw() << "\n\n";
-  ss << "OS Version: " << OSState::getInstance()->GetOSBuildVersion() << "\n";
+  ss << "Firmware Version\n";
+  ss << "Body Version: " << std::hex << fw.bodyVersion << "\n";
+  ss << "RTIP Version: " << std::hex << fw.rtipVersion << "\n";
+  ss << "Wifi Version: " << std::hex << fw.wifiVersion << "\n";
+  ss << "ToEngineCLADHash: ";
+  for(auto iter = fw.toEngineCLADHash.begin(); iter != fw.toEngineCLADHash.end(); ++iter)
+  {
+    ss << std::hex << (int)(*iter) << " ";
+  }
+  ss << "\nToRobotCLADHash: ";
+  for(auto iter = fw.toRobotCLADHash.begin(); iter != fw.toRobotCLADHash.end(); ++iter)
+  {
+    ss << std::hex << (int)(*iter) << " ";
+  }
+  ss << "\n";
   Write(ss.str());
 }
 
@@ -292,7 +304,7 @@ void BehaviorLiftLoadTest::HandleWhileActivated(const EngineToGameEvent& event)
     }
       
     default:
-      PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.HandleWhileRunning.InvalidTag",
+      PRINT_NAMED_INFO("BehaviorLiftLoadTest.HandleWhileRunning.InvalidTag",
                         "Received unexpected event with tag %hhu.", event.GetData().GetTag());
       break;
   }
@@ -311,7 +323,7 @@ void BehaviorLiftLoadTest::AlwaysHandleInScope(const GameToEngineEvent& event)
     }
     default:
     {
-      PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.AlwaysHandle.InvalidTag",
+      PRINT_NAMED_INFO("BehaviorLiftLoadTest.AlwaysHandle.InvalidTag",
                         "Received unexpected event with tag %hhu.", event.GetData().GetTag());
       break;
     }
@@ -333,12 +345,12 @@ void BehaviorLiftLoadTest::HandleWhileActivated(const RobotToEngineEvent& event)
         ++_dVars.numHadLoad;
       }
       ++_dVars.numLiftRaises;
-      PRINT_CH_DEBUG("Behaviors", "BehaviorLiftLoadTest.HandleLiftLoad.HasLoad", "%d / %d", _dVars.numHadLoad, _dVars.numLiftRaises);
+      PRINT_NAMED_DEBUG("BehaviorLiftLoadTest.HandleLiftLoad.HasLoad", "%d / %d", _dVars.numHadLoad, _dVars.numLiftRaises);
       break;
     }
     default:
     {
-      PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.HandleWhileRunning.InvalidRobotToEngineTag",
+      PRINT_NAMED_INFO("BehaviorLiftLoadTest.HandleWhileRunning.InvalidRobotToEngineTag",
                         "Received unexpected event with tag %hhu.", event.GetData().GetTag());
       break;
     }
@@ -360,7 +372,7 @@ void BehaviorLiftLoadTest::PrintStats()
 {
   u32 loadPercent = (100*_dVars.numHadLoad) / _dVars.numLiftRaises;
   
-  PRINT_CH_DEBUG("Behaviors", "BehaviorLiftLoadTest.PrintStats.LoadRate", "%d", loadPercent);
+  PRINT_NAMED_DEBUG("BehaviorLiftLoadTest.PrintStats.LoadRate", "%d", loadPercent);
   
   std::stringstream ss;
   ss << "*****************\n";
@@ -371,5 +383,5 @@ void BehaviorLiftLoadTest::PrintStats()
   Write("=====End LiftLoadTest=====");
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -17,9 +17,7 @@ root = tree.getroot()
 
 # change some stuff:
 root.find('SchemaVersion').text = '1.1'
-rte_tag = root.find('RTE')
-if rte_tag != None:
-  root.remove(rte_tag)
+root.remove(root.find('RTE'))
 for c in root.iter('MiscControls'):
     if c.text:
         c.text = c.text.replace("--cpp11","")

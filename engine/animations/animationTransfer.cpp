@@ -21,12 +21,12 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   const std::string AnimationTransfer::kCacheAnimFileName("NewAnim.json");
   const std::string AnimationTransfer::kCacheFaceAnimsDir(Anki::Util::FileUtils::FullFilePath({"assets", "faceAnimations"}));
   
-  AnimationTransfer::AnimationTransfer(Anki::Vector::IExternalInterface* externalInterface, Anki::Util::Data::DataPlatform* dataPlatform)
+  AnimationTransfer::AnimationTransfer(Anki::Cozmo::IExternalInterface* externalInterface, Anki::Util::Data::DataPlatform* dataPlatform)
   {
     _externalInterface = externalInterface;
     _dataPlatform = dataPlatform;
@@ -69,7 +69,7 @@ namespace Vector {
   {
     if( event.GetData().GetTag() == ExternalInterface::MessageGameToEngineTag::TransferFile )
     {
-      const Anki::Vector::ExternalInterface::TransferFile& msg = event.GetData().Get_TransferFile();
+      const Anki::Cozmo::ExternalInterface::TransferFile& msg = event.GetData().Get_TransferFile();
       
       if ((msg.fileType != ExternalInterface::FileType::Animation) &&
           (msg.fileType != ExternalInterface::FileType::FaceImg))
@@ -126,6 +126,7 @@ namespace Vector {
       }
       else if( msg.fileType == ExternalInterface::FileType::FaceImg)
       {
+        std::string str = msg.filename;
         std::size_t found_char = msg.filename.find_last_of("_");
         if( found_char != std::string::npos)
         {
@@ -152,6 +153,6 @@ namespace Vector {
       }
     }
   }
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

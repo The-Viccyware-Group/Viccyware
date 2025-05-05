@@ -4,9 +4,10 @@
 // Copyright: Anki, inc. 2017
 
 #include "clad/types/behaviorComponent/behaviorStages.clad"
+#include "clad/types/unlockTypes.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 
@@ -42,5 +43,5 @@ no_default_constructor structure RobotPublicState{
   BehaviorStageStruct userFacingBehaviorStageStruct
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

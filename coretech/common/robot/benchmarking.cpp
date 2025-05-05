@@ -24,7 +24,6 @@ For internal use only. No part of this code may be used without a signed non-dis
 #endif
 #endif
 
-#if ANKI_EMBEDDED_BENCHMARK
 typedef enum
 {
   BENCHMARK_EVENT_BEGIN,
@@ -104,7 +103,7 @@ staticInline u32 GetBenchmarkTime()
 
   return (u32)(time.tv_sec-startSeconds)*1000000 + (u32)time.tv_usec;
 #elif defined (__EDG__)  // MDK-ARM
-  return Anki::Vector::HAL::GetMicroCounter();
+  return Anki::Cozmo::HAL::GetMicroCounter();
 #else
   timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -126,13 +125,11 @@ staticInline void AddBenchmarkEvent(const char *name, const u32 time, BenchmarkE
   if(g_numBenchmarkEvents >= Anki::Embedded::MAX_BENCHMARK_EVENTS)
     g_numBenchmarkEvents = Anki::Embedded::MAX_BENCHMARK_EVENTS-1;
 }
-#endif // ANKI_EMBEDDED_BENCHMARK
 
 namespace Anki
 {
   namespace Embedded
   {
-#if ANKI_EMBEDDED_BENCHMARK
     ShowBenchmarkParameters::ShowBenchmarkParameters(const char * name, const bool showExclusiveTime, const u8 *color)
     {
       strncpy(this->name, name, BenchmarkElement::NAME_LENGTH);
@@ -862,7 +859,5 @@ namespace Anki
 
       return RESULT_OK;
     } // CompueMedianBenchmark()
-#else
-#endif // ANKI_EMBEDDED_BENCHMARK
   } // namespace Embedded
 } // namespace Anki

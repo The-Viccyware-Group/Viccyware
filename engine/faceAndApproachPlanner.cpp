@@ -12,6 +12,7 @@
  **/
 
 
+#include "coretech/common/engine/math/point_impl.h"
 #include "coretech/common/engine/math/pose.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
@@ -19,7 +20,6 @@
 #include "faceAndApproachPlanner.h"
 #include "util/logging/logging.h"
 
-#define LOG_CHANNEL "Planner"
 
 // amount of radians to be off from the desired angle in order to
 // introduce a turn in place action
@@ -42,7 +42,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 EComputePathStatus FaceAndApproachPlanner::ComputePath(const Pose3d& startPose,
                                                        const Pose3d& targetPose)
@@ -54,8 +54,7 @@ EComputePathStatus FaceAndApproachPlanner::ComputePath(const Pose3d& startPose,
 }
 
 EComputePathStatus FaceAndApproachPlanner::ComputeNewPathIfNeeded(const Pose3d& startPose,
-                                                                  bool forceReplanFromScratch,
-                                                                  bool allowGoalChange)
+                                                                  bool forceReplanFromScratch)
 {
 
   _hasValidPath = false;
@@ -88,7 +87,7 @@ EComputePathStatus FaceAndApproachPlanner::ComputeNewPathIfNeeded(const Pose3d& 
   Point2f target2d(_targetVec.x(), _targetVec.y());
   float distSquared = pow(target2d.x() - start2d.x(), 2) + pow(target2d.y() - start2d.y(), 2);
   if(distSquared > FACE_AND_APPROACH_LENGTH_SQUARED_THRESHOLD) {
-    LOG_INFO("FaceAndApproachPlanner.Straight", "doing straight because distance^2 of %f > %f",
+    PRINT_NAMED_INFO("FaceAndApproachPlanner.Straight", "doing straight because distance^2 of %f > %f",
                      distSquared,
                      FACE_AND_APPROACH_LENGTH_SQUARED_THRESHOLD);
     doStraight = true;
@@ -99,7 +98,7 @@ EComputePathStatus FaceAndApproachPlanner::ComputeNewPathIfNeeded(const Pose3d& 
 
   float deltaTheta1 = -(intermediateTargetAngle - _finalTargetAngle).ToFloat();
   if(std::abs(deltaTheta1) > FACE_AND_APPROACH_THETA_THRESHOLD) {
-    LOG_INFO("FaceAndApproachPlanner.FinalTurn", "doing final turn because delta theta of %f > %f",
+    PRINT_NAMED_INFO("FaceAndApproachPlanner.FinalTurn", "doing final turn because delta theta of %f > %f",
                      deltaTheta1,
                      FACE_AND_APPROACH_THETA_THRESHOLD);
     doTurn1 = true;
@@ -107,7 +106,7 @@ EComputePathStatus FaceAndApproachPlanner::ComputeNewPathIfNeeded(const Pose3d& 
 
   float deltaTheta = (intermediateTargetAngle - currAngle).ToFloat();
   if(doStraight && std::abs(deltaTheta) > FACE_AND_APPROACH_THETA_THRESHOLD) {
-    LOG_INFO("FaceAndApproachPlanner.InitialTurn", "doing initial turn because delta theta of %f > %f",
+    PRINT_NAMED_INFO("FaceAndApproachPlanner.InitialTurn", "doing initial turn because delta theta of %f > %f",
                      deltaTheta,
                      FACE_AND_APPROACH_THETA_THRESHOLD);
     doTurn0 = true;
@@ -162,5 +161,5 @@ EComputePathStatus FaceAndApproachPlanner::ComputeNewPathIfNeeded(const Pose3d& 
 
     
  
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

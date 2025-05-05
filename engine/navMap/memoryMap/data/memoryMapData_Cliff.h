@@ -15,10 +15,9 @@
 #include "memoryMapData.h"
 
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // NavMemoryMapQuadData_Cliff
@@ -26,7 +25,7 @@ namespace Vector {
 struct MemoryMapData_Cliff : public MemoryMapData
 {
   // constructor
-  MemoryMapData_Cliff(const Pose3d& cliffPose, RobotTimeStamp_t t);
+  MemoryMapData_Cliff(const Pose3d& cliffPose, TimeStamp_t t);
   
   // create a copy of self (of appropriate subclass) and return it
   MemoryMapDataPtr Clone() const override;
@@ -34,23 +33,14 @@ struct MemoryMapData_Cliff : public MemoryMapData
   // compare to INavMemoryMapQuadData and return bool if the data stored is the same
   bool Equals(const MemoryMapData* other) const override;
   
-  virtual ExternalInterface::ENodeContentTypeEnum GetExternalContentType() const override;
-  
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Attributes
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // If you add attributes, make sure you add them to ::Equals and ::Clone (if required)
   Pose3d pose; // location and direction we presume for the cliff (from detection)
 
-  // cliff detections from the cliff-sensor
-  bool isFromCliffSensor;
-
-  // cliff detections from vision require nearby connected cliff-sensor cliffs
-  bool isFromVision;
-
-  static bool HandlesType(EContentType otherType) {
-    return otherType == EContentType::Cliff;
-  }
+protected: 
+  MemoryMapData_Cliff() : MemoryMapData(MemoryMapTypes::EContentType::Cliff, 0, true) {}
 };
  
 } // namespace

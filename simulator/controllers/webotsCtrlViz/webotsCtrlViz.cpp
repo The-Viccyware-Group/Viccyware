@@ -25,7 +25,7 @@
 int main(int argc, char **argv)
 {
   using namespace Anki;
-  using namespace Anki::Vector;
+  using namespace Anki::Cozmo;
 
   // parse commands
   WebotsCtrlShared::ParsedCommandLine params = WebotsCtrlShared::ParseCommandLine(argc, argv);
@@ -36,44 +36,31 @@ int main(int argc, char **argv)
 
   webots::Supervisor vizSupervisor;
   VizControllerImpl vizController(vizSupervisor);
-  
-  // If we are using Webots R2018b or later, then openGL support is removed and we cannot use the PhysVizController to
-  // draw 3D objects. Instead the VizController should draw such objects.
-  const std::string webotsVer = WEBOTS_VER;
-  const bool isOldVersion = (webotsVer.find("R2018a") != std::string::npos);
-  const bool vizShouldDrawObjects = !isOldVersion;
-  vizController.EnableDrawingObjects(vizShouldDrawObjects);
-  
   const size_t maxPacketSize{(size_t)VizConstants::MaxMessageSize};
   uint8_t data[maxPacketSize]{0};
   ssize_t numBytesRecvd;
   
   // Setup server to listen for commands
-  UdpServer server("webotsCtrlViz");
+  UdpServer server;
   server.StartListening((uint16_t)VizConstants::VIZ_SERVER_PORT);
   
-  // Setup client to forward relevant commands to cozmo_physics plugin (but only if we need it for drawing objects)
+  // Setup client to forward relevant commands to cozmo_physics plugin
   UdpClient physicsClient;
-  if (!vizShouldDrawObjects) {
-    physicsClient.Connect("127.0.0.1", (uint16_t)VizConstants::PHYSICS_PLUGIN_SERVER_PORT);
-  }
+  physicsClient.Connect("127.0.0.1", (uint16_t)VizConstants::PHYSICS_PLUGIN_SERVER_PORT);
   
   vizController.Init();
   
   //
   // Main Execution loop
   //
-  while (vizSupervisor.step(Anki::Vector::BS_TIME_STEP_MS) != -1)
+  while (vizSupervisor.step(Anki::Cozmo::BS_TIME_STEP_MS) != -1)
   {
     // Any messages received?
     while ((numBytesRecvd = server.Recv((char*)data, maxPacketSize)) > 0) {
-      if (!vizShouldDrawObjects) {
-        physicsClient.Send((char*)data, numBytesRecvd);
-      }
+      physicsClient.Send((char*)data, (int)numBytesRecvd);
       vizController.ProcessMessage(VizInterface::MessageViz(data, numBytesRecvd));
     } // while server.Recv
     
-    vizController.Update();
   } // while step
 
   

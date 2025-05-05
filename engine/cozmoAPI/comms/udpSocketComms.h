@@ -4,7 +4,7 @@
  * Author: Mark Wesley
  * Created: 05/14/16
  *
- * Description: UDP implementation for socket-based communications. Used by webots for Vector.
+ * Description: UDP implementation for socket-based communications from e.g. Game/SDK to Engine
  *
  * Copyright: Anki, Inc. 2016
  *
@@ -26,7 +26,7 @@ namespace Comms{
 
   
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   
 class MultiClientComms;
@@ -71,7 +71,7 @@ private:
 
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

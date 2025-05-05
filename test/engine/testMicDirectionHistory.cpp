@@ -11,7 +11,7 @@
  * --gtest_filter=MicDirectionHistory*
  **/
 
-#include "engine/components/mics/micDirectionHistory.h"
+#include "engine/micDirectionHistory.h"
 
 #include "util/logging/logging.h"
 
@@ -22,7 +22,7 @@
 #define LOG_CHANNEL "MicDirectionHistory"
 
 using namespace Anki;
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 //
 // Use this to enable/disable all tests in the suite
@@ -38,7 +38,6 @@ TEST(SUITE, MicDirectionHistory_RecentDirection_simple)
   const auto directionFirst = kFirstMicDirectionIndex;
   const auto directionSecond = directionFirst + 1;
   const auto maxTimeLength_ms = std::numeric_limits<uint32_t>::max();
-  const auto isVadActive = true;
 
   // Some simple sets of data
   MicDirectionHistory newHistory{};
@@ -48,25 +47,25 @@ TEST(SUITE, MicDirectionHistory_RecentDirection_simple)
   ASSERT_EQ(directionUnknown, newHistory.GetRecentDirection(maxTimeLength_ms));
 
   // Verify single entry comes back as expected
-  newHistory.AddDirectionSample(10, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(10, directionFirst, 200, directionFirst);
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(0));
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(maxTimeLength_ms));
 
   // Verify multiple counts of single direction comes back as expected
-  newHistory.AddDirectionSample(20, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(20, directionFirst, 200, directionFirst);
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(0));
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(maxTimeLength_ms));
 
   // Verify that a higher more recent string of results is detected 
-  newHistory.AddDirectionSample(30, isVadActive, directionSecond, 200, directionSecond);
-  newHistory.AddDirectionSample(40, isVadActive, directionSecond, 200, directionSecond);
-  newHistory.AddDirectionSample(50, isVadActive, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(30, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(40, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(50, directionSecond, 200, directionSecond);
   ASSERT_EQ(directionSecond, newHistory.GetRecentDirection(50));
   ASSERT_EQ(directionSecond, newHistory.GetRecentDirection(maxTimeLength_ms));
 
   // Verify that alternating directions comes up with expected result
-  newHistory.AddDirectionSample(60, isVadActive, directionFirst, 200, directionFirst);
-  newHistory.AddDirectionSample(70, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(60, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(70, directionFirst, 200, directionFirst);
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(70));
   ASSERT_EQ(directionFirst, newHistory.GetRecentDirection(maxTimeLength_ms));
 
@@ -81,7 +80,6 @@ TEST(SUITE, MicDirectionHistory_RecentDirection_complex)
   const auto directionThird = directionFirst + 2;
   const auto historyLen = MicDirectionHistory::kMicDirectionHistoryLen;
   const auto maxTimeLength_ms = std::numeric_limits<uint32_t>::max();
-  const auto isVadActive = true;
 
   // First fill up the data
   uint32_t t = 0;
@@ -93,11 +91,11 @@ TEST(SUITE, MicDirectionHistory_RecentDirection_complex)
   {
     if ((t % 20) == 0)
     {
-      newHistory.AddDirectionSample(t, isVadActive, directionFirst, 200, directionFirst);
+      newHistory.AddDirectionSample(t, directionFirst, 200, directionFirst);
     }
     else
     {
-      newHistory.AddDirectionSample(t, isVadActive, directionSecond, 200, directionFirst);
+      newHistory.AddDirectionSample(t, directionSecond, 200, directionFirst);
     }
     nextT();
   }
@@ -111,7 +109,7 @@ TEST(SUITE, MicDirectionHistory_RecentDirection_complex)
   // Now lets add in a new direction with a count just greater than the others, and verify it's picked
   for (uint32_t i=0; i < (historyLen / 2) + 1; ++i)
   {
-    newHistory.AddDirectionSample(nextT(), isVadActive, directionThird, 200, directionThird);
+    newHistory.AddDirectionSample(nextT(), directionThird, 200, directionThird);
   }
   ASSERT_EQ(directionThird, newHistory.GetRecentDirection(maxTimeLength_ms));
 } // MicDirectionHistory_RecentDirection_complex
@@ -122,15 +120,14 @@ TEST(SUITE, MicDirectionHistory_GetDirectionAtTime)
   const auto directionSecond = directionFirst + 1;
   const auto directionThird = directionFirst + 2;
   const auto maxTimeLength_ms = std::numeric_limits<uint32_t>::max();
-  const auto isVadActive = true;
 
   uint32_t t = 0;
   auto nextT = [&t] { t += 10; return t; };
 
   MicDirectionHistory newHistory{};
-  for (uint32_t i=0; i<10; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionFirst, 200, directionFirst); } // ts 10 : 100
-  for (uint32_t i=0; i<20; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionSecond, 200, directionSecond); } // ts 110 : 300
-  for (uint32_t i=0; i<31; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionFirst, 200, directionFirst); } // ts 310 : 600
+  for (uint32_t i=0; i<10; ++i) { newHistory.AddDirectionSample(nextT(), directionFirst, 200, directionFirst); } // ts 10 : 100
+  for (uint32_t i=0; i<20; ++i) { newHistory.AddDirectionSample(nextT(), directionSecond, 200, directionSecond); } // ts 110 : 300
+  for (uint32_t i=0; i<31; ++i) { newHistory.AddDirectionSample(nextT(), directionFirst, 200, directionFirst); } // ts 310 : 600
 
   ASSERT_EQ(directionFirst, newHistory.GetDirectionAtTime(0, 0));
   ASSERT_EQ(directionFirst, newHistory.GetDirectionAtTime(maxTimeLength_ms, 0));
@@ -138,7 +135,7 @@ TEST(SUITE, MicDirectionHistory_GetDirectionAtTime)
   ASSERT_EQ(directionSecond, newHistory.GetDirectionAtTime(330, 250));
   ASSERT_EQ(directionFirst, newHistory.GetDirectionAtTime(maxTimeLength_ms, maxTimeLength_ms));
 
-  for (uint32_t i=0; i<100; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionThird, 200, directionThird); } // ts 610 : 1600
+  for (uint32_t i=0; i<100; ++i) { newHistory.AddDirectionSample(nextT(), directionThird, 200, directionThird); } // ts 610 : 1600
   ASSERT_EQ(directionThird, newHistory.GetDirectionAtTime(maxTimeLength_ms, maxTimeLength_ms));
 } // MicDirectionHistory_GetDirectionAtTime
 
@@ -148,7 +145,6 @@ TEST(SUITE, MicDirectionHistory_GetRecentHistory)
   const auto directionFirst = kFirstMicDirectionIndex;
   const auto directionSecond = directionFirst + 1;
   const auto maxTimeLength_ms = std::numeric_limits<uint32_t>::max();
-  const auto isVadActive = true;
 
   // Some simple sets of data
   MicDirectionHistory newHistory{};
@@ -161,7 +157,7 @@ TEST(SUITE, MicDirectionHistory_GetRecentHistory)
   ASSERT_TRUE(history.empty());
 
   // Verify single entry comes back as expected
-  newHistory.AddDirectionSample(10, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(10, directionFirst, 200, directionFirst);
   history = newHistory.GetRecentHistory(0);
   ASSERT_EQ(history.size(), 1);
   ASSERT_EQ(history[0].directionIndex, directionFirst);
@@ -170,7 +166,7 @@ TEST(SUITE, MicDirectionHistory_GetRecentHistory)
   ASSERT_EQ(history[0].directionIndex, directionFirst);
 
   // Verify multiple counts of single direction comes back as expected
-  newHistory.AddDirectionSample(20, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(20, directionFirst, 200, directionFirst);
   history = newHistory.GetRecentHistory(0);
   ASSERT_EQ(history.size(), 1);
   ASSERT_EQ(history[0].directionIndex, directionFirst);
@@ -179,9 +175,9 @@ TEST(SUITE, MicDirectionHistory_GetRecentHistory)
   ASSERT_EQ(history[0].directionIndex, directionFirst);
 
   // Verify that a higher more recent string of results is detected 
-  newHistory.AddDirectionSample(30, isVadActive, directionSecond, 200, directionSecond);
-  newHistory.AddDirectionSample(40, isVadActive, directionSecond, 200, directionSecond);
-  newHistory.AddDirectionSample(50, isVadActive, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(30, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(40, directionSecond, 200, directionSecond);
+  newHistory.AddDirectionSample(50, directionSecond, 200, directionSecond);
 
   // Try using the exact time that's been recorded
   history = newHistory.GetRecentHistory(50);
@@ -203,8 +199,8 @@ TEST(SUITE, MicDirectionHistory_GetRecentHistory)
   ASSERT_EQ(history[1].timestampEnd, 50);
 
   // Verify that looking at just some recent history (not all time) gets expected result
-  newHistory.AddDirectionSample(60, isVadActive, directionFirst, 200, directionFirst);
-  newHistory.AddDirectionSample(70, isVadActive, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(60, directionFirst, 200, directionFirst);
+  newHistory.AddDirectionSample(70, directionFirst, 200, directionFirst);
   history = newHistory.GetRecentHistory(50);
   ASSERT_EQ(history.size(), 2);
   ASSERT_EQ(history[0].directionIndex, directionSecond);
@@ -222,15 +218,14 @@ TEST(SUITE, MicDirectionHistory_GetHistoryAtTime)
   const auto directionThird = directionFirst + 2;
   const auto historyLen = MicDirectionHistory::kMicDirectionHistoryLen;
   const auto maxTimeLength_ms = std::numeric_limits<uint32_t>::max();
-  const auto isVadActive = true;
-  
+
   uint32_t t = 0;
   auto nextT = [&t] { t += 10; return t; };
 
   MicDirectionHistory newHistory{};
-  for (uint32_t i=0; i<10; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionFirst, 200, directionFirst); } // ts 10 : 100
-  for (uint32_t i=0; i<20; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionSecond, 200, directionSecond); } // ts 110 : 300
-  for (uint32_t i=0; i<31; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionFirst, 200, directionFirst); } // ts 310 : 600
+  for (uint32_t i=0; i<10; ++i) { newHistory.AddDirectionSample(nextT(), directionFirst, 200, directionFirst); } // ts 10 : 100
+  for (uint32_t i=0; i<20; ++i) { newHistory.AddDirectionSample(nextT(), directionSecond, 200, directionSecond); } // ts 110 : 300
+  for (uint32_t i=0; i<31; ++i) { newHistory.AddDirectionSample(nextT(), directionFirst, 200, directionFirst); } // ts 310 : 600
 
   MicDirectionNodeList history;
   // History before beginning of time is empty
@@ -254,7 +249,7 @@ TEST(SUITE, MicDirectionHistory_GetHistoryAtTime)
   ASSERT_EQ(history[1].count, 20);
   ASSERT_EQ(history[1].timestampEnd, 300);
 
-  for (uint32_t i=0; i<100; ++i) { newHistory.AddDirectionSample(nextT(), isVadActive, directionThird, 200, directionThird); } // ts 610 : 1600
+  for (uint32_t i=0; i<100; ++i) { newHistory.AddDirectionSample(nextT(), directionThird, 200, directionThird); } // ts 610 : 1600
   history = newHistory.GetHistoryAtTime(620, 1000);
   ASSERT_EQ(history.size(), 4);
   history = newHistory.GetHistoryAtTime(620, maxTimeLength_ms);
@@ -271,11 +266,11 @@ TEST(SUITE, MicDirectionHistory_GetHistoryAtTime)
   {
     if ((t % 20) == 0)
     {
-      newHistory.AddDirectionSample(t, isVadActive, directionFirst, 200, directionFirst);
+      newHistory.AddDirectionSample(t, directionFirst, 200, directionFirst);
     }
     else
     {
-      newHistory.AddDirectionSample(t, isVadActive, directionSecond, 200, directionSecond);
+      newHistory.AddDirectionSample(t, directionSecond, 200, directionSecond);
     }
     nextT();
   }

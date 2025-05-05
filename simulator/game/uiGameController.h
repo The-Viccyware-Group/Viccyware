@@ -23,6 +23,8 @@
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "clad/robotInterface/messageFromAnimProcess.h"
 #include "clad/types/imageTypes.h"
+#include "clad/types/nvStorageTypes.h"
+#include "clad/types/objectFamilies.h"
 #include "clad/types/objectTypes.h"
 #include "clad/types/robotTestModes.h"
 #include "clad/types/visionModes.h"
@@ -31,43 +33,49 @@
 
 
 namespace Anki {
-
+  
   // Forward declaration:
   namespace Util {
     namespace Data {
       class DataPlatform;
     }
   }
-
-namespace Vector {
+  
+namespace Cozmo {
 
 class UiGameController {
 
 public:
   typedef struct {
+    ObjectFamily family;
     ObjectType   type;
     s32 id;
+    f32 area;
     bool isActive;
-    uint32_t observedTimestamp;
-    Pose3d pose;
+    
+    void Reset() {
+      family = ObjectFamily::Unknown;
+      type = ObjectType::UnknownObject;
+      id = -1;
+      area = 0;
+      isActive = false;
+    }
   } ObservedObject;
-
-
-
+  
+  
+  
   UiGameController(s32 step_time_ms);
   ~UiGameController();
-
+  
   void Init();
   s32 Update();
-  // Called when the engine is fully loaded
-  void OnEngineLoaded();
-
+  
   void SetDataPlatform(const Util::Data::DataPlatform* dataPlatform);
   const Util::Data::DataPlatform* GetDataPlatform() const;
-
+  
   void QuitWebots(s32 status);
   void QuitController(s32 status);
-
+  
   ///
   // @brief      Cycles the viz origin between all observed cubes and the robot itself.
   //
@@ -78,16 +86,16 @@ public:
   //
   void UpdateVizOriginToRobot();
   void UpdateVizOrigin(const Pose3d& originPose);
-
+  
 protected:
-
-  // Note: Message comms are not yet established when InitInternal is called so
-  // don't send messages from it
+  
   virtual void InitInternal() {}
   virtual s32 UpdateInternal() = 0;
 
+  void EnableAutoBlockpool(bool enable) { _doAutoBlockPool = enable; }
+  
   // TODO: These default handlers and senders should be CLAD-generated!
-
+  
   // Message handlers
   virtual void HandlePing(const ExternalInterface::Ping& msg){};
   virtual void HandleRobotStateUpdate(const ExternalInterface::RobotState& msg){};
@@ -101,7 +109,6 @@ protected:
   virtual void HandleRobotCompletedAction(const ExternalInterface::RobotCompletedAction& msg){};
   virtual void HandleImageChunk(const ImageChunk& msg){};
   virtual void HandleActiveObjectAccel(const ExternalInterface::ObjectAccel& msg){};
-  virtual void HandleActiveObjectAvailable(const ExternalInterface::ObjectAvailable& msg){};
   virtual void HandleActiveObjectConnectionState(const ExternalInterface::ObjectConnectionState& msg){};
   virtual void HandleActiveObjectMoved(const ExternalInterface::ObjectMoved& msg){};
   virtual void HandleActiveObjectStoppedMoving(const ExternalInterface::ObjectStoppedMoving& msg){};
@@ -111,12 +118,15 @@ protected:
   virtual void HandleConnectedObjectStates(const ExternalInterface::ConnectedObjectStates& msg){};
   virtual void HandleAnimationAvailable(const ExternalInterface::AnimationAvailable& msg){};
   virtual void HandleAnimationAborted(const ExternalInterface::AnimationAborted& msg){};
+  virtual void HandleDebugString(const ExternalInterface::DebugString& msg){};
+  virtual void HandleNVStorageOpResult(const ExternalInterface::NVStorageOpResult& msg){};
   virtual void HandleFactoryTestResultEntry(const FactoryTestResultEntry& msg){};
   virtual void HandleRobotErasedAllEnrolledFaces(const ExternalInterface::RobotErasedAllEnrolledFaces& msg){};
   virtual void HandleLoadedKnownFace(const Vision::LoadedKnownFace& msg){};
+  virtual void HandleFaceEnrollmentCompleted(const ExternalInterface::FaceEnrollmentCompleted &msg) {};
   virtual void HandleCliffEvent(const CliffEvent& msg){};
   virtual void HandleSetCliffDetectThresholds(const SetCliffDetectThresholds& msg){};
-
+  
   virtual void HandleBehaviorTransition(const ExternalInterface::BehaviorTransition& msg){};
   virtual void HandleEndOfMessage(const ExternalInterface::EndOfMessage& msg){};
   virtual void HandleRobotOffTreadsStateChanged(const ExternalInterface::RobotOffTreadsStateChanged& msg){};
@@ -125,9 +135,9 @@ protected:
   virtual void HandleRobotDeletedAllCustomObjects(const ExternalInterface::RobotDeletedAllCustomObjects& msg) {};
   virtual void HandleRobotDeletedCustomMarkerObjects(const ExternalInterface::RobotDeletedCustomMarkerObjects& msg) {};
   virtual void HandleRobotDeletedFixedCustomObjects(const ExternalInterface::RobotDeletedFixedCustomObjects& msg) {};
-
+  
   // Message senders
-  Result SendMessage(const ExternalInterface::MessageGameToEngine& msg);
+  void SendMessage(const ExternalInterface::MessageGameToEngine& msg);
   void SendPing(bool isResponse);
   void SendDriveWheels(const f32 lwheel_speed_mmps, const f32 rwheel_speed_mmps, const f32 lwheel_accel_mmps2, const f32 rwheel_accel_mmps2);
   void SendDriveArc(const f32 speed, const f32 accel, const s16 curvature_mm);
@@ -145,56 +155,56 @@ protected:
 
   // Queue a generic action, automatically set robot id, id tag, and position to run now
   void SendAction(const ExternalInterface::QueueSingleAction& msg_in);
-
-  void SendTurnInPlaceAtSpeed(const f32 speed_rad_per_sec, const f32 accel_rad_per_sec2);
+  
+  void SendTurnInPlaceAtSpeed(const f32 speed_rad_per_sec, const f32 accel_rad_per_sec2);  
   void SendMoveHead(const f32 speed_rad_per_sec);
   void SendMoveLift(const f32 speed_rad_per_sec);
   void SendMoveHeadToAngle(const f32 rad, const f32 speed, const f32 accel, const f32 duration_sec = 0.f);
   void SendMoveLiftToHeight(const f32 mm, const f32 speed, const f32 accel, const f32 duration_sec = 0.f);
-  void SendMoveLiftToAngle(const f32 angle_rad, const f32 speed, const f32 accel, const f32 duration_sec = 0.f);
   void SendEnableLiftPower(bool enable);
+  void SendTapBlockOnGround(const u8 numTaps);
   void SendStopAllMotors();
   void SendImageRequest(ImageSendMode mode);
-  void SendSaveImages(ImageSendMode imageMode, const std::string& path = "", const int8_t qualityOnRobot = -1,
-                      const bool removeRadialDistortion = false);
+  void SendSetRobotImageSendMode(ImageSendMode mode);
+  void SendSaveImages(ImageSendMode imageMode, const std::string& path = "", const int8_t qualityOnRobot = -1);
   void SendSaveState(bool enabled, const std::string& path = "");
   void SendEnableDisplay(bool on);
   void SendExecutePathToPose(const Pose3d& p,
                              PathMotionProfile motionProf);
-
+                             
   void SendGotoObject(const s32 objectID,
                       const f32 distFromObjectOrigin_mm,
                       PathMotionProfile motionProf,
                       const bool usePreDockPose = false);
-
+  
   void SendAlignWithObject(const s32 objectID,
                            const f32 distFromMarker_mm,
                            PathMotionProfile motionProf,
                            const bool usePreDockPose,
                            const bool useApproachAngle = false,
                            const f32 approachAngle_rad = false);
-
+  
   void SendPlaceObjectOnGroundSequence(const Pose3d& p,
                                        PathMotionProfile motionProf,
                                        const bool useExactRotation = false);
-
+  
   void SendPickupObject(const s32 objectID,
                         PathMotionProfile motionProf,
                         const bool usePreDockPose,
                         const bool useApproachAngle = false,
                         const f32 approachAngle_rad = 0);
-
+  
   void SendPickupSelectedObject(PathMotionProfile motionProf,
                                 const bool usePreDockPose,
                                 const bool useApproachAngle,
                                 const f32 approachAngle_rad);
-
+  
   void SendPlaceOnObject(const s32 objectID,
                          PathMotionProfile motionProf,
                          const bool usePreDockPose,
                          const bool useApproachAngle = false,
                          const f32 approachAngle_rad = 0);
-
+  
   void SendPlaceOnSelectedObject(PathMotionProfile motionProf,
                                  const bool usePreDockPose,
                                  const bool useApproachAngle = false,
@@ -206,7 +216,7 @@ protected:
                           const f32 placementOffsetX_mm,
                           const bool useApproachAngle = false,
                           const f32 approachAngle_rad = 0);
-
+  
   void SendPlaceRelSelectedObject(PathMotionProfile motionProf,
                                   const bool usePreDockPose,
                                   const f32 placementOffsetX_mm,
@@ -219,7 +229,7 @@ protected:
                       const bool usePreDockPose,
                       const bool useApproachAngle = false,
                       const f32 approachAngle_rad = 0);
-
+  
   void SendRollSelectedObject(PathMotionProfile motionProf,
                               const bool doDeepRoll,
                               const bool usePreDockPose,
@@ -237,14 +247,17 @@ protected:
                      const bool usePreDockPose,
                      const bool useApproachAngle = false,
                      const f32 approachAngle_rad = 0);
+  
+  void SendTraverseSelectedObject(PathMotionProfile motionProf,
+                                  const bool usePreDockPose);
 
   void SendMountCharger(const s32 objectID,
                         PathMotionProfile motionProf,
                         const bool useCliffSensorCorrection = true);
-
+  
   void SendMountSelectedCharger(PathMotionProfile motionProf,
                                 const bool useCliffSensorCorrection = true);
-
+  
   void SendRequestEnabledBehaviorList();
   void SendTrackToObject(const u32 objectID, bool headOnly = false);
   void SendTrackToFace(const u32 faceID, bool headOnly = false);
@@ -279,18 +292,21 @@ protected:
   void SendClearCalibrationImages();
   void SendComputeCameraCalibration();
   void SendCameraCalibration(f32 focalLength_x, f32 focalLength_y, f32 center_x, f32 center_y);
-  void SendConnectToCube();
-  void SendDisconnectFromCube(const float gracePeriod_sec);
-  void SendForgetPreferredCube();
-  void SendSetPreferredCube(const std::string& preferredCubeFactoryId);
-  void SendBroadcastObjectAvailable(const bool enable);
+  void SendNVStorageWriteEntry(NVStorage::NVEntryTag tag, u8* data, size_t size, u8 blobIndex, u8 numTotalBlobs);
+  void SendNVStorageReadEntry(NVStorage::NVEntryTag tag);
+  void SendNVStorageEraseEntry(NVStorage::NVEntryTag tag);
+  void SendNVClearPartialPendingWriteData();
+  void SendEnableBlockTapFilter(bool enable);
+  void SendEnableBlockPool(double maxDiscoveryTime, bool enabled);
+  void SendStreamObjectAccel(const u32 objectID, bool enable = true);
 
   ///
   // @brief      Send SetActiveObjectLEDs CLAD message
   //
-  // See the .clad file for documentation on parameters.
+  // See the .clad file for documentation on parameters. The parameter robotID does not need to be
+  // passed in.
   //
-  void SendSetActiveObjectLEDs(const u32 objectID,
+  void SendSetActiveObjectLEDs(const u32 objectID, 
                                const u32 onColor,
                                const u32 offColor,
                                const u32 onPeriod_ms,
@@ -305,7 +321,7 @@ protected:
                                const MakeRelativeMode makeRelative,
                                const bool turnOffUnspecifiedLEDs);
 
-  void SendSetAllActiveObjectLEDs(const u32 objectID,
+  void SendSetAllActiveObjectLEDs(const u32 objectID, 
                                   const std::array<u32, 4> onColor,
                                   const std::array<u32, 4> offColor,
                                   const std::array<u32, 4> onPeriod_ms,
@@ -318,22 +334,15 @@ protected:
                                   const f32 relativeToY,
                                   const MakeRelativeMode makeRelative);
 
-  void SendPushDrivingAnimations(const std::string& lockName,
-                                 const AnimationTrigger& startAnim,
-                                 const AnimationTrigger& loopAnim,
-                                 const AnimationTrigger& endAnim);
-
-  void SendRemoveDrivingAnimations(const std::string& lockName);
-
   // ====== Accessors =====
   s32 GetStepTimeMS() const;
-  webots::Supervisor& GetSupervisor();
+  webots::Supervisor* GetSupervisor();
 
   PoseOriginList _poseOriginList;
-
+  
   // Pose to use as "actual" poses' origin
   const Pose3d  _webotsOrigin;
-
+  
   // Robot state message convenience functions
   const Pose3d& GetRobotPose() const;
   const Pose3d& GetRobotPoseActual() const;
@@ -341,43 +350,45 @@ protected:
   f32           GetLiftHeight_mm() const;
   void          GetWheelSpeeds_mmps(f32& left, f32& right) const;
   s32           GetCarryingObjectID() const;
+  s32           GetCarryingObjectOnTopID() const;
   bool          IsRobotStatus(RobotStatusFlag mask) const;
-
+  
   const ExternalInterface::RobotState& GetRobotState() const { return _robotStateMsg; }
-
+  
   std::vector<s32> GetAllObjectIDs() const;
-  std::vector<s32> GetAllLightCubeObjectIDs() const;
-  std::vector<s32> GetAllObjectIDsByType(const ObjectType& type) const;
+  std::vector<s32> GetAllObjectIDsByFamily(ObjectFamily family) const;
+  std::vector<s32> GetAllObjectIDsByFamilyAndType(ObjectFamily family, ObjectType type) const;
+  Result           GetObjectFamily(s32 objectID, ObjectFamily& family) const;
   Result           GetObjectType(s32 objectID, ObjectType& type) const;
   Result           GetObjectPose(s32 objectID, Pose3d& pose) const;
-
+  
+  u32              GetNumObjectsInFamily(ObjectFamily family) const;
+  u32              GetNumObjectsInFamilyAndType(ObjectFamily family, ObjectType type) const;
   u32              GetNumObjects() const;
   void             ClearAllKnownObjects();
-
+  
   // Helper to create a Pose3d from a poseStruct and add a new origin if needed
   Pose3d CreatePoseHelper(const PoseStruct3d& poseStruct);
-
-  void AddOrUpdateObject(s32 objID, ObjectType objType,
-                         const PoseStruct3d& poseStruct,
-                         const uint32_t observedTimestamp,
-                         const bool isActive);
-
-  std::map<s32, Pose3d> GetObjectPoseMap();
-
-  ObservedObject GetLastObservedObject() const;
+  
+  void AddOrUpdateObject(s32 objID, ObjectType objType, ObjectFamily objFamily,
+                         const PoseStruct3d& poseStruct);
+  
+  const std::map<s32, Pose3d>& GetObjectPoseMap();
+  
+  const ObservedObject& GetLastObservedObject() const;
 
   const Vision::FaceID_t GetLastObservedFaceID() const;
-
+  
   BehaviorClass GetBehaviorClass(const std::string& behaviorName) const;
+  
+  // NVStorage
+  const std::vector<u8>* GetReceivedNVStorageData(NVStorage::NVEntryTag tag) const;
+  void ClearReceivedNVStorageData(NVStorage::NVEntryTag tag);
+  bool IsMultiBlobEntryTag(u32 tag) const;
 
   // Press or release the backpack button
   void PressBackpackButton(bool pressed);
-
-  // Touch or not touch backpack touch sensor
-  void TouchBackpackTouchSensor(bool touched);
-
-  void StartFreeplayMode();
-
+  
   ///
   // @brief      Sets the actual robot pose.
   // @param[in]  newPose  The new pose with translation in millimeters.
@@ -395,7 +406,7 @@ protected:
   //
   void SetLightCubePose(ObjectType lightCubeType, const Pose3d& pose);
   bool HasActualLightCubePose(ObjectType lightCubeType) const;
-
+  
   ///
   // @brief      Iterates through _lightCubes and removes the one of the given ObjectType
   //             (should be unique).
@@ -403,7 +414,7 @@ protected:
   // @return     Whether or not it was successfully removed
   //
   bool RemoveLightCubeByType(ObjectType type);
-
+  
   ///
   // @brief      Adds a cube of the given ObjectType if doesn't already exist
   //             (should be unique).
@@ -412,11 +423,12 @@ protected:
   // @param[in]  factoryID  FactoryID of cube to be added. (If 0, then factoryID is auto-generated based on ObjectType)
   // @return     Whether or not it was successfully added
   //
-  bool AddLightCubeByType(ObjectType type, const Pose3d& p, const std::string& factoryID = "");
+  bool AddLightCubeByType(ObjectType type, const Pose3d& p, const u32 factoryID = 0);
 
   // Sets the "pluggedIn" field for the given charger.
   void SetChargerPluggedIn(webots::Node* chargerNode, const bool pluggedIn);
-
+  
+  static size_t MakeWordAligned(size_t size);
   const std::string GetAnimationTestName() const;
   const double GetSupervisorTime() const;
 
@@ -426,21 +438,21 @@ protected:
   // @return     The node with the definition name.
   //
   webots::Node* GetNodeByDefName(const std::string& defName) const;
-
+  
   ///
   // @brief      Packages the pose of a webots node into a Pose3d object
   // @param[in]  node  Node to get the pose for
   // @return     The pose of the webots node; translation units are in millimeters.
   //
   const Pose3d GetPose3dOfNode(webots::Node* node) const;
-
+  
   ///
   // @brief      Sets the pose of a webots node from a Pose3d object
   // @param[in]  node  Node whose pose to change
   // @param[in]  The new pose to use; translation units are in millimeters.
   //
   void SetNodePose(webots::Node* node, const Pose3d& newPose);
-
+  
   ///
   // @brief      Determines if x seconds passed since the first time this function was called.
   //             Useful in the CST test controllers where the same code block in each state can be
@@ -460,8 +472,8 @@ protected:
   // @param[in]  zForce   The z force
   //
   void SendApplyForce(const std::string& defName, int xForce, int yForce, int zForce);
-
-
+  
+  
 private:
   void HandlePingBase(const ExternalInterface::Ping& msg);
   void HandleRobotStateUpdateBase(const ExternalInterface::RobotState& msg);
@@ -477,7 +489,6 @@ private:
   void HandleRobotCompletedActionBase(const ExternalInterface::RobotCompletedAction& msg);
   void HandleImageChunkBase(const ImageChunk& msg);
   void HandleActiveObjectAccelBase(const ExternalInterface::ObjectAccel& msg);
-  void HandleActiveObjectAvailableBase(const ExternalInterface::ObjectAvailable& msg);
   void HandleActiveObjectConnectionStateBase(const ExternalInterface::ObjectConnectionState& msg);
   void HandleActiveObjectMovedBase(const ExternalInterface::ObjectMoved& msg);
   void HandleActiveObjectStoppedMovingBase(const ExternalInterface::ObjectStoppedMoving& msg);
@@ -487,20 +498,24 @@ private:
   void HandleConnectedObjectStatesBase(const ExternalInterface::ConnectedObjectStates& msg);
   void HandleAnimationAvailableBase(const ExternalInterface::AnimationAvailable& msg);
   void HandleAnimationAbortedBase(const ExternalInterface::AnimationAborted& msg);
+  void HandleDebugStringBase(const ExternalInterface::DebugString& msg);
+  void HandleNVStorageOpResultBase(const ExternalInterface::NVStorageOpResult& msg);
   void HandleBehaviorTransitionBase(const ExternalInterface::BehaviorTransition& msg);
   void HandleEndOfMessageBase(const ExternalInterface::EndOfMessage& msg);
   void HandleFactoryTestResultEntryBase(const FactoryTestResultEntry& msg);
   void HandleLoadedKnownFaceBase(const Vision::LoadedKnownFace& msg);
+  void HandleFaceEnrollmentCompletedBase(const ExternalInterface::FaceEnrollmentCompleted &msg);
   void HandleCliffEventBase(const CliffEvent& msg);
   void HandleSetCliffDetectThresholdsBase(const SetCliffDetectThresholds& msg);
   void HandleEngineErrorCodeBase(const ExternalInterface::EngineErrorCodeMessage& msg);
+  void HandleEngineLoadingStatusBase(const ExternalInterface::EngineLoadingDataStatus& msg);
   void HandleDefinedCustomObjectBase(const ExternalInterface::DefinedCustomObject& msg);
   void HandleRobotDeletedAllCustomObjectsBase(const ExternalInterface::RobotDeletedAllCustomObjects& msg);
   void HandleRobotDeletedCustomMarkerObjectsBase(const ExternalInterface::RobotDeletedCustomMarkerObjects& msg);
   void HandleRobotDeletedFixedCustomObjectsBase(const ExternalInterface::RobotDeletedFixedCustomObjects& msg);
-
+  
   void UpdateActualObjectPoses();
-
+  
   ///
   // @brief      Iterates through _lightCubes and returns the first light cube with the given ID
   //             (should be unique).
@@ -508,61 +523,67 @@ private:
   // @return     The webots node for the light cube.
   //
   webots::Node* GetLightCubeByType(ObjectType type) const;
-
+  
   const f32 TIME_UNTIL_READY_SEC = 1.5;
-
+  
   s32 _stepTimeMS;
   webots::Supervisor _supervisor;
-
+  
   webots::Node* _robotNode       = nullptr;
   webots::Field* _backpackButtonPressedField = nullptr;
-  webots::Field* _touchSensorTouchedField = nullptr;
 
   std::vector<webots::Node*> _lightCubes;
   std::vector<webots::Node*>::iterator _lightCubeOriginIter = _lightCubes.end();
-
+  
   Pose3d _robotPose;
   Pose3d _robotPoseActual;
   bool _firstRobotPoseUpdate;
-
+  
   ExternalInterface::RobotState _robotStateMsg;
-
-  std::vector<UiGameController::ObservedObject> _observedObjects;
-
+  
+  UiGameController::ObservedObject _lastObservedObject;
+  std::map<s32, std::pair<ObjectFamily, ObjectType> > _objectIDToFamilyTypeMap;
+  std::map<ObjectFamily, std::map<ObjectType, std::vector<s32> > > _objectFamilyToTypeToIDMap;
+  std::map<s32, Pose3d> _objectIDToPoseMap;
+  
   Vision::FaceID_t _lastObservedFaceID;
-
+  
   webots::Node* _root = nullptr;
-
+  
   typedef enum {
     UI_WAITING_FOR_GAME = 0,
+    UI_WAITING_FOR_ENGINE_LOAD,
     UI_RUNNING
   } UI_State_t;
-
+  
   UI_State_t _uiState;
-
+  
   GameMessageHandler _msgHandler;
   GameComms *_gameComms = nullptr;
-
+  
   const Util::Data::DataPlatform* _dataPlatform = nullptr;
 
   UdpClient _physicsControllerClient;
 
+  bool _doAutoBlockPool;
+  bool _isBlockPoolInitialized;
+  
+  float _engineLoadedRatio = 0.0f;
+  
   double _waitTimer = -1.0;
-
+  
   uint32_t _queueActionIdTag = 0;
-
+  
   // Seed used to start engine
   uint32_t _randomSeed = 0;
-
+  
   std::string _locale = "en-US";
-
-  bool _isStreamingImages = false;
-
+  
 }; // class UiGameController
-
-
-
-} // namespace Vector
+  
+  
+  
+} // namespace Cozmo
 } // namespace Anki
 
 

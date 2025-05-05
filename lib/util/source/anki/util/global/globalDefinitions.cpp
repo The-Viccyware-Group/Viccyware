@@ -20,6 +20,19 @@ namespace Util {
   
 CONSOLE_VAR(bool, kForceDisableAnkiDevFeatures, "Dev", false);
 
+const char * HidePersonallyIdentifiableInfo(const char* str)
+{
+  static const char * const kPrivacyString = "<PII>";
+  if(ANKI_PRIVACY_GUARD)
+  {
+    return kPrivacyString;
+  }
+  else
+  {
+    return str;
+  }
+}
+
 } // Anki::Util namespace
 } // Anki namespace
 

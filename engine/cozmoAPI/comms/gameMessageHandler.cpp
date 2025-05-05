@@ -4,7 +4,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   GameMessageHandler::GameMessageHandler()
   : comms_(NULL)
@@ -97,5 +97,5 @@ namespace Vector {
         return retVal;
       } // ProcessMessages()
   
-} // namespace Vector
+} // namespace Cozmo
 } // namepsace Anki

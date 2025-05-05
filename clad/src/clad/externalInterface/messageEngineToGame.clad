@@ -9,11 +9,9 @@
 #include "clad/types/actionResults.clad"
 #include "clad/types/activeObjectAccel.clad"
 #include "clad/types/animationEvents.clad"
-#include "clad/types/behaviorComponent/behaviorIDs.clad"
 #include "clad/types/behaviorComponent/behaviorObjectives.clad"
-#include "clad/types/behaviorComponent/userIntent.clad"
-#include "clad/types/behaviorSlot.clad"
 #include "clad/types/debugConsoleTypes.clad"
+#include "clad/types/deviceDataTypes.clad"
 #include "clad/types/engineErrorCodes.clad"
 #include "clad/types/engineState.clad"
 #include "clad/types/faceDetectionMetaData.clad"
@@ -21,33 +19,35 @@
 #include "clad/types/facialExpressions.clad"
 #include "clad/types/factoryTestTypes.clad"
 #include "clad/types/featureGateTypes.clad"
+#include "clad/types/firmwareTypes.clad"
 #include "clad/types/imageTypes.clad"
 #include "clad/types/imu.clad"
+#include "clad/types/inventoryTypes.clad"
 #include "clad/types/loadedKnownFace.clad"
 #include "clad/types/logLevels.clad"
 #include "clad/types/motorTypes.clad"
+#include "clad/types/nvStorageTypes.clad"
+#include "clad/types/objectFamilies.clad"
 #include "clad/types/objectTypes.clad"
-#include "clad/types/onboardingStages.clad"
 #include "clad/types/offTreadsStates.clad"
 #include "clad/types/petTypes.clad"
 #include "clad/types/poseStructs.clad"
 #include "clad/types/proxMessages.clad"
 #include "clad/types/cladPoint.clad"
 #include "clad/types/cladRect.clad"
-#include "clad/types/robotCompletedAction.clad"
+#include "clad/types/gameStatusFlag.clad"
 #include "clad/types/robotStatusAndActions.clad"
-#include "clad/types/selfTestTypes.clad"
 #include "clad/types/sdkStatusTypes.clad"
+#include "clad/types/toolCodes.clad"
 #include "clad/types/uiConnectionTypes.clad"
+#include "clad/types/unlockTypes.clad"
 #include "clad/types/visionModes.clad"
 #include "clad/types/ledTypes.clad"
 #include "clad/types/memoryMap.clad"
-#include "clad/types/robotToSwitchboard.clad"
-#include "clad/types/salientPointTypes.clad"
 #include "util/ankiLab/ankiLabDef.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace ExternalInterface {
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,15 @@ message UiDeviceAvailable {
 }
 
 message RobotConnectionResponse {
-    RobotConnectionResult result
+    RobotConnectionResult result,
+    uint_32 fwVersion,
+    uint_32 serialNumber,
+    int_32  bodyHWVersion,
+    BodyColor bodyColor // see robotStatusAndActions.clad
+}
+
+message RobotDisconnected {
+    float_32 timeSinceLastMsg_sec
 }
 
 
@@ -76,9 +84,39 @@ message UiDeviceConnected {
     string  buildVersion
 }
 
+message EngineRobotCLADVersionMismatch {
+  bool engineToRobotMismatch,
+  bool robotToEngineMismatch,
+  string  engineEnginetoRobotHash,	// Engine's calculated hash for the engine to robot messages
+  string  engineRobotToEngineHash,	// Engine's calculated hash for the robot to engine messages
+  string  robotEnginetoRobotHash,	// Robot's calculated hash for the engine to robot messages
+  string  robotRobotToEngineHash,	// Robot's calculated hash for the robot to engine messages
+}
+
+// Indicates that a previously advertising object is no longer advertising
+message ObjectUnavailable
+{
+  uint_32      factory_id,
+}
+
+// Responds to Unity request for feature toggles
+message FeatureToggles {
+  FeatureToggle features[uint_16]
+}
+
 message GoingToSleep {
   bool triggeredFromVoiceCommand = 0
 }
+
+message EngineLoadingDataStatus {
+  float_32 ratioComplete = 0.0
+}
+
+
+/*
+message Bogus {
+}
+*/
 
 message CurrentCameraParams {
   float_32 cameraGain,
@@ -103,7 +141,11 @@ structure CameraConfig {
 // All settings that are static and unique for a given robot
 message PerRobotSettings {
   uint_32 serialNumberHead,
-  CameraConfig cameraConfig
+  uint_32 serialNumberBody,
+  uint_32 modelNumber,
+  int_32  hwVersion,
+  CameraConfig cameraConfig,
+  BodyColor color // see robotStatusAndActions.clad
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -111,40 +153,49 @@ message PerRobotSettings {
 ///////////////////////////////////////////////////////////////////////////////
 
 message RobotState {
-    PoseStruct3d    pose,
-    float_32        poseAngle_rad,    // heading in X-Y plane
-    float_32        posePitch_rad,    // robot pitch angle
-    float_32        leftWheelSpeed_mmps,
-    float_32        rightWheelSpeed_mmps,
-    float_32        headAngle_rad,
-    float_32        liftHeight_mm,
-    float_32        batteryVoltage,
-    AccelData       accel,                 // in head frame (mm/s^2)
-    GyroData        gyro,                  // in head frame (rad/s)
-    int_32          carryingObjectID,      // will be -1 if not carrying object
-    int_32          carryingObjectOnTopID, // will be -1 if no object on top of object being carried
-    int_32          headTrackingObjectID,  // will be -1 if head is not tracking to any object
-    int_32          localizedToObjectID,   // Will be -1 if not localized to any object
-    uint_32         lastImageTimeStamp,    // Last image processed by the vision system
-    uint_32         status,                // See RobotStatusFlag in robotStatusAndActions.clad
+    PoseStruct3d pose,
+    float_32 poseAngle_rad,    // heading in X-Y plane
+    float_32 posePitch_rad,    // robot pitch angle
+    float_32 leftWheelSpeed_mmps,
+    float_32 rightWheelSpeed_mmps,
+    float_32 headAngle_rad,
+    float_32 liftHeight_mm,
+    float_32 batteryVoltage,
+    AccelData accel,                // in head frame (mm/s^2)
+    GyroData gyro,                  // in head frame (rad/s)
+    int_32   carryingObjectID,      // will be -1 if not carrying object
+    int_32   carryingObjectOnTopID, // will be -1 if no object on top of object being carried
+    int_32   headTrackingObjectID,  // will be -1 if head is not tracking to any object
+    int_32   localizedToObjectID,   // Will be -1 if not localized to any object
+    uint_32  lastImageTimeStamp,    // Last image processed by the vision system
+    uint_32  status,                // See RobotStatusFlag in robotStatusAndActions.clad
+    uint_8   gameStatus             // See GameStatusFlag in cozmoTypes.h
 }
 
 message RobotDelocalized {
 }
 
+message RobotPoked {
+}
+
 message RobotStopped {
-  StopReason reason,
-  uint_8 cliffDetectedFlags,
-  uint_8 whiteDetectedFlags
 }
 
 message RobotOffTreadsStateChanged {
     OffTreadsState treadsState
 }
 
+message RobotCliffEventFinished {
+}
+
 // Tests a collision, not contacts.
 message RobotOnChargerPlatformEvent {
   bool   onCharger
+}
+
+// Whether or not Cozmo has the hiccups
+message RobotHiccupsChanged {
+  bool hasHiccups
 }
 
 // Whether or not the robot's charge contacts are in contact with the charger contacts
@@ -163,8 +214,37 @@ message UnexpectedMovement {
   UnexpectedMovementSide movementSide
 }
 
-message RobotFallingEvent {
-  uint_32 duration_ms
+// Whether or not the restore was successful
+message RestoreRobotStatus {
+  bool isWipe,
+  bool success
+}
+
+// Sends an array of robot serial numbers that we have backup data for and whether or not
+// game should prompt for restore
+message RestoreRobotOptions {
+  bool shouldPromptForRestore,
+  uint_32 robotsWithBackupData[uint_8]
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////  DEBUG/PERFORMANCE  ///////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// Generic string for sending debug string up to game
+message DebugString {
+    string    text
+}
+message DebugAnimationString {
+    string    text
+}
+message DebugPerformanceTick {
+    string    systemName,
+    float_32  lastTickTime
+}
+message PerfMetricStatus {
+  bool   isRecording,
+  string statusString,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -179,15 +259,15 @@ message RobotFallingEvent {
 message RobotProcessedImage {
    uint_32 timestamp,
    VisionMode visionModes[uint_8],
-   uint_8 mean // Valid iff Stats mode enabled
+   uint_8 mean // Valid iff ComputingStatistics mode enabled
 }
 
 // RobotObservedObject for signaling that an object
-//  with specified ID/Type was seen at a particular location in the image
+//  with specified ID/Type/Family was seen at a particular location in the image
 //  and the world
 message RobotObservedObject {
     uint_32       timestamp,
-    ObjectFamily  objectFamily,  // Note: This field is deprecated and is only here for SDK v0.5.1 compatibility
+    ObjectFamily  objectFamily,
     ObjectType    objectType,
     int_32        objectID,      // signed to match U2G::PickAndPlaceObject which has the option to have objectID<0
     CladRect      img_rect,      // position in image coords
@@ -200,6 +280,14 @@ message RobotObservedObject {
 message RobotObservedPossibleObject {
     // objectID will always be -1
     RobotObservedObject possibleObject
+}
+
+// RobotObservedGenericObject - for detecting general objects (not Cozmo accessories with markers on them)
+message RobotObservedGenericObject {
+    CladRect      img_rect,       // Position in the image, if available
+    string        name,
+    uint_32       timestamp,
+    float_32      score
 }
 
 // RobotObservedFace
@@ -289,11 +377,6 @@ message RobotObservedMotion {
     int_16   right_img_y
 }
 
-// SalientPoint
-message RobotObservedSalientPoint {
-    Vision::SalientPoint salientPoint
-}
-
 // RobotObservedLaserPoint
 message RobotObservedLaserPoint {
     uint_32  timestamp,
@@ -304,12 +387,6 @@ message RobotObservedLaserPoint {
     float_32 ground_area_fraction,
     int_16   ground_x_mm,
     int_16   ground_y_mm
-}
-
-// RobotObservedIllumination
-message RobotObservedIllumination {
-    uint_32           timestamp,
-    IlluminationState state
 }
 
 // RobotDeletedFace - sent when an _observed_ face has been deleted (e.g. if not seen for too long)
@@ -347,9 +424,15 @@ message DefinedCustomObject {
     bool success     // false if the last custom object definition failed (e.g. due to duplicate marker already in use)
 }
 
+// RobotMarkedObjectPoseUnknown
+message RobotMarkedObjectPoseUnknown {
+    uint_32 objectID
+}
+
 structure LocatedObjectState {
     uint_32      objectID,
     uint_32      lastObservedTimestamp,
+    ObjectFamily objectFamily,
     ObjectType   objectType,
     PoseStruct3d pose,
     PoseState    poseState,
@@ -362,11 +445,25 @@ message LocatedObjectStates {
 
 structure ConnectedObjectState {
     uint_32      objectID,
+    ObjectFamily objectFamily,
     ObjectType   objectType
 }
 
 message ConnectedObjectStates {
     ConnectedObjectState objects[uint_8]
+}
+
+// RobotReadToolCode
+message RobotReadToolCode {
+  ToolCodeInfo info
+}
+
+// RobotEnrolledFace - Broadcast by BehaviorEnrollFace when it completes
+message FaceEnrollmentCompleted
+{
+  FaceEnrollmentResult result,
+  int_32               faceID,
+  string               name
 }
 
 // Status messages that will be superceded by some sort of generic status message (VIC-1423)
@@ -384,9 +481,6 @@ message MeetVictorFaceScanStarted
 // Tell the app the robot is finishing a facial scan for the Meet Victor flow
 message MeetVictorFaceScanComplete
 {
-}
-
-message MeetVictorNameSaved {
 }
 
 // NOTE: This is separate from deleting an _observed_ face.
@@ -428,13 +522,28 @@ message PlaypenBehaviorFailed {
   FactoryTestResultCode result
 }
 
-// Engine->Engine message for asynchronous selftest checks
-message SelfTestBehaviorFailed {
-  SelfTestResultCode result
+///////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////  ACTIONS  //////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// RobotCompletedAction
+// TODO: Add action type, more informative result codes...
+message RobotCompletedAction {
+    uint_32 idTag,                          // The identifier of the specific action that completed
+    RobotActionType  actionType,            // see actionTypes.clad
+    ActionResult  result,                   //  "
+    ActionResult  subActionResults[uint_8], // vector of all results from this action's subActions
+    ActionCompletedUnion completionInfo     //  see actionTypes.clad
 }
 
-message SelfTestEnd {
+// BlockPickedUp
+message BlockPickedUp {
+    bool didSucceed                       // true if robot thinks it picked up a block (from low or high position)
+}
 
+// BlockPlaced
+message BlockPlaced {
+    bool didSucceed                       // true if robot thinks it placed up a block (from low or high position)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -456,7 +565,7 @@ message AnimationAborted {
 }
 
 message AnimationEvent {
-  uint_32   timestamp, // AnimTimeStamp_t
+  uint_32   timestamp,
   AnimEvent event_id
 }
 
@@ -467,16 +576,16 @@ message AnimationEvent {
 // Indicates that a cube is advertising, but not connected.
 message ObjectAvailable
 {
-  string      factory_id,
+  uint_32     factory_id,
   ObjectType  objectType,
   int_8       rssi
 }
 
 // Indicates that a cube has connected or disconnected
 message ObjectConnectionState
-{
+{  
   uint_32 objectID,
-  string factoryID,
+  uint_32 factoryID,
   ObjectType  object_type,
   bool connected
 }
@@ -485,6 +594,8 @@ message ObjectMoved
 {
   uint_32     timestamp,
   uint_32     objectID,
+  ActiveAccel accel,
+  UpAxis      axisOfAccel, // The direction of acceleration, reported when object starts moving, and every time the direction changes.
 }
 
 message ObjectStoppedMoving
@@ -504,6 +615,10 @@ message ObjectTapped
 {
   uint_32 timestamp,
   uint_32 objectID,
+  uint_8  numTaps,
+  uint_8  tapTime,
+  int_8   tapNeg,
+  int_8   tapPos,
 }
 
 message ObjectAccel
@@ -540,6 +655,35 @@ message MoodState {
   float_32 emotionValues[uint_8]
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Progression Unlocks
+///////////////////////////////////////////////////////////////////////////////
+
+message RequestSetUnlockResult {
+  UnlockId unlockID,
+  bool unlocked
+}
+
+message UnlockStatus {
+  UnlockId unlocks[uint_8],
+  bool fromBackup = 0
+}
+
+// Only called the first time so UI can show correct "new" badges on default unlocks
+message UnlockedDefaults {
+  UnlockId defaultUnlocks[uint_8]
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Inventory
+///////////////////////////////////////////////////////////////////////////////
+
+message InventoryStatus {
+  InventoryList allInventory
+}
+
+message RequestDefaultSparks {
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Debug / Console
@@ -599,12 +743,135 @@ structure CurrentTimingInfo
   float_32 currentTime_ms
 }
 
+message LatencyMessage {
+  TimingInfo wifiLatency,
+  TimingInfo extSendQueueTime,
+  TimingInfo sendQueueTime,
+  TimingInfo recvQueueTime,
+  TimingInfo unityEngineLatency,
+  TimingInfo sdkEngineLatency,
+  CurrentTimingInfo imageLatency
+}
+
+message DeviceDataMessage {
+  DeviceDataPair dataList[uint_8]
+}
+
+// Debug menu for taps
+message BlockTapFilterStatus {
+  bool  enabled,
+  int_16 tapIntensityMin,
+  uint_32 tapWaitOffset,
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // State
 ///////////////////////////////////////////////////////////////////////////////
+message UpdateEngineState {
+  EngineState oldState,
+  EngineState newState
+}
 
 message EngineErrorCodeMessage {
   EngineErrorCode errorCode
+}
+
+// Sent when a cube lights change in CubeLightComponent
+message CubeLightsStateTransition {
+  uint_32 objectID,
+  uint_32 factoryID,
+  ObjectType objectType,
+  // Colors are encoded as uint with 5 bits per color
+  // To convert from frames to seconds divide by 30 (30 frames per second)
+  LightState lights[4],
+  bool lightRotation
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// BlockPool
+///////////////////////////////////////////////////////////////////////////////
+
+structure BlockPoolBlockData {
+  uint_32 factoryID,
+  ObjectType objectType
+}
+
+message BlockPoolDataMessage {
+  uint_8              blockPoolEnabled,
+  BlockPoolBlockData  blockData[uint_8]
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Robot flash (non-volatile storage)
+///////////////////////////////////////////////////////////////////////////////
+
+// Returned in response to NVStorageWriteEntry, NVStorageReadEntry, and NVStorageEraseEntry
+// to confirm success/failure of operation.
+// The index indicates the blob order if this is one of the messages received in response to
+// a NVStorageReadEntry and data contains data. You'll know when you get the last message of
+// a read when result != NV_MORE.
+message NVStorageOpResult {
+  NVStorage::NVEntryTag  tag,
+  NVStorage::NVResult    result,
+  NVStorage::NVOperation op,
+  uint_8  index,
+  uint_8  data[uint_16],
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+// Firmware
+///////////////////////////////////////////////////////////////////////////////
+
+message FirmwareUpdateProgress {
+  FirmwareUpdateStage stage,
+  FirmwareUpdateSubStage subStage,
+  string  fwSig,
+  uint_8  percentComplete
+}
+
+message FirmwareUpdateComplete {
+  FirmwareUpdateResult  result,
+  string  fwSig
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////  GAME  /////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// The behavior wants the UI to pop up a game request
+message RequestGameStart {
+  UnlockId gameRequested
+}
+
+// Game asked for a random trick; respond with which trick started
+// to update UI
+message HardSparkStartedByEngine {
+  UnlockId sparkStarted
+}
+
+// Spark was ended by Engine (due to success or timeout)
+message HardSparkEndedByEngine {
+  bool success
+}
+
+message SdkConnectionStatus
+{
+  string   sdkBuildVersion,
+  string   requiredSdkBuildVersion,
+  uint_32  numCommands,
+  float_32 timeInCurrentConnection_s,
+  bool     isConnected,
+  bool     isWrongSdkVersion,
+}
+
+message SdkStatus {
+  SdkConnectionStatus connectionStatus,
+  string   sdkStatus[uint_8],
+  uint_32  numTimesConnected,
+  float_32 timeInSdkMode_s,
+  float_32 timeSinceLastSdkMessage_s,
+  float_32 timeSinceLastSdkCommand_s,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -613,19 +880,56 @@ message EngineErrorCodeMessage {
 
 //notify the game that behavior has transitioned
 message BehaviorTransition{
+  //BehaviorID oldBehaviorID,
+  //BehaviorID newBehaviorID,
+  //BehaviorClass oldBehaviorClass,
+  //ExecutableBehaviorType oldBehaviorExecType,
+  //BehaviorClass newBehaviorClass,
+  //ExecutableBehaviorType newBehaviorExecType,
+  //string newBehaviorDisplayKey
 }
+
+message RespondAllBehaviorsList{
+  //BehaviorID behaviors[uint_8]
+}
+
 
 message BehaviorObjectiveAchieved{
   BehaviorObjective behaviorObjective
 }
 
+// notify game that build pyramid spark prerequisites have been met/not met
+message PyramidPreReqState{
+  bool areCubesUpright
+}
+
+message GuardDogStart {
+}
+
+message GuardDogEnd {
+  bool success
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////  Onboarding  ///////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+enum uint_8 OnboardingStateEnum
+{
+  Inactive,
+  ErrorCozmo,
+  ErrorCubeMoved,
+  ErrorCubeWrongSideUp,
+  ErrorFinal,
+  WaitForShowCube,
+  WaitForOKCubeDiscovered,
+  WaitForInspectCube,
+  WaitForFinalContinue,
+}
+
 message OnboardingState {
-  OnboardingStages stage,
-  bool forceSkipStackReset, // if true, even if the stage is Complete, this won't change the behavior stack
+  OnboardingStateEnum stateNum
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -657,6 +961,10 @@ message MemoryMapMessageEnd
 //////////////////////////////////  MISC  /////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+// Data to display in UI that's useful to customer support
+message SupportInfo {
+  string deviceId
+}
 
 //  Audio stages are map to different music updates that
 //  should be performed by Unity.
@@ -666,24 +974,31 @@ message MemoryMapMessageEnd
 //  3 - Play__SFX__Cube_Feeding_Success - game is over (also play the stop loop)
 //  4 - Stop__SFX__Cube_Feeding_Loop_Stop - stop looping sfx
 
-enum uint_8 BehaviorStackState {
-  NotActive = 0,
-  Active
-} 
-message AudioBehaviorStackUpdate {
-  BehaviorStackState state,
-  BehaviorID branchPath[uint_16],
+message FeedingSFXStageUpdate {
+  uint_8 stage,
+  float_32 chargePercentage = 0.0
 }
 
-
-// Anything that the robot wishes to push to the app that 
-// is not a response to a request from the app.
-// DEPRECATED. Please try to use protobuf's Event instead
-message RequiredEmptyMessage{}
-union Event {
-  RequiredEmptyMessage replaceMe,
+message ResponseLocale {
+  string locale
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Notifications
+///////////////////////////////////////////////////////////////////////////////
+
+message ClearNotificationCache {
+}
+
+message CacheNotificationToSchedule {
+  int_32 secondsInFuture,
+  string textKey,
+  bool   persist,
+}
+
+message NotificationTextKeys {
+  string textKeys[uint_16],
+}
 // explicit autounion - this will force the values given, and then add every other messages in this file
 // if you do not want to include messages in this union, use the keyword "structure" instead of "message"
 // DO NOT CHANGE ANY EXPLICITELY DECLARED VALUES - they must be compatible across all versions so we can reliably
@@ -691,32 +1006,8 @@ union Event {
 autounion MessageEngineToGame
 {
   UiDeviceConnected                 UiDeviceConnected                  = 0x00, // DO NOT CHANGE THIS VALUE
-  RobotCompletedAction              RobotCompletedAction               = 0x01,
-  Event                             Event                              = 0x02,
-  // empty slot, feel free to use
-  // empty slot, feel free to use
-  EnrolledNamesResponse             EnrolledNamesResponse              = 0x05,
-  RobotObservedFace                 RobotObservedFace                  = 0x06, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  RobotChangedObservedFaceID        RobotChangedObservedFaceID         = 0x07, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  AnimationAvailable                AnimationAvailable                 = 0x08,
-  EndOfMessage                      EndOfMessage                       = 0x09,
-  ObjectConnectionState             ObjectConnectionState              = 0x0A, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectMoved                       ObjectMoved                        = 0x0B, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectStoppedMoving               ObjectStoppedMoving                = 0x0C, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectUpAxisChanged               ObjectUpAxisChanged                = 0x0D, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectTapped                      ObjectTapped                       = 0x0E, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectAccel                       ObjectAccel                        = 0x0F, // TODO: The engine is not yet sending this message, holding this tag id near the other object events for when it's implemented
-  RobotObservedObject               RobotObservedObject                = 0x10, // TODO: Add this to Events once webots dependancy on heirarchy is lifted
-  ObjectAvailable                   ObjectAvailable                    = 0x11,
-  RobotDeletedFixedCustomObjects    RobotDeletedFixedCustomObjects     = 0x12,
-  RobotDeletedCustomMarkerObjects   RobotDeletedCustomMarkerObjects    = 0x13,
-  CreatedFixedCustomObject          CreatedFixedCustomObject           = 0x14,
-  DefinedCustomObject               DefinedCustomObject                = 0x15,
-  MemoryMapMessageBegin             MemoryMapMessageBegin              = 0x16,
-  MemoryMapMessage                  MemoryMapMessage                   = 0x17,
-  MemoryMapMessageEnd               MemoryMapMessageEnd                = 0x18,
 }
 
 } // namespace ExternalInterface
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

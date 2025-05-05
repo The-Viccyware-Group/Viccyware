@@ -17,7 +17,7 @@
 #include <sstream>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 std::string AnimTrackHelpers::AnimTrackFlagsToString(uint8_t tracks)
 {
@@ -52,5 +52,5 @@ std::string AnimTrackHelpers::AnimTrackFlagsToString(uint8_t tracks)
 }
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

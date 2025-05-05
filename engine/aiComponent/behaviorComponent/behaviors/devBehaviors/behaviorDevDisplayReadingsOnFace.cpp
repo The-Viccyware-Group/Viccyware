@@ -18,7 +18,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 static const float kMagicNumberSpaceBetweenText = 20.f;
@@ -118,12 +118,13 @@ void BehaviorDevDisplayReadingsOnFace::UpdateDisplayPeripheralMotion()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorDevDisplayReadingsOnFace::UpdateDisplayProxReading()
 {
-  const auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetComponent<ProxSensorComponent>();
-  const auto& proxData = proxSensor.GetLatestProxData();
+  auto& proxSensor = GetBEI().GetComponentWrapper(BEIComponentID::ProxSensor).GetValue<ProxSensorComponent>();
+  u16 proxDist_mm = 0;
+  const bool isValid = proxSensor.GetLatestDistance_mm(proxDist_mm);
 
   std::string text = "Prox (mm): ";
-  if(proxData.foundObject){
-    text += std::to_string(proxData.distance_mm);
+  if(isValid){
+    text += std::to_string(proxDist_mm);
   }else{
     text += "INVALID READING";
   }
@@ -134,7 +135,7 @@ void BehaviorDevDisplayReadingsOnFace::UpdateDisplayProxReading()
   {
     std::string text = "Intensity: ";
     auto proxData = proxSensor.GetLatestProxData();
-    text += std::to_string(proxData.signalQuality);
+    text += std::to_string(proxData.signalIntensity/proxData.spadCount);
 
 
     DrawTextWithAutoLayout(text);
@@ -161,6 +162,6 @@ void BehaviorDevDisplayReadingsOnFace::AlwaysHandleInScope(const EngineToGameEve
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

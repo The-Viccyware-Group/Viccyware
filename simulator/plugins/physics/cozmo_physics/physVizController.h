@@ -13,7 +13,8 @@
 #define __CozmoPhysics_PhysVizControllerImpl_H__
 
 #include "coretech/messaging/shared/UdpServer.h"
-#include "coretech/common/shared/math/point_fwd.h"
+#include "coretech/common/engine/math/point.h"
+#include "coretech/common/engine/math/point_impl.h"
 #include "engine/events/ankiEventMgr.h"
 #include "clad/externalInterface/messageEngineToGame.h"
 #include "clad/vizInterface/messageViz.h"
@@ -24,7 +25,25 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
+  
+using SimpleQuadVector = std::vector<VizInterface::SimpleQuad>;
+
+  
+class MemoryMapNode
+{
+public:
+  MemoryMapNode(int depth, float size_m, const Point3f& center);
+  
+  bool AddChild(SimpleQuadVector& destSimpleQuads, const ExternalInterface::ENodeContentTypeEnum content, const int depth);
+  
+private:
+  int     _depth;
+  float   _size_m;
+  Point3f _center;
+  int     _nextChild;
+  std::vector<MemoryMapNode> _children;
+};
   
 class PhysVizController
 {
@@ -46,15 +65,22 @@ private:
   }
 
   void ProcessVizObjectMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
-  void ProcessVizLineSegmentMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizSegmentPrimitiveMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizQuadMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizSimpleQuadVectorMessageBegin(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizSimpleQuadVectorMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizSimpleQuadVectorMessageEnd(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizMemoryMapMessageBegin(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizMemoryMapMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizMemoryMapMessageEnd(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizEraseObjectMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
-  void ProcessVizEraseLineSegmentsMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizEraseSegmentPrimitivesMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizEraseQuadMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizAppendPathSegmentLineMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizAppendPathSegmentArcMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizSetPathColorMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizErasePathMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
+  void ProcessVizDefineColorMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizShowObjectsMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
   void ProcessVizSetOriginMessage(const AnkiEvent<VizInterface::MessageViz>& msg);
 
@@ -64,7 +90,7 @@ private:
   void DrawHead(float width, float height, float depth);
   void DrawTetrahedronMarker(const float x, const float y, const float z,
     const float length_x, const float length_y, const float length_z);
-  void DrawRobot(Anki::Vector::VizRobotMarkerType type);
+  void DrawRobot(Anki::Cozmo::VizRobotMarkerType type);
   void DrawPredockPose();
   void DrawQuad(const float xUpperLeft,  const float yUpperLeft, const float zUpperLeft,
     const float xLowerLeft,  const float yLowerLeft, const float zLowerLeft,
@@ -116,6 +142,17 @@ private:
   //VizQuadTypeMap_t quadMap_;
   std::unordered_map<uint32_t, std::unordered_map<uint32_t, VizInterface::Quad> > _quadMap;
   
+  // quad arrays injected by name instead of requiring one ID per quad
+  std::unordered_map<std::string, SimpleQuadVector> _simpleQuadVectorMapReady;    // ready to draw
+  std::unordered_map<std::string, SimpleQuadVector> _simpleQuadVectorMapIncoming; // incoming from the socket
+  
+  // memory map quad info data
+  // Maps message sequence number to message. This allows use to check that all messages were received and deals with
+  // out of order messages
+  using MemoryMapQuadInfoVector = std::map<u32, std::vector<ExternalInterface::MemoryMapQuadInfo>>;
+  std::unordered_map<uint32_t, MemoryMapQuadInfoVector> _memoryMapQuadInfoVectorMapIncoming;  // incoming from the socket
+  std::unordered_map<uint32_t, ExternalInterface::MemoryMapInfo> _memoryMapInfo;
+  
   struct Segment {
     Segment() : color(0) {}
     Segment(uint32_t c, const std::array<float, 3>& o, const std::array<float, 3>& d) :
@@ -125,9 +162,14 @@ private:
     std::array<float, 3> dest;
   };
   
-  // line segments
+  // segment primitives
   using SegmentVector = std::vector<Segment>;
-  std::map<std::string, SegmentVector> _lineSegments;
+  std::map<std::string, SegmentVector> _segmentPrimitives;
+
+  // Color map
+  //using VizColorDef_t = std::unordered_map<uint32_t, VizInterface::DefineColor>;
+  //VizColorDef_t colorMap_;
+  std::unordered_map<uint32_t, VizInterface::DefineColor> _colorMap;
 
   // Server that listens for visualization messages from basestation's VizManger
   UdpServer _server;
@@ -148,7 +190,7 @@ private:
 };
 
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 
 

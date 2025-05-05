@@ -1,6 +1,0 @@
-{
-  "behaviorClass" : "CoordinateWhileInAir",
-  "behaviorID" : "CoordinateWhileInAir",
-
-  "delegateID": "GlobalInterruptions"
-}

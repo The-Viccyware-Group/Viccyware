@@ -4,9 +4,6 @@ cxx_project(
     ['engine', 'robot', 'shared'],
     excludes=['robot/mex/**']
   ),
-  data = glob([
-                'clad_src/clad/**/*.clad',              
-              ]),
   platform_srcs = [],
   headers = cxx_header_glob(
     ['engine', 'robot', 'shared'],
@@ -23,18 +20,3 @@ cxx_project(
   platform_headers = []
 )
 
-cxx_project(
-  name = 'cti_vision_face_eval',
-  srcs = cxx_src_glob(['tools/faceEval']),
-  platform_srcs = [],
-  headers = cxx_header_glob(['tools/faceEval']),
-  platform_headers = []
-)
-
-cxx_project(
-  name = 'cti_vision_debayer',
-  srcs = cxx_src_glob(['tools/debayer']),
-  platform_srcs = [],
-  headers = cxx_header_glob(['tools/debayer']),
-  platform_headers = []
-)

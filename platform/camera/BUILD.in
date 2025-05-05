@@ -6,7 +6,7 @@ cxx_project(
                                     '**/test/*',
                                     '*_mac.*']),
     platform_srcs = [
-        ('vicos', glob(['vicos/**/*.cpp',
+        ('android', glob(['vicos/**/*.cpp',
                           '**/*_vicos.cpp'])),
         ('mac', glob(['**/*_mac.cpp']))
     ],

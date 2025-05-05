@@ -3,7 +3,6 @@
 #include "common.h"
 #include "hardware.h"
 #include "power.h"
-#include "analog.h"
 
 #include "i2c.h"
 #include "messages.h"
@@ -11,13 +10,12 @@
 #include "flash.h"
 #include "comms.h"
 #include "opto.h"
-#include "motors.h"
 
 using namespace I2C;
 
 // Failure codes
 FailureCode Opto::failure = BOOT_FAIL_NONE;
-bool Opto::active = false;
+static bool optoActive = false;
 
 // Readback values
 static uint16_t cliffSense[4];
@@ -32,11 +30,18 @@ static uint32_t measurement_timing_budget_us;
 #define TARGET(value) sizeof(value), (void*)&value
 #define VALUE(value) 1, (void*)value
 
-static const int SKIP_WRITE = 8;    // Don't do the first 7 steps of I2C_LOOP
-static const int SKIP_NO_TOF = 13;  // There is no TOF sensor, so we can't access these addresses
-
 const I2C_Operation I2C_LOOP[] = {
-  // Start single read on TOF sensor
+  { I2C_REG_READ, 0, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[3]) },
+  { I2C_REG_READ, 1, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[2]) },
+  { I2C_REG_READ, 2, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[1]) },
+  { I2C_REG_READ, 3, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[0]) },
+  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS, TARGET(tof_status) },
+  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 10, TARGET(tof_reading) },
+  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 6, TARGET(tof_signal_rate) },
+  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 8, TARGET(tof_ambient_rate) },
+  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 2, TARGET(tof_spad_count) },
+
+  // Start single read
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0x80, VALUE(0x01) },
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0xFF, VALUE(0x01) },
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0x00, VALUE(0x00) },
@@ -44,18 +49,8 @@ const I2C_Operation I2C_LOOP[] = {
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0x00, VALUE(0x01) },
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0xFF, VALUE(0x00) },
   { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, 0x80, VALUE(0x00) },
-  { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, SYSRANGE_START, VALUE(0x01) },  
 
-  // Read the status of all the sensors
-  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS, TARGET(tof_status) },
-  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 10, TARGET(tof_reading) },
-  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 6, TARGET(tof_signal_rate) },
-  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 8, TARGET(tof_ambient_rate) },
-  { I2C_REG_READ, 0, TOF_SENSOR_ADDRESS, RESULT_RANGE_STATUS + 2, TARGET(tof_spad_count) },
-  { I2C_REG_READ, 0, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[3]) },
-  { I2C_REG_READ, 1, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[2]) },
-  { I2C_REG_READ, 2, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[1]) },
-  { I2C_REG_READ, 3, DROP_SENSOR_ADDRESS, PS_DATA_0, TARGET(cliffSense[0]) },
+  { I2C_REG_WRITE_VALUE, 0, TOF_SENSOR_ADDRESS, SYSRANGE_START, VALUE(0x01) },
 
   { I2C_DONE }
 };
@@ -75,47 +70,19 @@ struct SequenceStepTimeouts
 
 
 void Opto::tick(void) {
-  static const int SLOW_COUNT_TARGET = 200;
-  static const int MID_COUNT_TARGET = 12;
-  static const int FAST_COUNT_TARGET = 6;
-  static int period_counter = 0;
-  int COUNT_TARGET;
-  
-  if (Motors::treads_driven) {
-    COUNT_TARGET = FAST_COUNT_TARGET;
-  } else if (Analog::on_charger) {
-    COUNT_TARGET = SLOW_COUNT_TARGET;
-  } else  {
-    COUNT_TARGET = MID_COUNT_TARGET;
-  }
-
-  if (IS_WHISKEY) {
-    I2C::execute(&I2C_LOOP[SKIP_NO_TOF]);
-  } else if (++period_counter >= COUNT_TARGET) {
-    I2C::execute(&I2C_LOOP[0]);
-    period_counter = 0;
-  } else {
-    I2C::execute(&I2C_LOOP[SKIP_WRITE]);
-  }
+  I2C::execute(I2C_LOOP);
 }
 
 void Opto::transmit(BodyToHead *payload) {
-  static uint16_t totalSamples = 0x1;
-  static uint8_t last_tof_status = 0;
-
-  if (~last_tof_status & tof_status & 0x01) {
-    totalSamples++;
-  }
-  last_tof_status = tof_status;
-
   memcpy(payload->cliffSense, cliffSense, sizeof(cliffSense));
-  payload->proximity.sampleCount = totalSamples;
   payload->proximity.rangeMM = tof_reading;
   payload->proximity.rangeStatus = tof_status;
   payload->proximity.signalRate = tof_signal_rate;
   payload->proximity.ambientRate = tof_ambient_rate;
   payload->proximity.spadCount = tof_spad_count;
   payload->failureCode = failure;
+  payload->flags =
+    (optoActive ? RUNNING_FLAGS_SENSORS_VALID : 0);
 }
 
 #define decodeVcselPeriod(reg_val)      (((reg_val) + 1) << 1)
@@ -358,18 +325,11 @@ void Opto::start(void) {
     writeReg(i, DROP_SENSOR_ADDRESS, MAIN_CTRL, 0x01);
     writeReg(i, DROP_SENSOR_ADDRESS, PS_LED, 6 | (5 << 4));
     writeReg(i, DROP_SENSOR_ADDRESS, PS_PULSES, 8);
-    writeReg(i, DROP_SENSOR_ADDRESS, PS_MEAS_RATE, 3 | (3 << 3) | 0x40);
+    writeReg(i, DROP_SENSOR_ADDRESS, PS_MEAS_RATE, 4 | (3 << 3) | 0x40);
     writeReg(i, DROP_SENSOR_ADDRESS, PS_CAN_0, 0);
     writeReg(i, DROP_SENSOR_ADDRESS, PS_CAN_1, 0);
   }
 
-  if (IS_WHISKEY) {
-    I2C::release();
-
-    Opto::active = true;
-    return ;
-  }
-  
   // Turn on TOF sensor
   // "Set I2C standard mode"
   writeReg(0, TOF_SENSOR_ADDRESS, 0x88, 0x00);
@@ -579,13 +539,13 @@ void Opto::start(void) {
   // Return the i2c bus to the main execution loop
   I2C::release();
 
-  Opto::active = true;
+  optoActive = true;
 }
 
 void Opto::stop(void) {
-  Opto::active = false;
+  optoActive = false;
 
-  // I2C bus is no longer valid (block sensors)
+  // I2C bus is no longer valid
   I2C::capture();
   
   failure = BOOT_FAIL_NONE;
@@ -597,5 +557,6 @@ void Opto::stop(void) {
 }
 
 bool Opto::sensorsValid() {
-  return Opto::active;
+  return optoActive;
 }
+

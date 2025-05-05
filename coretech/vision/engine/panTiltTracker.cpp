@@ -16,7 +16,7 @@
 #include "coretech/vision/engine/cameraCalibration.h"
 #include "coretech/vision/engine/panTiltTracker.h"
 
-#include "coretech/common/shared/math/rect.h"
+#include "coretech/common/engine/math/rect_impl.h"
 
 #include "coretech/common/engine/utils/timer.h"
 #include "util/logging/logging.h"
@@ -207,5 +207,5 @@ namespace Anki {
       return lastResult;
     } // Update()
     
-} // namespace Vision
+} // namespace Cozmo
 } // namespace Anki

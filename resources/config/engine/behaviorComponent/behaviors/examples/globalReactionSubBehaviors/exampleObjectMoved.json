@@ -1,0 +1,10 @@
+{
+  "behaviorClass": "AnimSequence",
+  "behaviorID": "ExampleObjectMoved",
+  "animTriggers": ["AcknowledgeObject"],
+  "wantsToBeActivatedConditions": [
+    {
+      "conditionType" : "ObjectMoved"
+    }
+  ]  
+}

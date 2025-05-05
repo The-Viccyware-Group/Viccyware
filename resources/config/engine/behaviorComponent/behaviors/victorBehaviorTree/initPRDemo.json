@@ -1,7 +1,0 @@
-{
-  "behaviorID": "InitPRDemo",
-  "behaviorClass": "PRDemoBase"
-}
-
-// copy-paste for setting the timer
-// {"intent":"intent_clock_settimer","params": {"timer_duration":"20","unit":"s"}}

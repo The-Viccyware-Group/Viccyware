@@ -3,7 +3,7 @@
 * High level behaviors coordinate overall activity, delegate to other behaviors
 * Lower level behaviors control the robot by delegating to actions or helpers
 * Multiple behaviors are *active* in the stack, only the last one is *in control*
-* Behaviors which might run are in *activatable scope* 
+* Behaviors which might run are in *activatable scope*
 
 **The behavior system documentation is [on confluence](https://ankiinc.atlassian.net/wiki/spaces/CBS/overview).**
 Look there for details, this is just a tiny overview.
@@ -15,28 +15,20 @@ of behaviors can be active, managed by the Behavior System Manager. Each behavio
 On Victor, if you are trying to make the robot do something from engine, then (99% of the time) you need to be
 using a behavior
 
-## Active Feature
-
-The behavior system is also responsible for determining what the current _active feature_ is. This informs the
-feature that will appear in the status-log on app, as well as the data which is sent to DAS. Behavior json
-files can specify an "associatedActiveFeature" to declare that they (and all delegates that don't have their
-own associated features) are associated with a given feature enum (from
-[activeFeatures.clad](/clad/src/clad/types/behaviorComponent/activeFeatures.clad)). All branches of the
-production behavior tree must have an active feature defined (or explicitly declare
-ActiveFeature::NoFeature). This is checked by the `DelegationTree.CheckActiveFeatures` unit test.
-
 ## Running behaviors
 
 The default behavior is set in [victor_behavior_config.json](/resources/config/engine/behaviorComponent/victor_behavior_config.json)
 
-Using [webots](/simulator/README.md) you can run a behavior by pasting the ID (see [behaviorIDs.clad](../../clad/src/clad/types/behaviorComponent/behaviorIDs.clad)) into the `behaviorName` field and pressing "Shift+C"
+Using [webots](/simulator/README.md) you can run a behavior by pasting the ID (see
+[behaviorTypes.clad](../../clad/src/clad/types/behaviorComponent/behaviorTypes.clad)) into the `behaviorName`
+field and pressing "Shift+C"
 
 ## Examples
 
-1. The very simple ["observing without turn"](/engine/aiComponent/behaviorComponent/behaviors/observing/behaviorObservingWithoutTurn.h) behavior
+1. The very simple ["observing on charger"](/engine/aiComponent/behaviorComponent/behaviors/observing/behaviorObservingOnCharger.h) behavior
    which simply looks up and down with random delays (and can run on the charger)
 
-2. The ["come here"](/engine/aiComponent/behaviorComponent/behaviors/simpleFaceBehaviors/behaviorDriveToFace.h) behavior
+2. The ["come here"](/engine/aiComponent/behaviorComponent/behaviors/victor/behaviorComeHere.h) behavior
    in response to a voice command which turns and drives towards a face, handling some edge cases
    
 ## Basic concepts
@@ -72,9 +64,3 @@ automatically.
 
 The scripts also have some checks to ensure that the above conventions are matched and that json files match
 known behavior classes.
-
-## See also
-
-[User/cloud/app intents in the behavior system](/docs/architecture/behaviors_intents.md)
-
-You can run the [plotBehaviorTree.sh](/tools/ai/plotBehaviorTree.sh) function with no arguments to see the entire tree, or give it a filename as the single argument to output a pdf of the tree. Look at that script to see more about underling arguments and how to plot other things. Note that plotting the behavior tree relies on artifacts from running the engine unit tests. You can run engine unit tests with [project/buildServer/steps/unittestsEngine.sh](/project/buildServer/steps/unittestsEngine.sh).

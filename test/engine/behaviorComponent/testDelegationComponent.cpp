@@ -23,7 +23,6 @@
 #include "engine/aiComponent/behaviorComponent/behaviorSystemManager.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/aiComponent/behaviorComponent/behaviorStack.h"
 #include "engine/cozmoContext.h"
 #include "engine/robot.h"
 #include "engine/robotDataLoader.h"
@@ -32,14 +31,14 @@
 #include "test/engine/behaviorComponent/testBehaviorFramework.h"
 #include "util/helpers/boundedWhile.h"
 
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 TEST(DelegationComponent, TestDelegationVariants)
 {
   std::unique_ptr<TestSuperPoweredBehavior> baseBehavior = std::make_unique<TestSuperPoweredBehavior>();
   TestBehaviorFramework testFramework(1, nullptr);
   auto initializeBehavior = [&baseBehavior](const BehaviorComponent::ComponentPtr& comps) {
-    baseBehavior->SetBehaviorContainer(comps->GetComponent(BCComponentID::BehaviorContainer).GetComponent<BehaviorContainer>());
+    baseBehavior->SetBehaviorContainer(comps->GetComponent(BCComponentID::BehaviorContainer).GetValue<BehaviorContainer>());
   };
   testFramework.InitializeStandardBehaviorComponent(baseBehavior.get(),initializeBehavior);
 
@@ -67,7 +66,7 @@ TEST(DelegationComponent, TestDelegationVariants)
       toDelegate->SetBehaviorContainer(behaviorContainer);
       toDelegate->Init(bei);
       toDelegate->OnEnteredActivatableScope();
-      const bool wtba __attribute((unused)) = toDelegate->WantsToBeActivated();
+      toDelegate->WantsToBeActivated();
       InjectValidDelegateIntoBSM(testFramework, behaviorDelegating, toDelegate.get());
 
       ASSERT_TRUE(delegationComp.HasDelegator(behaviorDelegating));
@@ -97,7 +96,7 @@ TEST(DelegationComponent, TestDelegationVariants)
       auto& toDelegate = bunchOfCozmoBehaviors.back();
       toDelegate->Init(bei);
       toDelegate->OnEnteredActivatableScope();
-      const bool wtba __attribute((unused)) = toDelegate->WantsToBeActivated();
+      toDelegate->WantsToBeActivated();
       InjectValidDelegateIntoBSM(testFramework, behaviorDelegating, toDelegate.get());
 
       ASSERT_TRUE(delegationComp.HasDelegator(behaviorDelegating));

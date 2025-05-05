@@ -5,6 +5,7 @@
 #include <string.h>
 #include "portable.h"
 #include "timer.h"
+#include "uart.h"
 #include "console.h"
 #include "app.h"
 #include "binaries.h"

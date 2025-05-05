@@ -17,7 +17,6 @@
 #include "util/logging/logging.h"
 #include "util/math/numericCast.h"
 #include "util/global/globalDefinitions.h"
-#include "util/string/stringUtils.h"
 
 #include <json/json.h>
 
@@ -39,39 +38,6 @@ inline static Json::LargestInt TimeToInt64(EnrolledFaceEntry::Time time)
   using namespace std::chrono;
   auto jsonTime = Util::numeric_cast<Json::LargestInt>(duration_cast<seconds>(time.time_since_epoch()).count());
   return jsonTime;
-}
-
-UserName::UserName(const std::string& name)
-  : _name( Util::StringToLower(name) )
-  , _displayName( name )
-{
-
-}
-
-UserName& UserName::operator=( const std::string& name )
-{
-  _displayName = name;
-  _name = Util::StringToLower(name);
-  return *this;
-}
-
-bool UserName::operator==( const UserName& rhs ) const
-{
-  return ( _name == rhs._name );
-}
-
-bool UserName::operator==( const std::string& rhs ) const
-{
-  // use a temp UserName to ensure proper formatting of the _name string
-  const UserName rhsUserName( rhs );
-  return ( *this == rhsUserName );
-}
-
-bool UserName::operator==( const char* rhs ) const
-{
-  // use a temp UserName to ensure proper formatting of the _name string
-  const UserName rhsUserName( rhs );
-  return ( *this == rhsUserName );
 }
   
 EnrolledFaceEntry::EnrolledFaceEntry(FaceID_t withID, Time enrollmentTime)
@@ -203,14 +169,16 @@ void EnrolledFaceEntry::FillJson(Json::Value& entry) const
   using namespace std::chrono;
   
   // NOTE: Save times as "number of ticks since epoch"
-  entry[JsonKey::name]               = _name.asString();
+  entry[JsonKey::name]               = _name;
   entry[JsonKey::enrollmentTime]     = TimeToInt64(_enrollmentTime);
   entry[JsonKey::lastDataUpdateTime] = TimeToInt64(_lastDataUpdateTime);
   
   // First entry is the session-only entry, by convention
   Json::Value jsonAlbumEntry;
   jsonAlbumEntry[JsonKey::albumEntry]   = _sessionOnlyAlbumEntry;
-  jsonAlbumEntry[JsonKey::lastSeenTime] = TimeToInt64(GetSessionOnlySeenTime());
+  jsonAlbumEntry[JsonKey::lastSeenTime] = (_sessionOnlyAlbumEntry != UnknownAlbumEntryID ?
+                                    TimeToInt64(_albumEntrySeenTimes.at(_sessionOnlyAlbumEntry)) :
+                                    0);
   
   entry["albumEntries"].append(jsonAlbumEntry);
   
@@ -237,14 +205,16 @@ EnrolledFaceStorage EnrolledFaceEntry::ConvertToEnrolledFaceStorage() const
   message.enrollmentTimeCount     = duration_cast<seconds>(_enrollmentTime.time_since_epoch()).count();
   message.lastDataUpdateTimeCount = duration_cast<seconds>(_lastDataUpdateTime.time_since_epoch()).count();
   message.faceID                  = _faceID;
-  message.name                    = _name.asString(); // save formatted string
+  message.name                    = _name;
   
   message.albumEntries.reserve(_albumEntrySeenTimes.size());
   message.albumEntryUpdateTimes.reserve(_albumEntrySeenTimes.size());
   
   // First entry is the session-only entry, by convention
   message.albumEntries.push_back(_sessionOnlyAlbumEntry);
-  message.albumEntryUpdateTimes.push_back(TimeToInt64(GetSessionOnlySeenTime()));
+  message.albumEntryUpdateTimes.push_back(_sessionOnlyAlbumEntry != UnknownAlbumEntryID ?
+                                          TimeToInt64(_albumEntrySeenTimes.at(_sessionOnlyAlbumEntry)) :
+                                          0);
   
   for(auto & albumEntryPair : _albumEntrySeenTimes)
   {
@@ -446,28 +416,18 @@ Result EnrolledFaceEntry::MergeWith(const EnrolledFaceEntry& other,
   return RESULT_OK;
 }
 
-EnrolledFaceEntry::Time EnrolledFaceEntry::GetSessionOnlySeenTime() const
-{
-  Time sessionOnlyTime(std::chrono::seconds(0));
-  if(_sessionOnlyAlbumEntry != UnknownAlbumEntryID)
-  {
-    auto iter = _albumEntrySeenTimes.find(_sessionOnlyAlbumEntry);
-    if(ANKI_VERIFY(iter != _albumEntrySeenTimes.end(),
-                   "EnrolledFaceEntry.MergeAlbumEntriesHelper.MissingSessionOnlySeenTime",
-                   "FaceID:%d SessionOnlyEntry:%d", GetFaceID(), _sessionOnlyAlbumEntry))
-    {
-      sessionOnlyTime = iter->second;
-    }
-  }
-  return sessionOnlyTime;
-}
-  
 Result EnrolledFaceEntry::MergeAlbumEntriesHelper(const EnrolledFaceEntry& other,
                                                   s32 maxAlbumEntriesToKeep,
                                                   std::vector<AlbumEntryID_t>& entriesRemoved)
 {
-  const Time otherSessionOnlyTime = other.GetSessionOnlySeenTime();
-  const Time thisSessionOnlyTime  = this->GetSessionOnlySeenTime();
+  const Time otherSessionOnlyTime = (other._sessionOnlyAlbumEntry != UnknownAlbumEntryID ?
+                                     other._albumEntrySeenTimes.at(other._sessionOnlyAlbumEntry) :
+                                     Time(std::chrono::seconds(0)));
+  
+  const Time thisSessionOnlyTime  = (_sessionOnlyAlbumEntry != UnknownAlbumEntryID ?
+                                     _albumEntrySeenTimes.at(this->_sessionOnlyAlbumEntry) :
+                                     Time(std::chrono::seconds(0)));
+  
   const bool useOtherSessionOnlyEntry = (otherSessionOnlyTime > thisSessionOnlyTime);
   
   PRINT_CH_DEBUG("FaceRecognizer", "EnrolledFaceEntry.MergeAlbumEntriesHelper.WhichSessionOnlyEntry",
@@ -505,18 +465,11 @@ Result EnrolledFaceEntry::MergeAlbumEntriesHelper(const EnrolledFaceEntry& other
       if(_sessionOnlyAlbumEntry != UnknownAlbumEntryID) {
         _albumEntrySeenTimes.erase(_sessionOnlyAlbumEntry);
         entriesRemoved.emplace_back(_sessionOnlyAlbumEntry);
-        _sessionOnlyAlbumEntry = UnknownAlbumEntryID;
       }
       
-      if(ANKI_VERIFY(other._sessionOnlyAlbumEntry != UnknownAlbumEntryID,
-                     "EnrolledFaceEntry.MergeAlbumEntriesHelper.OtherSessionOnlyEntryInvalid",
-                     "OtherFaceID:%d", other.GetFaceID()))
-      {
-        // Add in other's session-only entry, iff it is valid
-        _sessionOnlyAlbumEntry = other._sessionOnlyAlbumEntry;
-        _albumEntrySeenTimes[_sessionOnlyAlbumEntry] = otherSessionOnlyTime;
-      }
-      
+      // Add in other's session-only entry
+      _sessionOnlyAlbumEntry = other._sessionOnlyAlbumEntry;
+      _albumEntrySeenTimes[_sessionOnlyAlbumEntry] = otherSessionOnlyTime;
     }
 
   }

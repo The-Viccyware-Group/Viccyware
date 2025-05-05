@@ -14,14 +14,15 @@
 #define __Cozmo__BehaviorReactToMicDirection_h__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/mics/micDirectionTypes.h"
+#include "engine/micDirectionTypes.h"
 
+#include "util/helpers/fullEnumToValueArrayChecker.h"
 #include "util/helpers/templateHelpers.h"
 #include <vector>
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 class BehaviorReactToMicDirection : public ICozmoBehavior
@@ -88,7 +89,6 @@ private:
     NineOClock,
     TenOClock,
     ElevenOClock,
-    Ambient,
 
     NumDirections,
     Invalid = NumDirections,

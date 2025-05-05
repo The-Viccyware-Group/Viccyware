@@ -16,13 +16,13 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/freeplay/oneShots/behaviorSinging.h"
 
 #include "engine/actions/animActions.h"
+#include "engine/activeObject.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
 #include "engine/audio/engineRobotAudioClient.h"
-#include "engine/block.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/components/cubes/cubeAccelComponent.h"
+#include "engine/components/cubeAccelComponent.h"
 #include "engine/cozmoContext.h"
-#include "util/cladHelpers/cladFromJSONHelpers.h"
+#include "engine/events/animationTriggerHelpers.h"
 
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
@@ -30,19 +30,19 @@
 #include "clad/audio/audioEventTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
   static const char* kAudioSwitchGroup = "audioSwitchGroup";
   static const char* kAudioSwitch = "audioSwitch";
-
-  static const AnimationTrigger kGetInTrigger = AnimationTrigger::DEPRECATED_Singing_GetIn;
-  static const AnimationTrigger kGetOutTrigger = AnimationTrigger::DEPRECATED_Singing_GetOut;
-
-  static const AnimationTrigger k80BpmTrigger = AnimationTrigger::DEPRECATED_Singing_80bpm;
-  static const AnimationTrigger k100BpmTrigger = AnimationTrigger::DEPRECATED_Singing_100bpm;
-  static const AnimationTrigger k120BpmTrigger = AnimationTrigger::DEPRECATED_Singing_120bpm;
-
+  
+  static const AnimationTrigger kGetInTrigger = AnimationTrigger::Singing_GetIn;
+  static const AnimationTrigger kGetOutTrigger = AnimationTrigger::Singing_GetOut;
+  
+  static const AnimationTrigger k80BpmTrigger = AnimationTrigger::Singing_80bpm;
+  static const AnimationTrigger k100BpmTrigger = AnimationTrigger::Singing_100bpm;
+  static const AnimationTrigger k120BpmTrigger = AnimationTrigger::Singing_120bpm;
+  
   static const AudioMetaData::GameParameter::ParameterType kVibratoParam =
     AudioMetaData::GameParameter::ParameterType::Cozmo_Singing_Vibrato;
 }
@@ -60,7 +60,7 @@ BehaviorSinging::BehaviorSinging(const Json::Value& config)
                  "No audioSwitchGroup for singing behavior %s",
                  GetDebugLabel().c_str());
   _audioSwitchGroup = AudioMetaData::SwitchState::SwitchGroupTypeFromString(value);
-
+  
   // We have to have a audioSwitch otherwise this behavior is useless
   res = JsonTools::GetValueOptional(config, kAudioSwitch, value);
   DEV_ASSERT_MSG(res,
@@ -97,7 +97,7 @@ BehaviorSinging::BehaviorSinging(const Json::Value& config)
                      "BehaviorSinging.NoAudioSwitch",
                      "No audioSwitch for singing behavior %s",
                      GetDebugLabel().c_str());
-
+      
       // Default to a 80Bpm fallback song
       _audioSwitch = GenericSwitch::Invalid;
       _audioSwitchGroup = AudioSwitchGroup::Cozmo_Sings_80Bpm;
@@ -110,9 +110,9 @@ BehaviorSinging::BehaviorSinging(const Json::Value& config)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorSinging::~BehaviorSinging()
 {
-
+  
 }
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSinging::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
 {
@@ -127,7 +127,7 @@ void BehaviorSinging::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) c
 bool BehaviorSinging::WantsToBeActivatedBehavior() const
 {
   // Always activatable, the higher level Singing goal/activity is responsible
-  // for deciding when Cozmo should sing
+  // for deciding when Cozmo should sing    
   return true;
 }
 
@@ -135,7 +135,7 @@ bool BehaviorSinging::WantsToBeActivatedBehavior() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSinging::OnBehaviorActivated()
 {
-  if(ANKI_VERIFY(GetBEI().HasRobotAudioClient(),
+  if(ANKI_VERIFY(GetBEI().HasRobotAudioClient(), 
                  "BehaviorSinging.OnBehaviorActivated.MissingAudioClient","")){
     // Tell Wwise to switch to the specific SwitchGroup (80/100/120bpm)
     // and a specific switch in the group (song)
@@ -144,6 +144,42 @@ void BehaviorSinging::OnBehaviorActivated()
                                                                      AudioMetaData::GameObjectType::Default /* FIXME: Not correct game object */);
   }
 
+  // Clear listeners and averages
+  _cubeAccelListeners.clear();
+  _objectShakeAverages.clear();
+  
+  // Filter to find all LightCubes
+  BlockWorldFilter filter;
+  filter.AddAllowedFamily(ObjectFamily::LightCube);
+  filter.SetFilterFcn(nullptr);
+  
+  // Get all connected light cubes
+  std::vector<const ActiveObject*> connectedObjects;
+  GetBEI().GetBlockWorld().FindConnectedActiveMatchingObjects(filter, connectedObjects);
+  
+  // For each of the connected light cubes
+  for(const ActiveObject* object : connectedObjects)
+  {
+    const ObjectID& objectID = object->GetID();
+    
+    // Create a RollingAverage to keep track of the average shake amount of this object
+    _objectShakeAverages[objectID].Reset();
+    
+    auto shakeDetected = [this, &objectID](const float shakeAmount) {
+      _objectShakeAverages[objectID].Update(shakeAmount);
+    };
+    
+    // Set up a CubeAccel ShakeListener that will update this object's average shake amount
+    // when shaking is detected
+    std::shared_ptr<CubeAccelListeners::ICubeAccelListener> listener;
+    listener.reset(new CubeAccelListeners::ShakeListener(0.5, 2.5, 3.9, shakeDetected));
+    GetBEI().GetCubeAccelComponent().AddListener(objectID, listener);
+    
+    // Store the listener so we can remove it when the behavior ends
+    // TODO Add SmartAddCubeAccelListener/SmartRemoveCubeAccelListener to base class
+    _cubeAccelListeners.emplace_back(objectID, listener);
+  }
+  
   // Setup the only action this behavior does, three sequential animations
   CompoundActionSequential* action = new CompoundActionSequential();
   action->AddAction(new TriggerAnimationAction(kGetInTrigger));
@@ -173,10 +209,10 @@ void BehaviorSinging::BehaviorUpdate()
     {
       mostShakenObjectAverage = objectShakeAverage.second.Avg();
     }
-
+    
     objectShakeAverage.second.Reset();
   }
-
+  
   // Based on the parameters of the ShakeListener, this maxShakeAmount is
   // the shake amount that results from fairly aggressive shaking
   // The shake amount at which vibrato will be max
@@ -201,34 +237,34 @@ void BehaviorSinging::BehaviorUpdate()
   constexpr float kMinFiltVibrato = 0.1;
   const bool shakeAmountExceedsMin = _vibratoScaleFilt > kMinFiltVibrato;
   const bool shakeStartTimeIsZero = _cubeShakingStartTime_ms == 0;
-
-  const EngineTimeStamp_t curTime_ms = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
   
   // If cube is not being shaken and its shake amount exceeds minimum record the time
   // it started being shaken
   if(shakeStartTimeIsZero && shakeAmountExceedsMin)
   {
-    _cubeShakingStartTime_ms = curTime_ms;
+    _cubeShakingStartTime_ms = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
   }
   // Otherwise if it is being shaken and the shake amount is now below minimum
   else if(!shakeStartTimeIsZero && !shakeAmountExceedsMin)
   {
+    const TimeStamp_t curTime_ms = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
+    
     const char* song = BehaviorTypesWrapper::BehaviorIDToString(GetID());
-    const TimeStamp_t durationOfShake_ms = (TimeStamp_t)(curTime_ms - _cubeShakingStartTime_ms);
-
+    const TimeStamp_t durationOfShake_ms = curTime_ms - _cubeShakingStartTime_ms;
+    
     // If the shake was longer than 500 ms then log event with the shake duration and song
     // name. Ignore short shakes which might be caused by cubes being moved or table shaking
     const TimeStamp_t minShakeDuration_ms = 500;
     if(durationOfShake_ms > minShakeDuration_ms)
     {
-      Util::sInfoF("robot.song_shake_duration_ms",
-                   {{DDATA, song}},
-                   "%u",
-                   durationOfShake_ms);
+      Util::sEventF("robot.song_shake_duration_ms",
+                    {{DDATA, song}},
+                    "%u",
+                    durationOfShake_ms);
     }
 
     _cubeShakingStartTime_ms = 0;
-  }
+  }  
 }
 
 
@@ -243,8 +279,17 @@ void BehaviorSinging::OnBehaviorDeactivated()
   }
 
   // Remove all our listeners
-  _cubeAccelListeners.clear();
+  for(auto iter = _cubeAccelListeners.begin(); iter != _cubeAccelListeners.end();)
+  {
+    const bool wasRemoved = GetBEI().GetCubeAccelComponent().RemoveListener(iter->first, iter->second);
+    DEV_ASSERT(wasRemoved, "BehaviorSinging.StopInternal.RemoveListenerFailed");
+    
+    // We should be the only thing that has a shared_ptr pointing to our CubeAccelListeners
+    // CubeAccelComponent used to have one but we just removed it
+    DEV_ASSERT(iter->second.use_count() == 1, "BehaviorSinging.StopInternal.ListenerHasMultipleRefs");
+    iter = _cubeAccelListeners.erase(iter);
+  }
 }
-
+  
 }
 }

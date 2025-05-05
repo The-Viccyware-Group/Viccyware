@@ -1,5 +1,0 @@
-if(USE_ANKITRACE AND VICOS)
-    add_compile_options(-DUSE_ANKITRACE)
-    find_package(LTTngUST)
-    set(ANKITRACE ankitrace)
-endif()

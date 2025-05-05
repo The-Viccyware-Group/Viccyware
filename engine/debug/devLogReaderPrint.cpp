@@ -14,7 +14,7 @@
 #include "engine/debug/devLogConstants.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 bool DevLogReaderPrint::FillLogData(std::ifstream& fileHandle, LogData& logData_out) const
 {
@@ -115,5 +115,5 @@ uint32_t DevLogReaderPrint::GetFinalTimestamp_ms(std::ifstream& fileHandle) cons
 }
 
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

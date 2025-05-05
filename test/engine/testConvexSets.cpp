@@ -11,7 +11,7 @@
  **/
 
 #include "gtest/gtest.h"
-#include "coretech/common/engine/math/polygon.h"
+#include "coretech/common/engine/math/point_impl.h"
 #include "coretech/common/engine/math/lineSegment2d.h"
 #include "coretech/common/engine/math/ball.h"
 #include "coretech/common/engine/math/fastPolygon2d.h"
@@ -84,32 +84,6 @@ TEST(LineSegment, TestIntersection)
     ASSERT_FALSE(res);
   }
   
-}
-
-// Perpendicular Bisector
-TEST(LineSegment, TestBisector)
-{
-  {
-    Anki::LineSegment l1( {-5.0f, -5.0f}, {5.0f, 5.0f});
-    Anki::Line2f bi = l1.GetPerpendicularBisector();
- 
-    ASSERT_TRUE( bi.Contains({-1.f, 1.f}) );
-    ASSERT_TRUE( bi.Contains({1.f, -1.f}) );
-    ASSERT_TRUE( bi.Contains({0.f, 0.f}) );
-
-    ASSERT_FALSE( bi.Contains({0.f, 2.f}) );
-  }
-
-  {
-    Anki::LineSegment l1( {0.f, 5.0f}, {10.0f, 5.0f});
-    Anki::Line2f bi = l1.GetPerpendicularBisector();
- 
-    ASSERT_TRUE( bi.Contains({5.f, 5.f}) );
-    ASSERT_TRUE( bi.Contains({5.f, 0.f}) );
-
-    ASSERT_FALSE( bi.Contains({0.f, 0.f}) );
-    ASSERT_FALSE( bi.Contains({0.f, 5.f}) );
-  }
 }
 
 // Contains
@@ -290,9 +264,7 @@ TEST(AffineHyperplane, InHalfPlane)
 TEST(Ball, Contains)
 {
   {
-    const Anki::Point3f origin(0.f, 0.f, 0.f);
-    const f32 radius = 1.f;
-    const Anki::Ball3f b(origin, radius);
+    Anki::Ball3f b({0.f, 0.f, 0.f}, 1);
     Anki::Util::RandomGenerator gen;
 
     // random points in unit sphere
@@ -301,9 +273,7 @@ TEST(Ball, Contains)
       Anki::Point3f p;
       for (int j=0; j<3; ++j) { p[j] = gen.RandDbl() - gen.RandDbl(); }
 
-      // VIC-2171: Unit test must apply same logic for tolerance as method being tested
-      const f32 distanceBetween = Anki::ComputeDistanceBetween(p, origin);
-      EXPECT_EQ( b.Contains(p), FLT_LE(SQUARE(distanceBetween), SQUARE(radius)) );
+      EXPECT_EQ( b.Contains(p) , (Anki::ComputeDistanceBetween(p, {0.f, 0.f, 0.f}) <= 1.f) ); 
     }
   }
 }
@@ -338,36 +308,3 @@ TEST(Ball, InHalfPlane)
     ASSERT_TRUE( b.InHalfPlane(xTangentOpen) );
   }
 }
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// ConvexPolygon Tests
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  
-GTEST_TEST(ConvexPolygon, GetCentroid)
-{
-  // center should be .5, .5 for both polygons
-  Anki::ConvexPolygon poly1( {
-    {0.0f, 0.0f},
-    {1.0f, 0.0f},
-    {1.0f, 1.0f},
-    {0.0f, 1.0f}
-  } );  
-
-  Anki::ConvexPolygon poly2( {
-    {0.0f, 0.0f},
-    {1.0f, 0.0f},
-    {1.0f, 1.0f},
-    {0.5f, 1.0f}, // extra point on edge should not skew centroid
-    {0.0f, 1.0f}
-  } );
-
-
-  Anki::Point2f centroid1 = poly1.ComputeCentroid();
-  Anki::Point2f centroid2 = poly2.ComputeCentroid();
-
-  EXPECT_FLOAT_EQ(centroid1.x(), .5f);
-  EXPECT_FLOAT_EQ(centroid1.y(), .5f);
-  EXPECT_FLOAT_EQ(centroid2.x(), .5f);
-  EXPECT_FLOAT_EQ(centroid2.y(), .5f);
-}
-

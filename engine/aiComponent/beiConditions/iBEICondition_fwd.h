@@ -1,5 +1,5 @@
 /**
- * File: iBEICondition_fwd.h
+ * File: iStateConceptStrategy_fwd.h
  *
  * Author: Brad Neuman
  * Created: 2017-11-29
@@ -16,16 +16,11 @@
 #include <memory>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IBEICondition;
 
 using IBEIConditionPtr = std::shared_ptr<IBEICondition>;
-
-class CustomBEIConditionHandleInternal;
-
-using CustomBEIConditionHandle = std::shared_ptr<CustomBEIConditionHandleInternal>;
-using CustomBEIConditionHandleList = std::vector<CustomBEIConditionHandle>;
 
 }
 }

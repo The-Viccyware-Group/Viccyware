@@ -91,7 +91,7 @@ bool TcpServer::StartListening(const unsigned short port)
     DEBUG_TCP_SERVER("TcpServer: Unable to set SO_REUSEADDR, errno=" << strerror(errno));
   }
   
-  #if defined(LINUX) || defined(ANDROID) || defined(VICOS)
+  #if defined(LINUX) || defined(ANDROID)
   // No SO_NOSIGPIPE available on these platforms - handled with MSG_NOSIGNAL flag on send instead
   #else
   // don't generate a SIGPIPE exception for writing to a closed socket
@@ -99,7 +99,7 @@ bool TcpServer::StartListening(const unsigned short port)
   if (status != 0) {
     DEBUG_TCP_SERVER("TcpServer: Unable to set SO_NOSIGPIPE, errno=" << strerror(errno));
   }
-  #endif // defined(LINUX) || defined(ANDROID) || defined(VICOS)
+  #endif // defined(LINUX) || defined(ANDROID)
   
   status = setsockopt(socketfd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
   if (status != 0) {

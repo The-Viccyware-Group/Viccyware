@@ -18,16 +18,15 @@
 #include "util/entityComponent/entity.h"
 #include "clad/types/factoryTestTypes.h"
 
-#include "util/signals/simpleSignal_fwd.h"
 #include "util/math/math.h"
 
 #include <deque>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IBehaviorPlaypen;
-struct FilterParameters;
+  
 
 class BoxFilter
 {
@@ -39,19 +38,15 @@ public:
   {
   }
   
-  float ApplyFilter(int input)
+  int ApplyFilter(int input)
   {
-    if(_winSize == 1) {
-      return input;
-    }
-    
     _buffer.push_back(input);
     _sum += _buffer.back();
     if(_buffer.size()==(_winSize+1)) {
       _sum -= _buffer.front();
       _buffer.pop_front();
     }
-    return float(_sum)/float(_buffer.size());
+    return int( float(_sum)/_buffer.size() );
   }
   
 private:
@@ -60,170 +55,21 @@ private:
   int _sum;
 };
 
-
-// helper class with logic to contain touch calibration logic
-class TouchBaselineCalibrator
-{
-public:
-  TouchBaselineCalibrator(int maxAllowedOffsetFromBaseline)
-  : _baseline(-1.0f)
-  , _isCalibrated(false)
-  , _numCalibrationReadings(0)
-  , _numConsecNoTouch(0)
-  , _maxAllowedOffsetFromBaseline(maxAllowedOffsetFromBaseline)
-  , _chargerModeChanged(false)
-  , _numPostChargerModeReadings(0)
-  , _postChargerModeChangeBaseline(-1.0f)
-  , _numTicksLargeDifferenceInBaselines(0)
-  , _numTicksReadingsTooLowFromBaseline(0)
-  , _durationForFastCalibration(0)
-  {
-  }
-  
-  bool IsCalibrated() const
-  {
-    return _isCalibrated;
-  }
-  
-  void ResetCalibration()
-  {
-    _baseline = -1.0f;
-    _isCalibrated = false;
-    _numConsecNoTouch = 0;
-    _numCalibrationReadings = 0;
-    _numStableBaselineReadings = 0;
-    _durationForFastCalibration = 0;
-    _chargerModeChanged = false;
-    
-    ResetBaselineMonitoring();
-  }
-  
-  void ResetBaselineMonitoring()
-  {
-    // charger mode check vars
-    _postChargerModeChangeBaseline = -1.0f;
-    _numPostChargerModeReadings = 0;
-    _numTicksLargeDifferenceInBaselines = 0;
-    
-    // too-low signal detection vars
-    _numTicksReadingsTooLowFromBaseline = 0;
-  }
-  
-  void ActivateChargerModeCheck()
-  {
-    _chargerModeChanged = true;
-    
-    _postChargerModeChangeBaseline = -1.0f;
-    _numPostChargerModeReadings = 0;
-    _numTicksLargeDifferenceInBaselines = 0;
-  }
-  
-  bool IsChargerModeCheckRunning() const
-  {
-    return _chargerModeChanged;
-  }
-  
-  bool IsInFastCalibrationMode() const
-  {
-    return _durationForFastCalibration != 0 || !IsCalibrated();
-  }
-  
-  void UpdateBaseline(float reading, bool isPressed);
-  
-  float GetBaseline() const
-  {
-    return _baseline;
-  }
-  
-protected:
-  float _baseline;
-  
-  // if not calibrated: fast calibration mode
-  // if     calibrated: slow calibration mode
-  bool _isCalibrated;
-  
-  // when enough raw readings are accumulated within
-  // the baseline, then we can transition to calibrated
-  size_t _numStableBaselineReadings;
-  
-  // number of readings collected so far (while not calibrated)
-  size_t _numCalibrationReadings;
-  
-  // number of readings after the last detected touch
-  size_t _numConsecNoTouch;
-  
-  // highest allowable offset from baseline that can be
-  // accummulated into the filter per tick. This value
-  // is used to prevent soft touches from raising the baseline
-  int _maxAllowedOffsetFromBaseline;
-  
-  // when transitioning between the on vs off charger case
-  // there is usually a DC offset between the steady states
-  bool _chargerModeChanged;
-  
-  // counter for number of accumulated readings since entering
-  // the charger mode check
-  int _numPostChargerModeReadings;
-  
-  // special baseline accumulator for when a charger mode change occurs
-  float _postChargerModeChangeBaseline;
-  
-  // counts of ticks where the preChargerBaseline and postChargerBaseline
-  // differ by too large of an amount
-  int _numTicksLargeDifferenceInBaselines;
-  
-  // counter for the number of consecutive ticks where the input readings
-  // is lower than the baseline by too great of a margin
-  int _numTicksReadingsTooLowFromBaseline;
-  
-  // the time duration in which the robot will use fast calibration
-  // for baseline accumulation
-  int _durationForFastCalibration;
-};
-
 class TouchSensorComponent : public ISensorComponent, public IDependencyManagedComponent<RobotComponentID>
 {
 public:
-  
-  // struct to organize the filter-specific parameters
-  // used in the dynamic thresholding algorithm for
-  // touch detection
-  struct FilterParameters
-  {
-    // number of values to average over
-    int boxFilterSize;
-    
-    // constant size difference between detect and undetect levels
-    int dynamicThreshGap;
-    
-    // the offset from the input reading that detect level is set to
-    int dynamicThreshDetectFollowOffset;
-    
-    // the offset from the input reading that the undetect level is set to
-    int dynamicThreshUndetectFollowOffset;
-    
-    // the lowest reachable undetect level offset from baseline
-    int dynamicThreshMaximumDetectOffset;
-    
-    // the highest reachable detect level offset from baseline
-    int dynamicThreshMininumUndetectOffset;
-    
-    // minimum number of consecutive readings that are below/above detect level
-    // before we update the thresholds dynamically
-    // note: this counters the impact of noise on the dynamic thresholds
-    int minConsecCountToUpdateThresholds;
-  };
-  
+
 public:
   TouchSensorComponent();
-
-  virtual ~TouchSensorComponent();
+  ~TouchSensorComponent() = default;
 
   //////
   // IDependencyManagedComponent functions
   //////
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
-  virtual void InitDependent(Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Robot* robot, const RobotCompMap& dependentComponents) override {
+    InitBase(robot);
+  };
   //////
   // end IDependencyManagedComponent functions
   //////
@@ -232,32 +78,15 @@ public:
   
   float GetTouchPressTime() const;
   
-  // dev-only feature for logging values around the last received touch
-  void DevLogTouchSensorData() const;
-  
-  // helper method to set the filter parameter values external
-  // note: this is to be used in the test harness to perform a
-  //    parameter sweep to find optimal setting
-  void UnitTestOnly_SetFilterParameters(FilterParameters params)
-  {
-    _filterParams = params;
-    
-    _boxFilterTouch = BoxFilter(params.boxFilterSize);
-    
-    _detectOffsetFromBase = params.dynamicThreshMininumUndetectOffset +
-                            params.dynamicThreshGap;
-    
-    _undetectOffsetFromBase = params.dynamicThreshMininumUndetectOffset;
-  }
-  
 protected:
   virtual void NotifyOfRobotStateInternal(const RobotState& msg) override;
   
   virtual std::string GetLogHeader() override;
   virtual std::string GetLogRow() override;
   
-  // returns the current detected press state using the input
-  // signal and passed in baseline measurement
+  // returns true if there is a state change between pressed/released
+  // additionally updates the state of press/release internally which
+  // can be queried with GetIsPressed()
   bool ProcessWithDynamicThreshold(const int baseline, const int input);
   
   int GetDetectLevelOffset() const;
@@ -271,42 +100,27 @@ public:
     return _lastRawTouchValue;
   }
   
-  bool IsCalibrated() const
-  {
-    return _baselineCalibrator.IsCalibrated();
-  }
-
-  bool IsChargerModeCheckRunning() const
-  {
-    return _baselineCalibrator.IsChargerModeCheckRunning();
-  }
+  bool IsCalibrated() const;
   
 private:
+
   // Let Playpen behaviors have access to Start/Stop recording touch sensor data
   // TODO(Al): Could probably move the recording logic to IBehaviorPlaypen by handling
   // state messages
   friend class IBehaviorPlaypen;
   void StartRecordingData(TouchSensorValues* data);
-  void StopRecordingData() { _dataToRecord = nullptr; }
-  
-  std::vector<Signal::SmartHandle> _signalHandles;
-  
-  FilterParameters _filterParams;
-  
-  static const FilterParameters _kFilterParamsForProd;
-  
-  // flag to guard against using touch sensor logic designed for
-  // PVT hardware on DVT robots. This prevents the robot undefined
-  // behavior as a result of syscon-level changes to touch sensor
-  bool _enabled = true;
+  void StopRecordingData() { _dataToRecord = nullptr; } 
 
   // Pointer to a struct that should be populated with touch sensor data when recording
   TouchSensorValues* _dataToRecord = nullptr;
 
   u16 _lastRawTouchValue;
+
+  // number of consecutive cycles seeing "no contact" reading
+  size_t _noContactCounter;
   
-  // module to help with maintaining the detected baseline
-  TouchBaselineCalibrator _baselineCalibrator;
+  // calibration value from IIR filtering "no contact" signals
+  float _baselineTouch;
   
   BoxFilter _boxFilterTouch;
   
@@ -318,64 +132,16 @@ private:
   
   bool _isPressed;
   
+  size_t _numConsecCalibReadings;
+  
   // counters to debounce the monotonic increase/decrease
   // of the detect and undetect thresholds
   // otherwise noise would constantly be shifting the thresholds
   int _countAboveDetectLevel;
   int _countBelowUndetectLevel;
   
-  // time in seconds of the last touch press (using BaseStationTimer)
+  // time in seconds of the last touch press
   float _touchPressTime;
-  
-  // counter for press state: number of consecutive
-  // detections for either pressed or released state
-  unsigned int _counterPressState;
-  
-  // whether or not the touch press state is confirmed:
-  // true, if pressed confirmed
-  // false, if released confirmed
-  bool _confirmedPressState;
-  
-  // cache charger state of the robot, used to determine
-  // when it's may be necessary to recalibrate the touch
-  // sensor because of larger differences between off vs.
-  // on charger states
-  bool _isOnCharger;
-  
-  // dev-only logging members for debugging touch
-  struct DevLogTouchRow
-  {
-    int rawTouch;
-    float boxTouch;
-    int calibBaseline;
-    
-    int detOffsetFromBase;
-    int undOffsetFromBase;
-    
-    bool isPressed;
-  };
-  
-  enum DevLogMode
-  {
-    PreTouch,
-    PostTouch
-  };
-  
-  // phase of logging with respect to the touch event that we
-  // are interested in logging around
-  DevLogMode _devLogMode;
-
-  // staging buffer for holding the pre-touch and post-touch samples
-  std::deque<DevLogTouchRow> _devLogBuffer;
-  
-  // buffer that only accumulates non-press touch samples
-  std::deque<DevLogTouchRow> _devLogBufferPreTouch;
-
-  // last complete buffer that is saved for writing to disk
-  std::deque<DevLogTouchRow> _devLogBufferSaved;
-
-  // number of consecutive touch samples taken after a release->press event
-  size_t _devLogSampleCount;
 };
 
 

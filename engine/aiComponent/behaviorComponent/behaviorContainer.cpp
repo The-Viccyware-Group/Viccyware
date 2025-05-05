@@ -14,9 +14,7 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 
-#include "clad/externalInterface/messageGameToEngine.h"
-#include "clad/types/behaviorComponent/behaviorClasses.h"
-#include "clad/types/behaviorComponent/behaviorIDs.h"
+#include "clad/types/behaviorComponent/behaviorTypes.h"
 
 #include "coretech/common/engine/jsonTools.h"
 
@@ -28,7 +26,7 @@
 #define LOG_CHANNEL    "Behaviors"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -57,6 +55,12 @@ BehaviorContainer::BehaviorContainer(const BehaviorIDJsonMap& behaviorData)
     }
     // don't print anything if we read an empty json
   }
+  
+  // If we didn't load any behaviors from data, there's no reason to check to
+  // see if all executable behaviors have a 1-to-1 matching
+  if(behaviorData.size() > 0){
+    VerifyExecutableBehaviors();
+  }
 }
 
 
@@ -70,9 +74,9 @@ BehaviorContainer::~BehaviorContainer()
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorContainer::InitDependent(Robot* robot, const BCCompMap& dependentComps)
+void BehaviorContainer::InitDependent(Robot* robot, const BCCompMap& dependentComponents)
 {
-  auto& bei = dependentComps.GetComponent<BehaviorExternalInterface>();
+  auto& bei = dependentComponents.GetValue<BehaviorExternalInterface>();
   Init(bei);
 }
 
@@ -81,6 +85,14 @@ void BehaviorContainer::InitDependent(Robot* robot, const BCCompMap& dependentCo
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorContainer::Init(BehaviorExternalInterface& behaviorExternalInterface)
 {
+  /**auto externalInterface = behaviorExternalInterface.GetRobotExternalInterface().lock();
+  if(externalInterface != nullptr) {
+    _robotExternalInterface = externalInterface.get();
+    auto helper = MakeAnkiEventUtil((*externalInterface.get()), *this, _signalHandles);
+    using namespace ExternalInterface;
+    helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestAllBehaviorsList>();
+  }**/
+  
   for(auto& behaviorMap: _idToBehaviorMap){
     behaviorMap.second->Init(behaviorExternalInterface);
   }
@@ -108,17 +120,52 @@ ICozmoBehaviorPtr BehaviorContainer::FindBehaviorByID(BehaviorID behaviorID) con
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-std::set<ICozmoBehaviorPtr> BehaviorContainer::FindBehaviorsByClass(BehaviorClass behaviorClass) const
+ICozmoBehaviorPtr BehaviorContainer::FindBehaviorByExecutableType(ExecutableBehaviorType type) const
 {
-  std::set<ICozmoBehaviorPtr> behaviorList;
   for (const auto & behavior : _idToBehaviorMap)
   {
-    if( GetBehaviorClass(behavior.second) == behaviorClass )
+    if (behavior.second->GetExecutableType() == type)
     {
-      behaviorList.insert(behavior.second);
+      return behavior.second;
     }
   }
-  return behaviorList;
+  return nullptr;
+}
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorContainer::VerifyExecutableBehaviors() const
+{
+
+  std::map< ExecutableBehaviorType, BehaviorID > executableBehaviorMap;
+    
+  for( const auto& it : _idToBehaviorMap ) {
+    ICozmoBehaviorPtr behaviorPtr = it.second;
+    const ExecutableBehaviorType executableBehaviorType = behaviorPtr->GetExecutableType();
+    if( executableBehaviorType != ExecutableBehaviorType::Count )
+    {
+#if (DEV_ASSERT_ENABLED)
+      const auto mapIt = executableBehaviorMap.find(executableBehaviorType);      
+      DEV_ASSERT_MSG((mapIt == executableBehaviorMap.end()), "ExecutableBehaviorType.NotUnique",
+                     "Multiple behaviors marked as %s including '%s' and '%s'",
+                     EnumToString(executableBehaviorType),
+                     BehaviorIDToString(it.first),
+                     BehaviorIDToString(mapIt->second));
+#endif
+      executableBehaviorMap[executableBehaviorType] = it.first;
+    }
+  }
+  
+  #if (DEV_ASSERT_ENABLED)
+    for( size_t i = 0; i < (size_t)ExecutableBehaviorType::Count; ++i)
+    {
+      const ExecutableBehaviorType executableBehaviorType = (ExecutableBehaviorType)i;
+      const auto mapIt = executableBehaviorMap.find(executableBehaviorType);
+      DEV_ASSERT_MSG((mapIt != executableBehaviorMap.end()), "ExecutableBehaviorType.NoMapping",
+                     "Should be one behavior marked as %s but found none",
+                     EnumToString(executableBehaviorType));
+    }
+  #endif
 }
 
 
@@ -130,6 +177,25 @@ bool BehaviorContainer::CreateAndStoreBehavior(const Json::Value& behaviorConfig
     const BehaviorID behaviorID = newBehavior->GetID();
     const auto newEntry = _idToBehaviorMap.emplace( behaviorID, newBehavior );
     const bool addedNewEntry = newEntry.second;
+
+    // check for any extraneous json keys
+    if( ANKI_DEVELOPER_CODE ) {
+      const std::vector<const char*> expectedKeys = newBehavior->GetAllJsonKeys();
+      std::vector<std::string> badKeys;
+      const bool hasBadKeys = JsonTools::HasUnexpectedKeys( behaviorConfig, expectedKeys, badKeys );
+      if( hasBadKeys ) {
+        std::string keys;
+        for( const auto& key : badKeys ) {
+          keys += key;
+          keys += ",";
+        }
+        DEV_ASSERT_MSG( false,
+                        "BehaviorContainer.CreateAndStoreBehavior.UnexpectedKey",
+                        "Behavior '%s' has unexpected keys '%s'",
+                        BehaviorIDToString(behaviorID),
+                        keys.c_str() );
+      }
+    }
 
     if (addedNewEntry) {
       // PRINT_CH_DEBUG(LOG_CHANNEL, "BehaviorContainer::AddToContainer",
@@ -171,6 +237,21 @@ bool BehaviorContainer::RemoveBehaviorFromMap(ICozmoBehaviorPtr behavior)
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+template<>
+void BehaviorContainer::HandleMessage(const ExternalInterface::RequestAllBehaviorsList& msg)
+{
+  /**if(_robotExternalInterface != nullptr){
+    std::vector<BehaviorID> behaviorList;
+    for(const auto& entry : _idToBehaviorMap){
+      behaviorList.push_back(entry.first);
+    }
+    ExternalInterface::RespondAllBehaviorsList message(std::move(behaviorList));
+    _robotExternalInterface->Broadcast(ExternalInterface::MessageEngineToGame(std::move(message)));
+  }**/
+}
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorClass BehaviorContainer::GetBehaviorClass(ICozmoBehaviorPtr behavior) const
 {
   return behavior->GetClass();
@@ -183,6 +264,6 @@ std::string BehaviorContainer::GetClassString(BehaviorClass behaviorClass) const
   return BehaviorClassToString(behaviorClass);
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

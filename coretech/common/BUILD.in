@@ -5,16 +5,19 @@ cxx_project(
     ['engine', 'shared', 'robot'],
     excludes=['robot/mex/**']
   ),
-  data = glob([
-                'clad_src/clad/**/*.clad',              
-              ]),
   platform_srcs = [
+      ('android', glob(['engine/**/*_android.cpp',
+                        'shared/**/*_android.cpp',
+                        'robot/**/*_android.cpp']))
   ],
   headers = cxx_header_glob(
     ['engine', 'shared', 'robot'],
     excludes=['robot/mex/**']
   ),
   platform_headers = [
+      ('android', glob(['engine/**/*_android.h',
+                        'shared/**/*_android.h',
+                        'robot/**/*_android.h']))
   ]
 )
 
@@ -25,26 +28,16 @@ cxx_project(
     excludes=['robot/mex/**']
   ),
   platform_srcs = [
+      ('android', glob(['shared/**/*_android.cpp',
+                        'robot/**/*_android.cpp']))
   ],
   headers = cxx_header_glob(
     ['shared', 'robot'],
     excludes=['robot/mex/**']
   ),
   platform_headers = [
-  ]
-)
-
-cxx_project(
-  name = 'cti_common_shared',
-  srcs = cxx_src_glob(
-    ['shared']
-  ),
-  platform_srcs = [
-  ],
-  headers = cxx_header_glob(
-    ['shared']
-  ),
-  platform_headers = [
+      ('android', glob(['shared/**/*_android.h',
+                        'robot/**/*_android.h']))
   ]
 )
 

@@ -17,6 +17,7 @@
 #include "engine/actions/driveToActions.h"
 #include "engine/aiComponent/aiWhiteboard.h"
 #include "engine/aiComponent/aiComponent.h"
+#include "engine/aiComponent/behaviorEventAnimResponseDirector.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/blockWorld/blockWorld.h"
@@ -28,7 +29,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 #define SET_STATE(s) SetState_internal(State::s, #s)
@@ -37,6 +38,8 @@ namespace{
 static const char* const kRetryCountKey = "rollRetryCount";
 static const char* const kIsBlockRotationImportant = "isBlockRotationImportant";
 static const float kMaxDistCozmoIsRollingCube_mm = 120;
+
+CONSOLE_VAR(f32, kBRB_ScoreIncreaseForAction, "Behavior.RollBlock", 0.8f);
   
 }
 
@@ -46,6 +49,16 @@ BehaviorRollBlock::InstanceConfig::InstanceConfig()
 {
   isBlockRotationImportant = false;
   rollRetryCount           = 1;
+};
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+BehaviorRollBlock::DynamicVariables::DynamicVariables()
+{
+  didAttemptDock        = false;
+  upAxisOnBehaviorStart = AxisName::X_POS;
+  behaviorState         = State::RollingBlock;
+  rollRetryCount        = 0;
 };
 
 
@@ -83,17 +96,8 @@ bool BehaviorRollBlock::WantsToBeActivatedBehavior() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorRollBlock::OnBehaviorActivated()
 {
-  ObjectID potentiallyCarryoverID;
-  if(_dVars.idSetExternally){
-    potentiallyCarryoverID = _dVars.targetID;
-  }
   _dVars = DynamicVariables();
-  
-  if(potentiallyCarryoverID.IsSet()){
-    _dVars.targetID = potentiallyCarryoverID;
-  }else{
-    CalculateTargetID(_dVars.targetID);
-  }
+  CalculateTargetID(_dVars.targetID);
 
   const ObservableObject* object = GetBEI().GetBlockWorld().GetLocatedObjectByID(_dVars.targetID);
   if(object != nullptr){
@@ -206,6 +210,7 @@ void BehaviorRollBlock::TransitionToRollSuccess()
   if(!ShouldStreamline()){
     DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::RollBlockSuccess));
   }
+  BehaviorObjectiveAchieved(BehaviorObjective::BlockRolled);
 }
 
   

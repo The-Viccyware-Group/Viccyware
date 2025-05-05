@@ -37,13 +37,12 @@
 #include "util/transport/udpTransport.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
   //const size_t HEADER_SIZE = sizeof(RADIO_PACKET_HEADER);
   
   GameComms::GameComms(int deviceID, int serverListenPort, const char* advertisementRegIP, int advertisementRegPort)
-  : server_("gameComms")
-  , isInitialized_(false)
+  : isInitialized_(false)
   , deviceID_(deviceID)
   , serverListenPort_(serverListenPort)
   , advertisementRegIP_(advertisementRegIP)
@@ -75,7 +74,7 @@ namespace Vector {
       // Wrap message in header/footer
       // TODO: Include timestamp too?
       char sendBuf[Comms::MsgPacket::MAX_SIZE];
-      size_t sendBufLen = 0;
+      int sendBufLen = 0;
 
       assert(p.dataLen < sizeof(sendBuf));
       memcpy(sendBuf, p.data, p.dataLen);
@@ -213,17 +212,17 @@ namespace Vector {
     PRINT_NAMED_INFO("GameComms.AdvertiseToService", "Sending registration for UI device %d at address %s on port %d/%d", regMsg_.id, regMsg_.ip.c_str(),
            (int)regMsg_.toEnginePort, (int)regMsg_.fromEnginePort);
   
-    Vector::ExternalInterface::MessageGameToEngine outMessage;
+    Cozmo::ExternalInterface::MessageGameToEngine outMessage;
     outMessage.Set_AdvertisementRegistrationMsg(regMsg_);
     
     uint8_t messageBuffer[64];
     const size_t bytesPacked = outMessage.Pack(messageBuffer, sizeof(messageBuffer));
     
-    regClient_.Send((const char*)messageBuffer, bytesPacked);
+    regClient_.Send((const char*)messageBuffer, (int)bytesPacked);
   }
   
   
-}  // namespace Vector
+}  // namespace Cozmo
 }  // namespace Anki
 
 

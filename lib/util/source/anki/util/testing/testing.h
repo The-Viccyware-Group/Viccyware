@@ -42,10 +42,10 @@ using namespace boost::property_tree;
 #define BT_END_LIST std::cout.flush(); std::cout<<res.str(); std::cout.flush(); return ret; }
 #define BT_RUN_TEST(t) {                                                \
     SetUp();                                                            \
-    sUnSetErrG()                                                        \
+    _errG=false;                                                        \
     try {                                                               \
       (t)();                                                            \
-      if(sGetErrG())                                                    \
+      if(_errG)                                                         \
         throw(BasestationTestingAssert( __FILE__, -1, "Internal error")); \
       res<<"| "<<#t<<": PASS\n";                                        \
     }                                                                   \

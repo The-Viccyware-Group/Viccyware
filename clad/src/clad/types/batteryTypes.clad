@@ -3,7 +3,7 @@
 // Copyright: Anki Inc (c) 2018
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum int_8 BatteryLevel {
   Unknown = 0,
@@ -13,5 +13,5 @@ enum int_8 BatteryLevel {
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

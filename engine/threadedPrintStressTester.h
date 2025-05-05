@@ -23,7 +23,7 @@
 #include "util/random/randomGenerator.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 CONSOLE_VAR(int, kStressTest_numThreads, "RobotDataLoader", 5);

@@ -15,35 +15,25 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorReactToTouchPetting.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
-#include "clad/types/behaviorComponent/behaviorTimerTypes.h"
 #include "coretech/common/engine/utils/timer.h"
 #include "coretech/common/engine/jsonTools.h"
 
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
-#include "engine/aiComponent/behaviorComponent/behaviorTimers.h"
-#include "engine/aiComponent/behaviorComponent/heldInPalmTracker.h"
-#include "engine/aiComponent/beiConditions/beiConditionFactory.h"
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
-#include "engine/audio/engineRobotAudioClient.h"
-#include "engine/components/robotStatsTracker.h"
-#include "engine/moodSystem/moodManager.h"
+#include "engine/aiComponent/beiConditions/beiConditionFactory.h"
 
+// audio
+#include "engine/audio/engineRobotAudioClient.h"
 #include "clad/audio/audioEventTypes.h"
-#include "clad/types/behaviorComponent/behaviorStats.h"
 
 #include <vector>
 #include <memory>
 #include <limits>
 
 namespace Anki {
-namespace Vector {
-  
-// convenience namespace aliases
-using AMD_GE_GE = AudioMetaData::GameEvent::GenericEvent;
-using AMD_GOT = AudioMetaData::GameObjectType;
+namespace Cozmo {
 
 namespace {
   // animation control constants
@@ -51,7 +41,6 @@ namespace {
   const bool kCanAnimationInterrupt = true; // value for whether starting the animation can interrupt
   
   const char* const kTimeTilTouchCheckKey = "timeTilTouchCheck";
-  const char* const kAnimGroupGetinKey = "animGroupGetin";
   const char* const kAnimGroupNamesKey = "animGroupNames";
   const char* const kAnimGroupNamesGetoutKey = "animGroupNamesGetout";
   const char* const kTimeTilBlissGetoutKey = "timeTilBlissGetout";
@@ -65,7 +54,6 @@ BehaviorReactToTouchPetting::BehaviorReactToTouchPetting(const Json::Value& conf
 : ICozmoBehavior(config)
 , _animPettingResponse()
 , _animPettingGetout()
-, _animPettingGetin()
 , _timeTilTouchCheck(5.0f)
 , _blissTimeout(5.0f)
 , _nonBlissTimeout(5.0f)
@@ -76,6 +64,7 @@ BehaviorReactToTouchPetting::BehaviorReactToTouchPetting(const Json::Value& conf
 , _checkForTransitionTime(std::numeric_limits<float>::max())
 , _currBlissLevel(0)
 , _numPressesAtCurrentBlissLevel(0)
+, _numTicksPressed(0)
 , _isPressed(false)
 , _isPressedPrevTick(false)
 {
@@ -95,19 +84,13 @@ BehaviorReactToTouchPetting::BehaviorReactToTouchPetting(const Json::Value& conf
     _animPettingGetout.push_back( AnimationTriggerFromString(t) );
   }
   
-  _animPettingGetin = AnimationTriggerFromString(
-                        JsonTools::ParseString(config,
-                                               kAnimGroupGetinKey,
-                                               "BehaviorReactToTouchPetting.Ctor.MissingGetin"));
-  
   _blissTimeout = JsonTools::ParseFloat(config, kTimeTilBlissGetoutKey,kDebugStr);
   _nonBlissTimeout = JsonTools::ParseFloat(config, kTimeTilNonBlissGetoutKey,kDebugStr);
   _minNumPetsToAdvanceBliss = JsonTools::ParseInt8(config, kNumPetsToAdvanceBlissKey,kDebugStr);
   
-  SubscribeToTags({{
-    ExternalInterface::MessageEngineToGameTag::TouchButtonEvent,
-    ExternalInterface::MessageEngineToGameTag::RobotFallingEvent,
-  }});
+  SubscribeToTags({
+    ExternalInterface::MessageEngineToGameTag::TouchButtonEvent
+  });
 }
 
 
@@ -121,7 +104,6 @@ void BehaviorReactToTouchPetting::GetBehaviorJsonKeys(std::set<const char*>& exp
      kTimeTilBlissGetoutKey,
      kTimeTilNonBlissGetoutKey,
      kNumPetsToAdvanceBlissKey,
-     kAnimGroupGetinKey,
   };
   expectedKeys.insert( std::begin(list), std::end(list) );
 }
@@ -144,17 +126,8 @@ void BehaviorReactToTouchPetting::AlwaysHandleInScope(const EngineToGameEvent& e
         _checkForTimeoutTimeBliss = touchTimeRelease + _blissTimeout;
         _checkForTimeoutTimeNonbliss = touchTimeRelease + _nonBlissTimeout;
       }
-      break;
     }
-    case ExternalInterface::MessageEngineToGameTag::RobotFallingEvent:
-    {
-      if(IsActivated()) {
-        CancelDelegates();
-        ResetTouchState();
-        CancelSelf();
-      }
       break;
-    }
     default: {
       PRINT_NAMED_ERROR("BehaviorReactToTouchPetting.AlwaysHandle.InvalidEvent",
                         "%s", MessageEngineToGameTagToString(tag));
@@ -181,29 +154,8 @@ void BehaviorReactToTouchPetting::InitBehavior()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToTouchPetting::OnBehaviorActivated()
 {
-  SmartDisableKeepFaceAlive();
-  
-  CancelAndPlayAnimation(_animPettingGetin);
-
-  // set internal state to speed up entry into Level1 animations
-  _numPressesAtCurrentBlissLevel = 1;
-  
-  auto& moodManager = GetBEI().GetMoodManager();
-  moodManager.TriggerEmotionEvent("PettingStarted");
-  
-  if ( GetBEI().GetHeldInPalmTracker().IsHeldInPalm() ) {
-    moodManager.TriggerEmotionEvent("PettingStartedOnPalm");
-  }
-  
-  GetBEI().GetBehaviorTimerManager().GetTimer(BehaviorTimerTypes::ReactToTouchPetting).Reset();
-  
   // starts the state machine to check for updates
   _currResponseState = PettingResponseState::PlayTransitionToLevel;
-  
-  const float now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
-  _checkForTransitionTime       = now + _timeTilTouchCheck;
-  _checkForTimeoutTimeBliss     = now + _blissTimeout;
-  _checkForTimeoutTimeNonbliss  = now + _nonBlissTimeout;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -232,13 +184,15 @@ void BehaviorReactToTouchPetting::PlayBlissLoopAnimation()
     }
   };
   
-  CancelDelegates();
   DelegateIfInControl(action, cb);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToTouchPetting::BehaviorUpdate()
 {
+  using AMD_GE_GE = AudioMetaData::GameEvent::GenericEvent;
+  using AMD_GOT = AudioMetaData::GameObjectType;
+  
   if(!IsActivated()){
     return;
   }
@@ -248,11 +202,9 @@ void BehaviorReactToTouchPetting::BehaviorUpdate()
   const float now            = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   const bool reachedMaxBliss = (_currBlissLevel == _animPettingResponse.size());
   if(_isPressed) {
-    // update the timeouts if we are being currently pressed
-    // prevents issues where presses that are roughly equal
-    // in duration as the timeout, would let the behavior exit
-    _checkForTimeoutTimeBliss     = now + _blissTimeout;
-    _checkForTimeoutTimeNonbliss  = now + _nonBlissTimeout;
+    _numTicksPressed++;
+  } else {
+    _numTicksPressed = 0;
   }
   
   //-----------------------------------------------------------------------------
@@ -289,11 +241,11 @@ void BehaviorReactToTouchPetting::BehaviorUpdate()
         
         // audio for petting purring
         if(_currBlissLevel==0) {
-          GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Loop_Play, AMD_GOT::Behavior);
+          GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Loop_Play, AMD_GOT::Cozmo_OnDevice);
         } else {
-          GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Increase_Level, AMD_GOT::Behavior);
+          GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Increase_Level, AMD_GOT::Cozmo_OnDevice);
         }
-
+        
         // important: increase the bliss level AFTER getting the animation index
         // reasoning:
         // - value of 0 for _currBlissLevel implies only the getin has been played
@@ -301,29 +253,6 @@ void BehaviorReactToTouchPetting::BehaviorUpdate()
         // thus the animation's index is _currBlissLevel-1
         // this keeps it consistent with how we pick the getout animation index
         _currBlissLevel = MIN(_currBlissLevel+1, (int)_animPettingResponse.size());
-
-        const bool nowAtMaxBliss = (_currBlissLevel == _animPettingResponse.size());
-
-        if( nowAtMaxBliss ) {
-          // reached max bliss this time
-          auto& moodManager = GetBEI().GetMoodManager();
-          
-          if ( GetBEI().GetHeldInPalmTracker().IsHeldInPalm() ) {
-            moodManager.TriggerEmotionEvent("PettingReachedMaxBlissOnPalm");
-          }
-          moodManager.TriggerEmotionEvent("PettingReachedMaxBliss");
-          GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::PettingReachedMaxBliss);
-        }
-        else {
-          // "leveled up" but did not reach max
-          auto& moodManager = GetBEI().GetMoodManager();
-          
-          if ( GetBEI().GetHeldInPalmTracker().IsHeldInPalm() ) {
-            moodManager.TriggerEmotionEvent("PettingBlissLevelIncreaseOnPalm");
-          }
-          moodManager.TriggerEmotionEvent("PettingBlissLevelIncrease");
-          GetBehaviorComp<RobotStatsTracker>().IncrementBehaviorStat(BehaviorStat::PettingBlissIncrease);
-        }
       }
       break;
     }
@@ -351,13 +280,16 @@ void BehaviorReactToTouchPetting::BehaviorUpdate()
         //      PlayBlissLoop | bliss animation cannot requeue because getout requested
         //                    |
         //      Update()      | Update() no animation playing, getout plays
-        const auto animIdx = _currBlissLevel-1; // bliss levels are +1 wrt animation indexes
-        CancelAndPlayAnimation(_animPettingGetout[animIdx]);
-        
-        GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Vic_Sfx__Purr_Loop_Stop, AMD_GOT::Behavior);
-        
-        // ensures we wait for the getout to finish before ending the behavior
-        _currResponseState = Done;
+        if(!IsControlDelegated()) {
+          const auto animIdx = _currBlissLevel-1; // bliss levels are +1 wrt animation indexes
+          CancelAndPlayAnimation(_animPettingGetout[animIdx]);
+          
+          
+          GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Vic_Sfx__Purr_Loop_Stop, AMD_GOT::Cozmo_OnDevice);
+          
+          // ensures we wait for the getout to finish before ending the behavior
+          _currResponseState = Done;
+        }
       }
       break;
     }
@@ -380,27 +312,12 @@ void BehaviorReactToTouchPetting::BehaviorUpdate()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToTouchPetting::OnBehaviorDeactivated()
 {
-  if( _currBlissLevel >= 2 ) {
-    // some decent amount of petting happened, so after this behavior finishes the robot should chill for a
-    // bit (rather than, e.g. going back into exploring)
-    GetAIComp<AIWhiteboard>().OfferPostBehaviorSuggestion( PostBehaviorSuggestions::Nothing );
-  }
-
-  ResetTouchState();
-}
-
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToTouchPetting::ResetTouchState()
-{
   _currResponseState              = Done;
   _numPressesAtCurrentBlissLevel  = 0;
   _currBlissLevel                 = 0;
   _checkForTimeoutTimeNonbliss    = std::numeric_limits<float>::max();
   _checkForTransitionTime         = std::numeric_limits<float>::max();
   _checkForTimeoutTimeBliss       = std::numeric_limits<float>::max();
-  
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Vic_Sfx__Purr_Loop_Stop, AMD_GOT::Behavior);
 }
 
 } // Cozmo

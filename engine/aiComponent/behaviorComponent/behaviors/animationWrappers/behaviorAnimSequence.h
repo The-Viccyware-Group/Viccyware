@@ -15,11 +15,10 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "engine/aiComponent/behaviorComponent/behaviorListenerInterfaces/iSubtaskListener.h"
+#include "clad/types/animationTrigger.h"
 
 namespace Anki {
-namespace Vector {
-  
-enum class AnimationTrigger : int32_t;
+namespace Cozmo {
   
 class BehaviorAnimSequence : public ICozmoBehavior
 {
@@ -27,7 +26,7 @@ protected:
   
   // Enforce creation through BehaviorFactory
   friend class BehaviorFactory;
-  BehaviorAnimSequence(const Json::Value& config);
+  BehaviorAnimSequence(const Json::Value& config, bool triggerRequired = true);
   
 public:
   
@@ -36,17 +35,16 @@ public:
   virtual bool WantsToBeActivatedBehavior() const override;
   virtual void AddListener(ISubtaskListener* listener) override;
 
+  
   // Begin playing the animations
   void StartPlayingAnimations();
+  void SetAnimSequence(const std::vector<AnimationTrigger>& animations){_iConfig.animTriggers = animations;}
 
 protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{
     modifiers.wantsToBeActivatedWhenCarryingObject = true;
     modifiers.wantsToBeActivatedWhenOffTreads = true;
-
-    // always runs on the charger, but the animation itself might lock the body tracks if it's not in the
-    // whitelist
-    modifiers.wantsToBeActivatedWhenOnCharger = true;
+    modifiers.wantsToBeActivatedWhenOnCharger = _iConfig.activatableOnCharger;
   }
   
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
@@ -54,12 +52,9 @@ protected:
   virtual bool WantsToBeActivatedAnimSeqInternal() const { return true;}
   
   virtual void OnBehaviorActivated() override;
-  
-  virtual void OnAnimationsComplete() { CancelSelf(); }
 
   // Returns an action that will play all animations in the class the appropriate number of times for one loop
   IActionRunner* GetAnimationAction();
-  
   // Returns true if multiple animations will be played as a loop _numLoops times
   // Returns false if a single animation will play _numLoops times
   bool IsSequenceLoop();
@@ -67,9 +62,8 @@ protected:
 private:
   struct InstanceConfig {
     InstanceConfig();
+    bool activatableOnCharger;
     int  numLoops;
-    u8 tracksToLock;
-    bool renderInEyeHue;
     // Class supports playing a series of animation triggers OR a series of animations by name
     // BUT NOT BOTH AT THE SAME TIME!!!!
     std::vector<AnimationTrigger> animTriggers;
@@ -97,7 +91,7 @@ private:
 };
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorAnimSequence_H__

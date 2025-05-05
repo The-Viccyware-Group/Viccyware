@@ -18,11 +18,10 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorAnimGetInLoop_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
+#include "clad/types/animationTrigger.h"
 
 namespace Anki {
-namespace Vector {
-  
-enum class AnimationTrigger : int32_t;
+namespace Cozmo {
   
 class BehaviorAnimGetInLoop : public ICozmoBehavior
 {
@@ -35,27 +34,23 @@ public:
   
   virtual ~BehaviorAnimGetInLoop();
   
-  virtual bool WantsToBeActivatedBehavior() const override final;
+  virtual bool WantsToBeActivatedBehavior() const override;
 
   // Notify the behavior that it should end the looping animation when it finishes
   void RequestLoopEnd() { _dVars.shouldLoopEnd = true; }
 
 protected:
-  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override  final{
+  virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{
     modifiers.wantsToBeActivatedWhenOffTreads = true;
     modifiers.behaviorAlwaysDelegates         = false;
   }
   
-  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override final;
+  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
   
-  virtual void InitBehavior() override final;
-  virtual void OnBehaviorActivated() override final;
-  virtual void BehaviorUpdate() override final;
-  virtual void AnimBehaviorUpdate() {};
-  virtual void OnBehaviorDeactivated() override final;
-
-  // For derived classes that do their own looping
-  AnimationTrigger GetLoopTrigger() { return _iConfig.loopTrigger; }
+  virtual void InitBehavior() override;
+  virtual void OnBehaviorActivated() override;
+  virtual void BehaviorUpdate() override;
+  virtual void OnBehaviorDeactivated() override;
 
 
 private:
@@ -95,7 +90,7 @@ private:
 };
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorAnimGetInLoop_H__

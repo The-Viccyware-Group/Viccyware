@@ -19,21 +19,6 @@ g_CubeStub
 g_CubeStubEnd
 
   ALIGN
-  EXPORT g_CubeStubFcc
-  EXPORT g_CubeStubFccEnd
-g_CubeStubFcc
-  INCBIN releases\\cubeotpfcc.bin
-g_CubeStubFccEnd
-
-  ;DEBUG -- include raw cube bootloader bin for ram-load testing
-  ALIGN
-  EXPORT g_CubeBoot
-  EXPORT g_CubeBootEnd
-g_CubeBoot
-  //INCBIN releases\\cubeboot.bin
-g_CubeBootEnd
-
-  ALIGN
   EXPORT g_BodyTest
   EXPORT g_BodyTestEnd
 g_BodyTest

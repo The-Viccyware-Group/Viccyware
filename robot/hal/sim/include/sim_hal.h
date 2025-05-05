@@ -21,7 +21,7 @@
 
 namespace Anki
 {
-  namespace Vector
+  namespace Cozmo
   {
     namespace HAL
     {
@@ -52,7 +52,7 @@ namespace Anki
 
       
     } // namespace HAL
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_ROBOT_SIM_HARDWAREINTERFACE_H

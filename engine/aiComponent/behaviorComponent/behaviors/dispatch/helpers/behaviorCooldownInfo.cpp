@@ -20,7 +20,7 @@
 #include "util/random/randomGenerator.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 CONSOLE_VAR_EXTERN(float, kTimeMultiplier);
 
@@ -41,13 +41,8 @@ BehaviorCooldownInfo::BehaviorCooldownInfo(const Json::Value& config)
   
   _ignoreFastForward = config.get("ignoreFastForward", false).asBool();
 
-  if( Anki::Util::IsFltLTZero( cooldown ) ) { // a clearly negative cooldown ==> forever
-    _cooldown_s = std::numeric_limits<float>::max();
-    _randomCooldownFactor = 0.0f;
-  } else {
-    _cooldown_s = cooldown;
-    _randomCooldownFactor = randomFactor;
-  }
+  _cooldown_s = cooldown;
+  _randomCooldownFactor = randomFactor;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -31,7 +31,7 @@
 
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
 class IBaseStationEventListener;
 
@@ -97,7 +97,7 @@ protected:
 #undef EVENT_ARG
 #undef EVENT_BEGIN
 
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // BASESTATION_BASESTATIONEVENTDEFINITIONS

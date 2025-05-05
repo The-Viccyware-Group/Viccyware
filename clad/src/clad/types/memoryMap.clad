@@ -3,7 +3,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace ExternalInterface {
 
 structure MemoryMapInfo
@@ -22,8 +22,8 @@ enum uint_8 ENodeContentTypeEnum
   ClearOfObstacle,
   ClearOfCliff,
   ObstacleCube,
+  ObstacleCharger,
   ObstacleProx,
-  ObstacleProxExplored,
   ObstacleUnrecognized,
   Cliff,
   InterestingEdge,
@@ -34,20 +34,10 @@ enum uint_8 ENodeContentTypeEnum
 structure MemoryMapQuadInfo
 {
   ENodeContentTypeEnum content,
-  uint_8               depth,
-  uint_32              colorRGBA
-}
-
-// Full information including position of center of node and edge length
-structure MemoryMapQuadInfoFull
-{
-  uint_32              colorRGBA,
-  float_32             centerX_mm,
-  float_32             centerY_mm,
-  float_32             edgeLen_mm,
+  uint_8               depth
 }
 
 
 } // namespace ExternalInterface
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

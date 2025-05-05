@@ -28,7 +28,6 @@
 #include "clad/types/actionTypes.h"
 #include "clad/types/actionResults.h"
 #include "clad/types/animationTypes.h"
-#include "clad/types/offTreadsStates.h"
 
 #include "util/random/randomGenerator.h"
 
@@ -36,7 +35,7 @@
 
 // Not sure if we want to support callbacks yet, but this switch enables some
 // preliminary callback code for functions to be run when an action completes.
-#define USE_ACTION_CALLBACKS 0
+#define USE_ACTION_CALLBACKS 1
 
 // Enable/disable procedural eye leading
 #define PROCEDURAL_EYE_LEADING 0
@@ -46,7 +45,7 @@
 
 namespace Anki {
 
-  namespace Vector {
+  namespace Cozmo {
 
     // Forward Declarations:
     class Robot;
@@ -125,7 +124,7 @@ namespace Anki {
 
       // Used (e.g. in initialization of CompoundActions) to specify that a
       // consituent action should not try to lock or unlock tracks it uses
-      void ShouldSuppressTrackLocking(bool tf);
+      void ShouldSuppressTrackLocking(bool tf) { _suppressTrackLocking = tf; }
       bool IsSuppressingTrackLocking() const { return _suppressTrackLocking; }
 
       // By default, the completion of any action could cause a mood event (the robot's mood manager defines
@@ -272,16 +271,6 @@ namespace Anki {
       // function, subscriptions to the VisionScheduleMediator will then be handled by IAction::UpdateInternal().
       // By default, we assume that no vision modes are required for the action
       virtual void GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const { }
-      
-      // Normally, actions unsubscribe from vision modes automatically when they destruct.
-      // Call this from a derived class to unsubscribe early.
-      void UnsubscribeFromVisionModes();
-      
-      // If the derived action needs to fail if the robot's tread state transitions from OnTreads to any other
-      // state at runtime, then the action returns an action result of INVALID_OFF_TREADS_STATE. The check to verify
-      // this is handled by IAction::UpdateInternal, which calls IAction::IsCurrentTreadStateValid. By default,
-      // we assume that the actions can run even if the tread state transitions from OnTreads to any other state.
-      virtual bool ShouldFailOnTransitionOffTreads() const { return false; }
 
       // Derived Actions should implement these.
       virtual ActionResult  Init() { return ActionResult::SUCCESS; } // Optional: default is no preconditions to meet
@@ -302,27 +291,20 @@ namespace Anki {
       virtual f32 GetTimeoutInSeconds()          const { return 30.f; }
 
       virtual void Reset(bool shouldUnlockTracks = true) override final;
-      
-      // Retrieves the number of seconds elapsed since the action started updating.
-      f32 GetCurrentRunTimeSeconds() const;
 
       // A random number generator all subclasses can share
       Util::RandomGenerator& GetRNG() const;
-      
-      // Verifies that the robot's tread state has NOT recently transitioned from OnTreads to any other state.
-      bool DidTreadStateChangeFromOnTreads() const;
 
     private:
 
-      bool          _actionSpecificPreconditionsMet;
+      bool          _preconditionsMet;
       f32           _startTime_sec;
 
       std::set<VisionModeRequest> _requiredVisionModes;
-      OffTreadsState _prevTreadsState;
 
     }; // class IAction
 
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 
 #endif // ANKI_COZMO_ACTION_INTERFACE_H

@@ -7,7 +7,7 @@
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 bool EqualityCStyleArray(const double* arr1, const double* arr2, int arraySize) {
   for (int i = 0; i < arraySize; i++) {
@@ -100,17 +100,13 @@ s32 CST_LEDColor::UpdateSimInternal()
       
       SendMoveHeadToAngle(kHeadLookupAngle_rad, 100, 100);
 
-      // Request a cube connection
-      SendConnectToCube();
-      
       SET_TEST_STATE(WaitForHeadUp);
       break;
     }
 
     case TestState::WaitForHeadUp:
     {
-      IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(15,
-                                            _id >=0,
+      IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(5, _id >=0,
                                             NEAR(GetRobotHeadAngle_rad(), kHeadLookupAngle_rad,
                                                  kHeadAngleTolerance_rad)) {
         SET_TEST_STATE(SetRGB);
@@ -286,5 +282,5 @@ void CST_LEDColor::HandleActiveObjectConnectionState(const ExternalInterface::Ob
   
 }
 
-}  // namespace Vector
+}  // namespace Cozmo
 }  // namespace Anki

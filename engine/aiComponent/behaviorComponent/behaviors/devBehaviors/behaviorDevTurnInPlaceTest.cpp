@@ -20,7 +20,7 @@
 #include "coretech/common/engine/jsonTools.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
 const char* kChannelName = "Behaviors";

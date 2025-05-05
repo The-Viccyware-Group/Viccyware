@@ -27,7 +27,7 @@ namespace Anki {
     class IComms;
   }
   
-namespace Vector {
+namespace Cozmo {
   
   
   // Define interface for a GameMessage handler
@@ -115,7 +115,7 @@ namespace Vector {
   }; // class GameMessageHandlerStub
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

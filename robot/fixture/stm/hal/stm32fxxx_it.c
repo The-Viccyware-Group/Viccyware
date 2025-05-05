@@ -30,6 +30,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32fxxx_it.h"
 #include "board.h"
+#include "uart.h"
 
 
 

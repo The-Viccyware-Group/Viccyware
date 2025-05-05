@@ -12,7 +12,6 @@
 #define ANKI_COZMO_BASESTATION_ROBOTMANAGER_H
 
 #include "engine/robotEventHandler.h"
-#include "clad/types/robotStatusAndActions.h"
 #include "util/helpers/noncopyable.h"
 #include <memory>
 
@@ -23,7 +22,7 @@ namespace Json {
 
 namespace Anki {
 
-namespace Vector {
+namespace Cozmo {
 
 // Forward declarations:
 namespace RobotInterface {
@@ -40,12 +39,12 @@ class RobotManager : Util::noncopyable
 {
 public:
 
-  RobotManager(CozmoContext* context);
+  RobotManager(const CozmoContext* context);
 
   ~RobotManager();
 
   void Init(const Json::Value& config);
-  void Shutdown(ShutdownReason reason);
+  void Shutdown();
 
   // Return raw pointer to robot
   Robot* GetRobot();
@@ -58,20 +57,19 @@ public:
   void RemoveRobot(bool robotRejectedConnection);
 
   // Call Robot's Update() function
-  Result UpdateRobot();
+  void UpdateRobot();
 
   // Update robot connection state
   Result UpdateRobotConnection();
 
   RobotInterface::MessageHandler* GetMsgHandler() const { return _robotMessageHandler.get(); }
-  RobotEventHandler& GetRobotEventHandler() { return _robotEventHandler; }
 
   bool ShouldFilterMessage(RobotInterface::RobotToEngineTag msgType) const;
   bool ShouldFilterMessage(RobotInterface::EngineToRobotTag msgType) const;
 
 protected:
   std::unique_ptr<Robot> _robot;
-  CozmoContext* _context;
+  const CozmoContext* _context;
   RobotEventHandler _robotEventHandler;
   std::unique_ptr<RobotInterface::MessageHandler> _robotMessageHandler;
   std::unique_ptr<RobotInitialConnection> _initialConnection;
@@ -80,7 +78,7 @@ private:
 
 }; // class RobotManager
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

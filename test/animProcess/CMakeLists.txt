@@ -8,7 +8,7 @@ set(PLATFORM_LIBS "")
 set(PLATFORM_INCLUDES "")
 set(PLATFORM_COMPILE_DEFS "")
 set(PLATFORM_FLAGS "")
-if (VICOS)
+if (ANDROID)
   set(PLATFORM_LIBS log)
 elseif (MACOSX)
   include(webots)
@@ -23,7 +23,6 @@ include(anki_build_cxx)
 include(symlink_target)
 
 anki_build_cxx_executable(test_animprocess ${ANKI_SRCLIST_DIR})
-anki_build_target_license(test_animprocess "ANKI")
 
 target_link_libraries(test_animprocess 
   PRIVATE

@@ -13,15 +13,17 @@
 #include "engine/actions/trackFaceAction.h"
 #include "engine/components/movementComponent.h"
 #include "engine/components/visionComponent.h"
+#include "engine/externalInterface/externalInterface.h"
 #include "engine/faceWorld.h"
 #include "engine/robot.h"
-#include "coretech/common/engine/utils/timer.h"
+
+#include "clad/externalInterface/messageEngineToGameTag.h"
+#include "clad/externalInterface/messageEngineToGame.h"
 
 #define DEBUG_TRACKING_ACTIONS 0
-#define LOG_CHANNEL "Actions"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 static const char * const kLogChannelName = "Actions";
   
@@ -43,23 +45,31 @@ TrackFaceAction::TrackFaceAction(SmartFaceID faceID)
 
 TrackFaceAction::~TrackFaceAction()
 {
+  if(HasRobot()){
+    GetRobot().GetMoveComponent().UnSetTrackToFace();
+  }
 }
 
 void TrackFaceAction::OnRobotSet()
 {
-  if( !_faceID.IsValid() ) {
-    _faceID = GetRobot().GetFaceWorld().GetSmartFaceID(_tmpFaceID);
-  }
-  GetRobot().GetVisionComponent().AddAllowedTrackedFace(_faceID.GetID());
+  _faceID = GetRobot().GetFaceWorld().GetSmartFaceID(_tmpFaceID);  
 }
 
 void TrackFaceAction::GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const
 {
-  requests.insert({ VisionMode::Faces, EVisionUpdateFrequency::High });
+  requests.insert({ VisionMode::DetectingFaces, EVisionUpdateFrequency::Med });
 }
 
 ActionResult TrackFaceAction::InitInternal()
-{  
+{
+  if(false == GetRobot().HasExternalInterface()) {
+    PRINT_NAMED_ERROR("TrackFaceAction.InitInternal.NoExternalInterface",
+                      "Robot must have an external interface so action can "
+                      "subscribe to face changed ID events.");
+    return ActionResult::ABORT;
+  }
+  
+  GetRobot().GetMoveComponent().SetTrackToFace(_faceID.GetID());
   _lastFaceUpdate = 0;
   
   return ActionResult::SUCCESS;
@@ -67,7 +77,6 @@ ActionResult TrackFaceAction::InitInternal()
 
 void TrackFaceAction::GetCompletionUnion(ActionCompletedUnion& completionUnion) const
 {
-  GetRobot().GetVisionComponent().ClearAllowedTrackedFaces();
   TrackFaceCompleted completion;
   completion.faceID = static_cast<s32>(_faceID.GetID());
   completionUnion.Set_trackFaceCompleted(std::move(completion));
@@ -109,9 +118,9 @@ ITrackAction::UpdateResult TrackFaceAction::UpdateTracking(Radians& absPanAngle,
 
   if(DEBUG_TRACKING_ACTIONS)
   {
-    LOG_INFO("TrackFaceAction.UpdateTracking.HeadPose",
-             "Translation w.r.t. robot = (%.1f, %.1f, %.1f) [t=%d]",
-             xDist, yDist, zDist, face->GetTimeStamp());
+    PRINT_NAMED_INFO("TrackFaceAction.UpdateTracking.HeadPose",
+                     "Translation w.r.t. robot = (%.1f, %.1f, %.1f) [t=%d]",
+                     xDist, yDist, zDist, face->GetTimeStamp());
   }
   
   const f32 xyDistSq = xDist*xDist + yDist*yDist;
@@ -127,67 +136,6 @@ ITrackAction::UpdateResult TrackFaceAction::UpdateTracking(Radians& absPanAngle,
   return UpdateResult::NewInfo;
 
 } // UpdateTracking()
-
-bool TrackFaceAction::AreContinueCriteriaMet(const f32 currentTime_sec)
-{
-  if (!Util::IsFltNear(_eyeContactCriteria.earliestStoppingTime_sec, -1.f) &&
-      Util::IsFltGTZero(_eyeContactCriteria.noEyeContactTimeout_sec))
-  {
-    // Always update the time of last eye contact before we do anything else
-    // TODO it would ideal to make sure we only use eye contact from the
-    // face we're tracking VIC-5557
-    const bool eyeContact = GetRobot().GetFaceWorld().IsMakingEyeContact(_eyeContactCriteria.eyeContactWithinLast_ms);
-    if (eyeContact)
-    {
-      _eyeContactCriteria.timeOfLastEyeContact_sec = currentTime_sec;
-    }
-
-    // If the current time is less than the earliest stopping time,
-    // we will always return true (which means we should continue
-    // tracking). Once current time is larger than the earliest
-    // stopping time, we apply the rest of the continue criteria.
-    if (currentTime_sec < _eyeContactCriteria.earliestStoppingTime_sec)
-    {
-      return true;
-    }
-    else
-    {
-      if (eyeContact)
-      {
-        return true;
-      }
-      else if ((currentTime_sec - _eyeContactCriteria.timeOfLastEyeContact_sec) <= _eyeContactCriteria.noEyeContactTimeout_sec)
-      {
-        return true;
-      }
-    }
-  }
-  else
-  {
-    // We need both earliest stopping time and no eye contact timeout
-    // to be provided for continue criteria to work, if one of these are
-    // missing false will be returned (indicating we should stop tracking)
-    PRINT_NAMED_ERROR("TrackFaceAction.AreContinueCriteriaMet.MissingContinueCriteria",
-                      "Both earliest stopping time and no eye contact timeout must be provided");
-  }
-  return false;
-}
-
-void TrackFaceAction::SetEyeContactContinueCriteria(const f32 minTimeToTrack_sec, const f32 noEyeContactTimeout_sec,
-                                                    const TimeStamp_t eyeContactWithinLast_ms)
-{
-  DEV_ASSERT(!HasStarted(), "ITrackAction.SetEyeContactContinueCriteria.ActionAlreadyStarted");
-
-  // This call configures AreContinueCriteriaMet to be called
-  // when determining whether to continue/stop tracking instead
-  // of AreStopCriteriaMet.
-  UseContinueCriteria(true);
-
-  const auto currentTime_sec = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
-  _eyeContactCriteria.earliestStoppingTime_sec = currentTime_sec + minTimeToTrack_sec;
-  _eyeContactCriteria.noEyeContactTimeout_sec = noEyeContactTimeout_sec;
-  _eyeContactCriteria.eyeContactWithinLast_ms = eyeContactWithinLast_ms;
-}
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

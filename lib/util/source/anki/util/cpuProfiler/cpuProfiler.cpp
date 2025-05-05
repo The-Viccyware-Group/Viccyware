@@ -31,6 +31,7 @@ namespace
   CpuProfiler gProfilerInstance;
 } // end anonymous namespace
   
+  
 CpuProfiler& CpuProfiler::GetInstance()
 {
   return gProfilerInstance;
@@ -89,9 +90,12 @@ CpuThreadProfiler* CpuProfiler::GetThreadProfilerByName(const char* threadName)
 
 void CpuProfiler::CheckAndUpdateProfiler(CpuThreadProfiler& profiler, double maxTickTime_ms, uint32_t logFreq) const
 {
-  // Skip checking for stale settings as these can be changed via console variables
-  profiler.SetMaxTickTime_ms(maxTickTime_ms);
-  profiler.SetLogFrequency(logFreq);
+  if (profiler.HasStaleSettings())
+  {
+    profiler.SetMaxTickTime_ms(maxTickTime_ms);
+    profiler.SetLogFrequency(logFreq);
+    profiler.SetHasStaleSettings(false);
+  }
 }
 
 CpuThreadProfiler* CpuProfiler::GetOrAddThreadProfiler(CpuThreadId threadId, const char* threadName,

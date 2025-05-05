@@ -12,10 +12,9 @@ enum PowerMode {
 namespace Power {
   void init(void);
   void tick(void);
-  void wakeUp(void);
-  void adjustHead();
-  void signalRecovery();
   void setMode(PowerMode);
+  void disableHead();
+  void enableHead();
 }
 
 #endif

@@ -10,10 +10,9 @@
 #endif
 
 #include <math.h>
-#include "anki/cozmo/shared/factory/emrHelper.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   /***************************************************************************
    *
@@ -51,17 +50,10 @@ namespace Vector {
   const f32 ORIGIN_TO_LIFT_FRONT_FACE_DIST_MM = 29.f;
   
   // The x-offset from robot origin that the robot's drive center is
-  // located (note that this is different when carrying a block).
+  // located for the treaded robot when not carrying a block.
   // (If you were to model the treaded robot as a two-wheel robot,
   // the drive center is the location between the two wheels)
-#ifdef SIMULATOR
-  // In simulation, the drive center pose always seems to be this value, whether carrying a block or not
-  const f32 DRIVE_CENTER_OFFSET = -16.f;
-  const f32 DRIVE_CENTER_OFFSET_CARRYING_CUBE = -16.f;
-#else
-  const f32 DRIVE_CENTER_OFFSET = -25.f;
-  const f32 DRIVE_CENTER_OFFSET_CARRYING_CUBE = 0.f;
-#endif // SIMULATOR
+  const f32 DRIVE_CENTER_OFFSET = -20.f;
   
   // Forward distance sensor measurements (TODO: finalize these dimensions on production robot)
   const float kProxSensorTiltAngle_rad = DEG_TO_RAD(6.5f);    // Angle that the prox sensor is tilted (upward is positive)
@@ -73,12 +65,12 @@ namespace Vector {
   // issue with moving the lift when it is at a limit. The lift arm
   // flies off of the robot and comes back! So for now, we just don't
   // drive the lift down that far. We also skip calibration in sim.
-  const f32 LIFT_PROTO_MIN_HEIGHT                 = 20.4f;
   const f32 LIFT_HEIGHT_LOWDOCK                   = 32.f; // For interfacing with a cube that is on the ground.
+  const f32 LIFT_HEIGHT_OCCLUDING_PROX_SENSOR_MIN = 36.f; // Between these min/max lift heights, the lift interferes with the prox sensor's beam.
+  const f32 LIFT_HEIGHT_OCCLUDING_PROX_SENSOR_MAX = 50.f; // (see above)
   const f32 LIFT_HEIGHT_HIGHDOCK                  = 76.f; // For interfacing with a cube that is stacked on top of another cube.
   const f32 LIFT_HEIGHT_CARRY                     = 92.f; // Cube carrying height.
   const f32 LIFT_HEIGHT_LOW_ROLL                  = 68.f; // For rolling a cube that is on the ground.
-  const f32 LIFT_HEIGHT_ABOVE_PROX                = 59.f; // Just above prox sensor. Useful for driving in cluttered spaces.
   
   // Distance between the lift shoulder joint and the lift "wrist" joint where arm attaches to fork assembly
   const f32 LIFT_ARM_LENGTH = 66.f;
@@ -117,7 +109,7 @@ namespace Vector {
   const f32 NECK_JOINT_POSITION[3] = {-13.f, 0.f, 34.5f + WHEEL_RAD_TO_MM};
   
   // camera relative to neck joint
-  const f32 HEAD_CAM_POSITION[3]   = {18.84f, 0.f, -7.96f};
+  const f32 HEAD_CAM_POSITION[3]   = {17.52f, 0.f, -8.f};
   
   // Upper shoulder joint relative to robot origin
   const f32 LIFT_BASE_POSITION[3]  = {-41.0f, 0.f, 30.5f + WHEEL_RAD_TO_MM}; // relative to robot origin
@@ -129,8 +121,8 @@ namespace Vector {
   const f32 SCREEN_SIZE[2] = {26.f, 13.f};
   
   // Face display resolution, in pixels
-  const s32 FACE_DISPLAY_WIDTH = IsXray() ? 160: 184;
-  const s32 FACE_DISPLAY_HEIGHT = IsXray() ? 80: 96;
+  const s32 FACE_DISPLAY_WIDTH = 184;
+  const s32 FACE_DISPLAY_HEIGHT = 96;
   const s32 FACE_DISPLAY_NUM_PIXELS = FACE_DISPLAY_WIDTH * FACE_DISPLAY_HEIGHT;
 
   // Common conversion functionality for lift height
@@ -138,12 +130,6 @@ namespace Vector {
                                                      - LIFT_BASE_POSITION[2] - LIFT_FORK_HEIGHT_REL_TO_ARM_END)/LIFT_ARM_LENGTH)
   #define ConvertLiftAngleToLiftHeightMM(angle_rad) ((sinf(angle_rad) * LIFT_ARM_LENGTH) \
                                                     + LIFT_BASE_POSITION[2] + LIFT_FORK_HEIGHT_REL_TO_ARM_END)
-  
-  const f32 MIN_LIFT_ANGLE = ConvertLiftHeightToLiftAngleRad(LIFT_HEIGHT_LOWDOCK);
-  const f32 MAX_LIFT_ANGLE = ConvertLiftHeightToLiftAngleRad(LIFT_HEIGHT_CARRY);
-  
-  // deadband around the min and max lift-angles beyond which we are considered not calibrated
-  const f32 LIFT_ANGLE_LIMIT_MARGIN = DEG_TO_RAD(5.f);
   
   /***************************************************************************
    *
@@ -153,15 +139,24 @@ namespace Vector {
   
   
   // TODO: This needs to be sync'd with whatever is in BlockDefinitions.h
-  const f32 DEFAULT_BLOCK_MARKER_WIDTH_MM = 25.f;  
+  const f32 DEFAULT_BLOCK_MARKER_WIDTH_MM = 25.f;
+  
+  // The distance to the bridge ground marker that the robot must
+  // achieve before we can consider it aligned with the bridge enough
+  // to start driving straight. This should be the minimum distance that
+  // the robot can reliably "dock" to the marker.
+  const f32 BRIDGE_ALIGNED_MARKER_DISTANCE = 60.f;
+  
+  // Distance between the marker at the end of the bridge
+  // and the desired pose of the robot when it is considered
+  // to be off the bridge.
+  const f32 MARKER_TO_OFF_BRIDGE_POSE_DIST = 80.f;
+  
   
   // Distance to the charger ramp marker that the robot must
   // achieve before we can consider it aligned with the charger enough
   // to reverse on to it.
   const f32 CHARGER_ALIGNED_MARKER_DISTANCE = 140.f;
-  
-  // Slope of the charger platform w.r.t. the ground
-  const f32 kChargerSlopeAngle_rad = DEG_TO_RAD(7.0f);
   
   
   /***************************************************************************
@@ -172,18 +167,8 @@ namespace Vector {
   
   const u8 NUM_RADIAL_DISTORTION_COEFFS = 8;
 
-  const u16 DEFAULT_CAMERA_RESOLUTION_WIDTH  =  IsXray() ? 800 : 640;
-  const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT =  IsXray() ? 600 : 360;
-
-  const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsXray() ? 1600: 1280;
-  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsXray() ?1200: 720;
-  
-  const f32 MIN_CAMERA_EXPOSURE_TIME_MS = 1;
-  const f32 MAX_CAMERA_EXPOSURE_TIME_MS = 66;
-  
-  // Range for exposure and white balance gains
-  const f32 MIN_CAMERA_GAIN = 0.25f; // Real min should be 0.1, but using 0.25 as a bandaid for VIC-6653
-  const f32 MAX_CAMERA_GAIN = 3.8f;
+  const u16 DEFAULT_CAMERA_RESOLUTION_WIDTH  = 640;
+  const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT = 360;
   
   /***************************************************************************
    *
@@ -193,11 +178,7 @@ namespace Vector {
 
   // Cliff detection thresholds (these come from testing with DVT1 robots - will need
   // to be adjusted for production hardware)
-  #if FACTORY_TEST
-  const u16 CLIFF_SENSOR_THRESHOLD_MAX = 180;
-  #else
   const u16 CLIFF_SENSOR_THRESHOLD_MAX = 40;
-  #endif
   const u16 CLIFF_SENSOR_THRESHOLD_MIN = 15;
   const u16 CLIFF_SENSOR_THRESHOLD_DEFAULT = CLIFF_SENSOR_THRESHOLD_MAX;
   
@@ -210,73 +191,7 @@ namespace Vector {
   const f32 kCliffSensorXOffsetFront_mm = 2.f;   // x (longitudinal) offset from robot origin to front cliff sensors
   const f32 kCliffSensorXOffsetRear_mm  = -50.f; // x (longitudinal) offset from robot origin to rear cliff sensors
   
-
-  // The minimum value expected of cliff sensor when
-  // it's detecting a white line in the habitat
-  // TODO (VIC-3550): Merge with kChargerCliffBlackThreshold?
-  const u16 MIN_CLIFF_STOP_ON_WHITE_VAL_HIGH = 400;
   
-  // if cliff-alignment fails, we may wish to retry cliff alignment
-  // with a lowered threshold in case we are dealing with values
-  // that are marginally lower than the threshold
-  // note: this is to counteract variability in appearance of
-  // habitat white w.r.t. individual robots
-  const u16 MIN_CLIFF_STOP_ON_WHITE_VAL_LOW = 350;
-
-  // Amount below MIN_CLIFF_STOP_ON_WHITE_VAL at which a white
-  // value is undetected
-  const u16 CLIFF_STOP_ON_WHITE_HYSTERSIS = 50;
-
-  // In calm mode, cliffs are never detected
-  const u16 CLIFF_CALM_MODE_VAL = 1000;
-
-  // In calm mode, prox sensor returns this distance reading
-  // but it's also of negative signal quality so it should never be used
-  const u16 PROX_CALM_MODE_DIST_MM = 1000;
-
-  /***************************************************************************
-   *
-   *                          Range Sensor (whiskey)
-   *
-   **************************************************************************/
-
-  #define TOF_SIDE_BY_SIDE 0 // Angled inwards
-  #define TOF_ABOVE_BELOW 1
-  #define TOF_CENTER_OF_FACE 2
-  
-  #define TOF_CONFIGURATION TOF_SIDE_BY_SIDE
-  
-  const f32 TOF_FOV_RAD = DEG_TO_RAD(19);
-  const u32 TOF_RESOLUTION = 4;
-
-  #if TOF_CONFIGURATION == TOF_SIDE_BY_SIDE
-  
-  const f32 TOF_LEFT_TRANS_REL_CAMERA_MM[] = {0, -8, 0};
-  const f32 TOF_LEFT_ROT_Z_REL_CAMERA_RAD = DEG_TO_RAD(12);
-  const f32 TOF_RIGHT_TRANS_REL_CAMERA_MM[] = {0, 8, 0};
-  const f32 TOF_RIGHT_ROT_Z_REL_CAMERA_RAD = DEG_TO_RAD(-12);
-  const f32 TOF_ANGLE_DOWN_REL_CAMERA_RAD = DEG_TO_RAD(7);
-  
-  #elif TOF_CONFIGURATION == TOF_ABOVE_BELOW
-
-  const f32 TOF_LEFT_TRANS_REL_CAMERA_MM[] = {0, -5, 0};
-  const f32 TOF_LEFT_ROT_Y_REL_CAMERA_RAD = DEG_TO_RAD(-9.5);
-  const f32 TOF_RIGHT_TRANS_REL_CAMERA_MM[] = {0, 5, 0};
-  const f32 TOF_RIGHT_ROT_Y_REL_CAMERA_RAD = DEG_TO_RAD(9.5);
-  const f32 TOF_ANGLE_DOWN_REL_CAMERA_RAD = DEG_TO_RAD(-4);
-
-  #elif TOF_CONFIGURATION == TOF_CENTER_OF_FACE
-
-  const f32 TOF_LEFT_TRANS_REL_CAMERA_MM[] = {0, 0, 10};
-  const f32 TOF_LEFT_ROT_Y_REL_CAMERA_RAD = DEG_TO_RAD(0);
-  const f32 TOF_RIGHT_TRANS_REL_CAMERA_MM[] = {0, 0, 10};
-  const f32 TOF_RIGHT_ROT_Y_REL_CAMERA_RAD = DEG_TO_RAD(0);
-  const f32 TOF_ANGLE_DOWN_REL_CAMERA_RAD = DEG_TO_RAD(-4);
-
-  #else
-  #error Invalid TOF_CONFIGURATION
-  #endif
-
   /***************************************************************************
    *
    *                          Speeds and Accels
@@ -294,14 +209,6 @@ namespace Vector {
   const f32 MAX_WHEEL_SPEED_MMPS = 220.f;
   const f32 MAX_WHEEL_ACCEL_MMPS2 = 10000.f;  // TODO: Actually measure this!
   
-  // How fast (in mm/sec) can the robot drive without falling off 
-  // (most) straight edge cliffs
-  const f32 MAX_SAFE_WHEEL_SPEED_MMPS = 170.f;
-
-  // How fast (in mm/sec) can the robot drive without falling off 
-  // (most) straight edge cliffs while carrying a cube
-  const f32 MAX_SAFE_WHILE_CARRYING_WHEEL_SPEED_MMPS = 60.f;
-
   // Maximum angular velocity
   // Determined experimentally by turning robot in place at max speed.
   // It can actually spin closer to 360 deg/s, but we use a conservative limit to be sure
@@ -336,8 +243,15 @@ namespace Vector {
   const s32 ANIM_OVERTIME_WARNING_THRESH_MS = 5;
   const s32 ANIM_OVERTIME_WARNING_THRESH_US = ANIM_OVERTIME_WARNING_THRESH_MS * 1000;
   
-  // Time step for cube tick
-  const s32 CUBE_TIME_STEP_MS = 10;
+  // Web server process timing consts; much more lax
+  const u32 WEB_SERVER_TIME_STEP_MS = 100;
+  const u32 WEB_SERVER_TIME_STEP_US = WEB_SERVER_TIME_STEP_MS * 1000;
+  const s32 WEB_SERVER_OVERTIME_WARNING_THRESH_MS = 500;
+  const s32 WEB_SERVER_OVERTIME_WARNING_THRESH_US = WEB_SERVER_OVERTIME_WARNING_THRESH_MS * 1000;
+  
+  // Time step for actual and simulated cubes
+  const s32 CUBE_TIME_STEP_MS = 5;
+  const s32 SIM_CUBE_TIME_STEP_MS = 10;
   
   // Timestep for cube animation LED 'frames'
   const u32 CUBE_LED_FRAME_LENGTH_MS = 30;
@@ -368,8 +282,16 @@ namespace Vector {
   
   // Port on which UI device should connect to (de)register for advertisement
   const u32 UI_ADVERTISEMENT_REGISTRATION_PORT = 5103;
-
-  const u32 SWITCHBOARD_TCP_PORT = 5107;
+  
+  // Port on which registered SDK devices advertise.
+  const u32 SDK_ADVERTISING_PORT = 5104;
+  
+  // Port on which SDK device should connect to (de)register for advertisement
+  const u32 SDK_ADVERTISEMENT_REGISTRATION_PORT = 5105;
+  
+  // Port for TCP/IP based version of SDK to communicate over
+  const u32 SDK_ON_DEVICE_TCP_PORT = 5106;
+  // See SDK_ON_COMPUTER_TCP_PORT in engineInterface.py for corresponding port on attached PC
   
   // If most recent advertisement message is older than this,
   // then it is no longer considered to be advertising.
@@ -381,10 +303,7 @@ namespace Vector {
   // How frequently to send robot state messages (in number of main execution
   // loop increments).  So, 6 --> every 30ms, since our loop timestep is 5ms.
   const s32 STATE_MESSAGE_FREQUENCY = 6;
-
-  // How frequently to send state messages in calm mode
-  const s32 STATE_MESSAGE_FREQUENCY_CALM = 50;
-
+  
   // UI device server port which listens for basestation/game clients
   const u32 UI_MESSAGE_SERVER_LISTEN_PORT = 5200;
 
@@ -401,7 +320,25 @@ namespace Vector {
   // THIS ON IN MASTER
   #define SHOULD_SEND_DISPLAYED_FACE_TO_ENGINE false
   
-} // namespace Vector
+  //
+  // Local (unix-domain) socket paths.
+  // RobotID will be appended to generate unique paths for each robot.
+  //
+  #ifdef SIMULATOR
+  constexpr char LOCAL_SOCKET_PATH[]  = "/tmp/";
+  constexpr char ANIM_ROBOT_SERVER_PATH[]  = "/tmp/_anim_robot_server_";
+  constexpr char ANIM_ROBOT_CLIENT_PATH[]  = "/tmp/_anim_robot_client_";
+  constexpr char ENGINE_ANIM_SERVER_PATH[] = "/tmp/_engine_anim_server_";
+  constexpr char ENGINE_ANIM_CLIENT_PATH[] = "/tmp/_engine_anim_client_";
+  #else
+  constexpr char LOCAL_SOCKET_PATH[]  = "/dev/";
+  constexpr char ANIM_ROBOT_SERVER_PATH[]  = "/dev/socket/_anim_robot_server_";
+  constexpr char ANIM_ROBOT_CLIENT_PATH[]  = "/dev/socket/_anim_robot_client_";
+  constexpr char ENGINE_ANIM_SERVER_PATH[] = "/dev/socket/_engine_anim_server_";
+  constexpr char ENGINE_ANIM_CLIENT_PATH[] = "/dev/socket/_engine_anim_client_";
+  #endif
+  
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // COZMO_CONFIG_H

@@ -14,7 +14,7 @@
  * Copyright: Anki, Inc. 2016
  **/
 
-#include "coretech/vision/engine/debugImageList.h"
+#include "coretech/vision/engine/image.h"
 #include "coretech/vision/engine/trackedFace.h"
 #include "coretech/vision/engine/profiler.h"
 #include "coretech/vision/engine/enrolledFaceEntry.h"
@@ -28,8 +28,11 @@
 #include "CommonDef.h"
 #include "DetectorComDef.h"
 
+#include "util/math/numericCast.h"
+
 #include <list>
 #include <map>
+#include <ctime>
 #include <thread>
 #include <mutex>
 
@@ -39,8 +42,6 @@ namespace Json {
 
 namespace Anki {
 namespace Vision {
-  
-  class CompressedImage;
 
   class FaceRecognizer : public Profiler
   {
@@ -56,7 +57,6 @@ namespace Vision {
 
     void SetIsSynchronous(bool isSynchronous);
     
-    bool     CanAddNamedFace() const;
     Result   AssignNameToID(FaceID_t faceID, const std::string& name, FaceID_t mergeWithID);
     Result   EraseFace(FaceID_t faceID);
     void     EraseAllFaces();
@@ -73,35 +73,28 @@ namespace Vision {
     // otherwise. If true, the caller must not modify the part detection handle
     // while processing is running (i.e. until false is returned).
     // If running synchronously, always returns true.
-    bool SetNextFaceToRecognize(const Vision::Image& img,
+    bool SetNextFaceToRecognize(const Image& img,
                                 const DETECTION_INFO& detectionInfo,
-                                const POINT* facialParts,     // PT_POINT_KIND_MAX in length
-                                const INT32* partConfidences, // PT_POINT_KIND_MAX in length
-                                const bool enableEnrollment);
-    
-
-                                     
+                                HPTRESULT okaoPartDetectionResultHandle,
+                                bool enableEnrollment);
     
     // Use faceID = UnknownFaceID to allow enrollments for any face.
     // Use N = -1 to allow ongoing enrollment.
-    void SetAllowedEnrollments(s32 N, FaceID_t forFaceID, bool forceNewID = false);
+    void SetAllowedEnrollments(s32 N, FaceID_t forFaceID);
     
     TrackingID_t GetEnrollmentTrackID() const { return _enrollmentTrackID; }
     FaceID_t     GetEnrollmentID()      const { return _enrollmentID; }
     
-    // Note that this will take effect on the next call to GetRecognitionData below
-    // (I.e., this just "queues" the clear to help prevent race conditions when running asynchronously)
+    void RemoveTrackingID(TrackingID_t trackerID);
     void ClearAllTrackingData();
     
-    // Return existing or newly-computed recognition info for a given tracking ID.
+    // Return existing or newly-computed recognitino info for a given tracking ID.
     // If a specific enrollment ID and count are in use, and the enrollment just
     // completed (the count was just reached), then that count is returned in
     // 'enrollmentCountReached'. Otherwise 0 is returned.
-    EnrolledFaceEntry GetRecognitionData(TrackingID_t forTrackingID, s32& enrollmentCountReached,
-                                         DebugImageList<CompressedImage>& debugImages);
+    EnrolledFaceEntry GetRecognitionData(TrackingID_t forTrackingID, s32& enrollmentCountReached);
     
     bool HasRecognitionData(TrackingID_t forTrackingID) const;
-    bool HasName(TrackingID_t forTrackingID) const;
     
     Result LoadAlbum(const std::string& albumName, std::list<LoadedKnownFace>& loadedFaces);
     Result SaveAlbum(const std::string& albumName);
@@ -114,51 +107,6 @@ namespace Vision {
                              const std::vector<u8>& enrollData,
                              std::list<LoadedKnownFace>& loadedFaces);
 
-    bool GetFaceIDFromTrackingID(const TrackingID_t trackingID, FaceID_t& faceID) const;
-   
-    std::string GetBestGuessNameForTrackingID(const TrackingID_t trackingID) const;
-
-#if ANKI_DEVELOPER_CODE
-    //
-    // For testing:
-    //
-    
-    // Adds a face to the album using its already-extracted features/confidences, using the
-    // next available slot for the given album entry. Fails if album or specific entry is full.
-    Result DevAddFaceToAlbum(const Image& img, const TrackedFace& face, int albumEntry);
-    
-    // Identify the given face, using enrollments present in the album and puts matched ID and score
-    // in 'albumEntry' and 'score'. Note: will always find a match (in the event of RESULT_OK); it's the
-    // caller's job to compare to a threshold.
-    Result DevFindFaceInAlbum(const Image& img, const TrackedFace& face, int& albumEntry, float& score) const;
-    
-    // Same as above, but returns up to maxMatches pairs of album entries and corresponding scores, in decreasing
-    // score order
-    Result DevFindFaceInAlbum(const Image& img, const TrackedFace& face, const int maxMatches,
-                              std::vector<std::pair<int, float>>& matches) const;
-    
-    // Computes recognition score for two faces added using AddFaceToAlbum
-    float DevComputePairwiseMatchScore(int faceID1, int faceID2) const;
-    float DevComputePairwiseMatchScore(int faceID1, const Image& img, const TrackedFace& face) const;
-    float DevComputePairwiseMatchScore(const Image& img1, const TrackedFace& face1,
-                                       const Image& img2, const TrackedFace& face2);
-    
-#endif // ANKI_DEVELOPER_CODE
-
-#if ANKI_DEV_CHEATS
-    // Saves all the debug enrollment images in the dierctory set above,
-    // and appending the face id, album id, and the image timestamp.
-    // The filename has the form /path/<filename_prefix>_<face_id>_<album_entry_id>_<timestamp>.jpg.
-    // Currently the debug images are cropped to only contain the region of the image
-    // where there was a face detection. The container of images is populated
-    // by enabling kGatherDebugEnrollmentImages which by default saves the croppped
-    // images at the same resolution that recognition occurs at. If kDisplayDebugEnrollmentImages
-    // is enabled the cropped images with be saved at kEnrollmentThumbnailSize.
-    void SaveAllRecognitionImages(const std::string& imagePathPrefix);
-    // This deletes all the debug recognition images for all users.
-    void DeleteAllRecognitionImages();
-#endif // ANKI_DEV_CHEATS
-    
   private:
     
     // Aliases for better readability
@@ -183,22 +131,15 @@ namespace Vision {
     Result UpdateExistingAlbumEntry(AlbumEntryID_t albumEntry, HFEATURE& hFeature, RecognitionScore score);
     
     // Matches features to known faces, when features are done being computed
-    Result RecognizeFace(FaceID_t& faceID, RecognitionScore& recognitionScore,
-                         DebugImageList<CompressedImage>& debugImages);
+    Result RecognizeFace(FaceID_t& faceID, RecognitionScore& recognitionScore);
     
     // Uses the ID and score from RecognizeFace to update the data. Also checks
     // for merge opportunities.
     Result UpdateRecognitionData(const FaceID_t recognizedID,
                                  const RecognitionScore score);
     
-    void   UpdateBestGuessName(const std::vector<AlbumEntryID_t>& matchingAlbumEntries,
-                               const std::vector<RecognitionScore>& scores,
-                               const int resultNum);
-    
 		bool   IsMergingAllowed(FaceID_t toFaceID) const;
-    
-    s32    GetNumNamedFaces() const;
-    
+		
     Result MergeFaces(FaceID_t keepID, FaceID_t mergeID);
   
     Result SelectiveMergeHelper(EnrollmentData::iterator keepIter, EnrollmentData::iterator mergeIter);
@@ -206,10 +147,6 @@ namespace Vision {
     Result RemoveUser(FaceID_t userID);
     EnrollmentData::iterator RemoveUser(EnrollmentData::iterator userIter);
 
-    void RemoveTrackingID(TrackingID_t trackerID);
-    
-    void ClearAllTrackingDataInternal();
-    
     Result GetSerializedAlbum(std::vector<u8>& serializedAlbum) const;
     
     static Result SetSerializedAlbum(HCOMMON okaoCommonHandle, const std::vector<u8>&serializedAlbum, HALBUM& album);
@@ -237,19 +174,15 @@ namespace Vision {
     void AddDebugInfo(FaceID_t matchedID, RecognitionScore score,
                       std::list<FaceRecognitionMatch>& newDebugInfo) const;
     
-    // Cancel existing and remove partial album entries
-    void CancelExistingEnrollment();
-    
     // TODO: Using Util::numeric_cast here would be nice, but its not (always) constexpr...
-    static constexpr s32 kMaxNamedFacesInAlbum       = (s32)FaceRecognitionConstants::MaxNumFacesInAlbum;
+    static constexpr s32 kMaxFacesInAlbum            = (s32)FaceRecognitionConstants::MaxNumFacesInAlbum;
     static constexpr s32 kMaxAlbumEntriesPerFace     = (s32)FaceRecognitionConstants::MaxNumAlbumEntriesPerFace;
     static constexpr s32 kMaxEnrollDataPerAlbumEntry = (s32)FaceRecognitionConstants::MaxNumEnrollDataPerAlbumEntry;
     
     // Make sure we are within fixed limits of the OKAO library
     static constexpr s32 kMaxTotalAlbumEntries = 1000;
-    static constexpr s32 kMinSessionOnlyFaces = 10;
-    static_assert( (kMaxNamedFacesInAlbum+kMinSessionOnlyFaces)*kMaxAlbumEntriesPerFace <= kMaxTotalAlbumEntries,
-                  "Combination of min/max face parameters too large for OKAO Library (Max is 1000).");
+    static_assert(kMaxFacesInAlbum*kMaxAlbumEntriesPerFace <= kMaxTotalAlbumEntries,
+                  "MaxTotalAlbumEntries too large for OKAO Library (Max is 1000).");
     static_assert(kMaxEnrollDataPerAlbumEntry <= 10,
                   "MaxEnrollDataPerAlbumEntry too large for OKAO Library (Max is 10).");
     
@@ -261,9 +194,6 @@ namespace Vision {
     HFEATURE    _okaoRecogMergeFeatureHandle   = NULL;
     HALBUM      _okaoFaceAlbum                 = NULL;
     
-    POINT       _aptPoint[PT_POINT_KIND_MAX];
-    INT32       _anConfidence[PT_POINT_KIND_MAX];
-
     // Threading
     enum class ProcessingState : u8 {
       Idle,
@@ -272,7 +202,6 @@ namespace Vision {
       FeaturesReady
     };
     std::mutex      _mutex;
-    std::condition_variable _newImageCondition;
     std::thread     _featureExtractionThread;
     bool            _isRunningAsync = true;
     bool            _isEnrollmentCancelled = false;
@@ -280,16 +209,15 @@ namespace Vision {
     void StartThread();
     void Run();
     void StopThread();
-
+    
     // Passed-in state for processing
     Image          _img;
+    HPTRESULT      _okaoPartDetectionResultHandle = NULL;
     DETECTION_INFO _detectionInfo;
     
     // Internal bookkeeping and parameters
-    std::map<TrackingID_t, FaceID_t>     _trackingToFaceID;
-    std::map<TrackingID_t, std::string>  _trackingIDtoBestGuessName;
-    AlbumEntryToFaceID                   _albumEntryToFaceID;
-    bool                                 _shouldClearAllTrackingData = false;
+    std::map<TrackingID_t, FaceID_t> _trackingToFaceID;
+    AlbumEntryToFaceID   _albumEntryToFaceID;
     
     FaceID_t       _nextFaceID     = 1; // Skip UnknownFaceID
     AlbumEntryID_t _nextAlbumEntry = 0; 
@@ -297,7 +225,6 @@ namespace Vision {
     // Which face we are allowed to add enrollment data for (UnknownFaceID == "any" face),
     // and how many enrollments we are allowed to add ( <0 means as many as we want)
     bool      _isEnrollmentEnabled = true;
-    bool      _forceNewEnrollment = false;
     FaceID_t  _enrollmentID = UnknownFaceID;
     FaceID_t  _enrollmentTrackID = UnknownFaceID;
     s32       _enrollmentCount = -1; // Has no effect if enrollmentID not set
@@ -308,16 +235,10 @@ namespace Vision {
     EnrollmentData _enrollmentData;
     
     // For debugging what is in current enrollment images
-    std::map<AlbumEntryID_t,std::array<Vision::Image, kMaxEnrollDataPerAlbumEntry>> _enrollmentImages;
+    std::map<AlbumEntryID_t,std::array<Vision::ImageRGB, kMaxEnrollDataPerAlbumEntry>> _enrollmentImages;
     void SetEnrollmentImage(AlbumEntryID_t albumEntry, s32 dataEntry);
-    void DisplayEnrollmentImages(DebugImageList<CompressedImage>& debugImages) const;
-    void DisplayMatchImages(const INT32 resultNum,
-                            const std::vector<AlbumEntryID_t>& matchingAlbumEntries,
-                            const std::vector<RecognitionScore>& scores,
-                            DebugImageList<CompressedImage>& debugImages);
+    void DisplayEnrollmentImages() const;
     
-    static Result ComputeFeaturesFromFace(const Image& img, const TrackedFace& face, HFEATURE featureHandle);
-
   }; // class FaceRecognizer
   
 

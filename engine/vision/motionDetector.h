@@ -13,11 +13,12 @@
 #ifndef __Anki_Cozmo_Basestation_MotionDetector_H__
 #define __Anki_Cozmo_Basestation_MotionDetector_H__
 
-#include "coretech/common/engine/robotTimeStamp.h"
+#include "coretech/common/shared/types.h"
+#include "coretech/common/engine/math/point.h"
 
-#include "coretech/vision/engine/compressedImage.h"
-#include "coretech/vision/engine/debugImageList.h"
 #include "coretech/vision/engine/image.h"
+
+#include "engine/debugImageList.h"
 
 #include "clad/externalInterface/messageEngineToGame.h"
 
@@ -33,7 +34,7 @@ class Camera;
 class ImageCache;
 }
 
-namespace Vector {
+namespace Cozmo {
 
 // Forward declaration:
 struct VisionPoseData;
@@ -72,7 +73,7 @@ public:
                 const VisionPoseData& crntPoseData,
                 const VisionPoseData& prevPoseData,
                 std::list<ExternalInterface::RobotObservedMotion>& observedMotions,
-                Vision::DebugImageList<Vision::CompressedImage>& debugImages);
+                DebugImageList<Vision::ImageRGB>& debugImageRGBs);
 
   ~MotionDetector();
 
@@ -84,13 +85,13 @@ private:
                       const VisionPoseData &crntPoseData,
                       const VisionPoseData &prevPoseData,
                       std::list<ExternalInterface::RobotObservedMotion> &observedMotions,
-                      Vision::DebugImageList<Vision::CompressedImage> &debugImages);
+                      DebugImageList<Vision::ImageRGB> &debugImageRGBs);
 
   // To detect peripheral motion, a simple impulse-decay model is used. The longer motion is detected in a
   // specific area, the higher its activation will be. When it reaches a max value motion is activated in
   // that specific area.
   bool DetectPeripheralMotionHelper(Vision::Image &ratioImage,
-                                    Vision::DebugImageList<Vision::CompressedImage> &debugImages,
+                                    DebugImageList<Anki::Vision::ImageRGB> &debugImageRGBs,
                                     ExternalInterface::RobotObservedMotion &msg, f32 scaleMultiplier);
 
   bool DetectGroundAndImageHelper(Vision::Image &foregroundMotion, int numAboveThresh, s32 origNumRows,
@@ -98,11 +99,11 @@ private:
                                   const VisionPoseData &crntPoseData,
                                   const VisionPoseData &prevPoseData,
                                   std::list<ExternalInterface::RobotObservedMotion> &observedMotions,
-                                  Vision::DebugImageList<Vision::CompressedImage> &debugImages,
+                                  DebugImageList<Anki::Vision::ImageRGB> &debugImageRGBs,
                                   ExternalInterface::RobotObservedMotion &msg);
 
   template <class ImageType>
-  void FilterImageAndPrevImages(const ImageType& image, ImageType& blurredImage);
+  void FilterImageAndPrevImages(const ImageType& image);
 
   void ExtractGroundPlaneMotion(s32 origNumRows, s32 origNumCols, f32 scaleMultiplier,
                                 const VisionPoseData &crntPoseData,
@@ -125,13 +126,7 @@ private:
   
   template<class ImageType>
   bool HavePrevImage() const;
-  
-  template<class ImageType>
-  ImageType& GetPrevImage();
-  
-  template<class ImageType>
-  bool WasPrevImageBlurred() const;
-  
+
   // Computes "centroid" at specified percentiles in X and Y
   static size_t GetCentroid(const Vision::Image& motionImg,
                             Anki::Point2f& centroid,
@@ -154,14 +149,14 @@ private:
   bool _wasPrevImageRGBBlurred = false;
   bool _wasPrevImageGrayBlurred = false;
   
-  RobotTimeStamp_t   _lastMotionTime = 0;
+  TimeStamp_t   _lastMotionTime = 0;
   
   VizManager*   _vizManager = nullptr;
 
   const Json::Value& _config;
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif /* __Anki_Cozmo_Basestation_MotionDetector_H__ */

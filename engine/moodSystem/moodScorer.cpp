@@ -20,7 +20,7 @@
 
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     
     MoodScorer::MoodScorer(const Json::Value& inJson)
     : _emotionScorers()
@@ -117,6 +117,6 @@ namespace Anki {
     }
 
     
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
 

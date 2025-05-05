@@ -15,12 +15,9 @@
 #define __Engine_AiComponent_BehaviorComponent_Behaviors_BehaviorHighLevelAI_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/internalStatesBehavior.h"
-#include "clad/types/behaviorComponent/postBehaviorSuggestions.h"
-
-#include <unordered_map>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorHighLevelAI : public InternalStatesBehavior
 {
@@ -37,7 +34,6 @@ public:
 
 protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{
-    modifiers.wantsToBeActivatedWhenCarryingObject = true;
     modifiers.wantsToBeActivatedWhenOffTreads = true;
     modifiers.wantsToBeActivatedWhenOnCharger = true;
     modifiers.behaviorAlwaysDelegates = false;
@@ -46,26 +42,21 @@ protected:
   virtual void BehaviorUpdate() override;
   
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
-  
-  virtual void OverrideResumeState( StateID& resumeState ) override;
-  
-  virtual void OnStateNameChange( const std::string& oldStateName, const std::string& newStateName ) const override;
 
 private:
+  
+  bool IsBehaviorActive( BehaviorID behaviorID ) const;
   
   struct {
     float socializeKnownFaceCooldown_s;
     float playWithCubeCooldown_s;
     float playWithCubeOnChargerCooldown_s;
+    float goToSleepTimeout_s;
+    float minFaceTimeToAllowSleep_s;
     float maxFaceDistanceToSocialize_mm;
-
-    // for logging only
-    float lastExploringCooldownPrinted = -1.0f;
-    
-    std::unordered_map< PostBehaviorSuggestions, StateID > pbsResumeOverrides;
   } _params;
-
-  CustomBEIConditionHandleList CreateCustomConditions();
+  
+  PreDefinedStrategiesMap CreatePreDefinedStrategies();
   
 };
 

@@ -9,36 +9,30 @@
  * Modifications:
  */
 
-#include "coretech/common/engine/opencvThreading.h"
-#include "coretech/common/engine/utils/data/dataPlatform.h"
-#include "coretech/common/engine/utils/timer.h"
-#include "engine/ankiEventUtil.h"
-#include "engine/components/battery/batteryComponent.h"
-#include "engine/components/mics/micComponent.h"
-#include "engine/components/mics/micDirectionHistory.h"
-#include "engine/components/movementComponent.h"
-#include "engine/components/sensors/cliffSensorComponent.h"
-#include "engine/components/sensors/proxSensorComponent.h"
-#include "engine/components/sensors/touchSensorComponent.h"
-#include "engine/components/visionComponent.h"
-#include "engine/cozmoAPI/comms/uiMessageHandler.h"
-#include "engine/cozmoContext.h"
 #include "engine/cozmoEngine.h"
-#include "engine/debug/cladLoggerProvider.h"
-#include "engine/events/ankiEvent.h"
+#include "engine/cozmoContext.h"
+#include "engine/components/batteryComponent.h"
 #include "engine/externalInterface/externalInterface.h"
-#include "engine/factory/factoryTestLogger.h"
-#include "engine/perfMetricEngine.h"
-#include "engine/robot.h"
-#include "engine/robotDataLoader.h"
+#include "engine/events/ankiEvent.h"
 #include "engine/robotInterface/messageHandler.h"
-#include "engine/robotManager.h"
-#include "engine/robotTest.h"
-#include "engine/utils/cozmoExperiments.h"
+#include "engine/ankiEventUtil.h"
+#include "engine/ble/BLESystem.h"
+#include "engine/debug/cladLoggerProvider.h"
+#include "coretech/common/engine/utils/data/dataPlatform.h"
+#include "engine/components/visionComponent.h"
+#include "engine/deviceData/deviceDataManager.h"
+#include "engine/perfMetric.h"
+#include "coretech/common/engine/utils/timer.h"
 #include "engine/utils/parsingConstants/parsingConstants.h"
 #include "engine/viz/vizManager.h"
-#include "osState/wallTime.h"
-#include "engine/cozmoAPI/comms/protoMessageHandler.h"
+#include "engine/robot.h"
+#include "engine/robotDataLoader.h"
+#include "engine/robotManager.h"
+#include "engine/util/transferQueue/transferQueueMgr.h"
+#include "engine/utils/cozmoExperiments.h"
+#include "engine/utils/cozmoFeatureGate.h"
+#include "engine/factory/factoryTestLogger.h"
+#include "engine/cozmoAPI/comms/uiMessageHandler.h"
 #include "webServerProcess/src/webService.h"
 
 #include "anki/cozmo/shared/cozmoConfig.h"
@@ -47,14 +41,11 @@
 
 #include "clad/externalInterface/messageGameToEngine.h"
 
-#include "platform/common/diagnosticDefines.h"
-
 #include "util/console/consoleInterface.h"
 #include "util/cpuProfiler/cpuProfiler.h"
 #include "util/global/globalDefinitions.h"
 #include "util/helpers/templateHelpers.h"
 #include "util/logging/logging.h"
-#include "util/logging/DAS.h"
 #include "util/logging/printfLoggerProvider.h"
 #include "util/logging/multiLoggerProvider.h"
 #include "util/time/universalTime.h"
@@ -65,7 +56,6 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
-#include <time.h>
 
 #if USE_DAS
 #include <DAS/DAS.h>
@@ -76,136 +66,72 @@
 
 #define LOG_CHANNEL "CozmoEngine"
 
+#if ANKI_PROFILING_ENABLED
+  #define ENABLE_CE_SLEEP_TIME_DIAGNOSTICS 0
+  #define ENABLE_CE_RUN_TIME_DIAGNOSTICS 1
+#else
+  #define ENABLE_CE_SLEEP_TIME_DIAGNOSTICS 0
+  #define ENABLE_CE_RUN_TIME_DIAGNOSTICS 0
+#endif
+
 #define MIN_NUM_FACTORY_TEST_LOGS_FOR_ARCHIVING 100
-#define NUM_OPENCV_THREADS 0
-
-// Local state variables
-namespace {
-
-  // How often do we attempt connection to robot/anim process?
-  constexpr auto connectInterval = std::chrono::seconds(1);
-
-  // When did we last try connecting?
-  auto lastConnectAttempt = std::chrono::steady_clock::time_point();
-
-}
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
-
-static int GetEngineStatsWebServerImpl(WebService::WebService::Request* request)
+int GetEngineStatsWebServerHandler(struct mg_connection *conn, void *cbdata)
 {
-  auto* cozmoEngine = static_cast<CozmoEngine*>(request->_cbdata);
-  if (cozmoEngine->GetEngineState() != EngineState::Running)
-  {
-    LOG_INFO("CozmoEngine.GetEngineStatsWebServerImpl.NotReady", "GetEngineStatsWebServerImpl called but engine not running");
-    return 0;
-  }
+  using namespace std::chrono;
+  const auto startTime = steady_clock::now();
 
-  const auto robot = cozmoEngine->GetRobot();
+  // We ignore the query string because overhead is minimal
+  auto* cozmoEngine = static_cast<CozmoEngine*>(cbdata);
+  const auto& robot = cozmoEngine->GetRobot();
 
   const auto& batteryComponent = robot->GetBatteryComponent();
   std::stringstream ss;
-  ss << std::fixed << std::setprecision(3) << batteryComponent.GetBatteryVolts() << '\n';
-  ss << std::fixed << std::setprecision(3) << batteryComponent.GetBatteryVoltsRaw() << '\n';
-  ss << std::fixed << std::setprecision(3) << batteryComponent.GetChargerVoltsRaw() << '\n';
-  ss << EnumToString(batteryComponent.GetBatteryLevel()) << '\n';
-  ss << std::to_string(static_cast<int>(batteryComponent.GetBatteryTemperature_C())) << '\n';
-  ss << (batteryComponent.IsCharging() ? "true" : "false") << '\n';
-  ss << (batteryComponent.IsOnChargerContacts() ? "true" : "false") << '\n';
-  ss << (batteryComponent.IsOnChargerPlatform() ? "true" : "false") << '\n';
-  ss << std::to_string(static_cast<int>(batteryComponent.GetTimeAtLevelSec(BatteryLevel::Full))) << '\n';
-  ss << std::to_string(static_cast<int>(batteryComponent.GetTimeAtLevelSec(BatteryLevel::Low))) << '\n';
+  ss << std::fixed << std::setprecision(3) << batteryComponent.GetBatteryVolts();
+  const std::string stat_batteryVoltsFiltered = ss.str();
+  std::stringstream ss2;
+  ss2 << std::fixed << std::setprecision(3) << batteryComponent.GetBatteryVoltsRaw();
+  const std::string stat_batteryVoltsRaw = ss2.str();
+  const std::string stat_batteryLevel = EnumToString(batteryComponent.GetBatteryLevel());
+  const std::string stat_batteryIsCharging = batteryComponent.IsCharging() ? "true" : "false";
+  const std::string stat_batteryIsOnChargerContacts = batteryComponent.IsOnChargerContacts() ? "true" : "false";
+  const std::string stat_batteryIsOnChargerPlatform = batteryComponent.IsOnChargerPlatform() ? "true" : "false";
+  const std::string stat_batteryFullyChargedTime_s = std::to_string(static_cast<int>(batteryComponent.GetFullyChargedTimeSec()));
+  const std::string stat_batteryLowBatteryTime_s = std::to_string(static_cast<int>(batteryComponent.GetLowBatteryTimeSec()));
 
-  const auto& robotState = robot->GetRobotState();
+  mg_printf(conn,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+            "close\r\n\r\n");
+  mg_printf(conn, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n",
+            stat_batteryVoltsFiltered.c_str(), stat_batteryVoltsRaw.c_str(),
+            stat_batteryLevel.c_str(), stat_batteryIsCharging.c_str(),
+            stat_batteryIsOnChargerContacts.c_str(), stat_batteryIsOnChargerPlatform.c_str(),
+            stat_batteryFullyChargedTime_s.c_str(), stat_batteryLowBatteryTime_s.c_str());
 
-  ss << EnumToString(robot->GetOffTreadsState()) << '\n';
-  ss << std::fixed << std::setprecision(1) << RAD_TO_DEG(robotState.poseAngle_rad) << '\n';
-  ss << std::fixed << std::setprecision(1) << RAD_TO_DEG(robotState.posePitch_rad) << '\n';
-  ss << std::fixed << std::setprecision(1) << RAD_TO_DEG(robotState.headAngle_rad) << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.liftHeight_mm << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.leftWheelSpeed_mmps << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.rightWheelSpeed_mmps << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.accel.x << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.accel.y << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.accel.z << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.gyro.x << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.gyro.y << '\n';
-  ss << std::fixed << std::setprecision(3) << robotState.gyro.z << '\n';
-
-  const auto& touchSensorComponent = robot->GetTouchSensorComponent();
-  ss << touchSensorComponent.GetLatestRawTouchValue() << '\n';
-
-  const auto& cliffSensorComponent = robot->GetCliffSensorComponent();
-  const auto& cliffDataRaw = cliffSensorComponent.GetCliffDataRaw();
-  ss << cliffDataRaw[0] << '\n';
-  ss << cliffDataRaw[1] << '\n';
-  ss << cliffDataRaw[2] << '\n';
-  ss << cliffDataRaw[3] << '\n';
-
-  ss << cliffSensorComponent.IsWhiteDetected(static_cast<CliffSensor>(0)) << ' '
-     << cliffSensorComponent.IsWhiteDetected(static_cast<CliffSensor>(1)) << ' '
-     << cliffSensorComponent.IsWhiteDetected(static_cast<CliffSensor>(2)) << ' '
-     << cliffSensorComponent.IsWhiteDetected(static_cast<CliffSensor>(3)) << '\n';
-
-  ss << robot->GetProxSensorComponent().GetDebugString() << '\n';
-
-  ss << robotState.carryingObjectID << '\n';
-  ss << robotState.carryingObjectOnTopID << '\n';
-  ss << robotState.headTrackingObjectID << '\n';
-  ss << robotState.localizedToObjectID << '\n';
-  ss << "0x" << std::uppercase << std::setfill('0') << std::setw(8) << std::hex << robotState.status << '\n';
-  ss << std::dec;
-
-  const auto& micDirectionHistory = robot->GetMicComponent().GetMicDirectionHistory();
-  ss << micDirectionHistory.GetRecentDirection() << '\n';
-  ss << micDirectionHistory.GetSelectedDirection() << '\n';
-
-  const auto& visionComp = robot->GetVisionComponent();
-  const TimeStamp_t framePeriod_ms = visionComp.GetFramePeriod_ms();
-  const TimeStamp_t procPeriod_ms = visionComp.GetProcessingPeriod_ms();
-  
-  ss << std::fixed << std::setprecision(3) << 1.f / Util::MilliSecToSec((f32)framePeriod_ms) << '\n';
-  ss << std::fixed << std::setprecision(3) << 1.f / Util::MilliSecToSec((f32)procPeriod_ms) << '\n';
-
-  request->_result = ss.str();
+  const auto now = steady_clock::now();
+  const auto elapsed_us = duration_cast<microseconds>(now - startTime).count();
+  LOG_INFO("CozmoEngine.GetEngineStatsWebServerHandler.Time", "GetEngineStatsWebServerHandler took %lld microseconds", elapsed_us);
 
   return 1;
 }
 
 
-// Note that this can be called at any arbitrary time, from a webservice thread
-static int GetEngineStatsWebServerHandler(struct mg_connection *conn, void *cbdata)
-{
-  // We ignore the query string because overhead is minimal
-
-  auto* cozmoEngine = static_cast<CozmoEngine*>(cbdata);
-  if (cozmoEngine->GetEngineState() != EngineState::Running)
-  {
-    LOG_INFO("CozmoEngine.GetEngineStatsWebServerHandler.NotReady", "GetEngineStatsWebServerHandler called but engine not running");
-    return 0;
-  }
-
-  auto ws = cozmoEngine->GetRobot()->GetContext()->GetWebService();
-  const int returnCode = ws->ProcessRequestExternal(conn, cbdata, GetEngineStatsWebServerImpl);
-
-  return returnCode;
-}
-
-
-CozmoEngine::CozmoEngine(Util::Data::DataPlatform* dataPlatform)
-  : _uiMsgHandler(new UiMessageHandler(1))
-  , _protoMsgHandler(new ProtoMessageHandler)
-  , _context(new CozmoContext(dataPlatform, _uiMsgHandler.get(), _protoMsgHandler.get()))
-  , _animationTransferHandler(new AnimationTransfer(_uiMsgHandler.get(), dataPlatform))
+CozmoEngine::CozmoEngine(Util::Data::DataPlatform* dataPlatform, GameMessagePort* messagePipe)
+  : _uiMsgHandler(new UiMessageHandler(1, messagePipe))
+  , _context(new CozmoContext(dataPlatform, _uiMsgHandler.get()))
+  , _deviceDataManager(new DeviceDataManager(_uiMsgHandler.get()))
+  // TODO:(lc) Once the BLESystem state machine has been implemented, create it here
+  //, _bleSystem(new BLESystem())
+  ,_animationTransferHandler(new AnimationTransfer(_uiMsgHandler.get(),dataPlatform))
 {
 #if ANKI_CPU_PROFILER_ENABLED
   // Initialize CPU profiler early and put tracing file at known location with no dependencies on other systems
   Anki::Util::CpuProfiler::GetInstance();
   Anki::Util::CpuThreadProfiler::SetChromeTracingFile(
       dataPlatform->pathToResource(Util::Data::Scope::Cache, "vic-engine-tracing.json").c_str());
-  Anki::Util::CpuThreadProfiler::SendToWebVizCallback([&](const Json::Value& json) { _context->GetWebService()->SendToWebViz("cpuprofile", json); });
 #endif
 
   DEV_ASSERT(_context->GetExternalInterface() != nullptr, "Cozmo.Engine.ExternalInterface.nullptr");
@@ -213,19 +139,37 @@ CozmoEngine::CozmoEngine(Util::Data::DataPlatform* dataPlatform)
     Anki::Util::gTickTimeProvider = BaseStationTimer::getInstance();
   }
 
-  // Designate this thread as the one from which the engine can broadcast messages
-  _context->SetEngineThread();
+  // The "main" thread is meant to be the one Update is run on. However, on some systems, some messaging
+  // happens during Init which is on one thread, then later, a different thread runs the updates. This will
+  // trigger asserts because more than one thread is sending messages. To work around this, we consider the
+  // "main thread" to be whatever thread Init is called from, until the first call of Update, at which point
+  // we switch our notion of "main thread" to the updating thread
+  _context->SetMainThread();
 
-  DASMSG(engine_language_locale, "engine.language_locale", "Prints out the language locale of the robot");
-  DASMSG_SET(s1, _context->GetLocale()->GetLocaleString().c_str(), "Locale on start up");
-  DASMSG_SEND();
+  // log additional das info
+  LOG_EVENT("device.language_locale", "%s", _context->GetLocale()->GetLocaleString().c_str());
+  std::time_t t = std::time(nullptr);
+  std::tm tm = *std::localtime(&t);
+  std::stringstream timeZoneString;
+  timeZoneString << std::put_time(&tm, "%Z");
+  std::stringstream timeZoneOffset;
+  timeZoneOffset << std::put_time(&tm, "%z");
+  Util::sEventF("device.timezone", {{DDATA, timeZoneOffset.str().c_str()}}, "%s", timeZoneString.str().c_str());
 
   auto helper = MakeAnkiEventUtil(*_context->GetExternalInterface(), *this, _signalHandles);
 
   using namespace ExternalInterface;
   helper.SubscribeGameToEngine<MessageGameToEngineTag::ImageRequest>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::ReadFaceAnimationDir>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::RedirectViz>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::ResetFirmware>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestFeatureToggles>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::SetFeatureToggle>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::SetGameBeingPaused>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::SetRobotImageSendMode>();
   helper.SubscribeGameToEngine<MessageGameToEngineTag::StartTestMode>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::UpdateFirmware>();
+  helper.SubscribeGameToEngine<MessageGameToEngineTag::RequestLocale>();
 
   auto handler = [this] (const std::vector<Util::AnkiLab::AssignmentDef>& assignments) {
     _context->GetExperiments()->UpdateLabAssignments(assignments);
@@ -240,9 +184,6 @@ CozmoEngine::CozmoEngine(Util::Data::DataPlatform* dataPlatform)
 
 CozmoEngine::~CozmoEngine()
 {
-  _engineState = EngineState::ShuttingDown;
-  _context->GetWebService()->Stop();
-
   if (Anki::Util::gTickTimeProvider == BaseStationTimer::getInstance()) {
     Anki::Util::gTickTimeProvider = nullptr;
   }
@@ -260,18 +201,10 @@ Result CozmoEngine::Init(const Json::Value& config) {
 
   _isInitialized = false;
 
-
-  auto * osState = OSState::getInstance();
-  DEV_ASSERT(osState != nullptr, "CozmoEngine.Init.InvalidOSState");
-
-  // set cpu frequency to default (in case we left it in a bad state last time)
-  osState->SetDesiredCPUFrequency(DesiredCPUFrequency::Automatic);
-
-  // engine checks the temperature of the OS now.
-  // The fluctuation in the temperature is not expected to be fast
-  // hence the 5 second update period (to prevent excessive file i/o)
-  osState->SetUpdatePeriod(5000);
-  osState->SendToWebVizCallback([&](const Json::Value& json) { _context->GetWebService()->SendToWebViz("cpu", json); });
+  // Engine currently has no reason to know about CPU
+  // freq or temperature so we set the update period to 0
+  // avoid time-wasting file access
+  OSState::getInstance()->SetUpdatePeriod(0);
 
   _config = config;
 
@@ -288,14 +221,7 @@ Result CozmoEngine::Init(const Json::Value& config) {
   Result lastResult = _uiMsgHandler->Init(_context.get(), _config);
   if (RESULT_OK != lastResult)
   {
-    PRINT_NAMED_ERROR("CozmoEngine.Init","Error initializing UiMessageHandler");
-    return lastResult;
-  }
-
-  lastResult = _protoMsgHandler->Init(_context.get(), _config);
-  if (RESULT_OK != lastResult)
-  {
-    PRINT_NAMED_ERROR("CozmoEngine.Init","Error initializing ProtoMessageHandler");
+    PRINT_NAMED_ERROR("CozmoEngine.Init","Error initializing UIMessageHandler");
     return lastResult;
   }
 
@@ -322,36 +248,32 @@ Result CozmoEngine::Init(const Json::Value& config) {
   _context->GetRobotManager()->Init(_config);
 
   // TODO: Specify random seed from config?
-  uint32_t seed = 0; // will choose random seed
-# ifdef ANKI_PLATFORM_OSX
-  {
-    seed = 1; // Setting to non-zero value for now for repeatable testing.
-  }
-# endif
-  _context->SetRandomSeed(seed);
+  //       Setting to non-zero value for now for repeatable testing.
+  _context->SetRandomSeed(1);
 
-  const auto& webService = _context->GetWebService();
-  const auto& dataPlatform = _context->GetDataPlatform();
+  // VIC-722: Set this automatically using location services
+  //          and/or set from UI/SDK?
+  _context->SetLocale("en-US");
 
-  webService->Start(dataPlatform,
-                    _context->GetDataLoader()->GetWebServerEngineConfig());
-  webService->RegisterRequestHandler("/getenginestats", GetEngineStatsWebServerHandler, this);
-
-  _context->GetPerfMetric()->Init(dataPlatform, webService);
-  _context->GetRobotTest()->Init(dataPlatform, webService);
+  _context->GetPerfMetric()->Init();
 
   LOG_INFO("CozmoEngine.Init.Version", "2");
 
   SetEngineState(EngineState::LoadingData);
 
+  const auto& webService = _context->GetWebService();
+  webService->Start(_context->GetDataPlatform(),
+                    _context->GetDataLoader()->GetWebServerEngineConfig());
+  webService->RegisterRequestHandler("/getenginestats", GetEngineStatsWebServerHandler, this);
+
   // DAS Event: "cozmo_engine.init.build_configuration"
   // s_val: Build configuration
   // data: Unused
-  Anki::Util::sInfo("cozmo_engine.init.build_configuration", {},
+  Anki::Util::sEvent("cozmo_engine.init.build_configuration", {},
 #if defined(NDEBUG)
-                    "RELEASE");
+                     "RELEASE");
 #else
-                    "DEBUG");
+                     "DEBUG");
 #endif
 
   _isInitialized = true;
@@ -359,73 +281,110 @@ Result CozmoEngine::Init(const Json::Value& config) {
   return RESULT_OK;
 }
 
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::UpdateFirmware& msg)
+{
+  if (EngineState::UpdatingFirmware == _engineState)
+  {
+    PRINT_NAMED_WARNING("CozmoEngine.HandleMessage.UpdateFirmware.AlreadyStarted", "");
+    return;
+  }
+
+  // TODO: figure out how to update firmware for Victor
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::RequestFeatureToggles& msg)
+{
+  // collect feature list and send to UI
+  ExternalInterface::FeatureToggles toggles;
+  auto featureList = _context->GetFeatureGate()->GetFeatures();
+  for (const auto& featurePair : featureList) {
+    toggles.features.emplace_back(featurePair.first, featurePair.second);
+  }
+
+  _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::FeatureToggles>(std::move(toggles));
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::SetFeatureToggle& message)
+{
+  _context->GetFeatureGate()->SetFeatureEnabled(message.feature, message.value);
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::ResetFirmware& msg)
+{
+  PRINT_NAMED_WARNING("CozmoEngine.HandleMessage.ResetFirmwareUndefined", "What does this mean for Victor?");
+}
+
 Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
 {
   ANKI_CPU_PROFILE("CozmoEngine::Update");
 
-  if (!_isInitialized) {
+  if(!_isInitialized) {
     PRINT_NAMED_ERROR("CozmoEngine.Update", "Cannot update CozmoEngine before it is initialized.");
     return RESULT_FAIL;
   }
 
-  if (!_hasRunFirstUpdate) {
+  // This is a bit of a hack, but on some systems the thread that calls Update is different from the thread
+  // that does all of the setup. This flag assures that we set the "main" thread to be the one that's going to
+  // be doing the updating
+  if( !_hasRunFirstUpdate ) {
+    _context->SetMainThread();
     _hasRunFirstUpdate = true;
-
-    // Designate this as the thread from which engine can broadcast messages
-    _context->SetEngineThread();
-
-    // Controls OpenCV's built-in multithreading for the calling thread, so we have to do this on the first
-    // call to update due to the threading quirk
-    Result cvResult = SetNumOpencvThreads(NUM_OPENCV_THREADS, "CozmoEngine.Init");
-    if (RESULT_OK != cvResult)
-    {
-      return cvResult;
-    }
   }
 
+  DEV_ASSERT( _context->IsMainThread(), "CozmoEngine.EngineNotOnMainThread" );
+
+#if ENABLE_CE_SLEEP_TIME_DIAGNOSTICS || ENABLE_CE_RUN_TIME_DIAGNOSTICS
+  const double startUpdateTimeMs = Util::Time::UniversalTime::GetCurrentTimeInMilliseconds();
+#endif
+#if ENABLE_CE_SLEEP_TIME_DIAGNOSTICS
+  {
+    static bool firstUpdate = true;
+    static double lastUpdateTimeMs = 0.0;
+    //const double currentTimeMs = (double)currTime_nanosec / 1e+6;
+    if (! firstUpdate)
+    {
+      const double timeSinceLastUpdate = startUpdateTimeMs - lastUpdateTimeMs;
+      const double maxLatency = BS_TIME_STEP_MS + 15.;
+      if (timeSinceLastUpdate > maxLatency)
+      {
+        Anki::Util::sEventF("cozmo_engine.update.sleep.slow", {{DDATA,TO_DDATA_STR(BS_TIME_STEP_MS)}}, "%.2f", timeSinceLastUpdate);
+      }
+    }
+    lastUpdateTimeMs = startUpdateTimeMs;
+    firstUpdate = false;
+  }
+#endif // ENABLE_CE_SLEEP_TIME_DIAGNOSTICS
+
   _uiMsgHandler->ResetMessageCounts();
-  _protoMsgHandler->ResetMessageCounts();
   _context->GetRobotManager()->GetMsgHandler()->ResetMessageCounts();
   _context->GetVizManager()->ResetMessageCount();
 
   _context->GetWebService()->Update();
 
-  _context->GetRobotTest()->Update();
-
   // Handle UI
   if (!_uiWasConnected && _uiMsgHandler->HasDesiredNumUiDevices()) {
     LOG_INFO("CozmoEngine.Update.UIConnected", "UI has connected");
+    SendSupportInfo();
 
-    _updateMoveComponent = true;
+    if (_engineState == EngineState::Running) {
+      _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::EngineLoadingDataStatus>(1.f);
+    }
+
     _uiWasConnected = true;
   } else if (_uiWasConnected && !_uiMsgHandler->HasDesiredNumUiDevices()) {
     LOG_INFO("CozmoEngine.Update.UIDisconnected", "UI has disconnected");
-    _updateMoveComponent = true;
     _uiWasConnected = false;
-  }
-
-  // Enable/disable external motor commands depending on whether we have an external UI connection (i.e.
-  // Webots). If we are connected via webots, then we want to allow external motion commands. Else do not
-  // allow motor commands. Note: this cannot be done in the state change logic above, since robot is
-  // sometimes null when the UI connection is established.
-  Robot* robot = GetRobot();
-  if (robot != nullptr && _updateMoveComponent) {
-    const bool hasUiConnection = _uiMsgHandler->HasDesiredNumUiDevices();
-    robot->GetMoveComponent().AllowExternalMovementCommands(hasUiConnection, "ui");
-    _updateMoveComponent = false;
   }
 
   Result lastResult = _uiMsgHandler->Update();
   if (RESULT_OK != lastResult)
   {
     PRINT_NAMED_ERROR("CozmoEngine.Update", "Error updating UIMessageHandler");
-    return lastResult;
-  }
-
-  lastResult = _protoMsgHandler->Update();
-  if (RESULT_OK != lastResult)
-  {
-    PRINT_NAMED_ERROR("CozmoEngine.Update", "Error updating ProtoMessageHandler");
     return lastResult;
   }
 
@@ -442,30 +401,30 @@ Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
       {
         SetEngineState(EngineState::ConnectingToRobot);
       }
+      LOG_INFO("CozmoEngine.Update.LoadingRatio", "%f", currentLoadingDone);
+      _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::EngineLoadingDataStatus>(currentLoadingDone);
       break;
     }
     case EngineState::ConnectingToRobot:
     {
-      // Is is time to try connecting?
-      const auto now = std::chrono::steady_clock::now();
-      const auto elapsed = (now - lastConnectAttempt);
-      if (elapsed < connectInterval) {
-        // Too soon to try connecting
-        break;
-      }
-      lastConnectAttempt = now;
-
-      // Attempt to connect
+      // Wait for robot process to start up and become ready
       Result result = ConnectToRobotProcess();
       if (RESULT_OK != result) {
-        //LOG_WARNING("CozmoEngine.Update.ConnectingToRobot", "Unable to connect to robot (result %d)", result);
+        LOG_WARNING("CozmoEngine.Update.ConnectingToRobot", "Unable to connect to robot (result %d)", result);
         break;
       }
-
-      // Now connected
       LOG_INFO("CozmoEngine.Update.ConnectingToRobot", "Now connected to robot");
       SetEngineState(EngineState::Running);
       break;
+    }
+    case EngineState::UpdatingFirmware:
+    {
+      // TODO: VictorFirmwareUpdate
+      SetEngineState(EngineState::Running);
+
+      // deliberate fallthrough because we
+      // do not handle updating firmware in
+      // victor yet
     }
     case EngineState::Running:
     {
@@ -473,7 +432,7 @@ Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
       BaseStationTimer::getInstance()->UpdateTime(currTime_nanosec);
 
       // Update OSState
-      OSState::getInstance()->Update(currTime_nanosec);
+      OSState::getInstance()->Update();
 
       Result result = _context->GetRobotManager()->UpdateRobotConnection();
       if (RESULT_OK != result) {
@@ -483,20 +442,29 @@ Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
 
       // Let the robot manager do whatever it's gotta do to update the
       // robots in the world.
-      result = _context->GetRobotManager()->UpdateRobot();
-      if(result != RESULT_OK)
-      {
-        LOG_WARNING("CozmoEngine.Update.UpdateRobotFailed", "Update robot failed with %d", result);
-        return result;
-      }
+      _context->GetRobotManager()->UpdateRobot();
 
       UpdateLatencyInfo();
       break;
     }
     default:
       PRINT_NAMED_ERROR("CozmoEngine.Update.UnexpectedState","Running Update in an unexpected state!");
-      break;
   }
+
+#if ENABLE_CE_RUN_TIME_DIAGNOSTICS
+  {
+    const double endUpdateTimeMs = Util::Time::UniversalTime::GetCurrentTimeInMilliseconds();
+    const double updateLengthMs = endUpdateTimeMs - startUpdateTimeMs;
+    const double maxUpdateDuration = BS_TIME_STEP_MS;
+    if (updateLengthMs > maxUpdateDuration)
+    {
+      static const std::string targetMs = std::to_string(BS_TIME_STEP_MS);
+      Anki::Util::sEventF("cozmo_engine.update.run.slow",
+                          {{DDATA, targetMs.c_str()}},
+                          "%.2f", updateLengthMs);
+    }
+  }
+#endif // ENABLE_CE_RUN_TIME_DIAGNOSTICS
 
   return RESULT_OK;
 }
@@ -517,9 +485,14 @@ CONSOLE_VAR(bool, kLogMessageLatencyOnce, "Network.Stats", false);
 
 void CozmoEngine::UpdateLatencyInfo()
 {
-#if REMOTE_CONSOLE_ENABLED
   if (Util::kNetConnStatsUpdate)
   {
+    // If the game is paused, don't bother sending latency info
+    if (_isGamePaused)
+    {
+      return;
+    }
+
     // We only want to send latency info every N ticks
     constexpr int kTickSendFrequency = 10;
     static int currentTickCount = kTickSendFrequency;
@@ -529,18 +502,40 @@ void CozmoEngine::UpdateLatencyInfo()
       return;
     }
     currentTickCount = kTickSendFrequency;
-    
+
+    ExternalInterface::TimingInfo wifiLatency(Util::gNetStat2LatencyAvg, Util::gNetStat4LatencyMin, Util::gNetStat5LatencyMax);
+    ExternalInterface::TimingInfo extSendQueueTime(Util::gNetStat7ExtQueuedAvg_ms, Util::gNetStat8ExtQueuedMin_ms, Util::gNetStat9ExtQueuedMax_ms);
+    ExternalInterface::TimingInfo sendQueueTime(Util::gNetStatAQueuedAvg_ms, Util::gNetStatBQueuedMin_ms, Util::gNetStatCQueuedMax_ms);
+    const Util::Stats::StatsAccumulator& queuedTimes_ms = _context->GetRobotManager()->GetMsgHandler()->GetQueuedTimes_ms();
+    ExternalInterface::TimingInfo recvQueueTime(queuedTimes_ms.GetMean(), queuedTimes_ms.GetMin(), queuedTimes_ms.GetMax());
+
+    // pull image stats from robot if available
+    static const Util::Stats::StatsAccumulator nullStats;
+    const Robot* robot = GetRobot();
+    const bool useRobotStats = robot != nullptr;
+    const Util::Stats::StatsAccumulator& imageStats = useRobotStats ? robot->GetImageStats() : nullStats;
+    double currentImageDelay = useRobotStats ? robot->GetCurrentImageDelay() : 0.0;
+
+    const Util::Stats::StatsAccumulator& unityLatency = _uiMsgHandler->GetLatencyStats(UiConnectionType::UI);
+    const Util::Stats::StatsAccumulator& sdk1Latency  = _uiMsgHandler->GetLatencyStats(UiConnectionType::SdkOverUdp);
+    const Util::Stats::StatsAccumulator& sdk2Latency  = _uiMsgHandler->GetLatencyStats(UiConnectionType::SdkOverTcp);
+    const Util::Stats::StatsAccumulator& sdkLatency = (sdk1Latency.GetNumDbl() > sdk2Latency.GetNumDbl()) ? sdk1Latency : sdk2Latency;
+    ExternalInterface::TimingInfo unityEngineLatency(unityLatency.GetMean(), unityLatency.GetMin(), unityLatency.GetMax());
+    ExternalInterface::TimingInfo sdkEngineLatency(sdkLatency.GetMean(), sdkLatency.GetMin(), sdkLatency.GetMax());
+    ExternalInterface::CurrentTimingInfo imageLatency(imageStats.GetMean(), imageStats.GetMin(), imageStats.GetMax(), currentImageDelay * 1000.0);
+
+    ExternalInterface::MessageEngineToGame debugLatencyMessage(ExternalInterface::LatencyMessage(
+                                                                                     std::move(wifiLatency),
+                                                                                     std::move(extSendQueueTime),
+                                                                                     std::move(sendQueueTime),
+                                                                                     std::move(recvQueueTime),
+                                                                                     std::move(unityEngineLatency),
+                                                                                     std::move(sdkEngineLatency),
+                                                                                     std::move(imageLatency) ));
+
+    #if REMOTE_CONSOLE_ENABLED
     if (kLogMessageLatencyOnce)
     {
-      ExternalInterface::TimingInfo wifiLatency(Util::gNetStat2LatencyAvg, Util::gNetStat4LatencyMin, Util::gNetStat5LatencyMax);
-      ExternalInterface::TimingInfo extSendQueueTime(Util::gNetStat7ExtQueuedAvg_ms, Util::gNetStat8ExtQueuedMin_ms, Util::gNetStat9ExtQueuedMax_ms);
-      ExternalInterface::TimingInfo sendQueueTime(Util::gNetStatAQueuedAvg_ms, Util::gNetStatBQueuedMin_ms, Util::gNetStatCQueuedMax_ms);
-      const Util::Stats::StatsAccumulator& queuedTimes_ms = _context->GetRobotManager()->GetMsgHandler()->GetQueuedTimes_ms();
-      ExternalInterface::TimingInfo recvQueueTime(queuedTimes_ms.GetMean(), queuedTimes_ms.GetMin(), queuedTimes_ms.GetMax());
-
-      const Util::Stats::StatsAccumulator& unityLatency = _uiMsgHandler->GetLatencyStats(UiConnectionType::UI);
-      ExternalInterface::TimingInfo unityEngineLatency(unityLatency.GetMean(), unityLatency.GetMin(), unityLatency.GetMax());
-
       PrintTimingInfoStats(wifiLatency,      "wifi");
       PrintTimingInfoStats(extSendQueueTime, "extSendQueue");
       PrintTimingInfoStats(sendQueueTime,    "sendQueue");
@@ -549,11 +544,29 @@ void CozmoEngine::UpdateLatencyInfo()
       {
         PrintTimingInfoStats(unityEngineLatency, "unity");
       }
+      if (sdkLatency.GetNumDbl() > 0.0)
+      {
+        PrintTimingInfoStats(sdkEngineLatency, "sdk");
+      }
+
+      PrintTimingInfoStats(imageLatency, "image");
 
       kLogMessageLatencyOnce = false;
     }
+    #endif // REMOTE_CONSOLE_ENABLED
+
+    _context->GetExternalInterface()->Broadcast( std::move(debugLatencyMessage) );
   }
-#endif // REMOTE_CONSOLE_ENABLED
+}
+
+void CozmoEngine::SendSupportInfo() const
+{
+  #if USE_DAS
+  const DAS::IDASPlatform* platform = DASGetPlatform();
+  if (platform != nullptr) {
+    _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::SupportInfo>(platform->GetDeviceId());
+  }
+  #endif
 }
 
 void CozmoEngine::SetEngineState(EngineState newState)
@@ -566,10 +579,9 @@ void CozmoEngine::SetEngineState(EngineState newState)
 
   _engineState = newState;
 
-  DASMSG(engine_state, "engine.state", "EngineState has changed")
-  DASMSG_SET(s1, EngineStateToString(oldState), "Old EngineState");
-  DASMSG_SET(s2, EngineStateToString(newState), "New EngineState");
-  DASMSG_SEND()
+  _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::UpdateEngineState>(oldState, newState);
+
+  Anki::Util::sEventF("app.engine.state", {{DDATA,EngineStateToString(newState)}}, "%s", EngineStateToString(oldState));
 }
 
 Result CozmoEngine::InitInternal()
@@ -579,7 +591,7 @@ Result CozmoEngine::InitInternal()
   u32 numLogs = factoryTestLogger.GetNumLogs(_context->GetDataPlatform());
   if (numLogs >= MIN_NUM_FACTORY_TEST_LOGS_FOR_ARCHIVING) {
     if (factoryTestLogger.ArchiveLogs(_context->GetDataPlatform())) {
-      LOG_INFO("CozmoEngine.InitInternal.ArchivedFactoryLogs", "%d logs archived", numLogs);
+      PRINT_NAMED_INFO("CozmoEngine.InitInternal.ArchivedFactoryLogs", "%d logs archived", numLogs);
     } else {
       PRINT_NAMED_WARNING("CozmoEngine.InitInternal.ArchivedFactoryLogsFailed", "");
     }
@@ -604,7 +616,7 @@ Result CozmoEngine::ConnectToRobotProcess()
   if (!msgHandler->IsConnected(robotID)) {
     Result result = msgHandler->AddRobotConnection(robotID);
     if (RESULT_OK != result) {
-      //LOG_WARNING("CozmoEngine.ConnectToRobotProcess", "Unable to connect to robot %d (result %d)", robotID, result);
+      LOG_WARNING("CozmoEngine.ConnectToRobotProcess", "Unable to connect to robot %d (result %d)", robotID, result);
       return result;
     }
   }
@@ -617,11 +629,32 @@ Robot* CozmoEngine::GetRobot() {
 }
 
 template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::ReadFaceAnimationDir& msg)
+{
+  // TODO: Tell animation process to read the anim dir?
+  PRINT_NAMED_WARNING("CozmoEngine.HandleMessage.ReadFaceAnimationDir.NotHookedUp", "");
+  //_context->GetRobotManager()->ReadFaceAnimationDir();
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::SetRobotImageSendMode& msg)
+{
+  const ImageSendMode newMode = msg.mode;
+  Robot* robot = GetRobot();
+
+  if(robot != nullptr) {
+    robot->SetImageSendMode(newMode);
+    // TODO: Can get rid of one of ExternalInterface::SetRobotImageSendMode or
+    // ExternalInterfaceImageRequest since they seem to do the same thing now.
+  }
+}
+
+template<>
 void CozmoEngine::HandleMessage(const ExternalInterface::ImageRequest& msg)
 {
   Robot* robot = GetRobot();
   if(robot != nullptr) {
-    return robot->GetVisionComponent().EnableImageSending(msg.mode == ImageSendMode::Stream);
+    return robot->SetImageSendMode(msg.mode);
   }
 }
 
@@ -653,6 +686,34 @@ void CozmoEngine::InitUnityLogger()
 #endif //ANKI_DEV_CHEATS
 }
 
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::SetGameBeingPaused& msg)
+{
+  _isGamePaused = msg.isPaused;
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::RequestLocale& msg)
+{
+  _context->GetExternalInterface()->BroadcastToGame<ExternalInterface::ResponseLocale>(
+                                                    _context->GetLocale()->GetLocaleStringLowerCase());
+}
+
+template<>
+void CozmoEngine::HandleMessage(const ExternalInterface::RequestDataCollectionOption& msg)
+{
+#if USE_DAS
+  if( msg.CollectionEnabled )
+  {
+    DASEnableNetwork(DASDisableNetworkReason_UserOptOut);
+  }
+  else
+  {
+    DASDisableNetwork(DASDisableNetworkReason_UserOptOut);
+  }
+#endif
+}
+
 
 template<>
 void CozmoEngine::HandleMessage(const ExternalInterface::RedirectViz& msg)
@@ -663,10 +724,13 @@ void CozmoEngine::HandleMessage(const ExternalInterface::RedirectViz& msg)
     std::ostringstream ss;
     ss << (int)ipBytes[0] << "." << (int)ipBytes[1] << "." << (int)ipBytes[2] << "." << (int)ipBytes[3];
     std::string ipAddr = ss.str();
-    LOG_INFO("CozmoEngine.RedirectViz.ipAddr", "%s", ipAddr.c_str());
+    PRINT_NAMED_INFO("CozmoEngine.RedirectViz.ipAddr", "%s", ipAddr.c_str());
 
     _context->GetVizManager()->Disconnect();
-    _context->GetVizManager()->Connect(ipAddr.c_str(), (uint16_t)VizConstants::VIZ_SERVER_PORT);
+    _context->GetVizManager()->Connect(ipAddr.c_str(),
+                                      (uint16_t)VizConstants::VIZ_SERVER_PORT,
+                                      ipAddr.c_str(),
+                                      (uint16_t)VizConstants::UNITY_VIZ_SERVER_PORT);
     _context->GetVizManager()->EnableImageSend(true);
 
     // Erase anything that's still being visualized in case there were leftovers from
@@ -677,6 +741,11 @@ void CozmoEngine::HandleMessage(const ExternalInterface::RedirectViz& msg)
   }
 }
 
+
+void CozmoEngine::ExecuteBackgroundTransfers()
+{
+  _context->GetTransferQueue()->ExecuteTransfers();
+}
 
 Util::AnkiLab::AssignmentStatus CozmoEngine::ActivateExperiment(
   const Util::AnkiLab::ActivateExperimentRequest& request, std::string& outVariationKey)
@@ -689,17 +758,19 @@ void CozmoEngine::RegisterEngineTickPerformance(const float tickDuration_ms,
                                                 const float sleepDurationIntended_ms,
                                                 const float sleepDurationActual_ms) const
 {
+  // Send two of these stats to the game for on-screen display
+  ExternalInterface::MessageEngineToGame perfEngMsg(ExternalInterface::DebugPerformanceTick(
+                                                    "Engine", tickDuration_ms));
+  _context->GetExternalInterface()->Broadcast(std::move(perfEngMsg));
+
+  ExternalInterface::MessageEngineToGame perfEngFreqMsg(ExternalInterface::DebugPerformanceTick(
+                                                    "EngineFreq", tickFrequency_ms));
+   _context->GetExternalInterface()->Broadcast(std::move(perfEngFreqMsg));
+
   // Update the PerfMetric system for end of tick
   _context->GetPerfMetric()->Update(tickDuration_ms, tickFrequency_ms,
                                     sleepDurationIntended_ms, sleepDurationActual_ms);
 }
 
-void CozmoEngine::SetEngineThread()
-{
-  // Context is valid for lifetime of engine
-  DEV_ASSERT(_context, "CozmoEngine.SetEngineThread.InvalidContext");
-  _context->SetEngineThread();
-}
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

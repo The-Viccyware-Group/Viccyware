@@ -23,7 +23,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   void DasToSdkHandler::Init( IExternalInterface* externalInterface )
   {
@@ -109,6 +109,6 @@ namespace Vector {
     }
   }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 

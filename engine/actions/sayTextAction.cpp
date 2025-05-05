@@ -6,7 +6,6 @@
  *
  * Description: Implements animation and audio cozmo-specific actions, derived from the IAction interface.
  *
- * Update: Say Text Action now uses TextToSpeechCoordinator to perform work
  *
  * Copyright: Anki, Inc. 2014
  **/
@@ -14,139 +13,368 @@
 #include "engine/actions/sayTextAction.h"
 #include "engine/animations/animationGroup/animationGroup.h"
 #include "engine/animations/animationGroup/animationGroupContainer.h"
+#include "engine/audio/engineRobotAudioClient.h"
+#include "engine/cozmoContext.h"
 #include "engine/robot.h"
+#include "engine/robotInterface/messageHandler.h"
+
+#include "clad/robotInterface/messageEngineToRobot.h"
+#include "clad/robotInterface/messageRobotToEngine.h"
+
+#include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "coretech/common/engine/utils/timer.h"
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/math/math.h"
 #include "util/random/randomGenerator.h"
 
+using SayTextVoiceStyle = Anki::Cozmo::SayTextVoiceStyle;
 
-#define LOG_CHANNEL "SayTextAction"
+#define LOG_CHANNEL "TextToSpeech"
 
 #define DEBUG_SAYTEXT_ACTION 0
 
 // Max duration of generated animation
 //const float kMaxAnimationDuration_ms = 60000;  // 1 min
 
-namespace Anki {
-namespace Vector {
+// Return a serial number 1-255.
+// 0 is reserved for "invalid".
+static uint8_t GetNextID()
+{
+  static uint8_t ttsID = 0;
+  uint8_t id = ++ttsID;
+  if (id == 0) {
+    id = ++ttsID;
+  }
+  return id;
+}
 
+namespace Anki {
+namespace Cozmo {
+
+// Static Method
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool SayTextAction::LoadMetadata(Util::Data::DataPlatform& dataPlatform)
+{
+  if (!_intentConfigs.empty()) {
+    LOG_WARNING("SayTextAction.LoadMetadata.AttemptToReloadStaticData", "_intentConfigs");
+    return false;
+  }
+
+  // Check for file
+  static const std::string filePath = "config/engine/sayTextintentConfig.json";
+  if (!Util::FileUtils::FileExists(dataPlatform.pathToResource(Util::Data::Scope::Resources, filePath))) {
+    LOG_ERROR("SayTextAction.LoadMetadata.FileNotFound", "sayTextintentConfig.json");
+    return false;
+  }
+
+  // Read file
+  Json::Value json;
+  if (!dataPlatform.readAsJson(Util::Data::Scope::Resources, filePath, json)) {
+    LOG_ERROR("SayTextAction.LoadMetadata.CanNotRead", "sayTextintentConfig.json");
+    return false;
+  }
+
+  // Load Intent Config
+  if (json.isNull() || !json.isObject()) {
+    LOG_ERROR("SayTextAction.LoadMetadata.json.IsNull", "or.NotIsObject");
+    return false;
+  }
+
+  // Create Cozmo Says Voice Style map
+  SayTextVoiceStyleMap voiceStyleMap;
+  for (uint8_t aStyleIdx = 0; aStyleIdx <  Util::numeric_cast<uint8_t>(SayTextVoiceStyle::Count); ++aStyleIdx) {
+    const SayTextVoiceStyle aStyle = static_cast<SayTextVoiceStyle>(aStyleIdx);
+    voiceStyleMap.emplace( EnumToString(aStyle), aStyle );
+  }
+
+  // Create Say Text Intent Map
+  std::unordered_map<std::string, SayTextIntent> sayTextIntentMap;
+  for (uint8_t anIntentIdx = 0; anIntentIdx < SayTextIntentNumEntries; ++anIntentIdx) {
+    const SayTextIntent anIntent = static_cast<SayTextIntent>(anIntentIdx);
+    sayTextIntentMap.emplace( EnumToString(anIntent), anIntent );
+  }
+
+  // Store metadata's Intent objects
+  for (auto intentJsonIt = json.begin(); intentJsonIt != json.end(); ++intentJsonIt) {
+    const std::string& name = intentJsonIt.key().asString();
+    const auto intentEnumIt = sayTextIntentMap.find( name );
+    DEV_ASSERT(intentEnumIt != sayTextIntentMap.end(), "SayTextAction.LoadMetadata.CanNotFindSayTextIntent");
+    if (intentEnumIt != sayTextIntentMap.end()) {
+      // Store Intent into STATIC var
+      const SayTextIntentConfig config(name, *intentJsonIt, voiceStyleMap);
+      _intentConfigs.emplace( intentEnumIt->second, std::move( config ) );
+    }
+  }
+
+  return true;
+}
+
+// Public Methods
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SayTextAction::SayTextAction(const std::string& text,
-                             const AudioTtsProcessingStyle style,
-                             const float durationScalar)
+                             const SayTextVoiceStyle style,
+                             const float durationScalar,
+                             const float pitchScalar)
 : IAction("SayText",
           RobotActionType::SAY_TEXT,
           (u8)AnimTrackFlag::NO_TRACKS)
 , _text(text)
 , _style(style)
 , _durationScalar(durationScalar)
+, _pitchScalar(pitchScalar)
+//, _animation("SayTextAnimation") // TODO: SayTextAction is broken (VIC-360)
 {
-  _animTrigger = AnimationTrigger::Count;
+
+} // SayTextAction()
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SayTextAction::SayTextAction(const std::string& text, const SayTextIntent intent)
+: IAction("SayText",
+          RobotActionType::SAY_TEXT,
+          (u8)AnimTrackFlag::NO_TRACKS)
+, _text(text)
+, _intent(intent)
+// , _animation("SayTextAnimation") // TODO: SayTextAction is broken (VIC-360)
+{
+
 } // SayTextAction()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SayTextAction::~SayTextAction()
 {
-  // Cleanup TTS request, if any
-  if (_ttsCoordinator != nullptr) {
-    if (_ttsState == UtteranceState::Generating ||
-        _ttsState == UtteranceState::Ready ||
-        _ttsState == UtteranceState::Playing) {
-      _ttsCoordinator->CancelUtterance( _ttsID );
-    }
-    _ttsCoordinator = nullptr;
+  // If TTS did not reach a terminal state, cancel it now
+  if (HasRobot() &&
+      (_ttsState != TextToSpeechState::Invalid) && 
+      (_ttsState != TextToSpeechState::Done)) {
+    LOG_DEBUG("SayTextAction.Destructor", "Cancel ttsID %d", _ttsID);
+    RobotInterface::TextToSpeechStop msg;
+    msg.ttsID = _ttsID;
+    const Robot & robot = GetRobot();
+    robot.SendMessage(RobotInterface::EngineToRobot(std::move(msg)));
   }
 
-  // Clean up accompanying animation, if any
-  if (_animAction) {
-    _animAction->PrepForCompletion();
+  if (_playAnimationAction != nullptr) {
+    _playAnimationAction->PrepForCompletion();
   }
 } // ~SayTextAction()
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SayTextAction::OnRobotSet()
 {
+  // If constructor specifies intent, set style/duration/pitch to match
+  if (_intent != SayTextIntent::Count) {
+    const auto it = _intentConfigs.find(_intent);
+    if (it != _intentConfigs.end()) {
+      // Set intent values
+      const SayTextIntentConfig& config = it->second;
+      auto & robot = GetRobot();
+      auto & rng = robot.GetRNG();
+
+      // Set audio processing style type
+      _style = config.style;
+
+      // Get Duration val
+      const auto & durationTrait = config.FindDurationTraitTextLength(Util::numeric_cast<uint>(_text.length()));
+      _durationScalar = durationTrait.GetDuration(rng);
+
+      // Get Pitch val
+      const auto & pitchTrait = config.FindPitchTraitTextLength(Util::numeric_cast<uint>(_text.length()));
+      _pitchScalar = pitchTrait.GetDuration(rng);
+    } else {
+      LOG_ERROR("SayTextAction.RobotSet.CanNotFind.SayTextIntentConfig", "%s", EnumToString(_intent));
+    }
+  }
+
   LOG_INFO("SayTextAction.RobotSet",
-           "Text '%s' Style '%s' DurScalar %f",
+           "Text '%s' Intent '%s' Style '%s' DurScalar %f Pitch %f",
            Util::HidePersonallyIdentifiableInfo(_text.c_str()),
+           EnumToString(_intent),
            EnumToString(_style),
-           _durationScalar);
+           _durationScalar,
+           _pitchScalar);
+
 }
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SayTextAction::SetAnimationTrigger(AnimationTrigger trigger, u8 ignoreTracks)
 {
-  _animTrigger = trigger;
+  _animationTrigger = trigger;
   _ignoreAnimTracks = ignoreTracks;
-} // SetAnimationTrigger()
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ActionResult SayTextAction::Init()
 {
-  //
-  // If we have an animation, use keyframe trigger, else use manual trigger.
-  //
-  const auto triggerType =
-    ((_animTrigger == AnimationTrigger::Count) ? UtteranceTriggerType::Manual : UtteranceTriggerType::KeyFrame);
+  using RobotToEngine = Anki::Cozmo::RobotInterface::RobotToEngine;
+  using RobotToEngineTag = Anki::Cozmo::RobotInterface::RobotToEngineTag;
+  using TextToSpeechStart = Anki::Cozmo::RobotInterface::TextToSpeechStart;
 
-  _ttsCoordinator = &GetRobot().GetTextToSpeechCoordinator();
-  _callbackPtr = std::make_shared<CallbackType>(std::bind(&SayTextAction::TtsCoordinatorStateCallback, this, std::placeholders::_1));
-  std::weak_ptr<CallbackType> weakCallback = _callbackPtr;
-  auto ttsCallback = [weakCallback](const UtteranceState& state) {
-    // SayTextAction may have been aborted and destroyed before the callback fires
-    if( auto callback = weakCallback.lock() ) {
-      (*callback)(state);
-    }
-  };
-  _ttsID = _ttsCoordinator->CreateUtterance(_text,
-                                            triggerType,
-                                            _style,
-                                            _durationScalar,
-                                            _pitchScalar,
-                                            ttsCallback);
+  // Assign a unique ID for this utterance. The ttsID is used to track lifetime
+  // of data associated with each utterance.
 
-  _actionState = SayTextActionState::Waiting;
+  _ttsID = GetNextID();
+  _ttsState = TextToSpeechState::Preparing;
 
   // When does this action expire?
   _expiration_sec = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds() + _timeout_sec;
 
   LOG_INFO("SayTextAction.Init", "ttsID %d text %s", _ttsID, Util::HidePersonallyIdentifiableInfo(_text.c_str()));
 
-  // Execution continues in CheckIfDone() below.
-  // State is advanced in response to events from animation process.
+ // Set up a callback to process TTS events.  When we receive a terminal event,
+ // the ttsState is updated to match.
+  auto callback = [this](const AnkiEvent<RobotToEngine>& event)
+  {
+    const auto & ttsEvent = event.GetData().Get_textToSpeechEvent();
+    const auto ttsID = ttsEvent.ttsID;
+    const auto ttsState = ttsEvent.ttsState;
 
-  return ActionResult::SUCCESS;
+    // If this is our ID, update state to match
+    if (ttsID == _ttsID) {
+      LOG_DEBUG("SayTextAction.callback", "ttsID %hhu state was %hhu now %hhu", _ttsID, _ttsState, ttsState);
+      _ttsState = ttsState;
+    }
 
-} // Init()
+  };
 
-ActionResult SayTextAction::TransitionToRunning()
-{
-  DEV_ASSERT(_ttsCoordinator != nullptr, "SayTextAction.TransitionToRunning.InvalidCoordinator");
+  // Subscribe to TTS events
+  auto & robot = GetRobot();
+  auto * messageHandler = robot.GetRobotMessageHandler();
 
-  const bool ok = _ttsCoordinator->PlayUtterance(_ttsID);
-  if (!ok) {
-    LOG_ERROR("SayTextAction.TransitionToRunning.FailedToPlay", "Unable to play ttsID %d", _ttsID);
-    _actionState = SayTextActionState::Invalid;
+  _signalHandle = messageHandler->Subscribe(RobotToEngineTag::textToSpeechEvent, callback);
+   
+  // Compose a TTS request
+  TextToSpeechStart msg;
+  msg.ttsID = _ttsID;
+  msg.text = _text;
+  msg.style = _style;
+  msg.durationScalar = _durationScalar;
+  msg.pitchScalar = _pitchScalar;
+
+  // Send request to animation process
+  const Result result = robot.SendMessage(RobotInterface::EngineToRobot(std::move(msg)));
+  if (RESULT_OK != result) {
+    LOG_ERROR("SayTextAction.Init", "Unable to send robot message (result %d)", result);
+    _ttsState = TextToSpeechState::Done;
     return ActionResult::ABORT;
   }
 
-  if (_animTrigger != AnimationTrigger::Count) {
-    LOG_DEBUG("SayTextAction.TransitionToRunning", "ttsID %d now running with animation", _ttsID);
-    _animAction = std::make_unique<TriggerAnimationAction>(_animTrigger, 1, true, _ignoreAnimTracks);
-    _animAction->SetRobot(&GetRobot());
-    _actionState = SayTextActionState::Running_Anim;
-    return ActionResult::RUNNING;
-  }
+  return ActionResult::SUCCESS;
 
-  LOG_DEBUG("SayTextAction.TransitionToRunning", "ttsID %d now running", _ttsID);
-  _actionState = SayTextActionState::Running_Tts;
-  return ActionResult::RUNNING;
-}
+  #ifdef notdef
+  using namespace AudioMetaData;
+  TextToSpeechComponent::AudioCreationState state = _robot.GetTextToSpeechComponent().GetOperationState(_ttsOperationId);
+  switch (state) {
+    case TextToSpeechComponent::AudioCreationState::Preparing:
+    {
+      // Can't initialize until text to speech is ready
+      if (DEBUG_SAYTEXT_ACTION) {
+        PRINT_CH_INFO(kLocalLogChannel, "SayTextAction.Init.LoadingTextToSpeech", "");
+      }
+      return ActionResult::RUNNING;
+    }
+    break;
+
+    case TextToSpeechComponent::AudioCreationState::Ready:
+    {
+      // Set Audio data right before action runs
+      float duration_ms = 0.0f;
+      // FIXME: Need to way to get other Audio GameObjs
+      const bool success = _robot.GetTextToSpeechComponent().PrepareAudioEngine(_ttsOperationId,
+                                                                                duration_ms);
+      if (success) {
+        // Don't need to be responsible for audio data after successfully TextToSpeechComponent().PrepareAudioEngine()
+        _ttsOperationId = TextToSpeechComponent::kInvalidOperationId;
+      }
+      else {
+        PRINT_NAMED_ERROR("SayTextAction.Init.PrepareAudioEngine.Failed", "");
+        return ActionResult::ABORT;
+      }
+
+      if (duration_ms * 0.001f > _timeout_sec) {
+        PRINT_NAMED_ERROR("SayTextAction.Init.PrepareAudioEngine.DurationTooLong", "Duration: %f", duration_ms);
+      }
+
+      const bool useBuiltInAnim = (AnimationTrigger::Count == _animationTrigger);
+      if (useBuiltInAnim) {
+        // Make our animation a "live" animation with a single audio keyframe at the beginning
+        if (DEBUG_SAYTEXT_ACTION) {
+          PRINT_CH_INFO(kLocalLogChannel, "SayTextAction.Init.CreatingAnimation", "");
+        }
+        // Get appropriate audio event for style and insert key frame
+        // TODO: Deprecate this, we are going to change the processing
+        // TODO: SayTextAction is broken (VIC-360)
+        /*
+        const GameEvent::GenericEvent audioEvent = _robot.GetTextToSpeechComponent().GetAudioEvent(_style);
+
+        _animation.AddKeyFrameToBack(RobotAudioKeyFrame(RobotAudioKeyFrame::AudioRef(audioEvent), 0));
+        _animation.SetIsLive(true);
+        _playAnimationAction.reset(new PlayAnimationAction(_robot, &_animation));
+         */
+      }
+      else {
+        if (DEBUG_SAYTEXT_ACTION) {
+          PRINT_CH_INFO(kLocalLogChannel,
+                        "SayTextAction.Init.UsingAnimationGroup", "GameEvent=%d (%s) fitToDuration %c",
+                        _animationTrigger, EnumToString(_animationTrigger), _fitToDuration ? 'Y' : 'N');
+        }
+        // Either create an animation for the duration of the generated audio or play specific animation group
+        if (_fitToDuration) {
+          // Get appropriate audio event for style and insert key frame
+          // TODO: Deprecate this, we are going to change the processing
+          //const GameEvent::GenericEvent audioEvent = _robot.GetTextToSpeechComponent().GetAudioEvent(_style);
+
+          // TODO: SayTextAction is broken (VIC-360)
+          //_animation.AddKeyFrameToBack(RobotAudioKeyFrame(RobotAudioKeyFrame::AudioRef(audioEvent), 0));
+
+          // Generate animation
+          UpdateAnimationToFitDuration(duration_ms);
+
+          // TODO: SayTextAction is broken (VIC-360)
+          //_playAnimationAction.reset(new PlayAnimationAction(_robot, &_animation, 1, true, _ignoreAnimTracks));
+        }
+        else {
+          // Use current animation trigger
+          _playAnimationAction.reset(new TriggerLiftSafeAnimationAction(
+                                                                        _animationTrigger,
+                                                                        1,
+                                                                        true,
+                                                                        _ignoreAnimTracks));
+          _playAnimationAction->SetRobot(&GetRobot());
+        }
+      }
+
+      _isAudioReady = true;
+
+      return ActionResult::SUCCESS;
+    }
+    break;
+
+    case TextToSpeechComponent::AudioCreationState::None:
+    {
+      // Audio load failed
+      if (DEBUG_SAYTEXT_ACTION) {
+        PRINT_CH_INFO(kLocalLogChannel, "SayTextAction.Init.TextToSpeechFailed", "");
+      }
+      return ActionResult::ABORT;
+    }
+    break;
+  }
+  #endif
+  return ActionResult::SUCCESS;
+} // Init()
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ActionResult SayTextAction::CheckIfDone()
 {
+  // Is TTS still in progress?
+  if (_ttsState == TextToSpeechState::Done) {
+    LOG_DEBUG("SayTextAction.CheckIfDone", "ttsID %d is done", _ttsID);
+    return ActionResult::SUCCESS;
+  }
+
   // Has this action expired?
   const float now_sec = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   if (_expiration_sec < now_sec) {
@@ -154,82 +382,50 @@ ActionResult SayTextAction::CheckIfDone()
     return ActionResult::TIMEOUT;
   }
 
-  ActionResult result;
-  switch (_actionState) {
-    case SayTextActionState::Invalid:
-    {
-      // Something has gone wrong
-      LOG_DEBUG("SayTextAction.CheckIfDone", "ttsID %d is invalid", _ttsID);
-      result = ActionResult::CANCELLED_WHILE_RUNNING;
-      break;
-    }
-    case SayTextActionState::Waiting:
-    {
-      result = ActionResult::RUNNING;
-      if (_ttsState == UtteranceState::Ready) {
-        // Transition to running
-        result = TransitionToRunning();
-      }
-      break;
-    }
-    case SayTextActionState::Running_Tts:
-    {
-      // Defer to TtS Coordinator State
-      result = GetTtsCoordinatorActionState();
-      break;
-    }
-    case SayTextActionState::Running_Anim:
-    {
-      // Tick animation while running, will return success when animation is completed
-      result = _animAction->Update();
-      // If animation has completed, defer to TTS Coordinator State
-      if (result == ActionResult::SUCCESS) {
-        result = GetTtsCoordinatorActionState();
-      }
-      break;
-    }
-    case SayTextActionState::Finished:
-    {
-      result = ActionResult::SUCCESS;
-      break;
-    }
-  }
+  // None of the above
+  return ActionResult::RUNNING;
 
-  return result;
 } // CheckIfDone()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void SayTextAction::TtsCoordinatorStateCallback(const UtteranceState& state)
+// Helper method
+// TODO: Is there a better way to do this?
+  // TODO: SayTextAction is broken (VIC-360)
+  /*
+const Animation* GetAnimation(const AnimationTrigger& animTrigger, Robot& robot)
 {
-  LOG_DEBUG("SayTextAction.TtsCoordinatorStateCallback",
-            "ttsID %d now state %d (%s)",
-            _ttsID, state, EnumToString(state));
-  _ttsState = state;
-} // TtsCoordinatorStateCallback()
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-ActionResult SayTextAction::GetTtsCoordinatorActionState()
-{
-  switch (_ttsState) {
-    case UtteranceState::Invalid:
-      return ActionResult::ABORT;
-      break;
-    case UtteranceState::Finished:
-      return ActionResult::SUCCESS;
-    default:
-      return ActionResult::RUNNING;
-      break;
+  RobotManager* robot_mgr = robot.GetContext()->GetRobotManager();
+  const Animation* anim = nullptr;
+  if (robot_mgr->HasAnimationForTrigger(animTrigger)) {
+    std::string animationGroupName = robot_mgr->GetAnimationForTrigger(animTrigger);
+    if (animationGroupName.empty()) {
+      PRINT_NAMED_ERROR("SayTextAction.GetAnimation.TriggerAnimationAction.EmptyAnimGroupNameForTrigger",
+                          "Event: %s", EnumToString(animTrigger));
+    }
+    // Get AnimationGroup for animation group name
+    const AnimationGroup* group = robot.GetContext()->GetRobotManager()->GetAnimationGroups().GetAnimationGroup(animationGroupName);
+    if (group != nullptr && !group->IsEmpty()) {
+      // Get Random animation in group
+      const std::string& animName = group->GetAnimationName(robot.GetMoodManager(),
+                                                            robot.GetContext()->GetRobotManager()->GetAnimationGroups(),
+                                                            robot.GetHeadAngle());
+      anim = robot.GetContext()->GetRobotManager()->GetCannedAnimation(animName);
+    }
   }
-} // GetTtsCoordinatorActionState()
-
+  else {
+    PRINT_NAMED_ERROR("SayTextAction.GetAnimation.TriggerAnimationAction.NoAnimationForTrigger",
+                        "Event: %s", EnumToString(animTrigger));
+  }
+  return anim;
+}
+   */
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#if 0
-// VIC-2151: Fit-to-duration not supported on victor
 void SayTextAction::UpdateAnimationToFitDuration(const float duration_ms)
 {
   if (AnimationTrigger::Count != _animationTrigger) {
     // TODO: SayTextAction is broken (VIC-360)
+    /*
     while (_animation.GetLastKeyFrameTime_ms() < duration_ms && duration_ms <= kMaxAnimationDuration_ms ) {
       const Animation* nextAnim = GetAnimation(_animationTrigger, _robot);
       if (nullptr != nextAnim) {
@@ -241,12 +437,110 @@ void SayTextAction::UpdateAnimationToFitDuration(const float duration_ms)
         break;
       }
     }
+     */
   }
   else {
     PRINT_NAMED_WARNING("SayTextAction.UpdateAnimationToFitDuration.InvalidAnimationTrigger", "AnimationTrigger::Count");
   }
 } // UpdateAnimationToFitDuration()
-#endif
 
-} // namespace Vector
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Static Var
+SayTextAction::SayIntentConfigMap SayTextAction::_intentConfigs;
+
+// SayTextIntentConfig methods
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SayTextAction::SayTextIntentConfig::SayTextIntentConfig()
+{ }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SayTextAction::SayTextIntentConfig::SayTextIntentConfig(const std::string& intentName,
+                                                        const Json::Value& json,
+                                                        const SayTextVoiceStyleMap& styleMap)
+: name(intentName)
+{
+  // Set Voice Style
+  const auto styleKey = json.get("style", Json::Value::null);
+  if (!styleKey.isNull()) {
+    const auto it = styleMap.find(styleKey.asString());
+    DEV_ASSERT(it != styleMap.end(), "SayTextAction.LoadMetadata.IntentStyleNotFound");
+    if (it != styleMap.end()) {
+      style = it->second;
+    }
+  }
+
+  // Duration Traits
+  const auto durationTraitJson = json.get("durationTraits", Json::Value::null);
+  if (!durationTraitJson.isNull()) {
+    for (auto traitIt = durationTraitJson.begin(); traitIt != durationTraitJson.end(); ++traitIt) {
+      durationTraits.emplace_back(*traitIt);
+    }
+  }
+
+  // Pitch Traits
+  const auto pitchTraitJson = json.get("pitchTraits", Json::Value::null);
+  if (!pitchTraitJson.isNull()) {
+    for (auto traitIt = pitchTraitJson.begin(); traitIt != pitchTraitJson.end(); ++traitIt) {
+      pitchTraits.emplace_back(*traitIt);
+    }
+  }
+
+  DEV_ASSERT(!name.empty(), "SayTextAction.LoadMetadata.Intent.name.IsEmpty");
+  DEV_ASSERT(!durationTraitJson.empty(), "SayTextAction.LoadMetadata.Intent.durationTraits.IsEmpty");
+  DEV_ASSERT(!pitchTraitJson.empty(), "SayTextAction.LoadMetadata.Intent.pitchTraits.IsEmpty");
+} // SayTextIntentConfig()
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+const SayTextAction::SayTextIntentConfig::ConfigTrait& SayTextAction::SayTextIntentConfig::FindDurationTraitTextLength(uint textLength) const
+{
+  for (const auto& aTrait : durationTraits) {
+    if (aTrait.textLengthMin <= textLength && aTrait.textLengthMax >= textLength) {
+      return aTrait;
+    }
+  }
+  return durationTraits.front();
+} // FindDurationTraitTextLength()
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+const SayTextAction::SayTextIntentConfig::ConfigTrait& SayTextAction::SayTextIntentConfig::FindPitchTraitTextLength(uint textLength) const
+{
+  for (const auto& aTrait : pitchTraits) {
+    if (aTrait.textLengthMin <= textLength && aTrait.textLengthMax >= textLength) {
+      return aTrait;
+    }
+  }
+  return pitchTraits.front();
+} // FindPitchTraitTextLength()
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SayTextAction::SayTextIntentConfig::ConfigTrait::ConfigTrait()
+{ }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SayTextAction::SayTextIntentConfig::ConfigTrait::ConfigTrait(const Json::Value& json)
+{
+  textLengthMin = json.get("textLengthMin", Json::Value(std::numeric_limits<uint>::min())).asUInt();
+  textLengthMax = json.get("textLengthMax", Json::Value(std::numeric_limits<uint>::max())).asUInt();
+  rangeMin = json.get("rangeMin", Json::Value(std::numeric_limits<float>::min())).asFloat();
+  rangeMax = json.get("rangeMax", Json::Value(std::numeric_limits<float>::max())).asFloat();
+  rangeStepSize = json.get("stepSize", Json::Value(0.f)).asFloat(); // If No step size use Range Min and don't randomize
+} // ConfigTrait()
+
+float SayTextAction::SayTextIntentConfig::ConfigTrait::GetDuration(Util::RandomGenerator& randomGen) const
+{
+  // TODO: Move this into Random Util class
+  float resultVal;
+  if (Util::IsFltGTZero( rangeStepSize )) {
+    // (Scalar Range / stepSize) + 1 = number of total possible steps
+    const int stepCount = ((rangeMax - rangeMin) / rangeStepSize) + 1;
+    const auto randStep = randomGen.RandInt( stepCount );
+    resultVal = rangeMin + (rangeStepSize * randStep);
+  }
+  else {
+    resultVal = rangeMin;
+  }
+  return resultVal;
+} // GetRange()
+
+} // namespace Cozmo
 } // namespace Anki

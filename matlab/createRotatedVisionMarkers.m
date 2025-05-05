@@ -1,4 +1,4 @@
-subdirs = {'charger', 'lightCubeSquare', 'lightCubeCircle', 'lightCubeK_lightOnDark', 'customSDK'};
+subdirs = {'charger', 'lightCubeSquare', 'lightCubeCircle'};
 
 for iSubDir = 1:length(subdirs)
   

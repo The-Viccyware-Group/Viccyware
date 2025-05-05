@@ -21,13 +21,13 @@
 #define DEBUG_TRACKING_ACTIONS 0
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 static const char * const kLogChannelName = "Actions";
 
 void TrackMotionAction::GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const
 {
-  requests.insert({ VisionMode::Motion, EVisionUpdateFrequency::High });
+  requests.insert({ VisionMode::DetectingMotion, EVisionUpdateFrequency::High });
 }
 
 ActionResult TrackMotionAction::InitInternal()
@@ -69,12 +69,12 @@ ITrackAction::UpdateResult TrackMotionAction::UpdateTracking(Radians& absPanAngl
     
     // Find pose of robot at time motion was observed
     HistRobotState* histStatePtr = nullptr;
-    RobotTimeStamp_t junkTime;
+    TimeStamp_t junkTime;
     if(RESULT_OK != GetRobot().GetStateHistory()->ComputeAndInsertStateAt(_motionObservation.timestamp, junkTime, &histStatePtr)) {
       PRINT_NAMED_ERROR("TrackMotionAction.UpdateTracking.PoseHistoryError",
                         "Could not get historical pose for motion observed at t=%d (lastRobotMsgTime = %d)",
                         _motionObservation.timestamp,
-                        (TimeStamp_t)GetRobot().GetLastMsgTimestamp());
+                        GetRobot().GetLastMsgTimestamp());
       return UpdateResult::NoNewInfo;
     }
     
@@ -100,5 +100,5 @@ ITrackAction::UpdateResult TrackMotionAction::UpdateTracking(Radians& absPanAngl
   
 } // UpdateTracking()
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

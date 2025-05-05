@@ -3,35 +3,14 @@
 
 #include "clad/types/animationEvents.clad"
 #include "clad/types/textToSpeechTypes.clad"
-#include "clad/types/sdkAudioTypes.clad"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
-// Note: Keep this enum in sync with the versions in clad/src/clad/cloud/mic.clad
-enum uint_8 ConnectionCode
-{
-  Available,
-  Connectivity,
-  Tls,
-  Auth,
-  Bandwidth
-}
-
-message ReportCloudConnectivity
-{
-  ConnectionCode code,
-  uint_8 numPackets,
-  uint_8 expectedPackets,
-}
-
-message StartShutdownAnim
-{
-
-}
 
 message AnimationState
 {
+  uint_32 numProcAnimFaceKeyframes,
   uint_8  lockedTracks,
   uint_8  tracksInUse,
 }
@@ -51,10 +30,9 @@ message AnimationStarted
 
 message AnimationEnded
 {
-  uint_32 streamTimeAnimEnded,
   uint_8  tag,
   bool    wasAborted,
-  string animName
+  string animName,
 }
 
 message AnimationEvent
@@ -66,38 +44,10 @@ message AnimationEvent
 
 message TextToSpeechEvent
 {
-  float_32 expectedDuration_ms,
   uint_8 ttsID,
   TextToSpeechState ttsState
 }
 
-// Trigger streaming of camera images down to anim process
-// for rendering in debug screen
-message StreamCameraImages
-{
-  bool enable,
-}
-
-// Indicates to engine whether or not anim process
-// is in pairing, customer care, or debug screen
-message DebugScreenMode
-{
-  bool isDebug,
-  bool needsWait,
-  bool fromMute,
-}
-
-message RobotAvailable
-{
-}
-
-// Results/status of AudioStreamPlayback added for SDK
-message AudioStreamStatusEvent
-{
-  uint_32 audioReceived,
-  uint_32 audioPlayed,
-  SDKAudioStreamingState streamResultID
-}
 
 } // Cozmo
 } // Anki

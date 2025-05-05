@@ -12,7 +12,6 @@
  **/
 #include "engine/aiComponent/behaviorComponent/behaviors/freeplay/putDownDispatch/behaviorLookForFaceAndCube.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
 #include "engine/actions/animActions.h"
@@ -29,7 +28,7 @@
 #include "util/random/randomGenerator.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 namespace {
@@ -83,10 +82,10 @@ BehaviorLookForFaceAndCube::InstanceConfig::InstanceConfig(const Json::Value& co
   face_bodyAngleRelRangeMax_rad = DEG_TO_RAD( ParseFloat(config, kFace_bodyAngleRelRangeMaxKey, debugName) );
   face_sidePicks = ParseUint8(config, kFace_sidePicksKey, debugName);
   // cube states
-  cube_headAngleAbsRangeMin_rad = DEG_TO_RAD( ParseFloat(config, kCube_headAngleAbsRangeMinKey, debugName) );
-  cube_headAngleAbsRangeMax_rad = DEG_TO_RAD( ParseFloat(config, kCube_headAngleAbsRangeMaxKey, debugName) );
-  cube_bodyAngleRelRangeMin_rad = DEG_TO_RAD( ParseFloat(config, kCube_bodyAngleRelRangeMinKey, debugName) );
-  cube_bodyAngleRelRangeMax_rad = DEG_TO_RAD( ParseFloat(config, kCube_bodyAngleRelRangeMaxKey, debugName) );
+  cube_headAngleAbsRangeMin_rad = DEG_TO_RAD( ParseFloat(config, kCube_headAngleAbsRangeMinKey, debugName) );;
+  cube_headAngleAbsRangeMax_rad = DEG_TO_RAD( ParseFloat(config, kCube_headAngleAbsRangeMaxKey, debugName) );;
+  cube_bodyAngleRelRangeMin_rad = DEG_TO_RAD( ParseFloat(config, kCube_bodyAngleRelRangeMinKey, debugName) );;
+  cube_bodyAngleRelRangeMax_rad = DEG_TO_RAD( ParseFloat(config, kCube_bodyAngleRelRangeMaxKey, debugName) );;
   cube_sidePicks = ParseUint8(config, kCube_sidePicksKey, debugName);
   stopBehaviorOnCube = config.get(kStopBehaviorOnCubeKey, false).asBool();
   
@@ -331,7 +330,7 @@ void BehaviorLookForFaceAndCube::StopBehaviorOnFaceIfNeeded(FaceID_t observedID)
     // need to handle that here. We never kill the behavior on a tracking only face
 
     if( _iConfig.stopBehaviorOnAnyFace ) {
-      PRINT_CH_INFO("Behaviors", (GetDebugLabel() + ".SawFace.End").c_str(),
+      PRINT_CH_INFO("Behavior", (GetDebugLabel() + ".SawFace.End").c_str(),
                     "Stopping behavior because we saw (any) face id %d",
                     observedID);
         
@@ -350,7 +349,7 @@ void BehaviorLookForFaceAndCube::StopBehaviorOnFaceIfNeeded(FaceID_t observedID)
                       observedID) ) {
         
         if( facePtr->HasName() ) {
-          PRINT_CH_INFO("Behaviors", (GetDebugLabel() + ".SawFace.End").c_str(),
+          PRINT_CH_INFO("Behavior", (GetDebugLabel() + ".SawFace.End").c_str(),
                         "Stopping behavior because we saw (any) face id %d",
                         observedID);
         
@@ -367,7 +366,8 @@ void BehaviorLookForFaceAndCube::StopBehaviorOnFaceIfNeeded(FaceID_t observedID)
 bool BehaviorLookForFaceAndCube::DoesCubeExist() const
 {
   BlockWorldFilter filter;
-  filter.AddFilterFcn(&BlockWorldFilter::IsLightCubeFilter);
+  filter.AddAllowedFamily(ObjectFamily::LightCube);
+  filter.SetFilterFcn(nullptr);
   
   std::vector<const ObservableObject*> objects;
   GetBEI().GetBlockWorld().FindLocatedMatchingObjects(filter, objects);
@@ -587,5 +587,5 @@ IAction* BehaviorLookForFaceAndCube::CreateBodyAndHeadTurnAction(
   return turnAction;
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

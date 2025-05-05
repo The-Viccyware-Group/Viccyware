@@ -1,8 +1,7 @@
 #include "coretech/messaging/shared/UdpClient.h"
-#include "coretech/messaging/shared/UdpServer.h"  // for kConnectionPacket
-#include "coretech/common/shared/logging.h"
 
 #include <iostream>
+#include <cstring>      // Needed for memset
 #include <sys/socket.h> // Needed for the socket functions
 #include <netdb.h>      // Needed for the socket functions
 #include <assert.h>
@@ -11,24 +10,9 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
-// Define this to enable logs
-#define LOG_CHANNEL                    "UdpClient"
 
-#ifdef  LOG_CHANNEL
-#define LOG_ERROR(name, format, ...)   CORETECH_LOG_ERROR(name, format, ##__VA_ARGS__)
-#define LOG_WARNING(name, format, ...) CORETECH_LOG_WARNING(name, format, ##__VA_ARGS__)
-#define LOG_INFO(name, format, ...)    CORETECH_LOG_INFO(LOG_CHANNEL, name, format, ##__VA_ARGS__)
-#define LOG_DEBUG(name, format, ...)   CORETECH_LOG_DEBUG(LOG_CHANNEL, name, format, ##__VA_ARGS__)
-#else
-#define LOG_ERROR(name, format, ...)   {}
-#define LOG_WARNING(name, format, ...) {}
-#define LOG_INFO(name, format, ...)    {}
-#define LOG_DEBUG(name, format, ...)   {}
-#endif
-
-UdpClient::UdpClient(const std::string& name)
-: _name(name)
-, host_info_list(nullptr)
+UdpClient::UdpClient()
+: host_info_list(nullptr)
 , socketfd(-1)
 {
 }
@@ -49,7 +33,7 @@ void UdpClient::set_nonblock(int socket) {
 bool UdpClient::Connect(const char *host_address, const unsigned short port)
 {
   if (socketfd >= 0) {
-    LOG_WARNING("UdpClient.Connect.AlreadyConnected", "");
+    DEBUG_UDP_CLIENT("UdpClient: Already connected\n");
     return false;
   }
 
@@ -69,15 +53,11 @@ bool UdpClient::Connect(const char *host_address, const unsigned short port)
   sprintf(portStr, "%d", port);
   status = getaddrinfo(host_address, portStr, &host_info, &host_info_list);
   if (status != 0) {
-    LOG_ERROR("UdpClient.Connect.GetAddrInfoError", 
-              "%s (host: %s, port %hu", 
-              gai_strerror(status), 
-              host_address,
-              port);
+    std::cout << "getaddrinfo error: " << gai_strerror(status) << " (host " << host_address << ":" << port << ")\n";
     return false;
   }
 
-  LOG_INFO("UdpClient.Connect.CreatingSocket", "Port: %hu (%s)", port, _name.c_str());
+  DEBUG_UDP_CLIENT("UdpClient: Creating a socket on port " << portStr << "\n");
 
   sockaddr_in socketAddress;
   memset( &socketAddress, 0, sizeof(socketAddress) );
@@ -89,7 +69,7 @@ bool UdpClient::Connect(const char *host_address, const unsigned short port)
                     host_info_list->ai_protocol);
   
   if (socketfd == -1) {
-    LOG_ERROR("UdpClient.Connect.SocketError", "");
+    std::cout << "socket error\n" ;
     return false;
   }
 
@@ -103,17 +83,16 @@ bool UdpClient::Connect(const char *host_address, const unsigned short port)
   {
     if (EADDRINUSE == errno)
     {
-      // Unable to bind to in-use socket, continuing as this is OK in case of running multiple instances on one machine.
-      LOG_WARNING("UdpClient.Connect.AddrInUse", "");
+      printf("UdpClient::Connect: Warning: Unable to bind to in-use socket, continuing as this is OK in case of running multiple instances on one machine.\n");
     }
     else
     {
-      LOG_ERROR("UdpClient.Connect.BindFailed", "res = %d, errno = %d '%s'", bindResult, errno, strerror(errno));
+      printf("UdpClient::Connect: Error: Unable to bind socket (res = %d), errno = %d '%s'\n", bindResult, errno, strerror(errno));
     }
   }
   // Send connection packet (i.e. something so that the server adds us to the client list)
-  LOG_INFO("UdpClient.Connect.SendConnectionPacket","%s (%zu)", _name.c_str(), sizeof(UdpServer::kConnectionPacket));
-  Send(UdpServer::kConnectionPacket, sizeof(UdpServer::kConnectionPacket));
+  const char zero = 0;
+  Send(&zero, 1);
   
   return true;
 }
@@ -129,14 +108,14 @@ bool UdpClient::Disconnect()
   return true;
 }
 
-ssize_t UdpClient::Send(const char* data, size_t size)
+ssize_t UdpClient::Send(const char* data, int size)
 {
   if (socketfd < 0) {
-    LOG_WARNING("UdpClient.Send.NoSocket", "");
+    DEBUG_UDP_CLIENT("UdpClient (WARN): Socket undefined. Skipping Send().\n");
     return 0;
   }
   
-  //LOG_DEBUG("UdpClient.Send.Sending", "%d bytes", size);
+  DEBUG_UDP_CLIENT("UdpClient: sending " << size << " bytes: " << data << "\n");
 
   ssize_t bytes_sent = sendto(socketfd, data, size, 0,
                           (struct sockaddr *)(host_info_list->ai_addr),
@@ -144,39 +123,51 @@ ssize_t UdpClient::Send(const char* data, size_t size)
 
   if (bytes_sent <= 0) {
     if (errno != EWOULDBLOCK) {
-      LOG_ERROR("UdpClient.Send.SendFailed", "%d", errno);
+      DEBUG_UDP_CLIENT("UdpClient: Send error, disconnecting (" << errno << ").\n");
       Disconnect();
       return -1;
     }
   }
+  
+  if(bytes_sent > std::numeric_limits<int>::max()) {
+    DEBUG_UDP_CLIENT("UdpClient: Send warning, num bytes sent > max integer.\n");
+  }
 
-  return bytes_sent;
+  return static_cast<int>(bytes_sent);
 }
 
-ssize_t UdpClient::Recv(char* data, size_t maxSize)
+ssize_t UdpClient::Recv(char* data, int maxSize)
 {
-  if (socketfd < 0) {
-    LOG_WARNING("UdpClient.Recv.NoSocket", "");
-    return 0;
-  }
-
-  assert(data != NULL);
-  ssize_t bytes_received = recv(socketfd, data, maxSize, 0);
-
-  if (bytes_received <= 0) {
-    if (errno != EWOULDBLOCK) {
-      LOG_ERROR("UdpClient.Recv.RecvError", "Disconnecting");
-      Disconnect();
-      return -1;
-    } else {
-      bytes_received = 0;
+    if (socketfd < 0) {
+      DEBUG_UDP_CLIENT("UdpClient (WARN): Socket undefined. Skipping Recv().\n");
+      return 0;
     }
-  }
-  else {
-    //LOG_DEBUG("UdpClient.Recv", "%zd bytes received", bytes_received);
-  }
+  
+    DEBUG_UDP_CLIENT( "UdpClient: Waiting to receive data...\n");
 
-  return bytes_received;
+    assert(data != NULL);
+    ssize_t bytes_received;
+    bytes_received = recv(socketfd, data, maxSize, 0);
+    // If no data arrives, the program will just wait here until some data arrives.
+  
+    if (bytes_received <= 0) {
+      if (errno != EWOULDBLOCK) {
+        DEBUG_UDP_CLIENT("UdpClient: Receive error, disconnecting.\n");
+        Disconnect();
+        return -1;
+      } else {
+        bytes_received = 0;
+      }
+    }
+    else {
+      DEBUG_UDP_CLIENT("UdpClient: " << bytes_received << " bytes received : " << data << "\n");
+    }
+
+  if(bytes_received > std::numeric_limits<int>::max()) {
+    DEBUG_UDP_CLIENT("UdpClient: Receive warning, num bytes received > max integer.\n");
+  }
+  
+  return static_cast<int>(bytes_received);
 }
 
 

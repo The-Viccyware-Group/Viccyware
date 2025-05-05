@@ -22,7 +22,7 @@
 #include <string.h>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   TimeProfiler::TimeProfiler(const char* name)
   {
@@ -129,5 +129,5 @@ namespace Vector {
 
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

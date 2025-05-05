@@ -22,13 +22,12 @@
 #include <chrono>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace{
-Anki::Vector::TimerUtility* sTimerUtility = nullptr;
+Anki::Cozmo::TimerUtility* sTimerUtility = nullptr;
 }
 
-#if ANKI_DEV_CHEATS
 CONSOLE_VAR(u32, kAdvanceTimerSeconds,   "TimerUtility.AdvanceTimerSeconds", 60);
 CONSOLE_VAR(u32, kAdvanceTimerAndAnticSeconds,   "TimerUtility.AdvanceTimerAndAnticSeconds", 60);
 
@@ -57,7 +56,6 @@ void AdvanceTimerBySeconds(int seconds)
 
 CONSOLE_FUNC(AdvanceTimer, "TimerUtility.AdvanceTimer");
 CONSOLE_FUNC(AdvanceTimerAndAntic, "TimerUtility.AdvanceTimerAndAntic");
-#endif // ANKI_DEV_CHEATS
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -74,9 +72,7 @@ int TimerHandle::GetSystemTime_s()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TimerUtility::TimerUtility()
 : IDependencyManagedComponent<AIComponentID>(this, AIComponentID::TimerUtility){
-  if( sTimerUtility != nullptr ) {
-    PRINT_NAMED_WARNING("TimerUtility.Constructor.MultipleInstances","TimerUtility instance exists already");
-  }
+  ANKI_VERIFY(sTimerUtility == nullptr, "TimerUtility.Constructor.MultipleInstances","");
   sTimerUtility = this;
 
 }
@@ -115,5 +111,5 @@ int TimerUtility::GetSystemTime_s() const
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

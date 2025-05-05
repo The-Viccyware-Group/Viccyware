@@ -18,7 +18,7 @@
 #include "clad/types/objectTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorAnimSequenceWithObject : public BehaviorAnimSequence
 {
@@ -50,7 +50,7 @@ private:
   DynamicVariables _dVars;
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Engine_Behaviors_BehaviorAnimSequenceWithObject_H__

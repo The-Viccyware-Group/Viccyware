@@ -7,7 +7,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Console Vars and Functions</title>
-/* -- generated stylesheet includes -- */
+    <link rel="stylesheet" href="jquery-ui.css">
+    <link rel="stylesheet" href="style.css">
+
     <style>
     div {
         display: inline-block;
@@ -17,7 +19,8 @@
 /* -- generated style -- */
     </style>
 
-/* -- generated jquery includes -- */
+    <script src="jquery-1.12.4.js"></script>
+    <script src="jquery-ui.js"></script>
 
     <script>
     $(function() {
@@ -25,11 +28,10 @@
     });
 
     $(function() {
-        $("#main").tabs();
-        // $("#main").accordion({
-        //     heightStyle: "content",
-        //     collapsible: true
-        // });
+        $("#main").accordion({
+            heightStyle: "content",
+            collapsible: true
+        });
     });
 
     $(function() {
@@ -42,15 +44,10 @@
         });
     });
 
-    function newlineToBr(str) {
-        var breakTag = '<br>';
-        return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1'+ breakTag +'$2');
-    }
-
     function onCheckboxClickHandler(element){
         $.post("consolevarset", {key: element.id, value: element.checked}, function(result){});
     }
-
+    
     $(function() {
         $(".slider").each(function() {
             var scale = $(this).data("scale"),
@@ -104,11 +101,7 @@
                 var args = "";
             }
             console.log("Call consolefunccall with func:" + func + " and args:" + args);
-            // Passing as string (instead of json object) prevents encoding of commas
-            var optionsString = "func=" + func + "&args=" + args;
-            $.post("consolefunccall", optionsString, function(result){
-              $("#id_consolefunc_result").html(newlineToBr(result));
-            });
+            $.post("consolefunccall", {func: func, args: args}, function(result){});
         })
     });
 // -- generated script --
@@ -123,8 +116,6 @@
         <h3 class="ui-widget-header" style="text-align: center; margin: 0;">Console Vars and Functions</h3>
         <div id="main">
 <!-- generated html -->
-        <div>Output from last console func call:</div><br>
-        <div id='id_consolefunc_result'></div>
         </div>
     </div>
 </body>

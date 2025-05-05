@@ -15,7 +15,7 @@
 
 #include "coretech/common/engine/math/logisticRegression.h"
 #include "coretech/common/engine/utils/data/dataPlatform.h"
-#include "coretech/common/shared/array2d.h"
+#include "coretech/common/engine/array2d_impl.h"
 #include "coretech/vision/engine/profiler.h"
 #include "engine/cozmoContext.h"
 #include "util/fileUtils/fileUtils.h"
@@ -33,7 +33,7 @@
 static const char* kLogChannelName = "VisionSystem";
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 
@@ -731,5 +731,5 @@ std::vector<uchar> DTRawPixelsClassifier::PredictClass(const Array2d<RawPixelsCl
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

@@ -1,7 +1,7 @@
 #include "simulator/game/cozmoSimTestController.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 enum class TestState {
   Init,
   PickupRobot,
@@ -72,5 +72,5 @@ void CST_RobotPickedUp::HandleRobotOffTreadsStateChanged(ExternalInterface::Robo
   }
 }
 
-}  // namespace Vector
+}  // namespace Cozmo
 }  // namespace Anki

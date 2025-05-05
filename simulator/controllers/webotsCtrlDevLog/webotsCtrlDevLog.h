@@ -28,7 +28,7 @@ namespace webots {
 class UdpClient;
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 class DevLogProcessor;
 
@@ -77,7 +77,7 @@ private:
   void ClearLogCallbacks();
   
 }; // class WebotsDevLogController
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif  // __Simulator_Controllers_WebotsCtrlDevLog_H_

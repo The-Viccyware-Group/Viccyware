@@ -103,16 +103,11 @@ void hal_acc_stop(void) {
 #define TAP_THRESH    (90*32)   // Equivalent to EP1/2G 10 (since I shift less and use 4G)
 
 void hal_acc_tick(void) {
-  // This gets called every 10 ms
-  static AccelDataCommand accel = { COMMAND_ACCEL_DATA };
-
-  static int accel_frame = 0;
-  int16_t* accel_data = accel.axis[accel_frame];
+  static TapCommand accel = { COMMAND_ACCEL_DATA };
 
   int frames = spi_read8(FIFO_STATUS) & 0x7F;
-
   while (frames-- > 0) {
-    spi_read(FIFO_DATA, sizeof(accel.axis[0]), (uint8_t*)accel_data);
+    spi_read(FIFO_DATA, sizeof(accel.axis), (uint8_t*)&accel.axis);
 
     static int16_t last = 0;
     static uint8_t debounce = 0;
@@ -121,7 +116,7 @@ void hal_acc_tick(void) {
     static int8_t  tapTime;
     static bool    posFirst;
     
-    int16_t current = accel_data[2];
+    int16_t current = accel.axis[2];
     int16_t diff = current - last;
     last = current;
 
@@ -129,6 +124,10 @@ void hal_acc_tick(void) {
       if (debounce > (TAP_DEBOUNCE-TAP_DURATION) && (diff < (posFirst ? -TAP_THRESH : TAP_DEBOUNCE)))
       {
         accel.tap_count++;
+        accel.tap_time = tapTime;
+        accel.tap_pos = tapPos;
+        accel.tap_neg = tapNeg;
+
         debounce = TAP_DEBOUNCE - TAP_DURATION;
       }
       debounce--;
@@ -154,10 +153,11 @@ void hal_acc_tick(void) {
       tapPos = diff;
   }
 
-  // Every ACCEL_FRAMES_PER_MSG, send the message over BLE.
-  // Frequency will be 10 ms * ACCEL_FRAMES_PER_MSG
-  if (++accel_frame >= ACCEL_FRAMES_PER_MSG) {
+  // Every 20ms
+  static int count;
+  
+  if (count++ >= 4) {
     ble_send(sizeof(accel), &accel);
-    accel_frame = 0;
+    count = 0;
   }
 }

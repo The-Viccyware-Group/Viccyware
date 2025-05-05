@@ -18,18 +18,16 @@
 #include <sstream>
 #include <chrono>
 #include <iomanip>
-#include <unistd.h>
 
 #define ARCHIVE_OLD_LOGS 1
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   static const std::string _kLogTextFileName = "mfgData";
   static const std::string _kLogRootDirName = "factory_test_logs";
   static const std::string _kArchiveRootDirName = "factory_test_log_archives";
-  static const Util::Data::Scope _kLogScope = Util::Data::Scope::Cache;
-  static std::string _kPathToCopyLogTo = "/factory";
+  static const Util::Data::Scope _kLogScope = Util::Data::Scope::Persistent;
   
   static const int _kMaxEngineLogSizeBytes = 1500000;
   
@@ -168,37 +166,9 @@ namespace Vector {
       
       // If exporting json, write it to file here
       if (_exportJson) {
-        // Use FastWriter to "compress" the json string (removes newlines, tabs, etc)
-        Json::FastWriter writer;
-        std::string json = writer.write(_json);
-        _logFileHandle << json;
+        _logFileHandle << _json;
       }
       _logFileHandle.close();
-
-      // Copy log to factory partition. This should overwrite any log already there
-      // so it will always contain the most recent log
-      PRINT_NAMED_INFO("FactoryTestLogger.CloseLog.Copying", 
-                       "Copying log from %s to %s", 
-                       _logFileName.c_str(),
-                       _kPathToCopyLogTo.c_str());
-      Util::FileUtils::CopyFile(_kPathToCopyLogTo, _logFileName);
-
-      // The log file has been copied to the correct directory but now needs to be renamed
-      const std::string oldFileName = _kPathToCopyLogTo + "/" + (_kLogTextFileName + (_exportJson ? ".json" : ".txt"));
-      const std::string newFileName = _kPathToCopyLogTo + "/log0";
-      int rc = std::rename(oldFileName.c_str(), 
-                           newFileName.c_str());
-
-      // Make sure files are written to disk
-      sync();
-
-      if(rc != 0)
-      {
-        PRINT_NAMED_ERROR("FactoryTestLogger.CloseLog.RenameFail",
-                          "Failed to rename log from %s to %s",
-                          oldFileName.c_str(),
-                          newFileName.c_str());
-      }
     }
     
     _logDir = "";
@@ -276,6 +246,34 @@ namespace Vector {
     return AppendToFile(ss.str());
   }
   
+  bool FactoryTestLogger::Append(const ToolCodeInfo& data)
+  {
+    std::stringstream ss;
+    if (_exportJson) {
+      Json::Value& node = _json["ToolCode"];
+      node["Code"] = EnumToString(data.code);
+      node["Expected_L"][0] = data.expectedCalibDotLeft_x;
+      node["Expected_L"][1] = data.expectedCalibDotLeft_y;
+      node["Expected_R"][0] = data.expectedCalibDotRight_x;
+      node["Expected_R"][1] = data.expectedCalibDotRight_y;
+      node["Observed_L"][0] = data.observedCalibDotLeft_x;
+      node["Observed_L"][1] = data.observedCalibDotLeft_y;
+      node["Observed_R"][0] = data.observedCalibDotRight_x;
+      node["Observed_R"][1] = data.observedCalibDotRight_y;
+      ss << "[ToolCode]\n" << node;
+    } else {
+      ss << "\n[ToolCode]"
+      << "\nCode: " << EnumToString(data.code)
+      << "\nExpected_L: " << data.expectedCalibDotLeft_x  << ", " << data.expectedCalibDotLeft_y
+      << "\nExpected_R: " << data.expectedCalibDotRight_x << ", " << data.expectedCalibDotRight_y
+      << "\nObserved_L: " << data.observedCalibDotLeft_x  << ", " << data.observedCalibDotLeft_y
+      << "\nObserved_R: " << data.observedCalibDotRight_x << ", " << data.observedCalibDotRight_y;
+    }
+    
+    PRINT_NAMED_INFO("FactoryTestLogger.Append.ToolCodeInfo", "%s", ss.str().c_str());
+    return AppendToFile(ss.str());
+  }
+
   bool FactoryTestLogger::Append(const BirthCertificate& data)
   {
     std::stringstream ss;
@@ -514,7 +512,10 @@ namespace Vector {
     {
       Json::Value& node = _json[name];
       Json::Value newNode;
-      newNode["SensorDistance_mm"] = data.proxDistanceToTarget_mm;
+      newNode["SignalIntensity"] = data.proxSensorData.signalIntensity;
+      newNode["AmbientIntensity"] = data.proxSensorData.ambientIntensity;
+      newNode["SpadCount"] = data.proxSensorData.spadCount;
+      newNode["SensorDistanceRaw_mm"] = data.proxSensorData.distance_mm;
       newNode["VisualDistance_mm"] = data.visualDistanceToTarget_mm;
       newNode["VisualAngleAway_rad"] = data.visualAngleAwayFromTarget_rad;
       node.append(newNode);
@@ -523,69 +524,17 @@ namespace Vector {
     else
     {
       ss << "\n[" << name << "]" << std::fixed
-      << "\nSensorDistance_mm: " << data.proxDistanceToTarget_mm
+      << "\nSignalIntensity: " << data.proxSensorData.signalIntensity
+      << "\nAmbientIntensity: " << data.proxSensorData.ambientIntensity
+      << "\nSpadCount: " << data.proxSensorData.spadCount
+      << "\nSensorDistanceRaw_mm: " << data.proxSensorData.distance_mm
       << "\nVisualDistance_mm: " << data.visualDistanceToTarget_mm
       << "\nVisualAngleAway_rad: " << data.visualAngleAwayFromTarget_rad;
     }
     PRINT_NAMED_INFO("FactoryTestLogger.Append.DistanceSensorData", "%s", ss.str().c_str());
     return AppendToFile(ss.str());
   }
-
-  bool FactoryTestLogger::Append(const std::string& name, const RangeSensorData& data)
-  {
-    std::stringstream ss;
-    if (_exportJson)
-    {
-      Json::Value& node = _json[name];
-      Json::Value newNode;
-
-      // Should be 32 of these one for each ROI
-      for(const auto& range : data.rangeData.data)
-      {
-        std::string roiName = "Roi" + std::to_string(range.roi);
-        Json::Value& rangeNode = newNode[roiName];
-
-        // Each ROI can report multiple distance readings, 1 for each object
-        // it detected
-        for(const auto& iter : range.readings)
-        {
-          Json::Value dataNode;
-          dataNode["SignalRate_mcps"] = iter.signalRate_mcps;
-          dataNode["AmbientRate_mcps"] = iter.ambientRate_mcps;
-          dataNode["Sigma_mm"] = iter.sigma_mm;
-          dataNode["RawRange_mm"] = iter.rawRange_mm;
-          dataNode["Status"] = iter.status;
-          rangeNode["Data"].append(dataNode);
-        }
-
-        rangeNode["Roi"] = range.roi;
-        rangeNode["NumObjects"] = range.numObjects;
-        rangeNode["RoiStatus"] = range.roiStatus;
-        rangeNode["SpadCount"] = range.spadCount;
-        rangeNode["ProcessedRange_mm"] = range.processedRange_mm;
-      }
-      
-      newNode["VisualDistance_mm"] = data.visualDistanceToTarget_mm;
-      newNode["VisualAngleAway_rad"] = data.visualAngleAwayFromTarget_rad;
-      newNode["HeadAngle_rad"] = data.headAngle_rad;
-      node.append(newNode);
-
-      ss << "[" << name << "]\n" << newNode;
-    }
-    else
-    {
-      // ss << "\n[" << name << "]" << std::fixed
-      // << "\nSignalIntensity: " << data.proxSensorData.signalIntensity
-      // << "\nAmbientIntensity: " << data.proxSensorData.ambientIntensity
-      // << "\nSpadCount: " << data.proxSensorData.spadCount
-      // << "\nSensorDistanceRaw_mm: " << data.proxSensorData.distance_mm
-      // << "\nVisualDistance_mm: " << data.visualDistanceToTarget_mm
-      // << "\nVisualAngleAway_rad: " << data.visualAngleAwayFromTarget_rad;
-    }
-    //PRINT_NAMED_INFO("FactoryTestLogger.Append.DistanceSensorData", "%s", ss.str().c_str());
-    return AppendToFile(ss.str());
-  }
-
+  
   bool FactoryTestLogger::Append(const std::map<std::string, std::vector<FactoryTestResultCode>>& results)
   {
     std::stringstream ss;
@@ -640,33 +589,6 @@ namespace Vector {
     return AppendToFile(ss.str());
   }
 
-  bool FactoryTestLogger::Append(const std::string& name, const TouchSensorFilt& data)
-  {
-    std::stringstream ss;
-    
-    if(_exportJson)
-    {
-      Json::Value& node = _json[name];
-      Json::Value newNode;
-      newNode["min"] = data.min;
-      newNode["max"] = data.max;
-      newNode["stddev"] = data.stddev;
-      node.append(newNode);
-      ss << "[" << name << "]\n" << newNode;
-    }
-    else
-    {
-      ss << "\n[" << name << "]" << std::fixed
-      << "\nMin: " << data.min
-      << "\nMax: " << data.max
-      << "\nStdDev: " << data.stddev;
-    }
-
-    PRINT_NAMED_INFO("FactoryTestLogger.Append.TouchSensorValues", "%s", ss.str().c_str());
-    return AppendToFile(ss.str());
-  }
-
-  
   bool FactoryTestLogger::AppendToFile(const std::string& data) {
     
     // If log name was not actually defined yet, do nothing.
@@ -722,7 +644,7 @@ namespace Vector {
     
     // Get directories inside CurrentGameLog. There should only ever be one.
     // TODO (Al): Get LOGNAME (log folder) from cozmoeEngineMain.cpp instead of duplicating it
-    std::string srcDir = dataPlatform->pathToResource(Util::Data::Scope::CurrentGameLog, "vic-engine");
+    std::string srcDir = dataPlatform->pathToResource(Util::Data::Scope::CurrentGameLog, "engine");
     std::vector<std::string> dirs;
     Util::FileUtils::ListAllDirectories(srcDir, dirs);
 
@@ -848,5 +770,5 @@ namespace Vector {
     return std::string(buf);
   }
   
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

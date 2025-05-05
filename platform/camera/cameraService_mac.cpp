@@ -3,7 +3,7 @@
  *
  * Author: chapados
  * Created: 02/07/2018
- *
+ * 
  * based on androidHAL_android.cpp
  * Author: Kevin Yoon
  * Created: 02/17/2017
@@ -16,14 +16,8 @@
  **/
 
 #include "camera/cameraService.h"
-
-#include "coretech/common/shared/array2d.h"
-
-#include "simulator/controllers/shared/webotsHelpers.h"
-
 #include "util/logging/logging.h"
 
-#include "util/container/fixedCircularBuffer.h"
 #include "util/random/randomGenerator.h"
 
 #include <vector>
@@ -31,16 +25,18 @@
 #include <webots/Supervisor.hpp>
 #include <webots/Camera.hpp>
 
-#define BLUR_CAPTURED_IMAGES 0
+#define BLUR_CAPTURED_IMAGES 1
 
+#if BLUR_CAPTURED_IMAGES
 #include "opencv2/imgproc/imgproc.hpp"
+#endif
 
 #ifndef SIMULATOR
 #error SIMULATOR should be defined by any target using cameraService_mac.cpp
 #endif
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
 
     namespace { // "Private members"
 
@@ -65,18 +61,10 @@ namespace Anki {
       const f32 kTangentialDistCoeff2 = 0.001523473592445885f;
       const f32 kDistCoeffNoiseFrac   = 0.0f; // fraction of the true value to use for uniformly distributed noise (0 to disable)
 
-      // This buffers Webots camera images from the recent past, so that engine can request an image from a specific
-      // timestamp (in the past). The buffer contains pairs, where the first element is timestamp of image capture, and
-      // the second element is the RGB image itself.
-      constexpr size_t nBufferEntries = 3; // 3 images = 195 ms
-      Util::FixedCircularBuffer<std::pair<TimeStamp_t, std::vector<u8>>, nBufferEntries> webotsImageBuffer_;
-      
       std::vector<u8> imageBuffer_;
-      Vision::ImageRGB rgb_; // Wrapper around imageBuffer_
       TimeStamp_t cameraStartTime_ms_;
       TimeStamp_t lastImageCapturedTime_ms_;
 
-      bool _skipNextImage = false;
     } // "private" namespace
 
 
@@ -85,8 +73,6 @@ namespace Anki {
     // Declarations
     void FillCameraInfo(const webots::Camera *camera, CameraCalibration &info);
 
-    // Apply lens distortion to the RGB image in frame, using the information from headCamInfo
-    void ApplyLensDistortion(u8* frame, const CameraCalibration& headCamInfo);
 
     // Definition of static field
     CameraService* CameraService::_instance = nullptr;
@@ -124,11 +110,7 @@ namespace Anki {
     }
 
     CameraService::CameraService()
-    : _imageSensorCaptureHeight(DEFAULT_CAMERA_RESOLUTION_HEIGHT)
-    , _imageSensorCaptureWidth(DEFAULT_CAMERA_RESOLUTION_WIDTH)
     {
-      imageBuffer_.resize(CAMERA_SENSOR_RESOLUTION_WIDTH * CAMERA_SENSOR_RESOLUTION_HEIGHT * 3);
-            
       if (nullptr != _engineSupervisor) {
 
         // Is the step time defined in the world file >= than the robot time? It should be!
@@ -153,27 +135,6 @@ namespace Anki {
           // TODO: Not sure from Cyberbotics support message whether this should include "+ VISION_TIME_STEP" or not...
           cameraStartTime_ms_ = GetTimeStamp(); // + VISION_TIME_STEP;
           lastImageCapturedTime_ms_ = 0;
-          
-          // Make the CozmoVizDisplay (which includes the nav map, etc.) invisible to the camera. Note that the call to
-          // setVisibility() requires a pointer to the camera NODE, _not_ the camera device (which is of type
-          // webots::Camera*). There seems to be no good way to get the underlying node pointer of the camera, so we
-          // have to do this somewhat hacky iteration over all of the nodes in the world to find the camera node.
-          const auto& vizNodes = WebotsHelpers::GetMatchingSceneTreeNodes(*_engineSupervisor, "CozmoVizDisplay");
-          
-          webots::Node* cameraNode = nullptr;
-          const int maxNodesToSearch = 10000;
-          for (int i=0 ; i < maxNodesToSearch ; i++) {
-            auto* node = _engineSupervisor->getFromId(i);
-            if ((node != nullptr) && (node->getTypeName() == "CozmoCamera")) {
-              cameraNode = node;
-              break;
-            }
-          }
-          DEV_ASSERT(cameraNode != nullptr, "CameraService.NoWebotsCameraFound");
-          
-          for (const auto& vizNode : vizNodes) {
-            vizNode.nodePtr->setVisibility(cameraNode, false);
-          }
         }
       }
     }
@@ -183,11 +144,6 @@ namespace Anki {
 
     }
 
-    void CameraService::RegisterOnCameraRestartCallback(std::function<void()> callback)
-    {
-      return;
-    }
-    
     TimeStamp_t CameraService::GetTimeStamp(void)
     {
       if (nullptr != _engineSupervisor) {
@@ -198,6 +154,12 @@ namespace Anki {
 
     Result CameraService::Update()
     {
+      if (nullptr != _engineSupervisor) {
+        if (_engineSupervisor->step(Cozmo::ROBOT_TIME_STEP_MS) == -1) {
+          return RESULT_FAIL;
+        }
+        // AudioUpdate();
+      }
       return RESULT_OK;
     }
 
@@ -248,53 +210,6 @@ namespace Anki {
         }
       }
     } // FillCameraInfo
-    
-    void ApplyLensDistortion(u8* frame, const CameraCalibration& headCamInfo)
-    {
-      // Apply radial/lens distortion. Note that cv::remap uses in inverse lookup to find where the pixels in
-      // the output (distorted) image came from in the source. So we have to compute the inverse distortion here.
-      // We do that using cv::undistortPoints to create the necessary x/y maps for remap:
-      static cv::Mat_<f32> x_undistorted, y_undistorted;
-      if(x_undistorted.empty())
-      {
-        // Compute distortion maps on first use
-        std::vector<cv::Point2f> points;
-        points.reserve(headCamInfo.nrows * headCamInfo.ncols);
-        
-        for (s32 i=0; i < headCamInfo.nrows; i++) {
-          for (s32 j=0; j < headCamInfo.ncols; j++) {
-            points.emplace_back(j,i);
-          }
-        }
-        
-        const std::vector<f32> distCoeffs{
-          kRadialDistCoeff1, kRadialDistCoeff2, kTangentialDistCoeff1, kTangentialDistCoeff2, kRadialDistCoeff3
-        };
-        const cv::Matx<f32,3,3> cameraMatrix(headCamInfo.focalLength_x, 0.f, headCamInfo.center_x,
-                                             0.f, headCamInfo.focalLength_y, headCamInfo.center_y,
-                                             0.f, 0.f, 1.f);
-        
-        cv::undistortPoints(points, points, cameraMatrix, distCoeffs, cv::noArray(), cameraMatrix);
-        
-        x_undistorted.create(headCamInfo.nrows, headCamInfo.ncols);
-        y_undistorted.create(headCamInfo.nrows, headCamInfo.ncols);
-        std::vector<cv::Point2f>::const_iterator pointIter = points.begin();
-        for (s32 i=0; i < headCamInfo.nrows; i++)
-        {
-          f32* x_i = x_undistorted.ptr<f32>(i);
-          f32* y_i = y_undistorted.ptr<f32>(i);
-          
-          for (s32 j=0; j < headCamInfo.ncols; j++)
-          {
-            x_i[j] = pointIter->x;
-            y_i[j] = pointIter->y;
-            ++pointIter;
-          }
-        }
-      }
-      cv::Mat  cvFrame(headCamInfo.nrows, headCamInfo.ncols, CV_8UC3, frame);
-      cv::remap(cvFrame, cvFrame, x_undistorted, y_undistorted, CV_INTER_LINEAR);
-    }
 
     const CameraCalibration* CameraService::GetHeadCamInfo(void)
     {
@@ -316,160 +231,117 @@ namespace Anki {
       return;
     }
 
-    void CameraService::CameraSetCaptureFormat(Vision::ImageEncoding format)
+
+    void CameraService::InitCamera()
     {
       return;
     }
 
-    void CameraService::CameraSetCaptureSnapshot(bool start)
-    {
-      return;
-    }
-
-    Result CameraService::InitCamera()
-    {
-      return RESULT_OK;
-    }
-
-    Result CameraService::DeleteCamera()
-    {
-      return RESULT_OK;
-    }
-
-    void CameraService::UnpauseForCameraSetting()
-    {
-      return;
-    }
-    
-    void CameraService::PauseCamera(bool pause)
-    {
-      if(pause)
-      {
-        headCam_->disable();
-      }
-      else
-      {
-        headCam_->enable(VISION_TIME_STEP);
-      }
-      
-      // Technically only need to skip the next image when unpausing but since
-      // you can't get images while paused it does not matter that this is being set
-      // when pausing
-      _skipNextImage = true;
-    }
-
-    // Starts camera frame synchronization.
-    // Returns true and popuates buffer if we have an available image from at or before atTimestamp_ms.
-    bool CameraService::CameraGetFrame(u32 atTimestamp_ms, Vision::ImageBuffer& buffer)
+    // Starts camera frame synchronization
+    bool CameraService::CameraGetFrame(u8*& frame, u32& imageID, TimeStamp_t& imageCaptureSystemTimestamp_ms)
     {
       if (nullptr == headCam_) {
         return false;
       }
 
-      if (_skipNextImage) {
-        _skipNextImage = false;
-        return false;
-      }
-      
       const TimeStamp_t currentTime_ms = GetTimeStamp();
 
-      // This computation is based on Cyberbotics support's explanation for how to compute
+      // This computation is based on Cyberbotics support's explaination for how to compute
       // the actual capture time of the current available image from the simulated camera
+      // *except* I seem to need the extra "- VISION_TIME_STEP" for some reason.
+      // (The available frame is still one frame behind? I.e. we are just *about* to capture
+      //  the next one?)
       const TimeStamp_t currentImageTime_ms = (std::floor((currentTime_ms-cameraStartTime_ms_)/VISION_TIME_STEP) * VISION_TIME_STEP
-                                               + cameraStartTime_ms_);
+                                               + cameraStartTime_ms_ - VISION_TIME_STEP);
 
-      // Do we have a 'new' image from webots?
-      if(lastImageCapturedTime_ms_ != currentImageTime_ms)
+      // Have we already sent the currently-available image?
+      if(lastImageCapturedTime_ms_ == currentImageTime_ms)
       {
-        // A 'new' image is available. Push the current webots image into the buffer of available webots images
-        auto& thisImage = webotsImageBuffer_.push_back();
-        thisImage.first = currentImageTime_ms;
-        auto& imageVec = thisImage.second;
-        imageVec.resize(CAMERA_SENSOR_RESOLUTION_WIDTH * CAMERA_SENSOR_RESOLUTION_HEIGHT * 3);
-        
-        const u8* image = headCam_->getImage();
-        DEV_ASSERT(image != NULL, "cameraService_mac.CameraGetFrame.NullImagePointer");
-        DEV_ASSERT_MSG(headCam_->getWidth() == headCamInfo_.ncols,
-                       "cameraService_mac.CameraGetFrame.MismatchedImageWidths",
-                       "HeadCamInfo:%d HeadCamWidth:%d", headCamInfo_.ncols, headCam_->getWidth());
-        
-        // Copy from the webots 'image' into imageVec, converting from BGRA to RGB along the way
-        u8* frame = imageVec.data();
-        u8* pixel = frame;
-        for (s32 i=0 ; i < headCamInfo_.nrows * headCamInfo_.ncols; i++) {
-          pixel[2] = *image++; // blue
-          pixel[1] = *image++; // green
-          pixel[0] = *image++; // red
-          ++image;             // don't need alpha channel, so skip it
+        return false;
+      }
+
+      imageBuffer_.resize(headCamInfo_.nrows * headCamInfo_.ncols * 3);
+      frame = imageBuffer_.data();
+
+      const u8* image = headCam_->getImage();
+
+      DEV_ASSERT(image != NULL, "cameraService_mac.CameraGetFrame.NullImagePointer");
+      DEV_ASSERT_MSG(headCam_->getWidth() == headCamInfo_.ncols,
+                     "cameraService_mac.CameraGetFrame.MismatchedImageWidths",
+                     "HeadCamInfo:%d HeadCamWidth:%d", headCamInfo_.ncols, headCam_->getWidth());
+
+      u8* pixel = frame;
+      for (s32 y=0; y < headCamInfo_.nrows; y++) {
+        for (s32 x=0; x < headCamInfo_.ncols; x++) {
+          pixel[0] = webots::Camera::imageGetRed(image,   headCamInfo_.ncols, x, y);
+          pixel[1] = webots::Camera::imageGetGreen(image, headCamInfo_.ncols, x, y);
+          pixel[2] = webots::Camera::imageGetBlue(image,  headCamInfo_.ncols, x, y);
           pixel+=3;
         }
-        
-        if (kUseLensDistortion)
+      }
+
+      if (kUseLensDistortion)
+      {
+        // Apply radial/lens distortion. Note that cv::remap uses in inverse lookup to find where the pixels in
+        // the output (distorted) image came from in the source. So we have to compute the inverse distortion here.
+        // We do that using cv::undistortPoints to create the necessary x/y maps for remap:
+        static cv::Mat_<f32> x_undistorted, y_undistorted;
+        if(x_undistorted.empty())
         {
-          ApplyLensDistortion(frame, headCamInfo_);
-        }
+          // Compute distortion maps on first use
+          std::vector<cv::Point2f> points;
+          points.reserve(headCamInfo_.nrows * headCamInfo_.ncols);
 
-        if (BLUR_CAPTURED_IMAGES)
-        {
-          // Add some blur to simulated images
-          cv::Mat cvImg(headCamInfo_.nrows, headCamInfo_.ncols, CV_8UC3, frame);
-          cv::GaussianBlur(cvImg, cvImg, cv::Size(0,0), 0.75f);
+          for (s32 i=0; i < headCamInfo_.nrows; i++) {
+            for (s32 j=0; j < headCamInfo_.ncols; j++) {
+              points.emplace_back(j,i);
+            }
+          }
+
+          const std::vector<f32> distCoeffs{
+            kRadialDistCoeff1, kRadialDistCoeff2, kTangentialDistCoeff1, kTangentialDistCoeff2, kRadialDistCoeff3
+          };
+          const cv::Matx<f32,3,3> cameraMatrix(headCamInfo_.focalLength_x, 0.f, headCamInfo_.center_x,
+                                               0.f, headCamInfo_.focalLength_y, headCamInfo_.center_y,
+                                               0.f, 0.f, 1.f);
+
+          cv::undistortPoints(points, points, cameraMatrix, distCoeffs, cv::noArray(), cameraMatrix);
+
+          x_undistorted.create(headCamInfo_.nrows, headCamInfo_.ncols);
+          y_undistorted.create(headCamInfo_.nrows, headCamInfo_.ncols);
+          std::vector<cv::Point2f>::const_iterator pointIter = points.begin();
+          for (s32 i=0; i < headCamInfo_.nrows; i++)
+          {
+            f32* x_i = x_undistorted.ptr<f32>(i);
+            f32* y_i = y_undistorted.ptr<f32>(i);
+
+            for (s32 j=0; j < headCamInfo_.ncols; j++)
+            {
+              x_i[j] = pointIter->x;
+              y_i[j] = pointIter->y;
+              ++pointIter;
+            }
+          }
         }
-        
-        // Mark that we've buffered this image for the current time
-        lastImageCapturedTime_ms_ = currentImageTime_ms;
+        cv::Mat  cvFrame(headCamInfo_.nrows, headCamInfo_.ncols, CV_8UC3, frame);
+        cv::remap(cvFrame, cvFrame, x_undistorted, y_undistorted, CV_INTER_LINEAR);
       }
 
-      if (webotsImageBuffer_.empty()) {
-        // no image available
-        return false;
-      }
-      
-      const auto earliestImageTimestamp = webotsImageBuffer_.front().first;
-      if ((atTimestamp_ms != 0) &&
-          (atTimestamp_ms < earliestImageTimestamp)) {
-        return false;
-      }
-      
-      u32 outputTimestamp = 0;
-      // If atTimestamp_ms is zero, this indicates that the caller simply wants the latest available image
-      if (atTimestamp_ms == 0) {
-        if (!webotsImageBuffer_.empty()) {
-          outputTimestamp = webotsImageBuffer_.back().first;
-          imageBuffer_.swap(webotsImageBuffer_.back().second);
-          // Clear the buffer to prevent the same image from being used twice
-          webotsImageBuffer_.clear();
-        }
-      } else {
-        // Find the image in the webots image buffer that is before or equal to atTimestamp_ms, popping older images
-        // from the buffer along the way.
-        while (!webotsImageBuffer_.empty() &&
-               webotsImageBuffer_.front().first <= atTimestamp_ms) {
-          outputTimestamp = webotsImageBuffer_.front().first;
-          imageBuffer_.swap(webotsImageBuffer_.front().second);
-          webotsImageBuffer_.pop_front();
-        }
+      if (BLUR_CAPTURED_IMAGES)
+      {
+        // Add some blur to simulated images
+        cv::Mat cvImg(headCamInfo_.nrows, headCamInfo_.ncols, CV_8UC3, frame);
+        cv::GaussianBlur(cvImg, cvImg, cv::Size(0,0), 0.75f);
       }
 
-      // Wrap imageBuffer_ in an ImageRGB so we can easily resize it
-      // On physical robot images are captured at 1280x720, on simulated robot
-      // images are captured at 640x360 so we need to scale the image by 2
-      // to make it match the physical robot
-      rgb_ = Vision::ImageRGB(headCamInfo_.nrows,
-                              headCamInfo_.ncols,
-                              imageBuffer_.data());
+      imageCaptureSystemTimestamp_ms = currentImageTime_ms;
 
-      rgb_.Resize(2.f, Vision::ResizeMethod::NearestNeighbor);
-
-      buffer = Vision::ImageBuffer(const_cast<u8*>(reinterpret_cast<const u8*>(rgb_.GetDataPointer())),
-                                   CAMERA_SENSOR_RESOLUTION_HEIGHT,
-                                   CAMERA_SENSOR_RESOLUTION_WIDTH,
-                                   Vision::ImageEncoding::RawRGB,
-                                   outputTimestamp,
-                                   _imageFrameID);
-
+      imageID = _imageFrameID;
       _imageFrameID++;
-            
+
+      // Mark that we've already sent the image for the current time
+      lastImageCapturedTime_ms_ = currentImageTime_ms;
+
       return true;
 
     } // CameraGetFrame()
@@ -479,5 +351,5 @@ namespace Anki {
       // no-op
       return true;
     }
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki

@@ -4,196 +4,195 @@
 <head>
   <meta charset="utf-8">
 
-  <title>Cozmo Web Viz</title>
+  <title>Victor Veb Viz</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-  <script src="/p5.min.js"></script> <!--this has a v0.6.0 bugfix so isn't CDN-->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.16/js/jquery.dataTables.min.js"></script>
-  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/processing.js/1.6.6/processing.min.js"></script>
+
   <script>
     // add new modules here, which also become the tab
     // names. The (case-insensitive) key should match
     // the moduleName used when your c++ code passes
     // data to the webservice.
-    var modules8888 = {
-      SoundReactions : 'webVizModules/micDataEngine.js',
+    var modules8888 = { 
       Behaviors : 'webVizModules/behaviors.js',
       Intents : 'webVizModules/intents.js',
       CloudIntents : 'webVizModules/cloud.js',
       BehaviorConds : 'webVizModules/behaviorConditions.js',
       VisionScheduleMediator : 'webVizModules/visionScheduleMediator.js',
-      ObservedObjects : 'webVizModules/observedObjects.js',
-      Mood : 'webVizModules/mood.js',
-      Cpu : 'webVizModules/cpu.js',
-      CpuProfile : 'webVizModules/cpuprofile.js',
-      NavMap : 'webVizModules/navMap.js',
-      Cubes : 'webVizModules/cubes.js',
-      Habitat : 'webVizModules/habitat.js',
-      // Uncomment if HeldInPalm status module is needed
-      // HeldInPalm: 'webVizModules/heldInPalm.js',
-      Touch : 'webVizModules/touch.js',
-      Power : 'webVizModules/power.js',
-      AnimationEngine: 'webVizModules/animationEngine.js',
-      Sleeping: 'webVizModules/sleeping.js',
-      BeatDetector: 'webVizModules/beatDetector.js',
-      IMU: 'webVizModules/imu.js',
-      Features: 'webVizModules/features.js',
-      SocialPresence: 'webVizModules/socialPresence.js'
+      ObservedObjects : 'webVizModules/observedObjects.js'
     }
     var modules8889 = {
       MicData : 'webVizModules/micData.js',
-      Alexa: 'webVizModules/alexa.js',
-      Animations: 'webVizModules/animations.js',
-      AudioEvents: 'webVizModules/audioEvents.js',
-      CpuProfile : 'webVizModules/cpuprofile.js',
-      SpeechRecognizerSys : 'webVizModules/speechRecognizerSys.js'
+      Animations: 'webVizModules/animations.js'
     }
   </script>
-
-  <!-- for datatables -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.16/css/jquery.dataTables.min.css">
 
   <style>
     *, *:before, *:after {
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      box-sizing:border-box;
+      -moz-box-sizing:border-box;
     }
-  
+
     body {
-      font: 14px 'Open Sans', sans-serif;
-      background-color: #004a8f;
-      color: #ffffff;
+      font: 12px sans-serif;
     }
-  
+
     #container,
     #popouts {
       width: 800px;
       margin: 20px auto;
+
     }
-  
+
     ul.tabs {
+      -ms-box-orient: horizontal;
+      display: -webkit-box;
+      display: -moz-box;
+      display: -ms-flexbox;
+      display: -moz-flex;
+      display: -webkit-flex;
       display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      width: 100%;
+      -webkit-flex-wrap: wrap-reverse;
+      flex-wrap: wrap-reverse;
+      align-items: stretch;
+      width:100%;
+      position: relative;
+      text-align: center;
       list-style: none;
       margin: 0;
-      padding: 0 6px;
-      border-bottom: 1px solid #49004d;
+      padding: 0px 6px;
+      line-height: 24px;
+      overflow: hidden;
     }
-  
-    ul.tabs li {
-      padding: 10px 15px;
-      font-size: 14px;
-      cursor: pointer;
-      margin: 0 4px;
-      background-color: #49004d;
-      color: #ffffff;
-      border-top-left-radius: 4px;
-      border-top-right-radius: 4px;
-      border: 1px solid #333;
-      border-bottom: none;
-      transition: background-color 0.3s;
+    ul.tabs:after {
+      position: absolute;
+      content: "";
+      width: 100%;
+      bottom: 0;
+      left: 0;
+      border-bottom: 1px solid #AAA;
       z-index: 1;
     }
-  
-    ul.tabs li:hover {
-      background-color: #356bac;
+    ul.tabs li {
+      padding: 10px 15px;
+      font-size: 12px; 
+      text-align: center;
+      background: #aaa;
+      cursor: pointer;    
+      flex: 0 1 auto;
+
+      position: relative;
+      margin: 0 8px -1px 8px;
+      padding: 0 13px;
+      border: 1px solid #AAA;
+      border-width: 1px 0px 1px 0px;
+      background-color: #d9d9d9;
+      background-image: linear-gradient(to bottom, #d9d9d9 50%, #bcbcbc 100%);
+      box-shadow: inset 0 1px 0 #FFF;
+      text-shadow: 0 1px #FFF;
+      z-index: 0;
     }
-  
+    ul.tabs li:before,
+    ul.tabs li:after {
+      position: absolute;
+      bottom: -1px;
+      width: 15px;
+      height: 26px;
+      content: " ";
+      border: 1px solid #AAA;
+      background: linear-gradient(to bottom, #d9d9d9 50%, #bcbcbc 100%);
+      z-index: 3;
+    }
+    ul.tabs li:before {
+      left: -10px;
+      border-right: none;
+      border-top-left-radius: 6px;
+      transform: skew(-20deg);
+      box-shadow: -2px 0px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+    ul.tabs li:after {
+      right: -10px;
+      border-left: none;
+      border-top-right-radius: 6px;
+      transform: skew(20deg);
+      box-shadow: 2px 0px 3px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+
     ul.tabs li.current {
-      background-color: #121212;
-      border-bottom: 1px solid #121212;
+      background: #ededed;
+      color: #000;
       z-index: 2;
+      border-bottom-color: #ededed;
     }
-  
+
+    ul.tabs li.current:before,
+    ul.tabs li.current:after {
+      background: #ededed;
+      border-bottom-color: #ededed;
+    }
+
     .tab-content {
-      background-color: #356bac;
+      background: #ededed;
       padding: 15px;
-      border: 1px solid #333;
-      border-top: none;
-      color: #ffffff;
-      border-radius: 0 4px 4px 4px;
+      border: 1px solid #AAA;
+      border-top:none;
+      position:relative;
     }
-  
     .tab-content:not(.poppedOut),
     .tab-content.tab-placeholder {
       display: none;
     }
-  
+
     .tab-content.current {
-      display: block;
+      display: inherit;
     }
-  
     .tab-placeholder {
-      height: 10px;
+      height:10px;
     }
-  
+
     #tab-overview p {
-      padding: 10px;
+      padding:10px;
     }
-  
     #tab-overview h3 {
-      padding: 10px;
+      padding:10px;
     }
-  
+
     #status {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      font-size: 14px;
-      color: #f44336;
+      position:fixed;
+      bottom:10px;
+      right:10px;
+      font-size:20px;
+      color:red;
     }
-  
-    #linkToHome {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      font-size: 14px;
-      color: #ffffff;
-    }
-  
+
     .popoutIcon,
     .nowItsAPinIcon {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      background-image: url(images/webVizPins.png);
-      cursor: pointer;
-      filter: invert(100%);
+      position:absolute;
+      top:0px;
+      right:0px;
+      width:16px;
+      height:16px;
+      background-image:url(images/webVizPins.png);
+      cursor:pointer;
     }
-  
     .nowItsAPinIcon {
-      background-position: -16px 0;
+      background-position: -16px 0px;
     }
-  
+
     #popouts {
       margin-top: 50px;
     }
-  
     #popouts .tab-content {
-      border-top: 1px solid #9d0080;
-      margin-bottom: 20px;
+      border-top: 1px solid #AAA;
+      margin-bottom:20px;
     }
-  
-    #devDataDump {
-      overflow-x: scroll;
-      overflow-y: scroll;
-      border: 1px solid #333;
-      padding: 10px;
-      margin: 10px;
-      font-family: monospace;
-      background-color: #1e1e1e;
-      color: #ffffff;
-    }
+
+    
   </style>
-  
-  
 
   <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
@@ -203,40 +202,18 @@
 <body>
 
   <div id="status">Not connected to robot</div>
-  <a id="linkToHome" href="/">Home</a>
   <div id="container">
 
     <ul class="tabs">
-      <style>
-        .tabs .tab-link {
-    background-color: #356bac !important; /* Purple */
-    color: white !important; /* White text for contrast */
-    border: 1px solid #003d66; /* Darker purple border */
-    padding: 10px 15px;
-    border-radius: 5px;
-    text-align: center;
-    cursor: pointer;
-    display: inline-block;
-}
-
-.tabs .tab-link.current {
-    background-color: #0085cc !important; 
-}
-
-      </style>
       <li class="tab-link current" data-tab="tab-overview">Overview</li>
     </ul>
 
     <div id="tab-overview" class="tab-content current">
-      <p>This page will display data "pushed" from Viccy engine to multiple drawing modules.</p>
+      <p>This page will display data "pushed" from Victor engine to multiple drawing modules.</p>
       <p>Each tab contains its own module. Open the tab to subscribe to the data source for that module.</p>
       <p>To add new modules, start with the template file module.js.template.</p>
-      <p><b>Are you always disconnected from the robot? Not seeing new tabs or new functionality? In Chrome, hit Command + Shift + R to re-download all the assets for this site.</b></p>
-
-      <div id="devDataDump" style="display:none;">
-        <div>{</div>
-        <div>}</div>
-      </div>
+      <p>Are you not seeing new tabs or new functionality? In Chrome, hit Command + Option + J,
+         then right click the page refresh button. Select "Empty cache and hard reload"</p>
     </div>
 
     
@@ -249,8 +226,6 @@
   <script>
 
     var modules;
-
-    var fakeData;
 
     var kUpdatePeriod_ms = 200; // todo: maybe a module should request its period?
 
@@ -348,12 +323,6 @@
           }
         
           modules[moduleName].init($('#' + tab_id)[0]);
-
-          if( typeof fakeData !== 'undefined' && typeof fakeData[moduleName] !== 'undefined' ) {
-            fakeData[moduleName].forEach(function(entry){
-              onNewData(moduleName, entry);
-            });
-          }
         }
       });
       $('.popoutIcon').click(function(){
@@ -390,35 +359,13 @@
       }, dt);
     }
 
-    var hasShownAlert = false;
     var onNewData = function(moduleName, data) {
       if( typeof modules[moduleName] !== 'undefined' ) {
         var elem = $('#tab-' + moduleName)[0];
-        try {
-          modules[moduleName].onData(data, elem);
-        } catch(err) {
-          console.log(err);
-          if( !hasShownAlert ) {
-            alert('The module ' + moduleName + ' has an error. Displayed results may be invalid');
-            hasShownAlert = true;
-          }
-        }
-        if( modules[moduleName].devShouldDumpData ) {
-          $('#devDataDump').show();
-          var moduleData = $('#devDataDump').find('div[data-tab="' + moduleName + '"]');
-          var container;
-          if( moduleData.length == 0 ) {
-            container = $('<div data-tab="' + moduleName + '">"' + moduleName + '": [</div>').insertBefore('#devDataDump div:last-child');
-          } else {
-            container = $(moduleData[0]);
-            container.text( container.text().slice(0,-1) + ', ' ); // prepare by removing trailing "]" and adding ", "
-          }
-          container.text( container.text() + JSON.stringify(data) + ']' ); 
-        }
+        modules[moduleName].onData(data, elem);
       }
     }
 
-    var autoOpenTabRef = "";
     var socket;
     var subscribedModules = [];
     function setupSocket() {
@@ -430,11 +377,7 @@
       socket = new WebSocket(uri);
       socket.onopen = function(){
         // notify that we've connected
-        $('#status').text('Connected').css('color','limegreen');
-        if (autoOpenTabRef !== "") {
-          console.log('auto navigating to ' + autoOpenTabRef);
-          $('.tab-link[data-tab=' + autoOpenTabRef + ']').trigger('click');
-        }
+        $('#status').text('Connected').css('color','black');
       }
       socket.onmessage = function(msg){
         var jsonData = JSON.parse(msg.data);
@@ -475,26 +418,6 @@
       var payload = {"type": "data", "module": moduleName.toLowerCase(), "data": data};
       socket.send( JSON.stringify(payload) );
     }
-    var getPortLink = function(port) {
-      return 'http://' + window.location.hostname + ':' + port + window.location.pathname;
-    }
-    var getDevData = function() {
-      var url = 'devData.json';
-      $.getJSON( url, function( data ) {
-        // add a warning about fake data
-        $('#tab-overview p:first-child').html( '<b>USING FAKE DATA!</b> remember to remove ' + url + ' when dev work is done' );
-        fakeData = data;
-      });
-    }
-    function parseQuery(queryString) {
-      var query = {};
-      var pairs = (queryString[0] === '?' ? queryString.substr(1) : queryString).split('&');
-      for (var i = 0; i < pairs.length; i++) {
-        var pair = pairs[i].split('=');
-        query[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1] || '');
-      }
-      return query;
-    }
 
     var modulesContexts = {};
     var moduleMethods = {}; // global passed to modules
@@ -505,9 +428,9 @@
       var missingTabsStr = '<h3>Looking for ';
       if( location.port == 8889 ) {
         modules = modules8889;
-        missingTabsStr += Object.keys(modules8888).join(' or ') + '? Change the port to <a href="' + getPortLink(8888) + '">8888</a></h3>';
+        missingTabsStr += Object.keys(modules8888).join(' or ') + '? Change the port to 8888</h3>';
       } else {
-        missingTabsStr += Object.keys(modules8889).join(' or ') + '? Change the port to <a href="' + getPortLink(8889) + '">8889</a></h3>';
+        missingTabsStr += Object.keys(modules8889).join(' or ') + '? Change the port to 8889</h3>';
       } 
       $('#tab-overview').append( missingTabsStr );
 
@@ -577,26 +500,6 @@
           setupSocket();
 
           startUpdateLoop(kUpdatePeriod_ms);
-
-          getDevData();
-          
-          // See if url had specification of which tab to auto-navigate to
-          autoOpenTabRef = "";
-          var fullUrl = document.URL;
-          var index = fullUrl.indexOf('?');
-          if (index >= 0) {
-            var queryPairs = parseQuery(fullUrl.substring(index + 1));
-            for (var key in queryPairs) {
-              var value = queryPairs[key];
-              if (key === 'tab') {
-                // Save the tab reference, so when the socket finishes
-                // connecting, we can auto-navigate to that tab
-                autoOpenTabRef = 'tab-' + value;
-                break;
-              }
-            }
-          }
- 
         } else {
           // increment and continue
           ++moduleIndex;

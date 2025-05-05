@@ -1,5 +1,4 @@
 #include "messages.h"
-#include "anki/cozmo/robot/cozmoBot.h"
 #include "anki/cozmo/robot/hal.h"
 #include <math.h>
 
@@ -30,30 +29,38 @@
 #define SEND_TEXT_REDIRECT_TO_STDOUT 0
 
 namespace Anki {
-  namespace Vector {
+  namespace Cozmo {
     namespace Messages {
 
       namespace {
 
+        
+        constexpr auto IS_MOVING = EnumToUnderlyingType(RobotStatusFlag::IS_MOVING);
+        constexpr auto IS_CARRYING_BLOCK = EnumToUnderlyingType(RobotStatusFlag::IS_CARRYING_BLOCK);
+        constexpr auto IS_PICKING_OR_PLACING = EnumToUnderlyingType(RobotStatusFlag::IS_PICKING_OR_PLACING);
+        constexpr auto IS_BUTTON_PRESSED = EnumToUnderlyingType(RobotStatusFlag::IS_BUTTON_PRESSED);
+        constexpr auto IS_PICKED_UP = EnumToUnderlyingType(RobotStatusFlag::IS_PICKED_UP);
+        constexpr auto IS_FALLING = EnumToUnderlyingType(RobotStatusFlag::IS_FALLING);
+        constexpr auto IS_PATHING = EnumToUnderlyingType(RobotStatusFlag::IS_PATHING);
+        constexpr auto LIFT_IN_POS = EnumToUnderlyingType(RobotStatusFlag::LIFT_IN_POS);
+        constexpr auto HEAD_IN_POS = EnumToUnderlyingType(RobotStatusFlag::HEAD_IN_POS);
+        constexpr auto IS_ON_CHARGER = EnumToUnderlyingType(RobotStatusFlag::IS_ON_CHARGER);
+        constexpr auto IS_CHARGING = EnumToUnderlyingType(RobotStatusFlag::IS_CHARGING);
+        constexpr auto CLIFF_DETECTED = EnumToUnderlyingType(RobotStatusFlag::CLIFF_DETECTED);
+        constexpr auto ARE_WHEELS_MOVING = EnumToUnderlyingType(RobotStatusFlag::ARE_WHEELS_MOVING);
+        
         u8 pktBuffer_[2048];
 
         static RobotState robotState_;
 
-        // Flag for receipt of sync message
-        bool syncRobotReceived_ = false;
-        bool syncRobotAckSent_ = false;
+        // Flag for receipt of Init message
+        bool initReceived_ = false;
+        u8 ticsSinceInitReceived_ = 0;
+        bool syncTimeAckSent_ = false;
 
 #ifdef SIMULATOR
         bool isForcedDelocalizing_ = false;
 #endif
-
-        // For only sending robot state messages every STATE_MESSAGE_FREQUENCY
-        // times through the main loop
-        u32 robotStateMessageCounter_ = 0;
-        bool calmModeEnabledByEngine_ = false;
-        bool calmMode_ = false;
-        TimeStamp_t timeToEnableCalmMode_ms_ = 0;
-
       } // private namespace
 
 // #pragma mark --- Messages Method Implementations ---
@@ -86,90 +93,51 @@ namespace Anki {
         robotState_.pose.z = 0;
         robotState_.pose.angle = Localization::GetCurrPose_angle().ToFloat();
         robotState_.pose.pitch_angle = IMUFilter::GetPitch();
-        robotState_.pose.roll_angle = IMUFilter::GetRoll();
         WheelController::GetFilteredWheelSpeeds(robotState_.lwheel_speed_mmps, robotState_.rwheel_speed_mmps);
         robotState_.headAngle  = HeadController::GetAngleRad();
         robotState_.liftAngle  = LiftController::GetAngleRad();
 
         HAL::IMU_DataStructure imuData = IMUFilter::GetLatestRawData();
-        robotState_.accel.x = imuData.accel[0];
-        robotState_.accel.y = imuData.accel[1];
-        robotState_.accel.z = imuData.accel[2];
+        robotState_.accel.x = imuData.acc_x;
+        robotState_.accel.y = imuData.acc_y;
+        robotState_.accel.z = imuData.acc_z;
         robotState_.gyro.x = IMUFilter::GetBiasCorrectedGyroData()[0];
         robotState_.gyro.y = IMUFilter::GetBiasCorrectedGyroData()[1];
         robotState_.gyro.z = IMUFilter::GetBiasCorrectedGyroData()[2];
-        
-        auto& imuDataBuffer = IMUFilter::GetImuDataBuffer();
-        for (int i=0 ; i < IMUConstants::IMU_FRAMES_PER_ROBOT_STATE ; i++) {
-          if (!imuDataBuffer.empty()) {
-            robotState_.imuData[i] = imuDataBuffer.front();
-            imuDataBuffer.pop_front();
-          } else {
-            static IMUDataFrame invalidDataFrame{0, {0, 0, 0}};
-            robotState_.imuData[i] = invalidDataFrame;
-          }
-        }
 
         for (int i=0 ; i < HAL::CLIFF_COUNT ; i++) {
           robotState_.cliffDataRaw[i] = ProxSensors::GetCliffValue(i);
         }
-        
         robotState_.proxData = ProxSensors::GetProxData();
-
-        robotState_.backpackTouchSensorRaw = HAL::GetButtonState(HAL::BUTTON_CAPACITIVE);
-
-        robotState_.cliffDetectedFlags = ProxSensors::GetCliffDetectedFlags();
         
-        robotState_.whiteDetectedFlags = ProxSensors::GetWhiteDetectedFlags();
-
+        robotState_.backpackTouchSensorRaw = HAL::GetButtonState(HAL::BUTTON_CAPACITIVE);
+        
         robotState_.currPathSegment = PathFollower::GetCurrPathSegment();
 
-        robotState_.batteryVoltage = HAL::BatteryGetVoltage();
-        robotState_.chargerVoltage = HAL::ChargerGetVoltage();
-        robotState_.battTemp_C = HAL::BatteryGetTemperature_C();
-
         robotState_.status = 0;
-        #define SET_STATUS_BIT(expr, bit) robotState_.status |= ((expr) ? EnumToUnderlyingType(RobotStatusFlag::bit) : 0)
-        const bool areWheelsMoving = WheelController::AreWheelsMoving() || 
-                                     SteeringController::GetMode() == SteeringController::SM_POINT_TURN;
-        const bool isMoving        = HeadController::IsMoving() || LiftController::IsMoving() || areWheelsMoving;
-        SET_STATUS_BIT(areWheelsMoving,                             ARE_WHEELS_MOVING);
-        SET_STATUS_BIT(isMoving,                                    IS_MOVING);
-        SET_STATUS_BIT(PickAndPlaceController::IsCarryingBlock(),   IS_CARRYING_BLOCK);
-        SET_STATUS_BIT(PickAndPlaceController::IsBusy(),            IS_PICKING_OR_PLACING);
-        SET_STATUS_BIT(IMUFilter::IsPickedUp(),                     IS_PICKED_UP);
-        SET_STATUS_BIT(IMUFilter::IsBeingHeld(),                    IS_BEING_HELD);
-        SET_STATUS_BIT(IMUFilter::IsMotionDetected(),               IS_MOTION_DETECTED);
-        SET_STATUS_BIT(HAL::GetButtonState(HAL::BUTTON_POWER) > 0,  IS_BUTTON_PRESSED);
-        SET_STATUS_BIT(PathFollower::IsTraversingPath(),            IS_PATHING);
-        SET_STATUS_BIT(LiftController::IsInPosition(),              LIFT_IN_POS);
-        SET_STATUS_BIT(HeadController::IsInPosition(),              HEAD_IN_POS);
-        SET_STATUS_BIT(calmMode_,                                   CALM_POWER_MODE);
-        SET_STATUS_BIT(HAL::BatteryIsDisconnected(),                IS_BATTERY_DISCONNECTED);
-        SET_STATUS_BIT(HAL::BatteryIsOnCharger(),                   IS_ON_CHARGER);
-        SET_STATUS_BIT(HAL::BatteryIsCharging(),                    IS_CHARGING);
-        SET_STATUS_BIT(HAL::BatteryIsOverheated(),                  IS_BATTERY_OVERHEATED);
-        SET_STATUS_BIT(HAL::BatteryIsLow(),                         IS_BATTERY_LOW);
-        SET_STATUS_BIT(HAL::IsShutdownImminent(),                   IS_SHUTDOWN_IMMINENT);
-        SET_STATUS_BIT(ProxSensors::IsAnyCliffDetected(),           CLIFF_DETECTED);
-        SET_STATUS_BIT(IMUFilter::IsFalling(),                      IS_FALLING);
-        SET_STATUS_BIT(HAL::AreEncodersDisabled(),                  ENCODERS_DISABLED);
-        SET_STATUS_BIT(HeadController::IsEncoderInvalid(),          ENCODER_HEAD_INVALID);
-        SET_STATUS_BIT(LiftController::IsEncoderInvalid(),          ENCODER_LIFT_INVALID);
+        // TODO: Make this a parameters somewhere?
+        robotState_.status |= (WheelController::AreWheelsMoving() ||
+                              SteeringController::GetMode() == SteeringController::SM_POINT_TURN ? ARE_WHEELS_MOVING : 0);
+        robotState_.status |= (HeadController::IsMoving() ||
+                               LiftController::IsMoving() ||
+                               (robotState_.status & ARE_WHEELS_MOVING) ? IS_MOVING : 0);
+        robotState_.status |= (PickAndPlaceController::IsCarryingBlock() ? IS_CARRYING_BLOCK : 0);
+        robotState_.status |= (PickAndPlaceController::IsBusy() ? IS_PICKING_OR_PLACING : 0);
+        robotState_.status |= (IMUFilter::IsPickedUp() ? IS_PICKED_UP : 0);
+        robotState_.status |= (HAL::GetButtonState(HAL::BUTTON_POWER) > 0 ? IS_BUTTON_PRESSED : 0 );
+        robotState_.status |= (PathFollower::IsTraversingPath() ? IS_PATHING : 0);
+        robotState_.status |= (LiftController::IsInPosition() ? LIFT_IN_POS : 0);
+        robotState_.status |= (HeadController::IsInPosition() ? HEAD_IN_POS : 0);
+        robotState_.status |= HAL::BatteryIsOnCharger() ? IS_ON_CHARGER : 0;
+        robotState_.status |= HAL::BatteryIsCharging() ? IS_CHARGING : 0;
+        robotState_.status |= ProxSensors::IsAnyCliffDetected() ? CLIFF_DETECTED : 0;
+        robotState_.status |= IMUFilter::IsFalling() ? IS_FALLING : 0;
 #ifdef  SIMULATOR
-        SET_STATUS_BIT(isForcedDelocalizing_,                       IS_PICKED_UP);
-#endif
-        #undef SET_STATUS_BIT
-
-
-        // Send state message
-        ++robotStateMessageCounter_;
-        const s32 messagePeriod = calmMode_ ? STATE_MESSAGE_FREQUENCY_CALM : STATE_MESSAGE_FREQUENCY;
-        if(robotStateMessageCounter_ >= messagePeriod) {
-          SendRobotStateMsg();
-          robotStateMessageCounter_ = 0;
+        if(isForcedDelocalizing_)
+        {
+          robotState_.status |= IS_PICKED_UP;
         }
-
+#endif
       }
 
       RobotState const& GetRobotStateMsg() {
@@ -179,41 +147,28 @@ namespace Anki {
 
 // #pragma --- Message Dispatch Functions ---
 
-      void Process_syncRobot(const RobotInterface::SyncRobot& msg)
+      void Process_syncTime(const RobotInterface::SyncTime& msg)
       {
-        AnkiInfo( "Messages.Process_syncRobot.Recvd", "");
+        AnkiInfo( "Messages.Process_syncTime.Recvd", "");
 
-        // Set SyncRobot received flag
+        // Set SyncTime received flag
         // Acknowledge in Update()
-        syncRobotReceived_ = true;
+        initReceived_ = true;
+        ticsSinceInitReceived_ = 0;
 
         // TODO: Compare message ID to robot ID as a handshake?
+
+        // Poor-man's time sync to basestation, for now.
+        HAL::SetTimeStamp(msg.syncTime);
+
+        // Set drive center offset
+        Localization::SetDriveCenterOffset(msg.driveCenterOffset);
 
         // Reset pose history and frameID to zero
         Localization::ResetPoseFrame();
 
-        AnkiInfo("watchdog_reset_count", "%d", HAL::GetWatchdogResetCounter());
+        AnkiEvent( "watchdog_reset_count", "%d", HAL::GetWatchdogResetCounter());
       } // ProcessRobotInit()
-
-
-      void Process_shutdown(const RobotInterface::Shutdown& msg)
-      {
-        HAL::Shutdown();
-      }
-
-      void Process_calmPowerMode(const RobotInterface::CalmPowerMode& msg)
-      {
-        // NOTE: This used to actually enable calm mode in syscon, but since "quiet" mode
-        //       was implemented in syscon where encoders are "off" when the motors are
-        //       not being driven leaving minimal difference between calm mode and active mode
-        //       in terms of battery life, this now only throttles RobotState messages being 
-        //       sent to engine since it still results in a 10+% reduction in CPU consumption.
-        //       Not going into syscon calm mode also means that motor calibrations are no 
-        //       longer necessary as a precaution when leaving calm mode.
-        AnkiInfo("Messages.Process_calmPowerMode.enable", "enable: %d", msg.enable);
-        calmModeEnabledByEngine_ = msg.enable;
-        calmMode_ = msg.enable;
-      }
 
       void Process_absLocalizationUpdate(const RobotInterface::AbsoluteLocalizationUpdate& msg)
       {
@@ -258,40 +213,29 @@ namespace Anki {
 
       void Update()
       {
-        // Send ACK of SyncRobot message when system is ready
-        if (!syncRobotAckSent_) {
-          if (syncRobotReceived_ &&
+        // Send syncTimeAck
+        if (!syncTimeAckSent_) {
+          // Make sure we wait some tics after receiving syncTime so that we're sure the
+          // timestamp from the body has propagated up.
+          if (initReceived_ && 
+              (++ticsSinceInitReceived_ > 3) && 
               IMUFilter::IsBiasFilterComplete() &&
               LiftController::IsCalibrated() &&
               HeadController::IsCalibrated()) {
-            RobotInterface::SyncRobotAck syncRobotAckMsg;
-            memcpy(&syncRobotAckMsg.sysconVersion, HAL::GetSysconVersionInfo(), 16);
-            while (RobotInterface::SendMessage(syncRobotAckMsg) == false);
-            syncRobotAckSent_ = true;
+            RobotInterface::SyncTimeAck syncTimeAckMsg;
+            while (RobotInterface::SendMessage(syncTimeAckMsg) == false);
+            syncTimeAckSent_ = true;
 
             // Send up gyro calibration
             // Since the bias is typically calibrate before the robot is even connected,
             // this is the time when the data can actually be sent up to engine.
-            AnkiInfo("Messages.Update.GyroCalibrated", "%f %f %f",
-                     RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[0]),
-                     RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[1]),
-                     RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[2]));
+            AnkiEvent( "Messages.Update.GyroCalibrated", "%f %f %f",
+                      RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[0]),
+                      RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[1]),
+                      RAD_TO_DEG_F32(IMUFilter::GetGyroBias()[2]));
           }
         }
 
-        // Temporarily unset calm mode when button is pressed so that 
-        // we can still go into pairing/debug screens
-        TimeStamp_t now_ms = HAL::GetTimeStamp();
-        static const u32 TEMP_CALM_MODE_DISABLE_TIME_MS = 1000;
-        if (calmModeEnabledByEngine_) {
-          if (HAL::GetButtonState(HAL::BUTTON_POWER)) {
-            calmMode_ = false;
-            timeToEnableCalmMode_ms_ = now_ms + TEMP_CALM_MODE_DISABLE_TIME_MS;
-          } else if (timeToEnableCalmMode_ms_ != 0 && timeToEnableCalmMode_ms_ < now_ms) {
-            calmMode_ = true;
-            timeToEnableCalmMode_ms_ = 0;
-          }
-        }
 
         // Process incoming messages
         u32 dataLen;
@@ -299,8 +243,8 @@ namespace Anki {
         // Each packet is a single message
         while((dataLen = HAL::RadioGetNextPacket(pktBuffer_)) > 0)
         {
-          Anki::Vector::RobotInterface::EngineToRobot msgBuf;
-
+          Anki::Cozmo::RobotInterface::EngineToRobot msgBuf;
+          
           // Copy into structured memory
           memcpy(msgBuf.GetBuffer(), pktBuffer_, dataLen);
           if (!msgBuf.IsValid())
@@ -313,7 +257,7 @@ namespace Anki {
           }
           else
           {
-            Anki::Vector::Messages::ProcessMessage(msgBuf);
+            Anki::Cozmo::Messages::ProcessMessage(msgBuf);
           }
         }
 
@@ -348,17 +292,15 @@ namespace Anki {
       }
 
       void Process_executePath(const RobotInterface::ExecutePath& msg) {
-        const bool result = PathFollower::StartPathTraversal(msg.pathID);
-        AnkiInfo( "Messages.Process_executePath.Result", "id=%d result=%d", msg.pathID, result);
+        AnkiInfo( "Messages.Process_executePath.StartingPath", "%d", msg.pathID);
+        PathFollower::StartPathTraversal(msg.pathID);
       }
 
       void Process_dockWithObject(const DockWithObject& msg)
       {
-        AnkiInfo( "Messages.Process_dockWithObject.Recvd", "action %hhu, dockMethod %hhu, doLiftLoadCheck %d, backUpWhileLiftingCube %d, speed %f, accel %f, decel %f",
-                 msg.action, msg.dockingMethod, msg.doLiftLoadCheck, msg.backUpWhileLiftingCube, msg.speed_mmps, msg.accel_mmps2, msg.decel_mmps2);
+        AnkiInfo( "Messages.Process_dockWithObject.Recvd", "action %hhu, dockMethod %hhu, doLiftLoadCheck %d, speed %f, acccel %f, decel %f", 
+                 msg.action, msg.dockingMethod, msg.doLiftLoadCheck, msg.speed_mmps, msg.accel_mmps2, msg.decel_mmps2);
 
-        PickAndPlaceController::SetBackUpWhileLiftingCube(msg.backUpWhileLiftingCube);
-        
         DockingController::SetDockingMethod(msg.dockingMethod);
 
         // Currently passing in default values for rel_x, rel_y, and rel_angle
@@ -383,13 +325,12 @@ namespace Anki {
       }
 
       void Process_startMotorCalibration(const RobotInterface::StartMotorCalibration& msg) {
-        const bool autoStarted = false;
         if (msg.calibrateHead) {
-          HeadController::StartCalibrationRoutine(autoStarted, msg.reason);
+          HeadController::StartCalibrationRoutine();
         }
 
         if (msg.calibrateLift) {
-          LiftController::StartCalibrationRoutine(autoStarted, msg.reason);
+          LiftController::StartCalibrationRoutine();
         }
       }
 
@@ -424,31 +365,17 @@ namespace Anki {
 
       // Send ack of head motor action
       void AckMotorCommand(u8 actionID) {
-        if (actionID != 0) {
-          RobotInterface::MotorActionAck ack;
-          ack.actionID = actionID;
-          RobotInterface::SendMessage(ack);
-        }
+        RobotInterface::MotorActionAck ack;
+        ack.actionID = actionID;
+        RobotInterface::SendMessage(ack);
       }
-
+      
       void Process_liftHeight(const RobotInterface::SetLiftHeight& msg) {
         //AnkiInfo( "Messages.Process_liftHeight.Recvd", "height %f, maxSpeed %f, duration %f", msg.height_mm, msg.max_speed_rad_per_sec, msg.duration_sec);
         if (msg.duration_sec > 0) {
           LiftController::SetDesiredHeightByDuration(msg.height_mm, 0.1f, 0.1f, msg.duration_sec);
         } else {
           LiftController::SetDesiredHeight(msg.height_mm, msg.max_speed_rad_per_sec, msg.accel_rad_per_sec2);
-        }
-        AckMotorCommand(msg.actionID);
-      }
-
-      void Process_setLiftAngle(const RobotInterface::SetLiftAngle& msg) {
-        // AnkiInfo( "Messages.Process_liftAngle.Recvd", 
-        //           "height %f, maxSpeed %f, duration %f", 
-        //           msg.angle_rad, msg.max_speed_rad_per_sec, msg.duration_sec);
-        if (msg.duration_sec > 0) {
-          LiftController::SetDesiredAngleByDuration(msg.angle_rad, 0.1f, 0.1f, msg.duration_sec);
-        } else {
-          LiftController::SetDesiredAngle(msg.angle_rad, msg.max_speed_rad_per_sec, msg.accel_rad_per_sec2);
         }
         AckMotorCommand(msg.actionID);
       }
@@ -461,6 +388,10 @@ namespace Anki {
           HeadController::SetDesiredAngle(msg.angle_rad, msg.max_speed_rad_per_sec, msg.accel_rad_per_sec2);
         }
         AckMotorCommand(msg.actionID);
+      }
+
+      void Process_headAngleUpdate(const RobotInterface::HeadAngleUpdate& msg) {
+        HeadController::SetAngleRad(msg.newAngle);
       }
 
       void Process_setBodyAngle(const RobotInterface::SetBodyAngle& msg)
@@ -513,13 +444,6 @@ namespace Anki {
                                                     msg.backupDist_mm);
       }
 
-      void Process_playpenStart(const RobotInterface::PlaypenStart& msg) {
-      }
-
-      void Process_printBodyData(const RobotInterface::PrintBodyData& msg) {
-        HAL::PrintBodyData(msg.period_tics, msg.motors, msg.prox, msg.battery);
-      }
-
       void Process_setControllerGains(const RobotInterface::ControllerGains& msg) {
         switch (msg.controller)
         {
@@ -565,6 +489,11 @@ namespace Anki {
         DockingController::StopDocking();
       }
 
+      void Process_abortAnimation(const RobotInterface::AbortAnimation& msg)
+      {
+
+      }
+
       void Process_checkLiftLoad(const RobotInterface::CheckLiftLoad& msg)
       {
         LiftController::CheckForLoad();
@@ -599,10 +528,26 @@ namespace Anki {
         }
       }
 
-      void Process_robotStoppedAck(const RobotInterface::RobotStoppedAck& msg)
+      void Process_enableReadToolCodeMode(const RobotInterface::EnableReadToolCodeMode& msg)
       {
-        AnkiInfo("Messages.Process_robotStoppedAck", "");
-        SteeringController::Enable();
+        //AnkiDebug( "ReadToolCodeMode", "enabled: %d, liftPower: %f, headPower: %f", msg.enable, msg.liftPower, msg.headPower);
+        if (msg.enable) {
+          HeadController::Disable();
+          f32 p = CLIP(msg.headPower, -0.5f, 0.5f);
+          HAL::MotorSetPower(MotorID::MOTOR_HEAD, p);
+
+          LiftController::Disable();
+          p = CLIP(msg.liftPower, -0.5f, 0.5f);
+          HAL::MotorSetPower(MotorID::MOTOR_LIFT, p);
+
+        } else {
+
+          HAL::MotorSetPower(MotorID::MOTOR_HEAD, 0);
+          HeadController::Enable();
+
+          HAL::MotorSetPower(MotorID::MOTOR_LIFT, 0);
+          LiftController::Enable();
+        }
       }
 
       void Process_enableStopOnCliff(const RobotInterface::EnableStopOnCliff& msg)
@@ -610,31 +555,10 @@ namespace Anki {
         ProxSensors::EnableStopOnCliff(msg.enable);
       }
 
-      void Process_enableStopOnWhite(const RobotInterface::EnableStopOnWhite& msg)
-      {
-        ProxSensors::EnableStopOnWhite(msg.enable);
-      }
-      
       void Process_setCliffDetectThresholds(const SetCliffDetectThresholds& msg)
       {
         for (int i = 0 ; i < HAL::CLIFF_COUNT ; i++) {
           ProxSensors::SetCliffDetectThreshold(i, msg.thresholds[i]);
-        }
-      }
-      
-      void Process_setWhiteDetectThresholds(const SetWhiteDetectThresholds& msg)
-      {
-        for (int i = 0 ; i < HAL::CLIFF_COUNT ; i++) {
-          ProxSensors::SetWhiteDetectThreshold(i, msg.whiteThresholds[i]);
-        }
-      }
-
-      void Process_cliffAlignToWhiteAction(const RobotInterface::CliffAlignToWhiteAction& msg)
-      {
-        if (msg.start) {
-          PickAndPlaceController::CliffAlignToWhite();
-        } else {
-          PickAndPlaceController::StopCliffAlignToWhite();
         }
       }
 
@@ -647,7 +571,6 @@ namespace Anki {
       {
         SteeringController::RecordHeading();
       }
-
       void Process_turnToRecordedHeading(RobotInterface::TurnToRecordedHeading const& msg)
       {
         SteeringController::ExecutePointTurnToRecordedHeading(DEG_TO_RAD_F32(msg.offset_deg),
@@ -658,28 +581,27 @@ namespace Anki {
                                                               msg.numHalfRevs,
                                                               msg.useShortestDir);
       }
-
       void Process_setBackpackLights(RobotInterface::SetBackpackLights const& msg)
       {
         BackpackLightController::SetParams(msg);
       }
+      
 
-      void Process_setSystemLight(RobotInterface::SetSystemLight const& msg)
+      void Process_getMfgInfo(const RobotInterface::GetManufacturingInfo& msg)
       {
-        BackpackLightController::SetParams(msg);
+        RobotInterface::SendMessage(RobotInterface::ManufacturingID());
       }
-
 
       void Process_setBackpackLayer(const RobotInterface::BackpackSetLayer& msg) {
         BackpackLightController::EnableLayer((BackpackLightLayer)msg.layer);
       }
-      
+
 // ----------- Send messages -----------------
 
       Result SendRobotStateMsg()
       {
         // Don't send robot state updates unless the init message was received
-        if (!syncRobotReceived_) {
+        if (!initReceived_) {
           return RESULT_FAIL;
         }
 
@@ -715,48 +637,14 @@ namespace Anki {
         return RobotInterface::SendMessage(m) ? RESULT_OK : RESULT_FAIL;
       }
 
-      Result SendMicDataFunction(const s16* latestMicData, uint32_t numSamples) 
+      Result SendMicDataFunction(const s16* latestMicData, uint32_t numSamples)
       {
-        static int chunkID = 0;
-        static const int numChannels = 4;
-        static const int samplesPerChunk = 80;
-        static const int samplesPerDeinterlacedChunk = 160;
-        static int16_t sampleBuffer[numChannels * samplesPerDeinterlacedChunk];
         RobotInterface::MicData micData{};
         micData.timestamp = HAL::GetTimeStamp();
         micData.robotStatusFlags = robotState_.status;
         micData.robotRotationAngle = robotState_.pose.angle;
-
-        /*
-        Deinterlace the audio before sending it to Engine/Anim. Coming into this method, we
-        have chunks of 80 samples each, but the data for 4 mics are interleaved;
-        
-            m0, m1, m2, m3, m0, m1, m2, m3....
-        
-        What we need is;
-
-            m0 (80x), m1 (80x), ....
-
-        Since the recipient doesn't process data any more frequently than every 10ms, we're
-        minimizing the message overhead by doing the deinterlacing here and sending the 10ms
-        message instead of 2 5ms messages.
-        */
-
-        int chunkOffset = chunkID * samplesPerChunk;
-        for (size_t channel=0; channel<numChannels; ++channel) {
-          for (size_t sample=0; sample<samplesPerChunk; ++sample) {
-            const auto sampleBufferIndex = channel*samplesPerDeinterlacedChunk + chunkOffset + sample;
-            const auto latestMicDataIndex = sample*numChannels + channel;
-            sampleBuffer[sampleBufferIndex] = latestMicData[latestMicDataIndex];
-          }
-        }
-
-        chunkID = chunkID ? 0 : 1;
-        if (chunkID == 0) {
-          memcpy(micData.data, sampleBuffer, numChannels * samplesPerDeinterlacedChunk * sizeof(s16));
-          return RobotInterface::SendMessage(micData) ? RESULT_OK : RESULT_FAIL;
-        }
-        return RESULT_OK;
+        std::copy(latestMicData, latestMicData + numSamples, micData.data);
+        return RobotInterface::SendMessage(micData) ? RESULT_OK : RESULT_FAIL;
       }
 
       Result SendMicDataMsgs()
@@ -770,13 +658,13 @@ namespace Anki {
 
       bool ReceivedInit()
       {
-        return syncRobotReceived_;
+        return initReceived_;
       }
 
       void ResetInit()
       {
-        syncRobotReceived_ = false;
-        syncRobotAckSent_ = false;
+        initReceived_ = false;
+        syncTimeAckSent_ = false;
       }
 
     } // namespace Messages
@@ -785,18 +673,19 @@ namespace Anki {
       bool RadioSendMessage(const void *buffer, const u16 size, const u8 msgID)
       {
         //Stuff msgID up front
-        size_t newSize = size + 1;
+        int newSize = size + 1;
         u8 buf[newSize];
-
+        
         memcpy(buf, &msgID, 1);
         memcpy(buf + 1, buffer, size);
-
+        
         //fprintf(stderr, "RadioSendMsg: %02x [%d]", msgID, newSize);
-
+        
         return HAL::RadioSendPacket(buf, newSize);
       }
 
 
     } // namespace HAL
-  } // namespace Vector
+  } // namespace Cozmo
 } // namespace Anki
+

@@ -18,7 +18,7 @@
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionRobotPlacedOnSlope : public IBEICondition{
 public:
@@ -37,18 +37,18 @@ private:
   const float _kOnInclinePitchThresholdHigh_deg = 55.f;
 
   // if any gyro reading is above this threshold, robot is considered "moving"
-  const float _kIsMovingNowGyroThreshold_degPerSec = 0.5f;
+  const float _kIsMovingNowGyroThreshold_degPerSec = 0.01f;
   
   // time for which robot must not be moving at all to be considered "stationary"
   const double _kIsStationaryTimeThreshold_sec = 0.40;
   
   // time after transition from PickedUp to not PickedUp for which robot is consider "just transitioned to not PickedUp"
-  const double _kTransitionToNotPickedUpTimeThreshold_sec = 2.5;
+  const double _kTransitionToNotPickedUpTimeThreshold_sec = 1.5;
   
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_WantsToRunStrategies_ConditionRobotPlacedOnSlope_H__

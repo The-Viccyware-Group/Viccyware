@@ -3,98 +3,76 @@
 // and re-run ./tools/ai/generateBehavior.py
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // BehaviorID is a unique identifier for each instance of a behavior
 // so that they can be referenced by other parts of the behavior system
 
-enum uint_16 BehaviorID {
+enum uint_8 BehaviorID {
 
   // required (not based on config)
   Anonymous,
   DevExecuteBehaviorRerun,
   Wait_TestInjectable,
 
+  // <root>
+  DriveOffCharger,
+  Wait,
+
   // devBehaviors
-  AcousticTestMode,
-  CubeDrive,
-  CubeDriveCoordinator,
   DevBaseBehavior,
-  DevBatteryLogging,
-  DevCubeSpinner,
-  DevCubeSpinnerConsole,
-  DevDesignCubeLights,
   DevDisplayReadingsOnFace,
-  DevEventSequenceCapture,
   DevImageCapture,
-  DevImageCapture_PetsAndHands,
-  DevPlannerTest,
-  DevSquawkBoxTest,
-  DevTestBlackjackViz,
-  DevTestConnectToCube,
-  DevTestPersonDetectorBehavior,
-  DevTestPromptUser,
-  DevTestSpriteBoxRemaps,
   DevTouchDataCollection,
   DevTurnInPlaceTest,
-  DevViewCubeBackpackLights,
   DockingTestSimple,
   FactoryCentroidExtractor,
   LiftLoadTest,
-  PowerSaveStressTest,
-  PowerSaveTest,
-  PuzzleMaze,
-  ReactToBody,
-  ReactToGazeDirection,
-  ReactToGazeDirectionSurface,
 
-  // devBehaviors/selfTest
-  SelfTest,
-  SelfTestButton,
-  SelfTestDockWithCharger,
-  SelfTestDriftCheck,
-  SelfTestDriveForwards,
-  SelfTestInitChecks,
-  SelfTestLookAtCharger,
-  SelfTestMotorCalibration,
-  SelfTestPickup,
-  SelfTestPutOnCharger,
-  SelfTestPutOnCharger2,
-  SelfTestScreenAndBackpack,
-  SelfTestSoundCheck,
-  SelfTestTouch,
+  // devBehaviors/playpen
+  PlaypenCameraCalibration,
+  PlaypenDistanceSensor100mm,
+  PlaypenDistanceSensor300mm,
+  PlaypenDistanceSensor80mm,
+  PlaypenDriftCheck,
+  PlaypenDriveForwards,
+  PlaypenEndChecks,
+  PlaypenInitChecks,
+  PlaypenMotorCalibration,
+  PlaypenPickupCube,
+  PlaypenReadToolCode,
+  PlaypenSoundCheck,
+  PlaypenTest,
+  PlaypenWaitToStart,
 
-  // devBehaviors
-  SnakeGame,
-  TestStackMonitors,
+  // examples
+  ExampleAnimGetInLoop,
+  ExampleAnonymousBehaviors,
+  ExampleDispatcherScoring,
+  ExampleGlobalReactions,
+  ExampleProceduralClock,
 
-  // victorBehaviorTree/alexa
-  Alexa,
-  AlexaSignInOut,
+  // examples/globalReactionSubBehaviors
+  ExampleFacePositionUpdated,
+  ExampleFrustration,
+  ExampleObjectMoved,
+  ExampleObjectPositionUpdated,
+  ExamplePetInitialDetection,
 
-  // victorBehaviorTree/appBehaviors
-  ChangeEyeColor,
+  // reactions
+  ProceduralTurnToMicDirection,
+  ReactToCliff,
+  ReactToCubeMoved,
+  ReactToGoodBye,
+  ReactToGoodMorning,
+  ReactToGoodNight,
+  ReactToGreeting,
+  ReactToPet,
+  ReactToSoundAsleep,
+  ReactToSoundAwake,
+  ReactToTriggerDirectionAwake,
 
-  // victorBehaviorTree/blackjack
-  BlackJack,
-  BlackJackGoodLuckTTS,
-  BlackJackHandleRTPResponses,
-  BlackJackHitOrStandPrompt,
-  BlackJackLookAtFaceInFront,
-  BlackJackRequestToPlay,
-  BlackJackRequestToPlayAgain,
-  BlackJackTextToSpeech,
-
-  // victorBehaviorTree/character
-  HowOldAreYou,
-  HowOldAreYouCounting,
-
-  // victorBehaviorTree/clock
-  ShowWallTime,
-  SingletonFindFaceInFrontWallTime,
-  SingletonWallTimeCoordinator,
-
-  // victorBehaviorTree/singing
+  // singing
   Singing_AbaDaba,
   Singing_BeautifulDreamer,
   Singing_Beethovens5th,
@@ -135,180 +113,76 @@ enum uint_16 BehaviorID {
   Singing_YankeeDoodle,
   Singing_YellowRose,
 
+  // timer
+  SingletonCancelTimer,
+  SingletonTimerAlreadySet,
+  SingletonTimerAntic,
+  SingletonTimerRinging,
+  SingletonTimerSet,
+  TimerUtilityCoordinator,
+
   // victorBehaviorTree
-  ComeHereVoiceCommand,
-  ConfirmHabitat,
-  ConnectToCube,
   CoordinateGlobalInterrupts,
-  CoordinateInHabitat,
-  CoordinateWhileHeldInPalm,
-  CoordinateWhileInAir,
-
-  // victorBehaviorTree/danceToTheBeat
-  DanceToTheBeat,
-  DanceToTheBeatCoordinator,
-  DanceToTheBeatVoiceCommand,
-
-  // victorBehaviorTree/danceToTheBeat/dances
-  DanceBig,
-  DanceForwardBackFlower,
-  DanceFrontRightLeftPoint,
-  DanceSTwoways,
-  DanceSwell,
-  DanceWiggleForwardWiggleBack,
-
-  // victorBehaviorTree/danceToTheBeat
-  ListenForBeats,
-  ListenForBeatsLong,
-  ListenForBeatsVoiceCommand,
-
-  // victorBehaviorTree
-  DefaultTextToSpeechLoop,
-
-  // victorBehaviorTree/driveOffCharger
-  DriveOffChargerCube,
-  DriveOffChargerFace,
-  DriveOffChargerRandomly,
-  DriveOffChargerRandomlyAnim,
-  DriveOffChargerStraight,
-
-  // victorBehaviorTree/emergencyMode
-  EmergencyMode,
-  EmergencyModeAnimDispatcher,
-  EmergencyModeInAir,
-  EmergencyModeOffCharger,
-  EmergencyModeTriggerWord,
-
-  // victorBehaviorTree
   GlobalInterruptions,
-  GreetAfterLongTime,
-  HabitatMutedDispatcher,
-  HabitatMutedVoiceCommandResponse,
   HighLevelAI,
 
   // victorBehaviorTree/highLevelDelegates
-  SearchWithinBoundingBox,
-  ActiveLookForFaces,
-
-  // victorBehaviorTree/highLevelDelegates/exploring
-  ConfirmCharger,
-  ConfirmCube,
-  Exploring,
-  ExploringBumpObject,
-  ExploringExamineObstacle,
-  ExploringGetIn,
-  ExploringReferenceHuman,
-  ExploringVoiceCommand,
-
-  // victorBehaviorTree/highLevelDelegates
-  FindCubeAndPlayKeepaway,
   FistBump,
 
   // victorBehaviorTree/highLevelDelegates/getHomeBehaviors
   AcknowledgeCharger,
-  ClearChargerArea,
-  EmergencyModeFindAndGoToHome,
   FindAndGoToHome,
   FindAndRequestHome,
   FindHome,
-  FindHomeInHabitat,
   GoHome,
-  RequestHomeBecauseStuck,
   RequestToGoHome,
-  RobustChargerObservation,
-  WiggleBackOntoChargerFromPlatform,
 
-  // victorBehaviorTree/highLevelDelegates/heldInPalm
-  ReactToJoltInPalm,
-  ForceStuckOnPalmEdge,
-  HeldInPalmDispatcher,
-  HeldInPalmResponses,
-  InitialHeldInPalmReaction,
-  LookInPlaceAtEdgeOfPalm,
-  LookInPlaceHeadDownNervous,
-  LookInPlaceHeadDownRelaxed,
-  LookInPlaceHeadUpInPalm,
-  LookingNervousInPalmAnim,
-  NestlingAndSleepingInPalmDispatcher,
-  ReactToPalmEdge,
-  ReactToPalmTilt,
-  ReactToPickupFromPalm,
-  ReactToPutDownFromPalm,
-  ReactToPutDownFromPalmAnimSelector,
-  SleepWhileHeldInPalm,
-  StuckOnPalmEdge,
+  // victorBehaviorTree/highLevelDelegates/hiking
+  Hiking_BringCubeToBeacon,
+  Hiking_DriveOffCharger,
+  Hiking_FirstLookIntro,
+  Hiking_FirstLookWakeUp,
+  Hiking_LookInPlace360,
+  Hiking_LookInPlaceForUnknown,
+  Hiking_RollCube,
+  Hiking_ThinkAboutBeacons,
+  Hiking_VisitInterestingEdge,
 
   // victorBehaviorTree/highLevelDelegates
-  InitialPickupAnimation,
   InteractWithFaces,
-
-  // victorBehaviorTree/highLevelDelegates/investigateCube
-  InteractWithStaticCube,
-  InvestigateCubeConnectionGate,
-  InvestigateHeldCube,
-  MoveCube,
-  PlaceCubeByCharger,
-  RollBlockIfNotVertical,
-  TurnToLastFace,
-
-  // victorBehaviorTree/highLevelDelegates
   Keepaway,
-
-  // victorBehaviorTree/highLevelDelegates/knowledgeGraph
-  KnowledgeGraphQuestion,
-  KnowledgeGraphTTS,
-
-  // victorBehaviorTree/highLevelDelegates
   LookInPlaceHeadUp,
 
   // victorBehaviorTree/highLevelDelegates/meetVictor
+  EnrollFace,
+  MeetCozmo_FindFaces_Socialize,
+  MeetCozmo_InteractWithFaces,
   MeetVictor,
-  MeetVictorAlreadyKnowYouPrompt,
   RespondToRenameFace,
-
-  // victorBehaviorTree/highLevelDelegates/messaging
-  LeaveAMessage,
-  MessagingPlaybackTTS,
-  MessagingRecordTTS,
-  PlaybackMessage,
 
   // victorBehaviorTree/highLevelDelegates
   NothingToDo_Idle,
 
   // victorBehaviorTree/highLevelDelegates/observing
+  DriveOffChargerIntoObserving,
+  DriveOffChargerIntoPlay,
   Observing,
-  ObservingDriveOffCharger,
   ObservingEyeContact,
+  ObservingFailedToFindCharger,
   ObservingFindFaces,
   ObservingLookAtFaces,
-  ObservingLookAtFacesInAir,
-  ObservingOffChargerHeadOnly,
   ObservingOnCharger,
-  ObservingOnChargerEyeContact,
-  ObservingOnChargerGetIn,
-  ObservingOnChargerGetOut,
   ObservingOnChargerIdle,
   ObservingOnChargerIdleAnim,
-  ReactToMotion,
-  TrackingEyeContact,
 
   // victorBehaviorTree/highLevelDelegates
   PickupCube,
-  PickupCubeNoInitialReaction,
-
-  // victorBehaviorTree/highLevelDelegates/playWithCube/activeCubeBehaviors
-  CubeSpinnerConnectionGate,
-  CubeSpinnerLookAroundInPlace,
-  VectorPlaysCubeSpinner,
 
   // victorBehaviorTree/highLevelDelegates/playWithCube
-  FetchCube,
-  FindCube,
-  FindCubeAndThen,
-  FindFacesFetchCube,
   PlayRollBlock,
   PlayWithCube,
   PopAWheelie,
+  RollCubeVoiceCommand,
 
   // victorBehaviorTree/highLevelDelegates/pounceWithProx
   SingletonPounceApproachWithProx,
@@ -319,218 +193,42 @@ enum uint_16 BehaviorID {
 
   // victorBehaviorTree/highLevelDelegates
   PutDownBlock,
-  PutDownBlockAtPose,
   PutDownDispatch_LookForFaceAndCube,
-  SayName,
+
+  // victorBehaviorTree/highLevelDelegates/puzzles
+  PuzzleMaze,
+
+  // victorBehaviorTree/highLevelDelegates
+  ReactToFrustrationMajor,
+  ReactToObstacle,
   ShortLookAroundForFaceAndCube,
 
   // victorBehaviorTree/highLevelDelegates/sleeping
-  Asleep,
-  FindHomeForSleeping,
   GoToSleep,
-  SleepCycle,
-  SleepingPersonCheck,
-  SleepingTriggerWord,
+  Sleeping,
   SleepingWakeUp,
-  SleepingWakeUpLights,
 
   // victorBehaviorTree/highLevelDelegates/socialize
   DriveOffChargerIntoSocializing,
+  FindFaces_socialize,
   Socialize,
-  SocializeInteraction,
+  SocializeGame,
 
   // victorBehaviorTree/highLevelDelegates
-  TrackCube,
-  TrackCubeTest,
-  TrackFaceTest,
+  StackBlocks,
 
   // victorBehaviorTree/highLevelDelegates/voiceCommands
-  BlackJackVoiceCommand,
   DoATrickVoiceCommand,
-  EyeColorVoiceCommand,
-  FetchCubeVoiceCommand,
-  FindYourCubeVoiceCommand,
   FistBumpVoiceCommand,
-  GoHomeVoiceCommand,
   KeepawayVoiceCommand,
-  LookAtMeVoiceCommand,
-  LookOverThereVoiceCommand,
-  PickUpCubeVoiceCommand,
-  PlayAGameVoiceCommand,
-  PopAWheelieVoiceCommand,
-  RollCubeVoiceCommand,
-
-  // victorBehaviorTree/highLevelDelegates/voiceCommands/trickDispatchers
-  CubeTrickDispatcher,
-
-  // victorBehaviorTree/highLevelDelegates/voiceCommands
-  WhatsMyNameVoiceCommand,
-
-  // victorBehaviorTree/highLevelDelegates
-  WhileInAirDispatcher,
-  WhileInAirResponses,
-  WhileInAirResponsesPRDemo,
 
   // victorBehaviorTree
-  InitNormalOperation,
-  InitPRDemo,
-  IntentUnmatched,
-  ModeSelector,
-
-  // victorBehaviorTree/movement
-  MovementBackward,
-  MovementTurnAround,
-  MovementTurnLeft,
-  MovementTurnRight,
-
-  // victorBehaviorTree
-  NoCloud,
-  NoWifi,
-  NormalWakeUp,
-
-  // victorBehaviorTree/onboarding
-  Onboarding,
-  OnboardingComeHere,
-  OnboardingEmulate1p0WaitForVC,
-  OnboardingLookAtPhone,
-  OnboardingLookAtUser,
-  OnboardingLookAtUserOffCharger,
-  OnboardingLookAtUserOnCharger,
-  OnboardingPowerOff,
-  OnboardingTeachComeHere,
-  OnboardingTeachMeetVictor,
-  OnboardingTeachWakeWord,
-  OnboardingWakeUp,
-
-  // victorBehaviorTree/performances
-  PossibleIntentionalPerformance,
-  PossibleUnintentionalPerformance,
-
-  // victorBehaviorTree/prDemo
-  PRDemoBigGreeting,
-  PRDemoComeHere,
-  PRDemoExploring,
-  PRDemoObserving,
-  PRDemoSleeping,
-  PRDemoStateMachine,
-
-  // victorBehaviorTree/quietMode
-  BeQuietAnims,
-  BeQuietLoop,
-  QuietMode,
-  QuietModeEmergencyModeGoHome,
-  ShutUpAnims,
-  ShutUpMode,
-
-  // victorBehaviorTree
+  ReactToTouchDispatcher,
+  ReactToTouchInitial,
   ReactToTouchPetting,
   ReactToUnclaimedIntent,
-
-  // victorBehaviorTree/reactions
-  AskForHelp,
-  AskForHelpOnSide,
-  CheckForAndReactToHand,
-  ForceStuckOnEdge,
-  MandatoryPhysicalReactions,
-  OptionalReactions,
-  ProceduralTurnToMicDirection,
-  ReactToAbuse,
-  ReactToAffirmative,
-  ReactToApology,
-  ReactToCliff,
-  ReactToCliffDuringFetch,
-  ReactToDarkness,
-  ReactToFrustrationMajor,
-  ReactToGoodBye,
-  ReactToGoodMorning,
-  ReactToHand,
-  ReactToLove,
-  ReactToMotorCalibration,
-  ReactToNegative,
-  ReactToObstacle,
-  ReactToPlacedOnSlope,
-  ReactToPutDown,
-  ReactToRobotOnBack,
-  ReactToRobotOnFace,
-  ReactToRobotOnSide,
-  ReactToRobotShaken,
-  ReactToRobotShakenSnowGlobe,
-  ReactToSoundAsleep,
-  ReactToSoundAwake,
-  ReactToSoundDirectionAsleep,
-  ReactToSoundDirectionAwake,
-  ReactToTriggerDirectionAwake,
-  ReactToUncalibratedHeadAndLift,
-  ReactToUnexpectedMovement,
-  ReactToUnexpectedMovementInAir,
-  SimpleVoiceResponses,
-  StuckOnEdge,
-  TriggerWordWithoutIntent,
-  VoiceFeatures,
-
-  // victorBehaviorTree
-  ResetSafely,
-
-  // victorBehaviorTree/sdkBehaviors
-  SDKDefault,
-  SDKLock,
-  SDKOverrideAll,
-
-  // victorBehaviorTree/seasonal
-  SeasonalHappyHolidays,
-  SeasonalHappyNewYear,
-
-  // victorBehaviorTree
   SingletonICantDoThat,
-  SingletonPoweringRobotOff,
-  StayOnChargerUntilCharged,
-
-  // victorBehaviorTree/takeAPhoto
-  FindFacesPhoto,
-  FrameFaces,
-  TakeAPhotoCoordinator,
-
-  // victorBehaviorTree/timer
-  DemoTimerUtilityCoordinator,
-  SingletonAnticShowClock,
-  SingletonCancelTimer,
-  SingletonTimerAlreadySet,
-  SingletonTimerAntic,
-  SingletonTimerCheckTime,
-  SingletonTimerRinging,
-  SingletonTimerSet,
-  TimerRingingPRDemo,
-  TimerUtilityCoordinator,
-
-  // victorBehaviorTree
   TriggerWordDetected,
-  UserDefinedBehaviorSelector,
-  UserDefinedBehaviorTreeConfirmNewBehavior,
-  UserDefinedBehaviorTreeRouter,
-  UserDefinedBehaviorTreeTextToSpeech,
-
-  // victorBehaviorTree/volume
-  Volume,
-
-  // victorBehaviorTree
-  Wait,
-
-  // victorBehaviorTree/weather/genericResponses
-  WeatherCloudyGeneric,
-  WeatherColdClearGeneric,
-  WeatherRainGeneric,
-  WeatherSnowGeneric,
-  WeatherStarsGeneric,
-  WeatherSunnyGeneric,
-  WeatherThunderstormsGeneric,
-  WeatherWindyGeneric,
-
-  // victorBehaviorTree/weather
-  WeatherResponses,
-  WeatherTextToSpeech,
-
-  // victorBehaviorTree
-  WireTest,
 }
 
 }

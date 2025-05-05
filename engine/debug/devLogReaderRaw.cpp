@@ -13,7 +13,7 @@
 #include "util/logging/logging.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 bool DevLogReaderRaw::FillLogData(std::ifstream& fileHandle, LogData& logData_out) const
 {
@@ -57,5 +57,5 @@ bool DevLogReaderRaw::FillLogData(std::ifstream& fileHandle, LogData& logData_ou
   return true;
 }
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

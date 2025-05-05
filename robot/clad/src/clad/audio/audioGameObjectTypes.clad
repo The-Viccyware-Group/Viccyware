@@ -8,17 +8,11 @@ enum uint_64 GameObjectType
 
   Invalid = 0,
   Default,
-  Victor_Listener,   // DO NOT USE - This is default listener
-  Procedural,
-  Animation,
-  Behavior,
-  TextToSpeech,
-  VoiceRecording,
-  Alexa,
-  AlexaVoice,
-  AlexaMedia,
-  AlexaNotifications,
-  AlexaAlerts,
+  UI,
+  SFX,
+  CodeLab,
+  Cozmo_OnDevice,
+  Cozmo_Listener,
   End, // Need end val so I can enumerate through GameObjects
 
 }

@@ -14,17 +14,18 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorReactToCliff_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/sensors/cliffSensorComponent.h"
-#include <array>
+#include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ICompoundAction;
   
 class BehaviorReactToCliff : public ICozmoBehavior
 {
 private:
+  using super = ICozmoBehavior;
+  
   // Enforce creation through BehaviorFactory
   friend class BehaviorFactory;
   BehaviorReactToCliff(const Json::Value& config);
@@ -36,81 +37,51 @@ protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
     modifiers.wantsToBeActivatedWhenCarryingObject = true;
   }
-  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
+  virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override {}
 
   virtual void InitBehavior() override;
   virtual void OnBehaviorActivated() override;
   virtual void OnBehaviorDeactivated() override;
   
-  virtual void GetAllDelegates(std::set<IBehavior*>& delegates) const override;
-
-  virtual void AlwaysHandleInScope(const EngineToGameEvent& event) override;
+  virtual void HandleWhileInScopeButNotActivated(const EngineToGameEvent& event) override;
+  virtual void HandleWhileActivated(const EngineToGameEvent& event) override;
   
   virtual void BehaviorUpdate() override;
 
-private:  
-  void TransitionToWaitForNoMotion();
-  void TransitionToStuckOnEdge();
+private:
+  using base = ICozmoBehavior;
+  
+  IBEIConditionPtr _cliffDetectedCondition;
+  
+  enum class State {
+    PlayingStopReaction,
+    PlayingCliffReaction,
+    BackingUp
+  };
+
+  State _state = State::PlayingStopReaction;
+
+  bool _gotCliff = false;
+  uint8_t _detectedFlags = 0;
+  
+  void TransitionToPlayingStopReaction();
   void TransitionToPlayingCliffReaction();
-  void TransitionToRecoveryBackup();
-  void TransitionToMotorCalibration();
-  void TransitionToVisualExtendCliffs();
-  void TransitionToFaceAndBackAwayCliff();
+  void TransitionToBackingUp();
+  void SendFinishedReactToCliffMessage();
   
-  // Based on which cliff sensor(s) was tripped, create the appropriate reaction
-  IActionRunner* GetCliffReactAction(uint8_t cliffDetectedFlags);
+  // Based on which cliff sensor(s) was tripped, select an appropriate pre-animation action
+  CompoundActionSequential* GetCliffPreReactAction(uint8_t cliffDetectedFlags);
 
-  // returns the cliff pose as estimated using the drop-sensor
-  // note: the cliff in question will be the newly discovered
-  //        one that caused this behavior to be triggered
-  Pose3d GetCliffPoseToLookAt() const;
+  u16 _cliffDetectThresholdAtStart = 0;
+  bool _quitReaction = false;
   
-  struct InstanceConfig {
-    InstanceConfig();
-    InstanceConfig(const Json::Value& config, const std::string& debugName);
-    
-    ICozmoBehaviorPtr stuckOnEdgeBehavior;
-    ICozmoBehaviorPtr askForHelpBehavior;
-    
-    float cliffBackupDist_mm;
-    float cliffBackupSpeed_mmps;
-    
-    u32 eventFlagTimeout_ms;
-  };
-
-  InstanceConfig _iConfig;
-
-  struct DynamicVariables {
-    DynamicVariables();
-    bool quitReaction;
-
-    // whether the robot has received a cliff event with a valid cliff pose
-    // that serves as the look-at target for any visual observation actions
-    bool hasTargetCliff; 
-    
-    // Used to cancel behavior if picked up for too long
-    TimeStamp_t lastPickupStartTime_ms;
-    
-    // used to determine where the robot searches for visual edges
-    Pose3d cliffPose;
-
-    struct Persistent {
-      bool gotStop;
-      int numStops;
-      int numCliffReactAttempts;
-      bool  putDownOnCliff;
-      TimeStamp_t lastActiveTime_ms;
-      std::array<u16, CliffSensorComponent::kNumCliffSensors> cliffValsAtStart;
-    };
-    Persistent persistent;
-  };
+  bool _shouldStopDueToCharger;
   
-  DynamicVariables _dVars;
   
 }; // class BehaviorReactToCliff
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_Behaviors_BehaviorReactToCliff_H__

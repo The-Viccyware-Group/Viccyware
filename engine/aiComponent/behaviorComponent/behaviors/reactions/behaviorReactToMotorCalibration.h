@@ -15,14 +15,17 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
 #include "clad/robotInterface/messageRobotToEngine.h"
+#include "util/signals/simpleSignal_fwd.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   
 class BehaviorReactToMotorCalibration : public ICozmoBehavior
 {
 private:
+  using super = ICozmoBehavior;
+  
   friend class BehaviorFactory;
   BehaviorReactToMotorCalibration(const Json::Value& config);
   
@@ -36,15 +39,12 @@ protected:
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override {}
   
   virtual void OnBehaviorActivated() override;
-  virtual void OnBehaviorDeactivated() override;
+  virtual void OnBehaviorDeactivated() override { };
 
-  virtual void HandleWhileInScopeButNotActivated(const RobotToEngineEvent& event) override;
-  virtual void AlwaysHandleInScope(const RobotToEngineEvent& event) override;
+  virtual void HandleWhileActivated(const EngineToGameEvent& event) override;
 
   constexpr static f32 _kTimeout_sec = 5.;
   
-  bool _headMotorCalibrationStarted = false;
-  bool _liftMotorCalibrationStarted = false;
 };
   
 }

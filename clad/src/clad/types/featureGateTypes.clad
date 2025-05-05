@@ -1,41 +1,19 @@
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 enum uint_8 FeatureType {
   Invalid,
+  AndroidConnectionFlow,
+  SpeedTapMultiPlayer,
+  CodeLabGame,
+  PeekABoo,
+  SparksGatherCubes,
+  Hiccups,
+  GuardDog,
+  Bouncer,
   Laser,
   Singing,
-  Exploring,
-  FetchCube,
-  FindCube,
-  Keepaway,
-  ReactToHeldCube,
-  RollCube,
-  MoveCube,
-  Messaging,
-  ReactToIllumination,
-  KnowledgeGraph,
-  Dancing,
-  CubeSpinner,
-  GreetAfterLongTime,
-  AttentionTransfer,
-  UserDefinedBehaviorTree,
-  PopAWheelie,
-  PounceOnMotion,
-  ActiveIntentFeedback,
-  Alexa,
-  Alexa_UK,
-  Alexa_AU,
-  HeldInPalm,
-  Volume,
-  HandDetection,
-  GazeDirection,
-  HowOldAreYou,
-  StayOnChargerUntilCharged,
-  EyeColorVC,
-
-  TestFeature,
-  PRDemo,
+  LocalNotifications
 }
 
 structure FeatureToggle {

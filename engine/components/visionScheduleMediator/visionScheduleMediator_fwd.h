@@ -16,11 +16,10 @@
 #include "clad/types/visionModes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   enum class EVisionUpdateFrequency
   {
-    SingleShot, // Run once and auto-disable the next time schedule is requested
     Low,
     Med,
     High,
@@ -36,7 +35,7 @@ namespace Vector {
     bool operator<(const VisionModeRequest& rhs) const { return this->mode < rhs.mode; }
   };
       
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Engine_Components_visionScheduleMediator_fwd_H__

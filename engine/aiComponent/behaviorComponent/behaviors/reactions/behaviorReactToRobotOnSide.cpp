@@ -1,5 +1,5 @@
 /**
- * File: behaviorReactToRobotOnSide.cpp
+ * File: behaviorReactToRobotOnSide.h
  *
  * Author: Kevin M. Karol
  * Created: 2016-07-18
@@ -12,39 +12,24 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/reactions/behaviorReactToRobotOnSide.h"
 
-#include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
-#include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
-#include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
-#include "engine/aiComponent/beiConditions/conditions/conditionOffTreadsState.h"
+#include "engine/externalInterface/externalInterface.h"
+#include "clad/externalInterface/messageEngineToGame.h"
 
 namespace Anki {
-namespace Vector {
-
-namespace {
-  const char* kAskForHelpAfter_key = "askForHelpAfter_sec";
-  const char* kAskForHelpBehavior_key = "askForHelpBehavior";
-}
-
+namespace Cozmo {
+  
 using namespace ExternalInterface;
+
+static const float kWaitTimeBeforeRepeatAnim_s = 15.f;
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorReactToRobotOnSide::BehaviorReactToRobotOnSide(const Json::Value& config)
 : ICozmoBehavior(config)
-, _iConfig(config, "Behavior" + GetDebugLabel() + ".LoadConfig")
 {
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-BehaviorReactToRobotOnSide::InstanceConfig::InstanceConfig(const Json::Value& config, const std::string& debugName)
-{
-  const bool hasAskForHelpTime = JsonTools::GetValueOptional(config, kAskForHelpAfter_key, askForHelpAfter_sec);
-  const bool hasAskForHelpBehavior = JsonTools::GetValueOptional(config, kAskForHelpBehavior_key, askForHelpBehaviorStr);
- 
-  DEV_ASSERT(hasAskForHelpTime == hasAskForHelpBehavior, "BehaviorReactToRobotOnSide.InstanceConfig.InvalidConfig");
 }
 
 
@@ -56,72 +41,51 @@ bool BehaviorReactToRobotOnSide::WantsToBeActivatedBehavior() const
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToRobotOnSide::InitBehavior()
-{
-  const auto& BC = GetBEI().GetBehaviorContainer();
-  if (!_iConfig.askForHelpBehaviorStr.empty()) {
-    _iConfig.askForHelpBehavior = BC.FindBehaviorByID(BehaviorTypesWrapper::BehaviorIDFromString(_iConfig.askForHelpBehaviorStr));
-    DEV_ASSERT(_iConfig.askForHelpBehavior != nullptr,
-               "BehaviorReactToRobotOnSide.InitBehavior.NullBehavior");
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToRobotOnSide::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
-{
-  const char* list[] = {
-    kAskForHelpAfter_key,
-    kAskForHelpBehavior_key,
-  };
-  expectedKeys.insert( std::begin(list), std::end(list) );
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToRobotOnSide::GetAllDelegates(std::set<IBehavior*>& delegates) const
-{
-  if (_iConfig.askForHelpBehavior != nullptr) {
-    delegates.insert(_iConfig.askForHelpBehavior.get());
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToRobotOnSide::OnBehaviorActivated()
 {
-  _dVars = DynamicVariables();
+  // clear bored animation timer
+  _timeToPerformBoredAnim_s = -1.0f;
   
   ReactToBeingOnSide();
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToRobotOnSide::BehaviorUpdate()
+void BehaviorReactToRobotOnSide::ReactToBeingOnSide()
 {
-  if (!IsActivated()) {
-    return;
+  AnimationTrigger anim = AnimationTrigger::Count;
+  
+  if( GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide){
+    anim = AnimationTrigger::ReactToOnLeftSide;
   }
   
-  // If we are no longer on our side (but have not been cancelled externally yet), then play the get-out and exit
-  const bool onSide = (GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide) ||
-                      (GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide);
-  if (!onSide && !_dVars.getOutPlayed) {
-    DelegateNow(new TriggerAnimationAction(AnimationTrigger::ReactToOnSideGetOut));
-    _dVars.getOutPlayed = true;
+  if(GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide) {
+    anim = AnimationTrigger::ReactToOnRightSide;
+  }
+  
+  if(anim != AnimationTrigger::Count){
+    DelegateIfInControl(new TriggerAnimationAction(anim),
+                        &BehaviorReactToRobotOnSide::AskToBeRighted);
   }
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToRobotOnSide::ReactToBeingOnSide()
+void BehaviorReactToRobotOnSide::AskToBeRighted()
 {
-  if (GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide) {
-    DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::ReactToOnLeftSideGetIn),
-                        &BehaviorReactToRobotOnSide::HoldingLoop);
-  } else if (GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide) {
-    DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::ReactToOnRightSideGetIn),
-                        &BehaviorReactToRobotOnSide::HoldingLoop);
+  AnimationTrigger anim = AnimationTrigger::Count;
+  
+  if( GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide){
+    anim = AnimationTrigger::AskToBeRightedLeft;
+  }
+  
+  if(GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide) {
+    anim = AnimationTrigger::AskToBeRightedRight;
+  }
+  
+  if(anim != AnimationTrigger::Count){
+    DelegateIfInControl(new TriggerAnimationAction(anim),
+                &BehaviorReactToRobotOnSide::HoldingLoop);
   }
 }
 
@@ -129,37 +93,35 @@ void BehaviorReactToRobotOnSide::ReactToBeingOnSide()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToRobotOnSide::HoldingLoop()
 {
-  // Check if we have been activated for longer than the timeout. If so, play the getout then transition to the
-  // "ask for help" behavior
-  if (_iConfig.askForHelpAfter_sec > 0.f &&
-      GetActivatedDuration() > _iConfig.askForHelpAfter_sec) {
-    DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::ReactToOnSideGetOut),
-                        [this](){
-                          if (_iConfig.askForHelpBehavior.get()->WantsToBeActivated()) {
-                            DelegateIfInControl(_iConfig.askForHelpBehavior.get());
-                          }
-                        });
-    return;
-  }
-  
-  auto loopAnim = AnimationTrigger::Count;
-  
-  if (GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide) {
-    loopAnim = AnimationTrigger::ReactToOnLeftSideLoop;
-  } else if (GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide) {
-    loopAnim = AnimationTrigger::ReactToOnRightSideLoop;
-  }
-  
-  if (loopAnim != AnimationTrigger::Count) {
-    const auto effortAnim = AnimationTrigger::ReactToOnSideEffort;
+  if( GetBEI().GetOffTreadsState() == OffTreadsState::OnRightSide
+     || GetBEI().GetOffTreadsState() == OffTreadsState::OnLeftSide) {
+
+    const float currTime_s = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
     
-    // Alternate between 'loop' animation and 'effort' animation
-    auto* action = new CompoundActionSequential();
-    action->AddAction(new TriggerAnimationAction(loopAnim));
-    action->AddAction(new TriggerAnimationAction(effortAnim));
+    if( _timeToPerformBoredAnim_s < 0.0f ) {
+      // set timer for when to perform the bored animations
+      _timeToPerformBoredAnim_s = currTime_s + kWaitTimeBeforeRepeatAnim_s;
+    }
     
-    DelegateIfInControl(action,
-                        &BehaviorReactToRobotOnSide::HoldingLoop);
+    if( currTime_s >= _timeToPerformBoredAnim_s ) {
+      // reset timer
+      _timeToPerformBoredAnim_s = -1.0f;
+
+      // play bored animation sequence, then return to holding
+
+      // note: NothingToDoBored anims can move the robot, so Intro/Outro may not work here well, should
+      // we be playing a specific loop here?
+      DelegateIfInControl(new CompoundActionSequential({
+                    new TriggerAnimationAction(AnimationTrigger::NothingToDoBoredIntro),
+                    new TriggerAnimationAction(AnimationTrigger::NothingToDoBoredEvent),
+                    new TriggerAnimationAction(AnimationTrigger::NothingToDoBoredOutro) }),
+                  &BehaviorReactToRobotOnSide::HoldingLoop);
+    }
+    else {
+      // otherwise, we just loop this animation
+      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::WaitOnSideLoop),
+                  &BehaviorReactToRobotOnSide::HoldingLoop);
+    }
   }
 }
 
@@ -169,5 +131,5 @@ void BehaviorReactToRobotOnSide::OnBehaviorDeactivated()
 {
 }
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

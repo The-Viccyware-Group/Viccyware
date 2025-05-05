@@ -16,19 +16,19 @@
 
 #include "coretech/common/shared/types.h"
 #include "engine/moodSystem/emotion.h"
+#include "engine/moodSystem/moodDebug.h"
 
 #include "clad/types/actionResults.h"
 #include "clad/types/actionTypes.h"
 #include "clad/types/emotionTypes.h"
 #include "clad/types/simpleMoodTypes.h"
 
-#include "engine/aiComponent/behaviorComponent/behaviorComponents_fwd.h"
+#include "util/entityComponent/iDependencyManagedComponent.h"
 #include "engine/moodSystem/emotion.h"
+#include "engine/moodSystem/moodDebug.h"
 #include "engine/robotComponents_fwd.h"
 #include "engine/robotDataLoader.h"
 
-#include "util/entityComponent/dependencyManagedEntity.h"
-#include "util/entityComponent/iDependencyManagedComponent.h"
 #include "util/graphEvaluator/graphEvaluator2d.h"
 #include "util/helpers/noncopyable.h"
 #include "util/signals/simpleSignal_fwd.h"
@@ -40,15 +40,8 @@
 #include <vector>
 
 namespace Anki {
+namespace Cozmo {
 
-namespace AudioMetaData {
-namespace GameParameter {
-// forward declaration (see audioParameterTypes.clad)
-enum class ParameterType : u32;
-}
-}
-
-namespace Vector {
 
 constexpr float kEmotionChangeVerySmall = 0.06f;
 constexpr float kEmotionChangeSmall     = 0.12f;
@@ -60,22 +53,18 @@ constexpr float kEmotionChangeVeryLarge = 1.00f;
 template <typename Type>
 class AnkiEvent;
 
-namespace ExternalInterface {
-class MessageGameToEngine;
-struct RobotCompletedAction;
-}
 
-namespace Audio{
-class EngineRobotAudioClient;
+namespace ExternalInterface {
+  class MessageGameToEngine;
+  struct RobotCompletedAction;
 }
   
-class CozmoContext;
+  
 class Robot;
 class StaticMoodData;
+
   
-class MoodManager : public IDependencyManagedComponent<RobotComponentID>,
-                    public UnreliableComponent<BCComponentID>,
-                    private Util::noncopyable
+class MoodManager : public IDependencyManagedComponent<RobotComponentID>, private Util::noncopyable
 {
 public:
   using MoodEventTimes = std::map<std::string, float>;
@@ -86,27 +75,12 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void AdditionalInitAccessibleComponents(RobotCompIDSet& components) const override {
-    components.insert(RobotComponentID::CozmoContextWrapper);
+      components.insert(RobotComponentID::CozmoContext);
   };
-  virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
-    dependencies.insert(RobotComponentID::EngineAudioClient);
-  }
-  virtual void AdditionalUpdateAccessibleComponents(RobotCompIDSet& components) const override {
-    components.insert(RobotComponentID::RobotStatsTracker);
-  }
-
+  virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override {};
   virtual void UpdateDependent(const RobotCompMap& dependentComps) override;
-
-  // Prevent hiding function warnings by exposing the (valid) unreliable component methods
-  using UnreliableComponent<BCComponentID>::InitDependent;
-  using UnreliableComponent<BCComponentID>::AdditionalInitAccessibleComponents;
-  using UnreliableComponent<BCComponentID>::GetInitDependencies;
-  using UnreliableComponent<BCComponentID>::UpdateDependent;
-  using UnreliableComponent<BCComponentID>::GetUpdateDependencies;
-  using UnreliableComponent<BCComponentID>::AdditionalUpdateAccessibleComponents;
   //////
   // end IDependencyManagedComponent functions
   //////
@@ -116,10 +90,8 @@ public:
   void Reset();
     
   // ==================== Modify Emotions ====================
-
-  // trigger an event at the given time. If no time specified, use GetCurrentTimeInSeconds
+  
   void TriggerEmotionEvent(const std::string& eventName, float currentTimeInSeconds);
-  void TriggerEmotionEvent(const std::string& eventName);
   
   void AddToEmotion(EmotionType emotionType, float baseValue, const char* uniqueIdString, float currentTimeInSeconds);
   
@@ -131,17 +103,13 @@ public:
                      EmotionType emotionType2, float baseValue2,
                      EmotionType emotionType3, float baseValue3,
                      const char* uniqueIdString, float currentTimeInSeconds);
-
-  // directly set the value e.g. for debugging
-  void SetEmotion(EmotionType emotionType, float value, const char* debugLabel = "SetEmotion");
+  
+  void SetEmotion(EmotionType emotionType, float value); // directly set the value e.g. for debugging
 
   // This manager internally listens for ActionCompleted events from the robot, and can use those to trigger
   // emotion events. By default, it listens for any actions that complete, but this function can be used to
   // enable or disable listening for specific actions
   void SetEnableMoodEventOnCompletion(u32 actionTag, bool enable);
-  
-  void SetEmotionFixed(EmotionType emotionType, bool fixed) { _fixedEmotions[(size_t)emotionType] = fixed; }
-  bool IsEmotionFixed(EmotionType emotionType) const { return _fixedEmotions[(size_t)emotionType]; }
 
   
   // ==================== GetEmotion... ====================
@@ -160,15 +128,7 @@ public:
   
   SimpleMoodType GetSimpleMood() const;
   
-  // true if SimpleMoodType transitioned this tick (with options for from/to)
-  bool DidSimpleMoodTransitionThisTick() const;
-  bool DidSimpleMoodTransitionThisTickFrom(SimpleMoodType from) const;
-  bool DidSimpleMoodTransitionThisTick(SimpleMoodType from, SimpleMoodType to) const;
-  
   float GetLastUpdateTime() const { return _lastUpdateTime; }
-
-  // check if the passed in emotion event exists in our map
-  bool IsValidEmotionEvent(const std::string& eventName) const;
   
   // ==================== Event/Message Handling ====================
   // Handle various message types
@@ -187,11 +147,8 @@ public:
   static float GetCurrentTimeInSeconds();
   
 private:
-  
-  static SimpleMoodType GetSimpleMood(float stimulation, float confidence);
-  
   void ReadMoodConfig(const Json::Value& inJson);
-  // Load in all data-driven emotion events
+  // Load in all data-driven emotion events // TODO: move to mood manager?
   void LoadEmotionEvents(const RobotDataLoader::FileJsonMap& emotionEventData);   
   bool LoadEmotionEvents(const Json::Value& inJson);
 
@@ -218,61 +175,32 @@ private:
     return _emotions[index];
   }
 
-  void LoadAudioParameterMap(const Json::Value& inJson);
-  void LoadAudioSimpleMoodMap(const Json::Value& inJson);
-  void VerifyAudioEvents() const;
   void LoadActionCompletedEventMap(const Json::Value& inJson);
   void PrintActionCompletedEventMap() const;
-
-  void SendEmotionsToAudio(Audio::EngineRobotAudioClient& audioClient);
   
-  void SendStimToApp(float velocity, float accel);
-
-  void SendMoodToWebViz(const CozmoContext* context, const std::string& emotionEvent = "");
-  void SubscribeToWebViz();
+  SEND_MOOD_TO_VIZ_DEBUG_ONLY( void AddEvent(const char* eventName) );
     
   // ============================== Private Member Vars ==============================
   
   Emotion         _emotions[(size_t)EmotionType::Count];
   MoodEventTimes  _moodEventTimes;
+  SEND_MOOD_TO_VIZ_DEBUG_ONLY( std::vector<std::string> _eventNames; )
   Robot*          _robot = nullptr;
   float           _lastUpdateTime;
-  
-  std::array<bool,(size_t)EmotionType::Count> _fixedEmotions;
 
   // maps from (action type, action result category) -> emotion event
   using ActionCompletedEventMap = std::map< std::pair< RobotActionType, ActionResultCategory >, std::string >;
   ActionCompletedEventMap _actionCompletedEventMap;
-
-  using AudioParameterType = AudioMetaData::GameParameter::ParameterType;  
-  // map from emotion to audio parameter type to inform audio system of mood parameters
-  std::map< EmotionType, AudioParameterType > _audioParameterMap;
-
-  // map from simple mood to value to send floats to the audio system
-  AudioParameterType _simpleMoodAudioParameter;
-  std::map< SimpleMoodType, float > _simpleMoodAudioEventMap;
 
   std::set< u32 > _actionsTagsToIgnore;
   
   std::vector<Signal::SmartHandle> _signalHandles;
 
   int _actionCallbackID = 0;
-
-  float _lastAudioSendTime_s = 0.0f;
-  float _lastWebVizSendTime_s = 0.0f;
-  
-  float _lastAppSentStimTime_s = 0.0f;
-  float _lastStimValue = 0.0f;
-  std::vector<std::string> _pendingAppEvents;
-
-  double _cumlPosStimDeltaToAdd = 0.0;
-
-  float _lastSimpleMoodStartTime_s = 0.0f;
-  SimpleMoodType _lastSimpleMood = SimpleMoodType::Count;
 };
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 

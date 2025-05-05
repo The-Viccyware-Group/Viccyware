@@ -19,24 +19,10 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior_fwd.h"
 #include "util/entityComponent/entity.h"
-#include "coretech/common/engine/math/pose.h"
 
 namespace Anki {
-namespace Vector {
-
-// Storage for processed prox sensor reading with useful metadata
-struct ProxSensorData
-{
-  u16  distance_mm;
-  f32  signalQuality;
-
-  bool unobstructed;          // The sensor has not detected anything up to its max range
-  bool foundObject;           // The sensor detected an object in the valid operating range
-  bool isLiftInFOV;           // Lift (or object on lift) is occluding the sensor
-  
-  Pose2d objectPose;
-};
-
+class Pose3d;
+namespace Cozmo {
 
 class ProxSensorComponent :public ISensorComponent, public IDependencyManagedComponent<RobotComponentID>
 {
@@ -48,7 +34,7 @@ public:
   // IDependencyManagedComponent functions
   //////
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {};
-  virtual void InitDependent(Robot* robot, const RobotCompMap& dependentComps) override {
+  virtual void InitDependent(Robot* robot, const RobotCompMap& dependentComponents) override {
     InitBase(robot);
   };
 
@@ -56,41 +42,62 @@ public:
   // end IDependencyManagedComponent functions
   //////
 
-  // check its return value rather than calling this method.
-  const ProxSensorData& GetLatestProxData() const { return _latestData; }
-  
-  // enable or disable this entire component's ability to update the nav map
-  void SetNavMapUpdateEnabled(bool enabled) { _mapEnabled = enabled; }
-  
-  // loads raw prox sensor data to a string for different logging systems
-  std::string GetDebugString(const std::string& delimeter = "\n");
-
-  // checks if the history to test if sensor is potentially picking up readings
-  // from the lift, and recalibrates the lift motors if so. Returns true
-  // if motors are being calibrated
-  bool VerifyLiftCalibration() const;
-
 protected:
   virtual void NotifyOfRobotStateInternal(const RobotState& msg) override;
   
   virtual std::string GetLogHeader() override;
-  virtual std::string GetLogRow() override { return GetDebugString(", "); }
+  virtual std::string GetLogRow() override;
   
+public:
+  // Returns true and populates distance_mm with the latest distance value if the
+  // sensor reading is considered valid (see IsLatestReadingValid()). If the sensor
+  // reading is not valid, this returns false and distance_mm is untouched.
+  bool GetLatestDistance_mm(u16& distance_mm) const;
+  
+  // Returns true if the latest distance sensor reading is valid,
+  // same as what GetLatestDistance_mm() would return only you don't get distance also.
+  bool IsLatestReadingValid() const;
+  
+  // Note: If you just need distance data, prefer to use GetLatestDistance_mm() and
+  // check its return value rather than calling this method.
+  const ProxSensorData& GetLatestProxData() const { return _latestData; }
+  
+  // Returns the current pose of the prox sensor w.r.t. robot. Computed on-the-fly
+  // since it depends on the robot's pose.
+  Pose3d GetPose() const;
+  
+  // Outputs true if the given pose falls within the sensor's field of view
+  Result IsInFOV(const Pose3d&, bool& isInFOV) const;
+  
+  // Returns true if any part of the lift falls within the sensor's field of view
+  bool IsLiftInFOV() const;
+
+  // calculate the pose directly in front of the robot where the prox sensor is indicating an object
+  // returns false if sensor reading isn't valid
+  bool CalculateSensedObjectPose(Pose3d& sensedObjectPose) const;
 
 private:
 
-  // Pushes processed prox data into the NavMap
-  void UpdateNavMap(uint32_t timestamp);
+  void UpdateNavMap();
   
-  // Checks if the lift is currently blocking any sensor regions
-  bool CheckLiftOcclusion();
+  // Indicates when the sensor reading...
+  //   1) Is within a reliable obstacle detection range
+  //   2) Is not being obstructed by the lift
+  //   3) Has a reasonable signal quality
+  bool IsSensorReadingValid(const ProxSensorData&) const;
   
-  ProxSensorDataRaw _latestDataRaw;           // raw data sent from robot process - should only be used for debugging purposes
-  ProxSensorData    _latestData;              // processed data that has additional cleanup and state
-  Pose3d            _currentRobotPose;        // robot pose at current sensor reading
-  uint32_t          _measurementsAtPose = 0;  // counter to limit number of map updates while not moving
-  uint32_t          _numTicsLiftOutOfFOV = 0; // counter for lift FOV checks to account for sensor delay
-  bool              _mapEnabled = true;       // disable map updates entirely (currently for low-power mode)
+  // Returns a unitless metric of "signal quality", which is computed as the
+  // signal intensity (which is the total signal intensity of the reading)
+  // divided by the number of active SPADs (which are the actual imaging sensors)
+  static float GetSignalQuality(const ProxSensorData& proxData) {
+    return proxData.signalIntensity / proxData.spadCount;
+  }
+  
+  ProxSensorData _latestData;
+  
+  // The timestamp of the RobotState message with the
+  // latest distance sensor data
+  uint32_t _lastMsgTimestamp = 0;
   
 };
 

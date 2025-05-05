@@ -13,12 +13,12 @@
 #include "engine/externalInterface/externalInterface.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 void SimpleExternalInterface::DeliverToGame(const ExternalInterface::MessageEngineToGame& message, DestinationId desinationId)
 {
 
 }
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki

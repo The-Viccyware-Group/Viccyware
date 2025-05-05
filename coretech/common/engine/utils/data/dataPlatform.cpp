@@ -4,7 +4,7 @@
 * Author: damjan stulic
 * Created: 8/5/15
 *
-* Description:
+* Description: 
 *
 * Copyright: Anki, inc. 2015
 *
@@ -17,7 +17,6 @@
 #include "util/helpers/includeFstream.h"
 #include "util/helpers/ankiDefines.h"
 #include "util/fileUtils/fileUtils.h"
-#include <memory>
 
 #define LOG_CHANNEL "DataPlatform"
 
@@ -70,8 +69,6 @@ std::string DataPlatform::GetOSPlatformString()
     return "ios";
   #elif defined(ANKI_PLATFORM_ANDROID)
     return "android";
-  #elif defined(ANKI_PLATFORM_VICOS)
-    return "vicos";
   #elif defined(ANKI_PLATFORM_OSX)
     return "osx";
   #else
@@ -89,43 +86,32 @@ bool DataPlatform::readAsJson(const Scope& resourceScope, const std::string& res
 // reads resource as json file. returns true if successful.
 bool DataPlatform::readAsJson(const std::string& resourceName, Json::Value& data)
 {
-  try {
-    std::ifstream jsonFile(resourceName);
-    Json::Reader reader;
-    bool success = reader.parse(jsonFile, data);
-    if (!success) {
-      LOG_ERROR("DataPlatform.readAsJson", "Failed to read [%s]", resourceName.c_str());
-      const std::string& errors = reader.getFormattedErrorMessages();
-      if (!errors.empty()) {
-        LOG_DEBUG("DataPlatform.readAsJson", "Json reader errors [%s]", errors.c_str());
-      }
+  std::ifstream jsonFile(resourceName);
+  Json::Reader reader;
+  bool success = reader.parse(jsonFile, data);
+  if (!success) {
+    LOG_ERROR("DataPlatform.readAsJson", "Failed to read [%s]", resourceName.c_str());
+    const std::string& errors = reader.getFormattedErrorMessages();
+    if (!errors.empty()) {
+      LOG_DEBUG("DataPlatform.readAsJson", "Json reader errors [%s]", errors.c_str());
     }
-    jsonFile.close();
-    return success;
-  } catch (const std::exception & ex) {
-    LOG_ERROR("DataPlatform.readAsJson", "Failed to read [%s] (%s)", resourceName.c_str(), ex.what());
-    return false;
   }
+  jsonFile.close();
+  return success;
 }
 
-// write data to json file. returns true if successful.
+// write dat to json file. returns true if successful.
 bool DataPlatform::writeAsJson(const Scope& resourceScope, const std::string& resourceName, const Json::Value& data) const
 {
   const std::string jsonFilename = pathToResource(resourceScope, resourceName);
-  return writeAsJson(jsonFilename, data);
-}
-
-// write data to json file. returns true if successful.
-bool DataPlatform::writeAsJson(const std::string& resourceName, const Json::Value& data) const
-{
-  LOG_INFO("DataPlatform.writeAsJson", "writing to %s", resourceName.c_str());
-  if (!Util::FileUtils::CreateDirectory(resourceName, true, true)) {
-    LOG_ERROR("DataPlatform.writeAsJson", "Failed to create folder %s", resourceName.c_str());
+  LOG_INFO("DataPlatform.writeAsJson", "writing to %s", jsonFilename.c_str());
+  if (!Util::FileUtils::CreateDirectory(jsonFilename, true, true)) {
+    LOG_ERROR("DataPlatform.writeAsJson", "Failed to create folder %s", jsonFilename.c_str());
     return false;
   }
   Json::StyledStreamWriter writer;
   std::fstream fs;
-  fs.open(resourceName, std::ios::out);
+  fs.open(jsonFilename, std::ios::out);
   if (!fs.is_open()) {
     return false;
   }
@@ -134,43 +120,6 @@ bool DataPlatform::writeAsJson(const std::string& resourceName, const Json::Valu
   return true;
 }
 
-std::unique_ptr<DataPlatform> DataPlatform::GetDataPlatform(const Json::Value & json)
-{
-  if (!json.isObject()) {
-    LOG_ERROR("DataPlatform.GetDataPlatform.InvalidJsonObject", "Invalid json object");
-    return nullptr;
-  }
-
-  const auto & persistentPath = json["DataPlatformPersistentPath"];
-  if (!persistentPath.isString()) {
-    LOG_ERROR("DataPlatform.GetDataPlatform.InvalidPersistentPath", "Invalid persistent path attribute");
-    return nullptr;
-  }
-
-  const auto & cachePath = json["DataPlatformCachePath"];
-  if (!cachePath.isString()) {
-    LOG_ERROR("DataPlatform.GetDataPlatform.InvalidCachePAth", "Invalid cache path attribute");
-    return nullptr;
-  }
-
-  const auto & resourcesPath = json["DataPlatformResourcesPath"];
-  if (!resourcesPath.isString()) {
-    LOG_ERROR("DataPlatform.GetDataPlatform.InvalidResourcesPath", "Invalid resource path attribute");
-    return nullptr;
-  }
-
-  return std::make_unique<DataPlatform>(persistentPath.asString(), cachePath.asString(), resourcesPath.asString());
-}
-
-std::unique_ptr<DataPlatform> DataPlatform::GetDataPlatform(const std::string & path)
-{
-  Json::Value json;
-  if (!readAsJson(path, json)) {
-    LOG_ERROR("DataPlatform.GetDataPlatform.InvalidJsonFile", "Unable to read json from %s", path.c_str());
-    return nullptr;
-  }
-  return GetDataPlatform(json);
-}
 
 } // end namespace Data
 } // end namespace Util

@@ -23,7 +23,7 @@
 #include <memory>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward Declaration
 class BehaviorManager;
@@ -64,8 +64,8 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Robot* robot, const BCCompMap& dependentComps) override;
-  virtual void UpdateDependent(const BCCompMap& dependentComps) override {};
+  virtual void InitDependent(Robot* robot, const BCCompMap& dependentComponents) override;
+  virtual void UpdateDependent(const BCCompMap& dependentComponents) override {};
   virtual void AdditionalInitAccessibleComponents(BCCompIDSet& components) const override {
     components.insert(BCComponentID::BehaviorSystemManager);
     components.insert(BCComponentID::AIComponent);
@@ -92,10 +92,6 @@ public:
   // behavior that it was delegated to. Otherwise, return nullptr (including if control was delegated to an
   // action)
   const IBehavior* GetBehaviorDelegatedTo(const IBehavior* delegatingBehavior) const;
-
-  // Return the last tick when the behavior stack was updated (i.e. new behavior delegated to or one was
-  // canceled)
-  size_t GetLastTickBehaviorStackChanged() const;
   
 private:
   std::unique_ptr<Delegator>   _delegator;
@@ -111,7 +107,7 @@ private:
   
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_DelegationComponent_H__

@@ -1,6 +1,0 @@
-cxx_project(
-    name = 'anki-ble',
-    srcs = cxx_src_glob(['.'],
-    ),
-    headers = cxx_header_glob(['.'])
-)

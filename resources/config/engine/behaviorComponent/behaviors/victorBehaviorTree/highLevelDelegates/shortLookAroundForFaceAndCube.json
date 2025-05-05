@@ -4,9 +4,7 @@
 {
   "behaviorClass": "LookForFaceAndCube",
   "behaviorID": "ShortLookAroundForFaceAndCube",
-
-  "associatedActiveFeature": "NoFeature",
-
+  
   // behavior configuration
   "bodyTurnSpeed_degPerSec": 180,
   "headTurnSpeed_degPerSec": 120,
@@ -28,5 +26,5 @@
   "stopBehaviorOnAnyFace": true,
   "stopBehaviorOnNamedFace": true,
   
-  "lookInPlaceAnimTrigger": "LookAround"
+  "lookInPlaceAnimTrigger": "HikingLookAround"
 }

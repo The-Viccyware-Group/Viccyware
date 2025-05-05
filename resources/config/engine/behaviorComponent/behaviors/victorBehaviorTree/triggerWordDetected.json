@@ -2,32 +2,7 @@
   "behaviorClass": "ReactToVoiceCommand",
   "behaviorID": "TriggerWordDetected",
 
-  "associatedActiveFeature": "NoFeature",
-  "behaviorStatToIncrement": "ReactedToTriggerWord",
+  "behaviorOnTrigger" : "ReactToTriggerDirectionAwake",
 
-  "notifyOnWifiErrors": {
-    "recentOccurrence": {
-      // trigger error notification immediately
-      "numberOfTimes": 1
-      // seconds don't matter with numberOfTimes = 1
-      // "amountOfSeconds": 300.0
-    }
-  },
-  
-  "notifyOnCloudErrors": {
-    "recentOccurrence": {
-      // trigger error notification immediately
-      "numberOfTimes": 2,
-      "amountOfSeconds": 60.0
-    }
-  },
-
-  "earConAudioEventBegin"   : "Play__Robot_Vo__Shared_Curious_Short",
-  "earConAudioEventSuccess" : "Play__Robot_Vic_Sfx__Wake_Word_On",
-  "earConAudioEventNeutral" : "Play__Robot_Vic_Sfx__Wake_Word_Off",
-  "backpackLights"          : false,
-
-  "behaviorOnIntent"        : "ReactToTriggerDirectionAwake",
-  
-  "exitAfterListeningIfNotStreaming" : true
+  "leesFeelings" : "lee_sad"
 }

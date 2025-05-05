@@ -1,5 +1,0 @@
-{
-  "behaviorID" : "PlaceCubeByCharger",
-  "behaviorClass" : "PlaceCubeByCharger",
-  "associatedActiveFeature" : "MoveCube"
-}

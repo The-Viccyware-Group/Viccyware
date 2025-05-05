@@ -14,7 +14,7 @@
 #include "simulator/game/cozmoSimTestController.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
     
 // ============ Test class declaration ============
 class CST_SmokeTest : public CozmoSimTestController {
@@ -37,14 +37,14 @@ s32 CST_SmokeTest::UpdateSimInternal()
   const double waitTime_s = 5.0;
   
   if (_startTime_s == 0.0) {
-    _startTime_s = GetSupervisor().getTime();
-  } else if (GetSupervisor().getTime() > _startTime_s + waitTime_s) {
+    _startTime_s = GetSupervisor()->getTime();
+  } else if (GetSupervisor()->getTime() > _startTime_s + waitTime_s) {
     CST_EXIT();
   }
   
   return _result;
 }
   
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 

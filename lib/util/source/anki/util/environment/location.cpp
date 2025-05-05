@@ -14,8 +14,6 @@
 #include <mutex>
 #include <string>
 
-#define LOG_CHANNEL "Location"
-
 namespace Anki {
 namespace Util {
 
@@ -94,7 +92,7 @@ void Location::StartProvider(const Location::ProviderConfig& config)
       const std::vector<uint8_t>& responseBody) {
 
       if (!isHttpSuccessCode(responseCode)) {
-        Util::sChanneledInfoF(LOG_CHANNEL, "util.location.fetch_failed.bad_http_response",
+        Util::sChanneledInfoF(DEFAULT_CHANNEL_NAME, "util.location.fetch_failed.bad_http_response",
                               {{DDATA, std::to_string(responseCode).c_str()}},
                               "%s", request.uri.c_str());
 
@@ -105,7 +103,7 @@ void Location::StartProvider(const Location::ProviderConfig& config)
       Location location;
       bool parsingSuccess = ParseLocationFromJsonFile(downloadPath, location);
       if (!parsingSuccess) {
-        PRINT_NAMED_INFO("util.location.failed_to_parse", "%s", request.uri.c_str());
+        Util::sEventF("util.location.failed_to_parse", {}, "%s", request.uri.c_str());
         FileUtils::DeleteFile(downloadPath);
         return;
       }
@@ -141,7 +139,7 @@ bool Location::GetCurrentLocation(Location& location)
   if (sHaveCachedLocation) {
     location = sCachedLocation;
   } else {
-    PRINT_NAMED_INFO("util.get_current_location.do_not_have_cached_location", "");
+    Util::sEventF("util.get_current_location.do_not_have_cached_location", {}, "");
   }
 
   return sHaveCachedLocation;

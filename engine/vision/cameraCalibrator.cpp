@@ -13,10 +13,11 @@
 #include "engine/vision/cameraCalibrator.h"
 
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/math/quad.h"
-#include "coretech/common/shared/math/rotation.h"
+#include "coretech/common/engine/math/rotation.h"
 
 #include "anki/cozmo/shared/cozmoConfig.h"
+
+#include "engine/vision/visionSystem.h"
 
 #include "opencv2/calib3d/calib3d.hpp"
 #include "opencv2/imgproc.hpp"
@@ -35,7 +36,7 @@
 #define DRAW_CALIB_IMAGES 0
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Min/max size of calibration pattern blobs and distance between them
 CONSOLE_VAR(float, kMaxCalibBlobPixelArea,         "Vision.Calibration", 800.f);
@@ -55,7 +56,8 @@ namespace {
 static const char* const kLogChannelName = "CameraCalibrator";
 }
     
-CameraCalibrator::CameraCalibrator()
+CameraCalibrator::CameraCalibrator(VisionSystem& visionSystem)
+: _visionSystem(visionSystem)
 {
   
 }
@@ -66,14 +68,14 @@ CameraCalibrator::~CameraCalibrator()
 }
 
 Result CameraCalibrator::ComputeCalibrationFromCheckerboard(std::list<Vision::CameraCalibration>& calibration_out,
-                                                            Vision::DebugImageList<Vision::CompressedImage>& debugImages_out)
+                                                            DebugImageList<Vision::ImageRGB>& debugImageRGBs_out)
 {
   std::unique_ptr<Vision::CameraCalibration> calibration;
   _isCalibrating = true;
   
-  // Guarantee Calibration mode gets disabled and computed calibration gets sent
+  // Guarantee ComputingCalibration mode gets disabled and computed calibration gets sent
   // no matter how we return from this function
-  Util::CleanupHelper disableCalibration([this, &calibration_out, &calibration]() {
+  Util::CleanupHelper disableComputingCalibration([this, &calibration_out, &calibration]() {
     if(calibration == nullptr)
     {
       PRINT_NAMED_WARNING("CameraCalibrator.ComputeCalibrationFromCheckerboard.NullCalibration", "");
@@ -82,6 +84,7 @@ Result CameraCalibrator::ComputeCalibrationFromCheckerboard(std::list<Vision::Ca
     {
       calibration_out.push_back(*calibration);
     }
+    _visionSystem.SetNextMode(VisionMode::ComputingCalibration, false);
     _isCalibrating = false;
   });
   
@@ -148,7 +151,7 @@ Result CameraCalibrator::ComputeCalibrationFromCheckerboard(std::list<Vision::Ca
         cv::drawChessboardCorners(dispImg.get_CvMat_(), boardSize, cv::Mat(pointBuf), calibImage.dotsFound);
       }
       
-      debugImages_out.emplace_back(std::string("CalibImage") + std::to_string(imgCnt), dispImg);
+      debugImageRGBs_out.push_back({std::string("CalibImage") + std::to_string(imgCnt), dispImg});
     }
     
     ++imgCnt;
@@ -226,14 +229,14 @@ Result CameraCalibrator::ComputeCalibrationFromCheckerboard(std::list<Vision::Ca
 Result CameraCalibrator::ComputeCalibrationFromSingleTarget(CalibTargetType targetType,
                                                             const std::list<Vision::ObservedMarker>& observedMarkers,
                                                             std::list<Vision::CameraCalibration>& calibration_out,
-                                                            Vision::DebugImageList<Vision::CompressedImage>& debugImages_out)
+                                                            DebugImageList<Vision::ImageRGB>& debugImageRGBs_out)
 {
   std::unique_ptr<Vision::CameraCalibration> calibration;
   _isCalibrating = true;
   
-  // Guarantee Calibration mode gets disabled and computed calibration gets sent
+  // Guarantee ComputingCalibration mode gets disabled and computed calibration gets sent
   // no matter how we return from this function
-  Util::CleanupHelper disableCalibration([this, &calibration_out, &calibration]() {
+  Util::CleanupHelper disableComputingCalibration([this, &calibration_out, &calibration]() {
     if(calibration == nullptr)
     {
       PRINT_NAMED_WARNING("CameraCalibrator.ComputeCalibrationFromSingleTarget.NullCalibration", "");
@@ -242,6 +245,7 @@ Result CameraCalibrator::ComputeCalibrationFromSingleTarget(CalibTargetType targ
     {
       calibration_out.push_back(*calibration);
     }
+    _visionSystem.SetNextMode(VisionMode::ComputingCalibration, false);
     _isCalibrating = false;
   });
   
@@ -340,9 +344,9 @@ Result CameraCalibrator::ComputeCalibrationFromSingleTarget(CalibTargetType targ
   std::string s = ss.str();
   if(!s.empty())
   {
-    PRINT_CH_INFO(kLogChannelName, "CameraCalibrator.ComputeCalibrationFromSingleTarget.MarkersNotSeen",
-                                   "Expected to see the following markers but didnt %s",
-                                   s.c_str());
+    PRINT_NAMED_INFO("CameraCalibrator.ComputeCalibrationFromSingleTarget.MarkersNotSeen",
+                     "Expected to see the following markers but didnt %s",
+                     s.c_str());
   }
   
   ss.str(std::string());
@@ -374,7 +378,7 @@ Result CameraCalibrator::ComputeCalibrationFromSingleTarget(CalibTargetType targ
       const auto& p = imgPts[i];
       dispImg.DrawFilledCircle({p[0], p[1]}, NamedColors::RED, 2);
     }
-    debugImages_out.emplace_back("CalibImage", dispImg);
+    debugImageRGBs_out.push_back({"CalibImage", dispImg});
   }
   
   // Depending on what type of robot we are running, provide a different initial guess for calibration
@@ -554,7 +558,6 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_Qbert(std::map<Vision::Ma
     (rotate 45 degree on Z and then -30 degree in Y in this origin)
    */
 
-#if FACTORY_TEST
   const f32 halfMarkerSize_mm = BLEACHER_CALIB_MARKER_SIZE_MM / 2.f;
   const f32 halfTargetFace_mm = BLEACHER_CALIB_TARGET_FACE_SIZE_MM / 2.f;
   const Quad3f originsFrontFace({
@@ -587,7 +590,7 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_Qbert(std::map<Vision::Ma
     p.ApplyTo(whichFace, whichFace);
     return whichFace;
   };
-
+  
   // Bottom row of cubes
   markersTo3dCoords[Vision::MARKER_LIGHTCUBEK_RIGHT]  = GetCoordsForFace(true, 0, 0, 0);
   
@@ -666,10 +669,6 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_Qbert(std::map<Vision::Ma
   markersTo3dCoords[Vision::MARKER_LIGHTCUBEJ_BOTTOM] = GetCoordsForFace(false, 6, -3, 3);
   
   markersTo3dCoords[Vision::MARKER_SDK_2TRIANGLES]    = GetCoordsForFace(false, 7, -4, 3);
-#else
-  PRINT_NAMED_ERROR("CameraCalibrator.GetCalibTargetMarkersTo3dCoords_Qbert.NotInFactoryTest",
-                    "Markers have diverged from factory test build");
-#endif
 }
 
 // TODO: Populate markersNeededToBeSeen should we end up using this target again
@@ -706,7 +705,7 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_InvertedBox(std::map<Visi
    !isFrontFace are the left markers, that will be visible when rotation are applied
    isBottomFace are the markers on the top face
    */
-#if FACTORY_TEST
+  
   const f32 halfMarkerSize_mm = INVERTEDBOX_CALIB_MARKER_SIZE_MM / 2.f;
   const f32 halfTargetFace_mm = INVERTEDBOX_CALIB_TARGET_FACE_SIZE_MM / 2.f;
   const Quad3f originsFrontFace({
@@ -749,7 +748,7 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_InvertedBox(std::map<Visi
     p.ApplyTo(whichFace, whichFace);
     return whichFace;
   };
-
+  
   // Left face
   // Bottom row
   markersTo3dCoords[Vision::MARKER_LIGHTCUBEK_LEFT]   = GetCoordsForFace(true, 0, 0, 0);
@@ -800,10 +799,6 @@ void CameraCalibrator::GetCalibTargetMarkersTo3dCoords_InvertedBox(std::map<Visi
   markersTo3dCoords[Vision::MARKER_SDK_3TRIANGLES]    = GetCoordsForFace(false, 2, -3, 3, true);
   
   markersTo3dCoords[Vision::MARKER_SDK_3DIAMONDS]     = GetCoordsForFace(false, 2, -4, 3, true);
-#else
-  PRINT_NAMED_ERROR("CameraCalibrator.GetCalibTargetMarkersTo3dCoords_InvertedBox.NotInFactoryTest",
-                    "Markers have diverged from factory test build");
-#endif
 }
 
 }

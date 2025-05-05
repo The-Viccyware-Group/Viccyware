@@ -1,6 +1,7 @@
 #!/bin/bash
-set -e
+set -x
 set -u
+set -e
 
 SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || echo $0))
 
@@ -17,6 +18,8 @@ function vlog()
 }
 
 pushd "${TOPLEVEL}" > /dev/null 2>&1
+
+$GIT config --global url."git@github.com:".insteadOf https://github.com
 
 OS_NAME=$(uname -s)
 case $OS_NAME in

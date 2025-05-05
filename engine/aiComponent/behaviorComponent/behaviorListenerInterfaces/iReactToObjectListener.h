@@ -14,7 +14,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class IReactToObjectListener{
 public:
@@ -24,7 +24,7 @@ public:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_BehaviorListenerInterfaces_IReactToObjectListener_H__

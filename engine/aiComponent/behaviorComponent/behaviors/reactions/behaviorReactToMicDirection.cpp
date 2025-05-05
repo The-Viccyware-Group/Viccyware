@@ -25,11 +25,11 @@
 
 #include <algorithm>
 
-#define LOG_CHANNEL "Microphones"
+
 #define DEBUG_MIC_REACTION_VERBOSE 0 // add some verbose debugging if trying to track down issues
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace {
 
@@ -59,7 +59,6 @@ const BehaviorReactToMicDirection::DynamicStateReaction BehaviorReactToMicDirect
     { kInvalidAnimationTrigger, -((float)EClockDirection::NineOClock * kDegreesPerDirection) },
     { kInvalidAnimationTrigger, -((float)EClockDirection::TenOClock * kDegreesPerDirection) },
     { kInvalidAnimationTrigger, -((float)EClockDirection::ElevenOClock * kDegreesPerDirection) },
-    { kInvalidAnimationTrigger, 0 },
   }
 };
 
@@ -79,6 +78,8 @@ BehaviorReactToMicDirection::BehaviorReactToMicDirection( const Json::Value& con
   const Json::Value& allResponses( config[kKeyResponseList] );
   ASSERT_NAMED_EVENT( ( !allResponses.isNull() ), "BehaviorReactToMicDirection.Init",
                       "Config is missing list of response animations (key == reaction_list)" );
+
+  PRINT_NAMED_INFO("TESTING", "Created BehaviorReactToMicDirection");
 
   // initialize our default data to our fallback data ...
   std::copy( std::begin( kFallbackReaction.directionalResponseList ),
@@ -211,7 +212,8 @@ BehaviorReactToMicDirection::EClockDirection BehaviorReactToMicDirection::Conver
                        "BehaviorReactToMicDirection.ConvertMicDirectionToClockDirection",
                        "Attempting to convert an invalid mic direction" );
 
-    return EClockDirection::Invalid;
+    // we'll treat all of these exceptions as simply coming from the twelve o'clock direction
+    return EClockDirection::TwelveOClock;
   }
 }
 
@@ -263,8 +265,6 @@ std::string BehaviorReactToMicDirection::ConvertClockDirectionToString( EClockDi
       return "TenOClock";
     case EClockDirection::ElevenOClock:
       return "ElevenOClock";
-    case EClockDirection::Ambient:
-      return "Ambient";
     case EClockDirection::Invalid:
       PRINT_NAMED_ERROR( "BehaviorReactToMicDirection.ConvertClockDirectionToString", "Invalid conversion of EClockDirection::Invalid to string" );
     break;
@@ -356,8 +356,7 @@ void BehaviorReactToMicDirection::RespondToSound()
   // normally we would play an animation, but currently we don't have animation ready, so for now we'll just turn to sound
   if ( EClockDirection::Invalid != _dVars.reactionDirection )
   {
-    LOG_DEBUG( "BehaviorReactToMicDirection.Reacting",
-               "Responding to sound from direction [%u]", _dVars.reactionDirection );
+    PRINT_CH_DEBUG( "MicData", "BehaviorReactToMicDirection.Reacting", "Responding to sound from direction [%u]", _dVars.reactionDirection );
 
     // if an animation was specified, use it, else procedurally turn to the facing direction
     const DirectionResponse& response = GetResponseData( _dVars.reactionDirection );
@@ -367,8 +366,8 @@ void BehaviorReactToMicDirection::RespondToSound()
 
       #if DEBUG_MIC_REACTION_VERBOSE
       {
-        LOG_DEBUG( "BehaviorReactToMicDirection.Debug", "Playing reaction anim [%s]",
-                   AnimationTriggerToString(response.animation) );
+        PRINT_CH_DEBUG( "MicData", "BehaviorReactToMicDirection.Debug", "Playing reaction anim [%s]",
+                        AnimationTriggerToString(response.animation) );
       }
       #endif
     }
@@ -382,8 +381,8 @@ void BehaviorReactToMicDirection::RespondToSound()
 
         #if DEBUG_MIC_REACTION_VERBOSE
         {
-          LOG_DEBUG( "BehaviorReactToMicDirection.Debug", "Playing reaction turn to [%d] degrees",
-                     (int)RAD_TO_DEG(rads.ToFloat()) );
+          PRINT_CH_DEBUG( "MicData", "BehaviorReactToMicDirection.Debug", "Playing reaction turn to [%d] degrees",
+                          (int)RAD_TO_DEG(rads.ToFloat()) );
         }
         #endif
       }

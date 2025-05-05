@@ -15,7 +15,7 @@
 #include "util/logging/saveToFileLoggerProvider.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class DevLoggerProvider : public Util::SaveToFileLoggerProvider {
 public:
@@ -25,7 +25,7 @@ public:
   void Log(ILoggerProvider::LogLevel logLevel, const std::string& message) override;
 };
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 
 

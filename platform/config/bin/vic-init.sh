@@ -4,38 +4,20 @@
 #
 # Perform any cleanup & init tasks not handled by the OS.
 #
-# This script runs each time the service group (anki-robot.target)
-# is started, BEFORE any individual vic-blah services.
-#
 
-#
-# Forward log events from rampost, if any
-#
-RAMPOST_LOG=/dev/rampost.log
+# VIC-1369: Older OS images wrote journal to root partition
+echo "Vacuum journal"
+/bin/journalctl --vacuum-size=10M
 
-if [ -f ${RAMPOST_LOG} ]; then
-  /anki/bin/vic-log-forward rampost ${RAMPOST_LOG}
-  /bin/rm -f ${RAMPOST_LOG}
+# VIC-1504: Older OS images do not provide init_debuggerd.service
+active=`/bin/systemctl is-active init_debuggerd`
+if [ "$active" != "active" ]; then
+  echo "Enable tombstones"
+  /bin/mkdir -p /data/tombstones
+  pid=`/bin/pgrep debuggerd`
+  if [ "$pid" == "" ]; then
+    echo "Start debuggerd"
+    /usr/bin/debuggerd > /dev/null 2>&1 &
+  fi
 fi
 
-#
-# Forward kernel panics, if any
-#
-PANICS_DIR="/data/panics"
-if [ -d "${PANICS_DIR}" ]; then
-  shopt -s nullglob
-  for i in "${PANICS_DIR}"/*
-  do
-    echo "/anki/bin/vic-log-kernel-panic ${i}"
-    if /anki/bin/vic-log-kernel-panic "${i}" ; then
-      echo "/bin/rm -f ${i}"
-      /bin/rm -f "${i}"
-    fi
-  done
-  shopt -u nullglob
-fi
-
-#
-# Clear fault code, if any
-#
-/bin/fault-code-clear

@@ -15,11 +15,12 @@
 #ifndef __Anki_Cozmo_Basestation_OverheadEdge_H__
 #define __Anki_Cozmo_Basestation_OverheadEdge_H__
 
-#include "coretech/common/engine/math/quad.h"
-#include "coretech/common/engine/robotTimeStamp.h"
+#include "coretech/common/shared/types.h"
+#include "coretech/common/engine/math/point.h"
+#include "coretech/common/engine/math/quad_impl.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Point in an edge
@@ -60,14 +61,14 @@ namespace Vector {
   // information processed for a frame at the given timestamp
   struct OverheadEdgeFrame {
   OverheadEdgeFrame() : timestamp(0), groundPlaneValid(false) {}
-    RobotTimeStamp_t timestamp;
+    TimeStamp_t timestamp;
     bool groundPlaneValid;
     Quad2f groundplane;
     OverheadEdgeChainVector chains;
   };
   
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_Basestation_OverheadEdge_H__

@@ -17,7 +17,7 @@
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionRobotShaken : public IBEICondition
 {
@@ -27,11 +27,10 @@ public:
 protected:
   virtual bool AreConditionsMetInternal(BehaviorExternalInterface& behaviorExternalInterface) const override;
 
-  float _minTriggerMagnitude;
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_WantsToRunStrategies_ConditionRobotShaken_H__

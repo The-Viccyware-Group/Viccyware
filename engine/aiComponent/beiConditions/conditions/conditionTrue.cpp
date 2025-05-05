@@ -17,7 +17,7 @@
 #include "coretech/common/engine/utils/timer.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ConditionTrue::ConditionTrue(const Json::Value& config)

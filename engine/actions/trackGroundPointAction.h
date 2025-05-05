@@ -16,11 +16,11 @@
 #include "engine/actions/trackActionInterface.h"
 
 #include "clad/types/visionModes.h"
-#include "coretech/common/engine/robotTimeStamp.h"
+
 #include "util/signals/simpleSignal_fwd.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class TrackGroundPointAction : public ITrackAction
 {
@@ -56,9 +56,9 @@ protected:
 private:
   
   struct PointObservation {
-    RobotTimeStamp_t timestamp;
-    f32              groundArea;
-    Point2f          groundPoint;
+    TimeStamp_t timestamp;
+    f32         groundArea;
+    Point2f     groundPoint;
   };
   
   ExternalInterface::MessageEngineToGameTag _salientTag;
@@ -104,7 +104,7 @@ inline void TrackGroundPointAction::EnablePredictionWhenLost(bool enableX, bool 
   _maxPredictionWindow_ms = duration_ms;
 }
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_Basestation_TrackGroundPointAction_H__

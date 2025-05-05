@@ -186,16 +186,8 @@ extern "C" {
 void DASConfigure(const char* configurationJsonFilePath, const char* logDirPath, const char* gameLogDirPath) __attribute__((visibility("default")));
 const char* DASGetLogDir() __attribute__((visibility("default")));
 void DASClose() __attribute__((visibility("default")));
-
-// Enable network for given reason
 void DASEnableNetwork(DASDisableNetworkReason reason) __attribute__((visibility("default")));
-
-// Disable network for given reason
 void DASDisableNetwork(DASDisableNetworkReason reason) __attribute__((visibility("default")));
-
-// Return bitmask of reasons network is disabled
-int  DASGetNetworkingDisabled() __attribute__((visibility("default")));
-
 void DASForceFlushNow() __attribute__((visibility("default")));
 
 #ifdef __cplusplus
@@ -206,7 +198,7 @@ using DASFlushCallback = std::function<void(bool,std::string)>; // passes in suc
 void DASForceFlushWithCallback(const DASFlushCallback& callback) __attribute((visibility("default")));
 void DASPauseUploadingToServer(const bool isPaused) __attribute((visibility("default")));
 
-
+  
 using DASArchiveFunction = std::function<bool(const std::string&)>;
 using DASUnarchiveFunction = std::function<std::string(const std::string&)>;
 void DASSetArchiveLogConfig(const DASArchiveFunction& archiveFunction,
@@ -249,17 +241,6 @@ void _DAS_LogKvMap(DASLogLevel level, const char* eventName, const char* eventVa
 
 #ifdef __cplusplus
 } // extern "C"
-#endif
-
-#if defined(VICOS)
-
-// Expose additional methods for use on this platform
-extern "C" {
-  namespace DAS {
-    bool PostToServer(const std::string & url, const std::string & body, std::string & response) __attribute__((visibility("default")));
-  }
-}
-
 #endif
 
 #endif /* defined(__DAS_H__) */

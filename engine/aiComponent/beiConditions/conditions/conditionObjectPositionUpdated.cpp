@@ -14,8 +14,6 @@
 
 #include "engine/aiComponent/beiConditions/conditions/conditionObjectPositionUpdated.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
-
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
@@ -24,11 +22,17 @@
 #include "engine/components/dockingComponent.h"
 #include "engine/cozmoContext.h"
 
+#include "coretech/common/engine/math/point_impl.h"
+
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace{
+std::set<ObjectFamily> _objectFamilies = {{
+  ObjectFamily::LightCube,
+  ObjectFamily::Block
+}};
 const bool kDebugAcknowledgements = false;
 }
   
@@ -89,8 +93,9 @@ void ConditionObjectPositionUpdated::HandleEvent(const EngineToGameEvent& event,
 void ConditionObjectPositionUpdated::HandleObjectObserved(BehaviorExternalInterface& behaviorExternalInterface,
   const ExternalInterface::RobotObservedObject& msg)
 {
-  // Only care about light cubes (see VIC-13208)
-  if (!IsValidLightCube(msg.objectType, false)) {
+  // Object must be in one of the families this behavior cares about
+  const bool hasValidFamily = _objectFamilies.count(msg.objectFamily) > 0;
+  if(!hasValidFamily) {
     return;
   }
 
@@ -100,7 +105,7 @@ void ConditionObjectPositionUpdated::HandleObjectObserved(BehaviorExternalInterf
   Pose3d obsPose( msg.pose, robotInfo.GetPoseOriginList() );
 
   // ignore cubes we are carrying or docking to (don't react to them)
-  if(msg.objectID == robotInfo.GetCarryingComponent().GetCarryingObjectID() ||
+  if(msg.objectID == robotInfo.GetCarryingComponent().GetCarryingObject() ||
      msg.objectID == robotInfo.GetDockingComponent().GetDockObject())
   {
     const bool considerReaction = false;
@@ -139,7 +144,7 @@ void ConditionObjectPositionUpdated::ReactionData::FakeReaction()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ConditionObjectPositionUpdated::HandleNewObservation(s32 id,
                                                          const Pose3d& pose,
-                                                         RobotTimeStamp_t timestamp,
+                                                         u32 timestamp,
                                                          bool reactionEnabled)
 {
   const auto reactionIt = _reactionData.find(id);
@@ -164,7 +169,7 @@ void ConditionObjectPositionUpdated::HandleNewObservation(s32 id,
                     pose.GetTranslation().x(),
                     pose.GetTranslation().y(),
                     pose.GetTranslation().z(),
-                    (TimeStamp_t)timestamp,
+                    timestamp,
                     reactionEnabled ? 1 : 0);
     }
     
@@ -262,7 +267,7 @@ bool ConditionObjectPositionUpdated::ShouldReactToTarget(BehaviorExternalInterfa
     // if we have reacted, then check if we want to react again based on the last pose and time we reacted.
     if( hasEverReactedToThisId ) {
       const auto& robotInfo = behaviorExternalInterface.GetRobotInfo();
-      const RobotTimeStamp_t currTimestamp = robotInfo.GetLastImageTimeStamp();
+      const u32 currTimestamp = robotInfo.GetLastImageTimeStamp();
       const bool isCooldownOver = currTimestamp - reactionPair.second.lastReactionTime_ms > _params.coolDownDuration_ms;
       
       const bool shouldReactToPose = ShouldReactToTarget_poseHelper(reactionPair.second.lastPose,
@@ -288,7 +293,7 @@ bool ConditionObjectPositionUpdated::ShouldReactToTarget(BehaviorExternalInterfa
         PRINT_CH_INFO("ReactionTriggers", ("ConditionObjectPositionUpdated.DoInitialReaction"),
                       "Doing first reaction to new id %d at ts=%dms",
                       reactionPair.first,
-                      (TimeStamp_t)reactionPair.second.lastSeenTime_ms);
+                      reactionPair.second.lastSeenTime_ms);
         reactionPair.second.lastPose.Print("Behaviors", ("ConditionObjectPositionUpdated.NewPose"));
       }
     }
@@ -311,5 +316,5 @@ bool ConditionObjectPositionUpdated::HasDesiredReactionTargets(BehaviorExternalI
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

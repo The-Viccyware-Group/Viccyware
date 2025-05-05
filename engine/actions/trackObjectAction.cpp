@@ -13,7 +13,6 @@
 
 #include "engine/actions/trackObjectAction.h"
 #include "engine/blockWorld/blockWorld.h"
-#include "engine/blockWorld/blockWorldFilter.h"
 #include "engine/components/movementComponent.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/robot.h"
@@ -24,7 +23,7 @@
 #define DEBUG_TRACKING_ACTIONS 0
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 static const char * const kLogChannelName = "Actions";
   
@@ -48,7 +47,7 @@ TrackObjectAction::~TrackObjectAction()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TrackObjectAction::GetRequiredVisionModes(std::set<VisionModeRequest>& requests) const
 {
-  requests.insert({ VisionMode::Markers, EVisionUpdateFrequency::High });
+  requests.insert({ VisionMode::DetectingMarkers, EVisionUpdateFrequency::High });
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -85,9 +84,7 @@ ITrackAction::UpdateResult TrackObjectAction::UpdateTracking(Radians& absPanAngl
   
   if(_trackByType) {
     BlockWorldFilter filter;
-    filter.AddFilterFcn([this](const ObservableObject* obj){
-      return (obj->GetLastObservedTime() == GetRobot().GetLastImageTimeStamp());
-    });
+    filter.OnlyConsiderLatestUpdate(true);
     
     matchingObject = GetRobot().GetBlockWorld().FindLocatedClosestMatchingObject(_objectType, _lastTrackToPose, 1000.f, DEG_TO_RAD(180), filter);
     
@@ -178,5 +175,5 @@ ITrackAction::UpdateResult TrackObjectAction::UpdateTracking(Radians& absPanAngl
 } // UpdateTracking()
 
   
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

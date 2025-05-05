@@ -14,12 +14,12 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorReactToFrustration_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
+#include "clad/types/animationTrigger.h"
 #include <vector>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
-enum class AnimationTrigger : int32_t;
 class IFrustrationListener;
   
 class BehaviorReactToFrustration : public ICozmoBehavior
@@ -49,23 +49,19 @@ private:
   
   void LoadJson(const Json::Value& config);
   
-  struct InstanceConfig {
-    InstanceConfig();
-    f32 minDistanceToDrive_mm;
-    f32 maxDistanceToDrive_mm;
-    f32 randomDriveAngleMin_deg;
-    f32 randomDriveAngleMax_deg;
-    AnimationTrigger animToPlay;
-    std::string finalEmotionEvent;
+  f32 _minDistanceToDrive_mm = 0;
+  f32 _maxDistanceToDrive_mm = 0;
+  f32 _randomDriveAngleMin_deg = 0;
+  f32 _randomDriveAngleMax_deg = 0;
+  AnimationTrigger _animToPlay = AnimationTrigger::Count;
+  std::string _finalEmotionEvent;
   
-    std::set<ISubtaskListener*> frustrationListeners;
-  };
-  InstanceConfig _iConfig;
+  std::set<ISubtaskListener*> _frustrationListeners;
 
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif

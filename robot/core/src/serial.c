@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <assert.h>
 #include <termios.h>
-#include <errno.h>
 
 #include "core/common.h"
 #include "core/serial.h"

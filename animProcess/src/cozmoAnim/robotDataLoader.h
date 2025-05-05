@@ -13,13 +13,7 @@
 #ifndef ANKI_COZMO_ANIM_DATA_LOADER_H
 #define ANKI_COZMO_ANIM_DATA_LOADER_H
 
-#include "cannedAnimLib/cannedAnims/cannedAnimationLoader.h"
-#include "clad/types/backpackAnimationTriggers.h"
-#include "cozmoAnim/backpackLights/animBackpackLightComponentTypes.h"
-#include "util/cladHelpers/cladEnumToStringMap.h"
 #include "util/helpers/noncopyable.h"
-#include "coretech/vision/shared/spritePathMap.h"
-
 #include "assert.h"
 #include <json/json.h>
 #include <atomic>
@@ -37,18 +31,11 @@ class DataPlatform;
 }
 }
 
-namespace Vision {
-class SpriteCache;
-class SpriteSequenceContainer;
-}
-
-namespace Vector {
+namespace Cozmo {
 
 class CannedAnimationContainer;
 class Animation;
-namespace Anim {
 class AnimContext;
-class BackpackLightAnimationContainer;
 
 class RobotDataLoader : private Util::noncopyable
 {
@@ -72,44 +59,17 @@ public:
 
   const Json::Value & GetTextToSpeechConfig() const { return _tts_config; }
   const Json::Value & GetWebServerAnimConfig() const { return _ws_config; }
-  const Json::Value & GetMicTriggerConfig() const { return _micTriggerConfig; }
   Animation* GetCannedAnimation(const std::string& name);
   std::vector<std::string> GetAnimationNames();
-  
-  const std::string& GetAlexaConfig() const { return _alexaConfig; }
 
-  // images are stored as a map of stripped file name (no file extension) to full path
-  const Vision::SpritePathMap* GetSpritePaths() const { assert(_spritePathMap != nullptr); return _spritePathMap.get(); }
-  Vision::SpriteCache* GetSpriteCache() const { assert(_spriteCache != nullptr); return _spriteCache.get();  }
-
-  Vision::SpriteSequenceContainer* GetSpriteSequenceContainer() { return _spriteSequenceContainer.get();}
-
-  using BackpackAnimationTriggerMap = Util::CladEnumToStringMap<BackpackAnimationTrigger>;
-  using FileJsonMap = std::unordered_map<std::string, const Json::Value>;
-  const FileJsonMap& GetBackpackLightAnimations() const { return _backpackLightAnimations; }
-  BackpackAnimationTriggerMap* GetBackpackAnimationTriggerMap() { return _backpackAnimationTriggerMap.get();}
-  
 private:
-  void LoadIndependentSpritePaths();
-
   void NotifyAnimAdded(const std::string& animName, uint32_t animLength);
-  
-  void SetupProceduralAnimation();
 
-  void LoadBackpackLightAnimations(const CannedAnimationLoader::AnimDirInfo& fileInfo);
-  void LoadBackpackLightAnimationFile(const std::string& path);
-  void LoadBackpackAnimationTriggerMap();
-  
   const AnimContext* const _context;
   const Util::Data::DataPlatform* _platform;
 
   // animation data
-  std::unique_ptr<CannedAnimationContainer>              _cannedAnimations;
-  std::unique_ptr<Vision::SpriteSequenceContainer>       _spriteSequenceContainer;
-  std::unique_ptr<Vision::SpritePathMap>                 _spritePathMap;
-  std::unique_ptr<Vision::SpriteCache>                   _spriteCache;
-
-
+  std::unique_ptr<CannedAnimationContainer>           _cannedAnimations;
   // loading properties shared with the animiation loader
   std::atomic<float>    _loadingCompleteRatio{0};
   std::atomic<bool>     _abortLoad{false};
@@ -120,16 +80,9 @@ private:
   
   Json::Value _tts_config;
   Json::Value _ws_config;
-  Json::Value _micTriggerConfig;
-  std::string _alexaConfig;
-
-  std::unique_ptr<BackpackAnimationTriggerMap> _backpackAnimationTriggerMap;
-  FileJsonMap _backpackLightAnimations;
-  std::mutex _backpackLoadingMutex;
   
 };
 
-}
 }
 }
 

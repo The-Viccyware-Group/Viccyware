@@ -19,7 +19,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

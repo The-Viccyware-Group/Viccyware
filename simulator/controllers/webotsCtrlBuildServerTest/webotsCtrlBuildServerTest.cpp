@@ -16,7 +16,7 @@
 #include "simulator/game/cozmoSimTestController.h"
 
 using namespace Anki;
-using namespace Anki::Vector;
+using namespace Anki::Cozmo;
 
 void QuitWebots(int status)
 {

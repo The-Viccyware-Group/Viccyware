@@ -4,10 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-//fixture error codes
-#define FIXTURE_EXTERNAL
-#include "../app/fixture.h"
-
 //-----------------------------------------------------------
 //        Defines
 //-----------------------------------------------------------

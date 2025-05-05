@@ -1,5 +1,5 @@
 /**
- * File: util/logging/logging.h
+ * File: logging
  *
  * Author: damjan
  * Created: 4/3/2014
@@ -10,7 +10,7 @@
  *   style: f - takes (...) , v - takes va_list
  *   functions are spelled out, instead of stacked (sErrorF -> calls sErrorV -> calls sError)
  *   to improve on the stack space. If you think about improving on this, please consider macros to re-use code.
- *   If you however feel that we should stack them into one set of functions that use LogLevel as a param, think about
+ *   If you however feel that we should stack them into one set of function that uses LogLevel as a param, think about
  *   need to translate Ank::Util::LogLevel to DasLogLevel and then to ios/android LogLevel.
  *
  * Copyright: Anki, Inc. 2014
@@ -22,126 +22,96 @@
 #define __Util_Logging_Logging_H_
 
 #include "util/global/globalDefinitions.h"
+#include "util/logging/eventKeys.h"
 #include "util/logging/callstack.h"
-#include "util/logging/logtypes.h"
-
-#include "platform/anki-trace/tracing.h"
 
 #include <string>
 #include <vector>
-#include <stdio.h>
 
 #ifndef ALLOW_DEBUG_LOGGING
 #define ALLOW_DEBUG_LOGGING ANKI_DEVELOPER_CODE
 #endif
 
-#if !defined(ANKI_BREADCRUMBS)
-#define ANKI_BREADCRUMBS 0
-#endif
-
-#define MAX_LOG_STRING_LEN 1024
-
 namespace Anki {
 namespace Util {
-
-#if ANKI_BREADCRUMBS
-bool DropBreadcrumb(bool result, const char* file, int line);
-#else
-static inline bool DropBreadcrumb(bool result, const char*, int) { return result; }
-#endif
 
 class ITickTimeProvider;
 class ILoggerProvider;
 class ChannelFilter;
 class IEventProvider;
 
+const uint8_t DASMaxSvalLength = 128;
+
 std::string HexDump(const void *value, const size_t len, char delimiter);
 
 extern ITickTimeProvider* gTickTimeProvider;
 extern ILoggerProvider* gLoggerProvider;
+extern ChannelFilter gChannelFilter;
 extern IEventProvider* gEventProvider;
 
-// Accessors for global error flag for unit testing
-void sSetErrG();            // Sets errG to true
-void sUnSetErrG();          // Sets errG to false
-bool sGetErrG();            // Gets the value of errG
-// Only useful if access to the global error flag involves some locking mechanism
-void sPushErrG(bool value); // Sets errG to value and locks access by other threads until PopErrG is called
-void sPopErrG();            // Restores errG to its value before calling sPushErrG and enables access to errG by other threads
+// Global error flag so we can check if PRINT_ERROR was called for unit testing
+extern bool _errG;
 
 // Global flag to control break-on-error behavior
 extern bool _errBreakOnError;
 
-// If true, access to the global error flag uses a mutex device. Changing this value while logging could
-// lead to a mutex lock, so don't.
-extern bool _lockErrG;
-
-//
-// "Event level" logging is no longer a thing. Do not use it.
-// Messages intended for DAS should use the explicit DASMSG interface declared by util/logging/DAS.h.
-//
-__attribute__((__deprecated__))
 __attribute__((__used__))
-void sEventF(const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,3,4)));
-
-__attribute__((__deprecated__))
-__attribute__((__used__))
-void sEventV(const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,3,0)));
+void sEventF(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,3,4)));
 
 __attribute__((__used__))
-void sEvent(const char* name, const KVPairVector & keyvals, const char* strval);
+void sEventV(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,3,0)));
 
 __attribute__((__used__))
-void sErrorF(const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,3,4)));
+void sEvent(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 __attribute__((__used__))
-void sErrorV(const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,3,0)));
+void sErrorF(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,3,4)));
 
 __attribute__((__used__))
-void sError(const char* name, const KVPairVector & keyvals, const char* strval);
+void sErrorV(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,3,0)));
 
 __attribute__((__used__))
-void sWarningF(const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,3,4)));
+void sError(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 __attribute__((__used__))
-void sWarningV(const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,3,0)));
+void sWarningF(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,3,4)));
 
 __attribute__((__used__))
-void sWarning(const char* name, const KVPairVector & keyvals, const char* strval);
+void sWarningV(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,3,0)));
 
 __attribute__((__used__))
-void sInfoF(const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,3,4)));
+void sWarning(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 __attribute__((__used__))
-void sInfoV(const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,3,0)));
+void sInfoF(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,3,4)));
 
 __attribute__((__used__))
-void sInfo(const char* name, const KVPairVector & keyvals, const char* strval);
+void sChanneledInfoF(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,4,5)));
 
 __attribute__((__used__))
-void sChanneledInfoF(const char* channel, const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,4,5)));
+void sInfoV(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,3,0)));
 
 __attribute__((__used__))
-void sChanneledInfoV(const char* channel, const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,4,0)));
+void sChanneledInfoV(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,4,0)));
 
 __attribute__((__used__))
-void sChanneledInfo(const char* channel, const char* name, const KVPairVector & keyvals, const char* strval);
+void sInfo(const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 __attribute__((__used__))
-void sChanneledDebugF(const char* channel, const char* name, const KVPairVector & keyvals, const char* format, ...) __attribute__((format(printf,4,5)));
+void sChanneledInfo(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 __attribute__((__used__))
-void sChanneledDebugV(const char* channel, const char* name, const KVPairVector & keyvals, const char* format, va_list args) __attribute__((format(printf,4,0)));
+void sChanneledDebugF(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, ...) __attribute__((format(printf,4,5)));
 
 __attribute__((__used__))
-void sChanneledDebug(const char* channel, const char* name, const KVPairVector & keyvals, const char* strval);
+void sChanneledDebugV(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* format, va_list args) __attribute__((format(printf,4,0)));
 
-// Helper for use with ANKI_VERIFY macro. Always returns true.
-bool sVerifySucceededReturnTrue(const char* file, int line);
+__attribute__((__used__))
+void sChanneledDebug(const char* channelName, const char* eventName, const std::vector<std::pair<const char*, const char*>>& keyValues, const char* eventValue);
 
 // Helper for use with ANKI_VERIFY macro. Always returns false.
 __attribute__((__used__))
-bool sVerifyFailedReturnFalse(const char* file, int line, const char* name, const char* format, ...) __attribute__((format(printf,4,5)));
+bool sVerifyFailedReturnFalse(const char* eventName, const char* format, ...) __attribute__((format(printf,2,3)));
 
 
 void sSetGlobal(const char* key, const char* value);
@@ -184,70 +154,33 @@ __attribute__((noreturn)) void sAbort();
 } // namespace Util
 } // namespace Anki
 
+#define DEFAULT_CHANNEL_NAME "Unnamed"
+
 //
 // Logging with names.
 //
 #define PRINT_NAMED_ERROR(name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_ERR, "%s %s", name, PRINT_LOG_VAR_logString);        \
-    ::Anki::Util::sErrorF(name, {}, "%s", PRINT_LOG_VAR_logString);     \
-  } else { \
-    ::Anki::Util::sErrorF(name, {}, format, ##__VA_ARGS__); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);       \
-  ::Anki::Util::sSetErrG(); \
+  ::Anki::Util::sErrorF(name, {}, format, ##__VA_ARGS__); \
+  ::Anki::Util::_errG=true; \
   if (::Anki::Util::_errBreakOnError) { \
     ::Anki::Util::sDebugBreakOnError(); \
   } \
 } while(0)
 
 #define PRINT_NAMED_WARNING(name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];\
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__);\
-    tracelog(TRACE_WARNING, "%s %s", name, PRINT_LOG_VAR_logString);\
-    ::Anki::Util::sWarningF(name, {}, "%s", PRINT_LOG_VAR_logString);\
-  } else { \
-    ::Anki::Util::sWarningF(name, {}, format, ##__VA_ARGS__);\
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
+  ::Anki::Util::sWarningF(name, {}, format, ##__VA_ARGS__); \
 } while(0)
 
 #define PRINT_NAMED_INFO(name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_INFO, "%s %s", name, PRINT_LOG_VAR_logString);       \
-    ::Anki::Util::sChanneledInfoF(name, name, {}, "%s", PRINT_LOG_VAR_logString); \
-  } else { \
-    ::Anki::Util::sChanneledInfoF(name, name, {}, format, ##__VA_ARGS__); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);              \
+  ::Anki::Util::sChanneledInfoF(DEFAULT_CHANNEL_NAME, name, {}, format, ##__VA_ARGS__); \
 } while(0)
 
 #if ALLOW_DEBUG_LOGGING
 #define PRINT_NAMED_DEBUG(name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN]; \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_DEBUG, "%s %s", name, PRINT_LOG_VAR_logString); \
-    ::Anki::Util::sChanneledDebugF(name, name, {}, "%s", PRINT_LOG_VAR_logString); \
-  } else { \
-    ::Anki::Util::sChanneledDebugF(name, name, {}, format, ##__VA_ARGS__); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);              \
+  ::Anki::Util::sChanneledDebugF(DEFAULT_CHANNEL_NAME, name, {}, format, ##__VA_ARGS__); \
 } while(0)
 #else
-#define PRINT_NAMED_DEBUG(name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN]; \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_DEBUG, "%s %s", name, PRINT_LOG_VAR_logString); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);  \
-} while(0)
+#define PRINT_NAMED_DEBUG(name, format, ...)
 #endif
 
 //
@@ -291,45 +224,18 @@ __attribute__((noreturn)) void sAbort();
 // This prevents analyzers from generating bogus warnings caused by impossible code paths.
 //
 #define ANKI_VERIFY(expr, name, format, ...) \
- (expr ? ::Anki::Util::sVerifySucceededReturnTrue(__FILE__, __LINE__) : (::Anki::Util::sVerifyFailedReturnFalse(__FILE__, __LINE__, name, "VERIFY(%s): " format, #expr, ##__VA_ARGS__) && false))
+  (expr ? true : (::Anki::Util::sVerifyFailedReturnFalse(name, "VERIFY(%s): " format, #expr, ##__VA_ARGS__) && false))
 
 //
 // Logging with channels.
 //
 #define PRINT_CH_INFO(channel, name, format, ...) do { \
-  if(ANKITRACE_ENABLED) { \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_INFO, "%s %s %s", channel, name, PRINT_LOG_VAR_logString); \
-    ::Anki::Util::sChanneledInfoF(channel, name, {}, "%s", PRINT_LOG_VAR_logString); \
-  } else { \
-    ::Anki::Util::sChanneledInfoF(channel, name, {}, format, ##__VA_ARGS__); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);  \
+  ::Anki::Util::sChanneledInfoF(channel, name, {}, format, ##__VA_ARGS__); \
 } while(0)
 
-#if ALLOW_DEBUG_LOGGING
 #define PRINT_CH_DEBUG(channel, name, format, ...) do { \
-  if(ANKITRACE_ENABLED) {                                               \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_DEBUG, "%s %s %s", channel, name, PRINT_LOG_VAR_logString); \
-    ::Anki::Util::sChanneledDebugF(channel, name, {}, "%s", PRINT_LOG_VAR_logString); \
-  } else { \
-    ::Anki::Util::sChanneledDebugF(channel, name, {}, format, ##__VA_ARGS__); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
+  ::Anki::Util::sChanneledDebugF(channel, name, {}, format, ##__VA_ARGS__); \
 } while(0)
-#else
-#define PRINT_CH_DEBUG(channel, name, format, ...) do { \
-  if(ANKITRACE_ENABLED) {                                               \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_DEBUG, "%s %s %s", channel, name, PRINT_LOG_VAR_logString); \
-  } \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);   \
-} while(0)
-#endif
 
 //
 // Periodic logging with channels.
@@ -339,61 +245,38 @@ __attribute__((noreturn)) void sAbort();
 #define PRINT_PERIODIC_CH_HELPER(func, period, channel, name, format, ...) \
 { static u16 cnt = period;                                                 \
   if (++cnt >= period) {                                                   \
-    ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);                 \
     ::Anki::Util::func(channel, name, {}, format, ##__VA_ARGS__);          \
     cnt = 0;                                                               \
   }                                                                        \
 }
 
 // Actually use these in your code (not the helper above)
-#define PRINT_PERIODIC_CH_INFO(period, channel, name, format, ...)  \
-  if(ANKITRACE_ENABLED) {                                               \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                     \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_INFO, "%d %s %s %s", period, channel, name, PRINT_LOG_VAR_logString); \
-    PRINT_PERIODIC_CH_HELPER(sChanneledInfoF, period, channel, name, "%s", PRINT_LOG_VAR_logString) \
-  } else { \
-    PRINT_PERIODIC_CH_HELPER(sChanneledInfoF, period, channel, name, format, ##__VA_ARGS__) \
-  }
+#define PRINT_PERIODIC_CH_INFO(period, channel, name, format, ...) \
+PRINT_PERIODIC_CH_HELPER(sChanneledInfoF, period, channel, name, format, ##__VA_ARGS__)
 
 #define PRINT_PERIODIC_CH_DEBUG(period, channel, name, format, ...) \
-  if(ANKITRACE_ENABLED) {                                               \
-    char PRINT_LOG_VAR_logString[MAX_LOG_STRING_LEN];                                   \
-    snprintf(PRINT_LOG_VAR_logString, MAX_LOG_STRING_LEN, format, ##__VA_ARGS__); \
-    tracelog(TRACE_DEBUG, "%d %s %s %s", period, channel, name, PRINT_LOG_VAR_logString); \
-    PRINT_PERIODIC_CH_HELPER(sChanneledDebugF, period, channel, name, "%s", PRINT_LOG_VAR_logString) \
-  } else { \
-      PRINT_PERIODIC_CH_HELPER(sChanneledDebugF, period, channel, name, format, ##__VA_ARGS__) \
-  }
+PRINT_PERIODIC_CH_HELPER(sChanneledDebugF, period, channel, name, format, ##__VA_ARGS__)
 
 // Streams
-#define PRINT_STREAM_ERROR(name, args) do{         \
+#define PRINT_STREAM_ERROR(eventName, args) do{         \
       std::stringstream ss; ss<<args;                   \
-      tracelog(TRACE_ERR, "%s %s", name, ss.str().c_str());    \
-      ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
-      ::Anki::Util::sError(name, {}, ss.str().c_str()); \
+      ::Anki::Util::sError(eventName, {}, ss.str().c_str()); \
     } while(0)
 
-#define PRINT_STREAM_WARNING(name, args) do{       \
+#define PRINT_STREAM_WARNING(eventName, args) do{       \
       std::stringstream ss; ss<<args;                   \
-      tracelog(TRACE_WARNING, "%s %s", name, ss.str().c_str());\
-      ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
-      ::Anki::Util::sWarning(name, {}, ss.str().c_str()); \
+      ::Anki::Util::sWarning(eventName, {}, ss.str().c_str()); \
     } while(0)
 
-#define PRINT_STREAM_INFO(name, args) do{          \
+#define PRINT_STREAM_INFO(eventName, args) do{          \
       std::stringstream ss; ss<<args;                   \
-      tracelog(TRACE_INFO, "%s %s", name, ss.str().c_str()); \
-      ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
-      ::Anki::Util::sChanneledInfo(name, name, {}, ss.str().c_str()); \
+      ::Anki::Util::sChanneledInfo(DEFAULT_CHANNEL_NAME, eventName, {}, ss.str().c_str()); \
     } while(0)
 
 #if ALLOW_DEBUG_LOGGING
-#define PRINT_STREAM_DEBUG(name, args) do {         \
+#define PRINT_STREAM_DEBUG(eventName, args) do{         \
       std::stringstream ss; ss<<args;                   \
-      tracelog(TRACE_DEBUG, "%s %s", name, ss.str().c_str());   \
-      ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__); \
-      ::Anki::Util::sChanneledDebug(name, name, {}, ss.str().c_str()); \
+      ::Anki::Util::sChanneledDebug(DEFAULT_CHANNEL_NAME, eventName, {}, ss.str().c_str()); \
     } while(0)
 #else
 #define PRINT_STREAM_DEBUG(eventName, args)
@@ -401,9 +284,9 @@ __attribute__((noreturn)) void sAbort();
 
 // Auto streams
 #if ALLOW_DEBUG_LOGGING
-#define PRINT_AUTOSTREAM_DEBUG(args) do { \
-    char nameBuf[256]; GENERATE_EVENT_NAME(nameBuf, sizeof(nameBuf)); \
-    PRINT_STREAM_DEBUG(nameBuf, args); } while(0)
+#define PRINT_AUTOSTREAM_DEBUG(args) do{ \
+    char eventNameBuf[256]; GENERATE_EVENT_NAME(eventNameBuf, sizeof(eventNameBuf)); \
+    PRINT_STREAM_DEBUG(eventNameBuf, args); }while(0)
 #else
 #define PRINT_AUTOSTREAM_DEBUG(args)
 #endif
@@ -420,7 +303,6 @@ __attribute__((noreturn)) void sAbort();
 #endif
 
 #define ASSERT_NAMED(expr, name) do {                       \
-  ::Anki::Util::DropBreadcrumb(expr ? true : false, __FILE__, __LINE__); \
   if (!(expr)) {                                            \
     PRINT_NAMED_ERROR(name, "Assertion Failed: %s", #expr); \
     Anki::Util::sDumpCallstack("AssertCallstack");          \
@@ -430,7 +312,6 @@ __attribute__((noreturn)) void sAbort();
 } while(0)
 
 #define ASSERT_NAMED_AND_RETURN_FALSE_IF_FAIL(exp, name) do { \
-  ::Anki::Util::DropBreadcrumb(false, __FILE__, __LINE__);    \
   if(!(exp)) {                                              \
     PRINT_NAMED_ERROR(name, "Assertion Failed: %s", #exp);  \
     Anki::Util::sDumpCallstack("AssertCallstack");          \
@@ -442,7 +323,6 @@ __attribute__((noreturn)) void sAbort();
 
 
 #define ASSERT_NAMED_EVENT(expr, name, format, ...) do {                      \
-  ::Anki::Util::DropBreadcrumb(expr ? true : false, __FILE__, __LINE__);        \
   if (!(expr)) {                                                              \
     PRINT_NAMED_ERROR(name, "ASSERT ( %s ): " format, #expr, ##__VA_ARGS__);  \
     Anki::Util::sDumpCallstack("AssertCallstack");                            \
@@ -453,7 +333,6 @@ __attribute__((noreturn)) void sAbort();
 
 
 #define ASSERT_NAMED_EVENT_AND_RETURN_FALSE_IF_FAIL(exp, name, format, ...) do { \
-  ::Anki::Util::DropBreadcrumb(exp ? true : false, __FILE__, __LINE__);         \
   if(!(exp)) {                                                                \
     PRINT_NAMED_ERROR(name, "ASSERT ( %s ): " format, #exp, ##__VA_ARGS__);   \
     Anki::Util::sDumpCallstack("AssertCallstack");                            \
@@ -468,14 +347,12 @@ __attribute__((noreturn)) void sAbort();
 // Developer assertions are compiled for debug builds ONLY.
 // Developer assertions are discarded for release and shipping builds.
 //
-// Code blocks that are only used for developer assertions should be guarded with #if ANKI_DEV_ASSERT_ENABLED.
+// Code blocks that are only used for developer assertions should be guarded with #if DEV_ASSERT_ENABLED.
 // Variables that are only used for developer assertions should be guarded with DEV_ASSERT_ONLY.
 
-#ifndef ANKI_DEV_ASSERT_ENABLED
-  #define ANKI_DEV_ASSERT_ENABLED ANKI_DEVELOPER_CODE
-#endif
+#define DEV_ASSERT_ENABLED ANKI_DEVELOPER_CODE
 
-#if ANKI_DEV_ASSERT_ENABLED
+#if DEV_ASSERT_ENABLED
 
 #define DEV_ASSERT_MSG(expr, name, format, ...) do { \
   if (!(expr)) { \
@@ -511,12 +388,19 @@ __attribute__((noreturn)) void sAbort();
 //
 // DAS events are structured messages for use with backend analytics.
 // Event name and data fields are determined by the analytics team.
+// Do NOT use LOG_EVENT to report random messages from your code!
 //
 #define DPHYS "$phys"
 #define DDATA "$data"
 #define DGROUP "$group"
 #define DGAME "$game"
 #define DCONNECTSESSION "$session_id"
+
+// send BI event
+#define LOG_EVENT(name, format, ...) do { \
+  ::Anki::Util::sEventF(name, {}, format, ##__VA_ARGS__); \
+} while(0)
+
 
 //
 // Compact version of PRINT_NAMED_ERROR & friends

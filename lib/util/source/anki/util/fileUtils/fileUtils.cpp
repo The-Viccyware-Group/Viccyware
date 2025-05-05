@@ -8,17 +8,11 @@
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/helpers/includeIostream.h"
-#include "util/helpers/temp_failure_retry.h"
 #include "util/math/numericCast.h"
 #include <fstream>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
-#include <sys/types.h>
-#include <utime.h>
 #include <cstdio>
 #include <dirent.h>
-#include <fcntl.h>
-#include <unistd.h>
 
 namespace Anki {
 namespace Util {
@@ -30,17 +24,7 @@ namespace {
   const char kFileSeparator = '/';
 # endif
 } // anonymous namespace
-
-bool FileUtils::PathExists(const std::string &path)
-{
-  struct stat info;
-  bool exists = false;
-  if (stat(path.c_str(), &info) == 0) {
-    exists = true;
-  }
-  return exists;
-}
-
+  
 bool FileUtils::DirectoryExists(const std::string &path)
 {
   struct stat info;
@@ -67,10 +51,7 @@ ssize_t FileUtils::GetFileSize(const std::string &path)
 // -p      Create intermediate directories as required.  If this option is not specified,
 // the full path prefix of each operand must already exist.  On the other hand, with this
 // option specified, no error will be reported if a directory given as an operand already exists.
-bool FileUtils::CreateDirectory(const std::string &path,
-                                const bool stripFilename,
-                                bool dashP,
-                                const mode_t mode)
+bool FileUtils::CreateDirectory(const std::string &path, const bool stripFilename, bool dashP)
 {
   std::string workPath;
   if (stripFilename) {
@@ -89,7 +70,7 @@ bool FileUtils::CreateDirectory(const std::string &path,
       std::string subPath = workPath.substr(0, pos);
       ++count;
       if (!Util::FileUtils::DirectoryExists(subPath)) {
-        if( mkdir(subPath.c_str(), mode) != 0 ) {
+        if( mkdir(subPath.c_str(), S_IRWXU) != 0 ) {
           return false;
         }
       }
@@ -98,13 +79,13 @@ bool FileUtils::CreateDirectory(const std::string &path,
   }
 
   if (!Util::FileUtils::DirectoryExists(workPath)) {
-    if( mkdir(workPath.c_str(), mode) != 0 ) {
+    if( mkdir(workPath.c_str(), S_IRWXU) != 0 ) {
       return false;
     }
   }
   return true;
 }
-
+  
 void FileUtils::RemoveDirectory(const std::string &path)
 {
   if( DirectoryExists(path) ) {
@@ -129,30 +110,6 @@ void FileUtils::RemoveDirectory(const std::string &path)
   }
 }
 
-ssize_t FileUtils::GetDirectorySize(const std::string& path)
-{
-  ssize_t size = 0;
-
-  const auto files = FilesInDirectory(path, false, nullptr, true);
-  for(const auto& file : files)
-  {
-    size += GetFileSize(file);
-  }
-
-  return size;
-}
-
-int64_t FileUtils::GetDirectoryFreeSize(const std::string& path)
-{
-  if (DirectoryExists(path)) {
-    struct statvfs buf;
-    statvfs(path.c_str(), &buf);
-    return buf.f_bsize * buf.f_bavail;
-  }
-
-  return -1;
-}
-
 std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
                                                      bool useFullPath,
                                                      const char* withExtension,
@@ -164,7 +121,7 @@ std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
   }
   return FileUtils::FilesInDirectory(path, useFullPath, withExtensions, recurse);
 }
-
+  
 std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
                                                      bool useFullPath,
                                                      const std::vector<const char*>& withExtensions,
@@ -172,11 +129,11 @@ std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
 {
   // We always want to useFullPath when looking for files recursively
   useFullPath |= recurse;
-
+  
   std::vector<std::string> files;
-
+  
   std::function<bool(const char* fname)> FilterFilename = [](const char*) { return true; };
-
+  
   if(!withExtensions.empty()) {
     FilterFilename = [&withExtensions](const char* fname) {
       for(auto* ext : withExtensions) {
@@ -187,7 +144,7 @@ std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
       return false;
     };
   }
-
+  
   DIR* listingDir = opendir(path.c_str());
   if( listingDir ) {
     struct dirent *info;
@@ -212,25 +169,8 @@ std::vector<std::string> FileUtils::FilesInDirectory(const std::string& path,
     }
     closedir(listingDir);
   }
-
+  
   return files;
-}
-
-bool FileUtils::TouchFile(const std::string& fileName, mode_t mode)
-{
-  int result = utime(fileName.c_str(), NULL);
-  if (result == 0) {
-    return true;
-  }
-  if (errno != ENOENT) {
-    return false;
-  }
-  int fd = open(fileName.c_str(), O_RDWR | O_CREAT, mode);
-  if (fd >= 0) {
-    (void) close(fd);
-    return true;
-  }
-  return false;
 }
 
 bool FileUtils::FileExists(const std::string& fileName)
@@ -243,32 +183,6 @@ bool FileUtils::FileExists(const std::string& fileName)
     }
   }
   return exists;
-}
-
-ssize_t FileUtils::ReadN(int fd, void *vptr, size_t n)
-{
-  size_t  nleft;
-  ssize_t nread;
-  char   *ptr;
-
-  ptr = (char*)vptr;
-  nleft = n;
-  while (nleft > 0) {
-    nread = read(fd, ptr, nleft);
-    if (nread  < 0) {
-      if (errno == EINTR) {
-        nread = 0;      /* and call read() again */
-      } else {
-        return (-1);
-      }
-    } else if (nread == 0) {
-      break;              /* EOF */
-    }
-
-    nleft -= nread;
-    ptr += nread;
-  }
-  return (n - nleft);         /* return >= 0 */
 }
 
 std::string FileUtils::ReadFile(const std::string& fileName)
@@ -285,50 +199,28 @@ std::string FileUtils::ReadFile(const std::string& fileName)
     return body;
   }
 }
-
-std::vector<uint8_t> FileUtils::ReadFileAsBinary(const std::string& fileName,
-                                                 size_t offset,
-                                                 size_t length)
+  
+std::vector<uint8_t> FileUtils::ReadFileAsBinary(const std::string& fileName)
 {
-  if (offset >= length) {
-    // Reading past the end of the file is not allowed
+  std::ifstream fileIn;
+  fileIn.open(fileName, std::ios::in | std::ifstream::binary);
+  if( fileIn.is_open() ) {
+    std::vector<uint8_t> data{std::istreambuf_iterator<char>(fileIn), std::istreambuf_iterator<char>()};
+    fileIn.close();
+    return data;
+  }
+  else {
     return {};
   }
-  int fd = TEMP_FAILURE_RETRY(open(fileName.c_str(), O_RDONLY));
-  if (fd < 0) {
-    return {};
-  }
-  if (length == SIZE_MAX) {
-    off_t seekResult = lseek(fd, (off_t) 0, SEEK_END);
-    if (seekResult == (off_t) -1 || offset >= seekResult) {
-      close(fd);
-      return {};
-    }
-    length = ((size_t) seekResult) - offset;
-  }
-
-  off_t seekResult = lseek(fd, (off_t) offset, SEEK_SET);
-  if (seekResult == (off_t) -1) {
-    close(fd);
-    return {};
-  }
-  std::vector<uint8_t> data(length);
-  ssize_t bytesRead = ReadN(fd, data.data(), length);
-  int r = close(fd);
-  if ((bytesRead < (ssize_t) length) || (r == -1)) {
-    return {};
-  }
-
-  return data;
 }
 
-bool FileUtils::WriteFile(const std::string &fileName, const std::string &body, bool append)
+bool FileUtils::WriteFile(const std::string &fileName, const std::string &body)
 {
   std::vector<uint8_t> bytes;
   copy(body.begin(), body.end(), back_inserter(bytes));
-  return WriteFile(fileName, bytes, append);
+  return WriteFile(fileName, bytes);
 }
-
+  
 bool FileUtils::WriteFile(const std::string &fileName, const std::vector<uint8_t> &body, bool append)
 {
   bool success = false;
@@ -365,54 +257,22 @@ bool FileUtils::WriteFileAtomic(const std::string& fileName, const std::vector<u
   return success;
 }
 
-static bool CopyOrMoveFile(const std::string& dest,
-                           const std::string& srcFileName,
-                           const int maxBytesToCopyFromEnd,
-                           const bool deleteSource)
+  
+bool FileUtils::CopyFile(const std::string& dest, const std::string& srcFileName, const int maxBytesToCopyFromEnd)
 {
-  if (!FileUtils::FileExists(srcFileName) || dest.empty()) {
+  if (!FileExists(srcFileName) || dest.empty()) {
     return false;
   }
-
-  // If dest is a file use that.
-  // If dest is a folder use the src file name.
-  std::string outFileName = dest;
-  if (FileUtils::GetFileName(dest, true).empty()) {
-
-    // dest is the output directory name
-    // Get the output file name
-    // Remove trailing separator if there is one
-    while (outFileName.back() == kFileSeparator) {
-      outFileName.pop_back();
-    }
-
-    outFileName += kFileSeparator + FileUtils::GetFileName(srcFileName, false);
-  }
-
-  // Create output directory in case it doesn't exist already
-  FileUtils::CreateDirectory(outFileName, true, true);
-
-  if (!maxBytesToCopyFromEnd && deleteSource) {
-    // If we are moving the file on the same mounted filesystem it should succeed
-    if (0 == rename(srcFileName.c_str(), outFileName.c_str())) {
-      return true;
-    }
-    if (errno != EXDEV) {
-      return false;
-    }
-    // A simple rename won't work.  The source and destination are on two different
-    // mounted filesystems.  A copy is required.
-  }
-
+  
   std::ifstream inFile(srcFileName.c_str(), std::ios::binary);
-
+  
   // Seek to appropriate starting position of input file
   if (maxBytesToCopyFromEnd != 0) {
-
+    
     // Get file size
     inFile.seekg(0, std::ios_base::end);
     int fileSize = static_cast<int>(inFile.tellg());
-
+    
     // Set stream position to given offset if file size > offset
     if (fileSize > maxBytesToCopyFromEnd) {
       inFile.seekg(-std::abs(maxBytesToCopyFromEnd), std::ios_base::end);
@@ -421,41 +281,45 @@ static bool CopyOrMoveFile(const std::string& dest,
     }
   }
 
+  
+  // If dest is a file use that.
+  // If dest is a folder use the src file name.
+  std::string outFileName = dest;
+  if (GetFileName(dest, true).empty()) {
+    
+    // dest is the output directory name
+    // Get the output file name
+    // Remove trailing separator if there is one
+    while (outFileName.back() == kFileSeparator) {
+      outFileName.pop_back();
+    }
+    
+    outFileName += kFileSeparator + GetFileName(srcFileName, false);
+  }
+  
+  // Create output directory in case it doesn't exist already
+  CreateDirectory(outFileName, true, true);
+  
   // Copy file
   std::ofstream outFile(outFileName.c_str(), std::ios::binary);
   outFile << inFile.rdbuf();
   outFile.close();
-  inFile.close();
-
-  if (deleteSource) {
-    FileUtils::DeleteFile(srcFileName);
-  }
-
+  
   return true;
 }
-
-bool FileUtils::CopyFile(const std::string& dest, const std::string& srcFileName, const int maxBytesToCopyFromEnd)
-{
-  return CopyOrMoveFile(dest, srcFileName, maxBytesToCopyFromEnd, false /* deleteSource */);
-}
-
-bool FileUtils::MoveFile(const std::string& dest, const std::string& srcFileName)
-{
-  return CopyOrMoveFile(dest, srcFileName, 0, true /* deleteSource */);
-}
-
+  
 void FileUtils::DeleteFile(const std::string &fileName)
 {
   (void) remove(fileName.c_str());
 }
-
+ 
 void FileUtils::ListAllDirectories( const std::string& path, std::vector<std::string>& directories )
 {
   if ( !directories.empty() )
   {
     directories.clear();
   }
-
+  
   if( FileUtils::DirectoryExists(path) )
   {
     DIR* dir = opendir(path.c_str());
@@ -482,35 +346,35 @@ bool FileUtils::FilenameHasSuffix(const char* inFilename, const char* inSuffix)
 {
   const size_t filenameLen = strlen(inFilename);
   const size_t suffixLen   = strlen(inSuffix);
-
+  
   if (filenameLen < suffixLen)
   {
     return false;
   }
-
+  
   const int cmp = strcmp(&inFilename[filenameLen-suffixLen], inSuffix);
   return (cmp == 0);
 }
 
-
+  
 namespace {
   inline void RemoveFileSeparators(std::string& str, bool removeLeading = true)
   {
     if(!str.empty())
     {
       const auto strLen = str.length();
-
+      
       const bool hasLeading = removeLeading && (str[0] == kFileSeparator);
       const bool hasTrailing = (str.back() == kFileSeparator);
-
+      
       const auto start = (hasLeading  ? 1        : 0);
       const auto end   = (hasTrailing ? strLen-1 : strLen);
-
+      
       str = str.substr(start, end-start);
     }
   }
 } // anonymous namespace
-
+  
 std::string FileUtils::FullFilePath(std::vector<std::string>&& names)
 {
   std::string fullpath;
@@ -518,19 +382,19 @@ std::string FileUtils::FullFilePath(std::vector<std::string>&& names)
   if(!names.empty())
   {
     auto nameIter = names.begin();
-
+    
     fullpath = *nameIter;
 
     // NOTE: Leave leading fileSep for first entry only
     RemoveFileSeparators(fullpath, false);
-
+    
     ++nameIter;
     while(nameIter != names.end())
     {
       if(!nameIter->empty())
       {
         RemoveFileSeparators(*nameIter);
-
+        
         if(!fullpath.empty()) {
           fullpath += kFileSeparator;
         }
@@ -556,7 +420,7 @@ std::string FileUtils::GetFileName(const std::string& fullPath, bool mustHaveExt
       return potentialFile;
     }
   }
-
+  
   return("");
 }
 
@@ -569,19 +433,6 @@ std::string FileUtils::AddTrailingFileSeparator(const std::string& path)
   }
   return newPath;
 }
-
-long FileUtils::GetFileLastModificationTime(const std::string &path)
-{
-  struct stat info;
-  if( stat(path.c_str(), &info)==0 ) {
-    // fun fact: linux and macos have diverged in the name for this field,
-    // but the older version used here has backwards compatibility on both systems,
-    // as long as we don't need nanosecond resolution...which we don't.
-    return info.st_mtime;
-  } else {
-    return -1; // bogus.
-  }
-}
-
+  
 }
 }

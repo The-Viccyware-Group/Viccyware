@@ -26,7 +26,7 @@
 extern webots::Supervisor animSupervisor;
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace { // "Private members"
 
@@ -34,7 +34,7 @@ namespace { // "Private members"
   webots::Display* face_;
   
   // Face 'image' to send to webots each frame
-  u32 faceImg_[184*96] = {0};
+  u32 faceImg_[FACE_DISPLAY_WIDTH*FACE_DISPLAY_HEIGHT] = {0};
   
 } // "private" namespace
 
@@ -100,10 +100,5 @@ namespace { // "Private members"
     face_->drawText(std::string(line), 0, 0);
   }
 
-  void FaceDisplayImpl::SetFaceBrightness(int level)
-  {
-    // not supported for mac
-  }
-
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

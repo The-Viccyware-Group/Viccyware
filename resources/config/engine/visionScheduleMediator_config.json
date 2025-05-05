@@ -4,90 +4,33 @@
     // Frequency settings indicate update period in frames for each mode e.g. "1" runs every frame "4" every fourth etc.
     // Settings other than relativeCost must be Powers Of Two to simplify schedule construction.
     // "relativeCost" is an heuristic weighting to drive separation of heavy-weight tasks between frames where 1 should
-    // indicate our lowest cost process e.g. "Markers" is ~16x as resource intensive as "CheckingQuality"
+    // indicate our lowest cost process e.g. "DetectingMarkers" is ~16x as resource intensive as "CheckingQuality"
     {
-      "mode"         : "Markers",
+      "mode"         : "DetectingMarkers",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
       "standard"     : 2,
       "relativeCost" : 16
     },
-
-    // TODO: Remove with VIC-6838
     {
-      "mode"         : "Markers_Off",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Markers_FullFrame",
-      // Only a schedule of "1" makes sense because this mode modifier piggybacks on Markers's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Markers_FullHeight",
-      // Only a schedule of "1" makes sense because this mode modifier piggybacks on Markers's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Markers_FullWidth",
-      // Only a schedule of "1" makes sense because this mode modifier piggybacks on Markers's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Markers_FastRotation",
-      // Only a schedule of "1" makes sense because this mode modifier piggybacks on Markers's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Faces",
-      // todo VIC-3774: Revert this back to (4,2,1,2) This is a temp solution to deal with the fact that when Faces is
-      // not High, weird stuff can happen with face timestamps and poses.
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 16
-    },
-    {
-      "mode"         : "Faces_Crop",
-      // Only a schedule of "1" makes sense because this mode modifier piggybacks on Faces' schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 16
-    },
-    {
-      "mode"         : "Pets",
+      "mode"         : "DetectingFaces",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
-      "standard"     : 1,
+      "standard"     : 2,
       "relativeCost" : 16
     },
     {
-      "mode"         : "Motion",
+      "mode"         : "DetectingPets",
+      "low"          : 8,
+      "med"          : 4,
+      "high"         : 2,
+      "standard"     : 8,
+      "relativeCost" : 10
+    },
+    {
+      "mode"         : "DetectingMotion",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
@@ -95,15 +38,7 @@
       "relativeCost" : 4
     },
     {
-      "mode"         : "BrightColors",
-      "low"          : 4,
-      "med"          : 2,
-      "high"         : 1,
-      "standard"     : 2,
-      "relativeCost" : 4
-    },
-    {
-      "mode"         : "OverheadEdges",
+      "mode"         : "DetectingOverheadEdges",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
@@ -111,39 +46,7 @@
       "relativeCost" : 1
     },
     {
-      "mode"         : "Faces_Expression",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Faces_Smile",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Faces_Gaze",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Faces_Blink",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Lasers",
+      "mode"         : "EstimatingFacialExpression",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
@@ -151,129 +54,57 @@
       "relativeCost" : 1
     },
     {
-      "mode"         : "Stats",
+      "mode"         : "DetectingSmileAmount",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
       "standard"     : 2,
       "relativeCost" : 1
     },
-
-    // TODO: Restore once we solve VisionModes and put this vision mode back
-    //    {
-    //      "mode"         : "OverheadMap",
-    //      "low"          : 4,
-    //      "med"          : 2,
-    //      "high"         : 1,
-    //      "standard"     : 2,
-    //      "relativeCost" : 1
-    //    },
-
     {
-      "mode"         : "SaveImages",
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Illumination",
+      "mode"         : "DetectingGaze",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
-      "standard"     : 1,
+      "standard"     : 2,
       "relativeCost" : 1
     },
     {
-      "mode"         : "People",
+      "mode"         : "DetectingBlinkAmount",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 4 // right now people detection is not too high, change when things are different
+      "standard"     : 2,
+      "relativeCost" : 1
     },
     {
-      "mode"         : "Hands",
+      "mode"         : "DetectingLaserPoints",
       "low"          : 4,
       "med"          : 2,
       "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 16
-    },
-    {
-      "mode"         : "AutoExp",
-      // NOTE: Should probably be no more frequent than every 5th frame
-      "low"          : 5,
-      "med"          : 5,
-      "high"         : 5,
-      "standard"     : 5,
-      "relativeCost" : 1 // Basically "free"
-    },
-    {
-      "mode"         : "WhiteBalance",
-      // NOTE: Should probably be no more frequent than every 5th frame
-      "low"          : 5,
-      "med"          : 5,
-      "high"         : 5,
-      "standard"     : 5,
-      "relativeCost" : 1 // Basically "free"
-    },
-    {
-      "mode"         : "AutoExp_Cycling",
-      // Only a schedule of "1" makes sense because this mode piggybacks on AutoExp's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1 // Basically "free"
-    },
-    {
-      "mode"         : "Markers_ChargerOnly",
-      // Only a schedule of "1" makes sense because this mode piggybacks on Markers' schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1 // Basically "free"
-    },
-    {
-      "mode"         : "AutoExp_MinGain",
-      // Only a schedule of "1" makes sense because this mode piggybacks on AutoExp's schedule
-      "low"          : 1,
-      "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1 // Basically "free"
-    },
-    {
-      "mode"         : "MirrorMode",
-      "low"          : 16,
-      "med"          : 8,
-      "high"         : 1,
-      "standard"     : 1,
+      "standard"     : 2,
       "relativeCost" : 1
     },
     {
-      "mode"         : "Viz",
-      "low"          : 16,
-      "med"          : 8,
+      "mode"         : "ComputingStatistics",
+      "low"          : 4,
+      "med"          : 2,
       "high"         : 1,
-      "standard"     : 1,
+      "standard"     : 2,
       "relativeCost" : 1
     },
     {
-      "mode"         : "Markers_Composite",
+      "mode"         : "BuildingOverheadMap",
+      "low"          : 4,
+      "med"          : 2,
+      "high"         : 1,
+      "standard"     : 2,
+      "relativeCost" : 1
+    },
+    {
+      "mode"         : "SavingImages",
       "low"          : 1,
       "med"          : 1,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 1
-    },
-    {
-      "mode"         : "Offboard",
-      "low"          : 16,
-      "med"          : 8,
       "high"         : 1,
       "standard"     : 1,
       "relativeCost" : 1

@@ -12,16 +12,17 @@
 #ifndef __Cozmo_Basestation_BehaviorSystem_AIWhiteboard_H__
 #define __Cozmo_Basestation_BehaviorSystem_AIWhiteboard_H__
 
+#include "engine/aiComponent/aiBeacon.h"
+
 #include "engine/aiComponent/aiComponents_fwd.h"
-#include "engine/aiComponent/behaviorComponent/userIntentComponent_fwd.h"
 #include "engine/externalInterface/externalInterface_fwd.h"
 
 #include "coretech/common/engine/math/pose.h"
 #include "coretech/common/engine/objectIDs.h"
 #include "coretech/vision/engine/faceIdTypes.h"
 
+#include "clad/types/objectFamilies.h"
 #include "clad/types/objectTypes.h"
-#include "clad/types/behaviorComponent/postBehaviorSuggestions.h"
 
 #include "util/entityComponent/iDependencyManagedComponent.h"
 #include "util/helpers/noncopyable.h"
@@ -31,17 +32,15 @@
 #include <queue>
 #include <set>
 #include <vector>
-#include <unordered_map>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 // Forward declarations
+class BlockWorldFilter;  
 class ObservableObject;
 class Robot;
-class SayNameProbabilityTable;
 class SmartFaceID;
-enum class OnboardingStages : uint8_t;
 
 namespace DefaultFailToUseParams {
 constexpr static const float kTimeObjectInvalidAfterFailure_sec = 30.f;
@@ -70,6 +69,17 @@ public:
   using PossibleObjectList = std::list<PossibleObject>;
   using PossibleObjectVector = std::vector<PossibleObject>;
   
+  // info for objects we search from the whiteboard and return as result of the search
+  struct ObjectInfo {
+    ObjectInfo(const ObjectID& objId, ObjectFamily fam) : id(objId), family(fam) {}
+    ObjectID id;
+    ObjectFamily family;
+  };
+  using ObjectInfoList = std::vector<ObjectInfo>;
+  
+  // list of beacons
+  using BeaconList = std::vector<AIBeacon>;
+
   // object usage reason for failure
   enum class ObjectActionFailure {
     PickUpObject,   // pick up object from location
@@ -81,7 +91,7 @@ public:
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // IDependencyManagedComponent<AIComponentID> functions
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  virtual void InitDependent(Vector::Robot* robot, 
+  virtual void InitDependent(Cozmo::Robot* robot, 
                              const AICompMap& dependentComps) override;
 
   
@@ -102,39 +112,32 @@ public:
   void OnRobotDelocalized();
   // what to do when the robot relocalizes to a cube
   void OnRobotRelocalized();
-  // what to do when the robot wakes up (e.g. reset things)
-  void OnRobotWakeUp();
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Possible Objects
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // NB: BN 2018 - I'm not sure if this is still functional, it may be, but it's old Cozmo code
   
   // called when Cozmo can identify a clear quad (no borders, obstacles, etc)
   void ProcessClearQuad(const Quad2f& quad);
 
   // called when we've searched for a possible object at a given pose, but failed to find it
   void FinishedSearchForPossibleCubeAtPose(ObjectType objectType, const Pose3d& pose);
-
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Exploring
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // Returns the cooldown that should be used to transition into Exploring autonomously. This is meant to be
-  // used as a cooldown since the last time we _stopped_ exploring
-  float GetExploringCooldown_s() const;
-
-  // Tell the whiteboard that a new user intent is pending (so it can internally update cooldowns)
-  void NotifyNewUserIntentPending(UserIntentTag userIntent);
   
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Cube search
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  // BN: this code is not really needed anymore in it's full form but it's still used in a few places so left
-  // it here for now. It was really designed for a multi-cube world where it was important to figure out which
-  // cubes were working (from which angles)
+  
+  // find any usable cubes (not unknown) that are not in a beacon, and return true if any are found.
+  // recentFailureTimeout_sec: objects that failed to be picked up more recently than this ago will be
+  // discarded
+  bool FindUsableCubesOutOfBeacons(ObjectInfoList& outObjectList) const;
+  
+  // finds cubes in the given beacon and returns them in the given list. Returns true if the list is not empty (=if
+  // found any cubes at all)
+  bool FindCubesInBeacon(const AIBeacon* beacon, ObjectInfoList& outObjectList) const;
+  
+  // returns true if all active cubes are known to be in beacons
+  bool AreAllCubesInBeacons() const;
   
   // notify the whiteboard that we just failed to use this object.
   // uses object's current location
@@ -144,7 +147,7 @@ public:
 
   // returns true if someone reported a failure to use the given object (by ID), less than the specified seconds ago
   // close to the given location with the given reason(s).
-  // recentSecs: use negative for any time at all, 0 for failed this tick, positive for failed less than X secs ago
+  // recentSecs: use negative for any time at all, 0 for failed this tick, positive for failed less than X ago
   // atPose: where to compare
   // distThreshold_mm: set to negative to not compare poses, set to 0 or positive for atPose or around by X distance
   // angleThreshold: set to M_PI for any rotation, set to anything else for rotation difference with atPose's rotation
@@ -175,48 +178,70 @@ public:
   
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Beacons
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  
+  // add a new beacon
+  void AddBeacon( const Pose3d& beaconPos, const float radius );
+  
+  // add a new beacon
+  void ClearAllBeacons();
+  
+  // notify whiteboard that someone tried to find good locations for cubes in this beacon and it was not possible
+  void FailedToFindLocationInBeacon(AIBeacon* beacon);
+
+  // return current active beacon if any, or nullptr if none are active
+  const AIBeacon* GetActiveBeacon() const;
+  AIBeacon* GetActiveBeacon();
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Accessors
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   
   // This getter iterates the list of possible objects currently stored and retrieves only those that can be located in
   // current origin. Note this causes a calculation WRT origin (consider caching in the future if need to optimize)
   void GetPossibleObjectsWRTOrigin(PossibleObjectVector& possibleObjects) const;
+
+  // set/return time at which Cozmo got off the charger by himself
+  void GotOffChargerAtTime(const float time_sec) { _gotOffChargerAtTime_sec = time_sec; }
+  float GetTimeAtWhichRobotGotOffCharger() const { return _gotOffChargerAtTime_sec; }
+  
+  // return time at which Cozmo got back on treads (negative if never recorded)
+  float GetTimeAtWhichRobotReturnedToTreadsSecs() const { return _returnedToTreadsAtTime_sec; }
   
   // set/return time at which engine processed information regarding edges
-  void SetLastEdgeInformation(const float closestEdgeDist_mm);
+  inline void SetLastEdgeInformation(const float time_sec, const float closestEdgeDist_mm);
   float GetLastEdgeInformationTime() const { return _edgeInfoTime_sec; }
   float GetLastEdgeClosestDistance() const { return _edgeInfoClosestEdge_mm; }
+  
+  
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Hiccups
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  bool HasHiccups() const { return _hasHiccups; }
+  void SetHasHiccups(bool hasHiccups) { _hasHiccups = hasHiccups; }
 
-  // decide whether or not to say a name
-  inline std::shared_ptr<SayNameProbabilityTable>& GetSayNameProbabilityTable() { return _sayNameProbTable; }
-  
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Tracking Game Requests
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  void SetCurrentGameRequestUIRequest(bool isUIRequest){_isGameRequestUIRequest = isUIRequest;}
+  bool IsCurrentGameRequestUIRequest(){ return _isGameRequestUIRequest;}
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Post behavior suggestions
+  // Victor observing demo state (may eventually become part of victor freeplay)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // feeding state
+  bool Victor_HasCubeToEat() const { return _victor_cubeToEat.IsSet(); }
+  const ObjectID& Victor_GetCubeToEat() const { return _victor_cubeToEat; }
+
   
-  // write a post-behavior suggestion
-  void OfferPostBehaviorSuggestion( const PostBehaviorSuggestions& suggestion );
-  
-  // returns true if suggestion has been offered, and sets the of the last tick it was offered if so
-  bool GetPostBehaviorSuggestion( const PostBehaviorSuggestions& suggestion, size_t& tick ) const;
-  
-  // clears the post behavior suggestions
-  void ClearPostBehaviorSuggestions();
-  
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Events
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   
   // template for all events we subscribe to
   template<typename T>
   void HandleMessage(const T& msg);
-  
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Onboarding
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  
-  OnboardingStages GetCurrentOnboardingStage() { return _onboardingStage; }
-  void SetMostRecentOnboardingStage(OnboardingStages stage) { _onboardingStage = stage; } // doesn't save or broadcast
 
 private:
 
@@ -247,12 +272,9 @@ private:
   
   // update render of possible markers since they may have changed
   void UpdatePossibleObjectRender();
+  // update render of beacons
+  void UpdateBeaconRender();
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  // Exploring
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-  void UpdateExploringTransitionCooldown();
   
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Failures
@@ -288,7 +310,12 @@ private:
   ObjectFailureTable _stackOnFailures;
   ObjectFailureTable _placeAtFailures;
   ObjectFailureTable _rollOrPopFailures;
-    
+  
+  // time at which the robot got off the charger by itself. Negative value means never
+  float _gotOffChargerAtTime_sec;
+  // time at which the robot returned to being on treads (after being picked up)
+  float _returnedToTreadsAtTime_sec;
+  
   // time at which the engine processed edge information coming from vision
   float _edgeInfoTime_sec;
   float _edgeInfoClosestEdge_mm;
@@ -296,20 +323,28 @@ private:
   // list of markers/objects we have not checked out yet
   PossibleObjectList _possibleObjects;
   
-  std::unordered_map<PostBehaviorSuggestions, size_t> _postBehaviorSuggestions;
+  // container of beacons currently defined (high level AI concept)
+  BeaconList _beacons;
   
-  // holds the current onboarding stage to avoid having to listen for it or read it from disk
-  OnboardingStages _onboardingStage;
+  // Whether or not Cozmo has the hiccups
+  bool _hasHiccups;
 
-  std::shared_ptr<SayNameProbabilityTable> _sayNameProbTable;
+  bool _isGameRequestUIRequest;
 
-  float _exploringTransitionCooldownBase_s = 0.0f;
-  float _exploringTransitionCooldownExtra_s = 0.0f;
-  float _lastExploringCooldownUpdateTime_s = 0.0f;
+  ObjectID _victor_cubeToEat;
 };
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Inline
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void AIWhiteboard::SetLastEdgeInformation(const float time_sec, const float closestEdgeDist_mm)
+{
+  _edgeInfoTime_sec = time_sec;
+  _edgeInfoClosestEdge_mm = closestEdgeDist_mm;
+}
   
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif //

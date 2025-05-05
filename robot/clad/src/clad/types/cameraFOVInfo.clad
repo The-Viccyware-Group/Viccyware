@@ -1,7 +1,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 message CameraFOVInfo
 {

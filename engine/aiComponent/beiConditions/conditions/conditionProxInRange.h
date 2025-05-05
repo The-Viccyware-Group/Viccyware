@@ -19,7 +19,7 @@
 #include <limits>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class ConditionProxInRange : public IBEICondition
 {

@@ -15,14 +15,13 @@
 #define __Anki_Cozmo_ITrackLayerManager_H__
 
 #include "coretech/common/shared/types.h"
-#include "cannedAnimLib/cannedAnims/animation.h"
-#include "cannedAnimLib/baseTypes/track.h"
+#include "cannedAnimLib/animation.h"
+#include "cannedAnimLib/track.h"
 
 #include <map>
 
 namespace Anki {
-namespace Vector {
-namespace Anim {
+namespace Cozmo {
 
 template<class FRAME_TYPE>
 class ITrackLayerManager
@@ -31,8 +30,9 @@ public:
 
   ITrackLayerManager(const Util::RandomGenerator& rng);
   
-  using ApplyLayerFunc = std::function<bool(const Animations::Track<FRAME_TYPE>&,
-                                            const TimeStamp_t,
+  using ApplyLayerFunc = std::function<bool(Animations::Track<FRAME_TYPE>&,
+                                            TimeStamp_t,
+                                            TimeStamp_t,
                                             FRAME_TYPE&)>;
   
   // Updates frame by applying all layers to it using applyLayerFunc which should define
@@ -40,12 +40,12 @@ public:
   // Both applyFunc and this function should return whether or not the frame was updated
   // Note: applyLayerFunc is responsible for moving to the next keyframe of a layer's track
   bool ApplyLayersToFrame(FRAME_TYPE& frame,
-                          const TimeStamp_t timeSinceAnimStart_ms,
-                          ApplyLayerFunc applyLayerFunc) const;
+                          ApplyLayerFunc applyLayerFunc);
   
-  // Adds the given track as a new layer
+  // Adds the given track as a new layer with an initial start delay of delay_ms
   Result AddLayer(const std::string& name,
-                  const Animations::Track<FRAME_TYPE>& track);
+                  const Animations::Track<FRAME_TYPE>& track,
+                  TimeStamp_t delay_ms = 0);
   
   // Adds the given track as a persitent layer
   void AddPersistentLayer(const std::string& layerName,
@@ -55,9 +55,7 @@ public:
   void AddToPersistentLayer(const std::string& layerName, FRAME_TYPE& keyFrame);
   
   // Removes a persitent layer after duration_ms has passed
-  void RemovePersistentLayer(const std::string& layerName,
-                             TimeStamp_t streamTime_ms,
-                             TimeStamp_t duration_ms);
+  void RemovePersistentLayer(const std::string& layerName, u32 duration_ms = 0);
   
   // Returns true if there are any layers
   bool HaveLayersToSend() const;
@@ -67,10 +65,6 @@ public:
   
   // Returns true if there is a layer with the name 'layerName'
   bool HasLayer(const std::string& layerName) const;
-
-  // Advance all tracks to the keyframe that should play in ms
-  // NOTE: This function only moves tracks forwards
-  void AdvanceTracks(const TimeStamp_t toTime_ms);
   
 protected:
   
@@ -83,19 +77,15 @@ private:
   // Structure defining an individual layer
   struct Layer {
     Animations::Track<FRAME_TYPE> track;
-    bool         sentOnce;
+    TimeStamp_t  startTime_ms;
+    TimeStamp_t  streamTime_ms;
     bool         isPersistent;
+    bool         sentOnce;
   };
 
   std::map<std::string, Layer> _layers;
-  
-  // Ensures that expected playback parameters are met - this is not a long term
-  // fix, it's a hack to try and catch animation streamer issues more quickly
-  // while the system's in flux
-  void ValidateTrack(const Animations::Track<FRAME_TYPE>& track);
 };
 
-}
 }
 }
 

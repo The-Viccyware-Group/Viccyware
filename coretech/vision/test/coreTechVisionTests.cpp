@@ -3,15 +3,17 @@
 #include "util/fileUtils/fileUtils.h"
 #include "util/helpers/quoteMacro.h"
 
-#include "coretech/common/shared/math/radians.h"
+#include "coretech/common/shared/radians.h"
 #include "coretech/common/shared/types.h"
 #include "coretech/common/engine/math/pose.h"
 
-#include "coretech/common/engine/math/quad.h"
+#include "coretech/common/engine/math/point_impl.h"
+#include "coretech/common/engine/math/quad_impl.h"
 
 #include "coretech/vision/engine/camera.h"
-#include "coretech/vision/engine/compressedImage.h"
 #include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/imageCache.h"
+#include "coretech/vision/engine/objectDetector.h"
 #include "coretech/vision/engine/observableObject.h"
 #include "coretech/vision/engine/perspectivePoseEstimation.h"
 #include "coretech/vision/engine/profiler.h"
@@ -444,6 +446,121 @@ GTEST_TEST(ColorPixels, RGB565Conversion)
 #undef SCALE
 }
 
+GTEST_TEST(ImageCache, ImageCacheGray)
+{
+  using namespace Anki::Vision;
+  
+  ImageCache cache;
+  
+  // Nothing in the cache: should fail
+  ASSERT_DEATH(cache.GetRGB(), "");
+  ASSERT_DEATH(cache.GetGray(), "");
+  
+  const s32 nrows = 16;
+  const s32 ncols = 32;
+  Vision::Image imgGray(nrows, ncols);
+  imgGray(0,0) = 42;
+  cache.Reset(imgGray);
+  
+  ASSERT_EQ(false, cache.HasColor());
+  ASSERT_EQ(nrows, cache.GetOrigNumRows());
+  ASSERT_EQ(ncols, cache.GetOrigNumCols());
+  
+  ImageCache::GetType getType;
+  
+  // Cached gray image should share data pointer with original
+  const Vision::Image& getResult = cache.GetGray(ImageCache::Size::Full, &getType);
+  ASSERT_EQ(imgGray.GetDataPointer(), getResult.GetDataPointer());
+  
+  // Getting original should not have required any resizing/computation
+  ASSERT_EQ(ImageCache::GetType::FullyCached, getType);
+  
+  // Compute new resized entry
+  const Vision::Image& halfSize = cache.GetGray(ImageCache::Size::Half_NN, &getType);
+  ASSERT_EQ(nrows/2, halfSize.GetNumRows());
+  ASSERT_EQ(ncols/2, halfSize.GetNumCols());
+  ASSERT_EQ(ImageCache::GetType::NewEntry, getType);
+  
+  // Compute double sized entry
+  const Vision::Image& doubleSize = cache.GetGray(ImageCache::Size::Double_NN, &getType);
+  ASSERT_EQ(nrows*2, doubleSize.GetNumRows());
+  ASSERT_EQ(ncols*2, doubleSize.GetNumCols());
+  ASSERT_EQ(ImageCache::GetType::NewEntry, getType);
+  
+  // Second request should be cached
+  const Vision::Image& halfSize2 = cache.GetGray(ImageCache::Size::Half_NN, &getType);
+  ASSERT_EQ(&halfSize, &halfSize2);
+  ASSERT_EQ(ImageCache::GetType::FullyCached, getType);
+  
+  // Request with different resize method should compute
+  const Vision::Image& halfSize3 = cache.GetGray(ImageCache::Size::Half_Linear, &getType);
+  ASSERT_EQ(nrows/2, halfSize3.GetNumRows());
+  ASSERT_EQ(ncols/2, halfSize3.GetNumCols());
+  ASSERT_EQ(ImageCache::GetType::NewEntry, getType);
+  
+  // Get full-scale color version (should require computation)
+  const Vision::ImageRGB& colorVersion = cache.GetRGB(ImageCache::Size::Full, &getType);
+  ASSERT_EQ(nrows, colorVersion.GetNumRows());
+  ASSERT_EQ(ncols, colorVersion.GetNumCols());
+  ASSERT_EQ(ImageCache::GetType::ComputeFromExisting, getType);
+  
+  // Gray value should be replicated to all three color channels
+  ASSERT_EQ(Vision::PixelRGB(42,42,42), colorVersion(0,0));
+  
+  // Getting colorized gray should not change cache's HasColor status
+  ASSERT_EQ(false, cache.HasColor());
+  
+  // Second request for color should be cached
+  const Vision::ImageRGB& colorVersion2 = cache.GetRGB(ImageCache::Size::Full, &getType);
+  ASSERT_EQ(&colorVersion, &colorVersion2);
+  ASSERT_EQ(ImageCache::GetType::FullyCached, getType);
+  
+  // Request for quarter size color should create new entry
+  const Vision::ImageRGB& qtrSizeColor = cache.GetRGB(ImageCache::Size::Quarter_Linear, &getType);
+  ASSERT_EQ(ImageCache::GetType::NewEntry, getType);
+  ASSERT_EQ(nrows/4, qtrSizeColor.GetNumRows());
+  ASSERT_EQ(ncols/4, qtrSizeColor.GetNumCols());
+  
+  // Asking for quarter size gray should compute it from the color one we just created
+  const Vision::Image& qtrSizeGray = cache.GetGray(ImageCache::Size::Quarter_Linear, &getType);
+  ASSERT_EQ(ImageCache::GetType::ComputeFromExisting, getType);
+  ASSERT_EQ(nrows/4, qtrSizeGray.GetNumRows());
+  ASSERT_EQ(ncols/4, qtrSizeGray.GetNumCols());
+  
+  // Resetting with a new image and asking for half size should resize into an existing entry and use same data
+  Vision::Image newImg(nrows,ncols);
+  cache.Reset(newImg);
+  const Vision::Image& newHalfSize = cache.GetGray(ImageCache::Size::Half_NN, &getType);
+  ASSERT_EQ(ImageCache::GetType::ResizeIntoExisting, getType);
+  ASSERT_EQ(newHalfSize.GetDataPointer(), halfSize.GetDataPointer());
+  
+  // Resetting with a new color image should mean asking for full-sized gray will cause a compute
+  Vision::ImageRGB newColorImg(nrows,ncols);
+  const Vision::PixelRGB colorPixel(5, 10, 15);
+  newColorImg(0,0) = colorPixel;
+  cache.Reset(newColorImg);
+  ASSERT_EQ(true, cache.HasColor());
+  const Vision::Image& newGray = cache.GetGray(ImageCache::Size::Full, &getType);
+  ASSERT_EQ(ImageCache::GetType::ComputeFromExisting, getType);
+  ASSERT_EQ(nrows, newGray.GetNumRows());
+  ASSERT_EQ(ncols, newGray.GetNumCols());
+  
+  // Gray value should be (R+2G+B)
+  ASSERT_EQ(colorPixel.gray(), newGray(0,0));
+  
+  // ReleaseMemory should clear out the cache and thus a request for an image should fail
+  cache.ReleaseMemory();
+  ASSERT_DEATH(cache.GetGray(), "");
+  
+  // Resetting with a color image and requesting a resized version should trigger a
+  // new allocation and not a resize into existing memory, since we called ReleaseMemory
+  cache.Reset(newColorImg);
+  ASSERT_EQ(true, cache.HasColor());
+  cache.GetRGB(ImageCache::Size::Half_NN, &getType);
+  ASSERT_EQ(ImageCache::GetType::NewEntry, getType);
+}
+
+
 GTEST_TEST(ImageRGB, NormalizedColor)
 {
   using namespace Anki::Vision;
@@ -553,67 +670,208 @@ GTEST_TEST(ResizeImage, CorrectSizes)
   // Resize in place with keep aspect ratio and onlySmaller=false should yield 13x25
   origImg.ResizeKeepAspectRatio(30, 25, Vision::ResizeMethod::NearestNeighbor, false);
   EXPECT_EQ(13, origImg.GetNumRows());
-  EXPECT_EQ(25, origImg.GetNumCols());  
+  EXPECT_EQ(25, origImg.GetNumCols());
+  
 }
 
-GTEST_TEST(CompressedImage, Compress)
+GTEST_TEST(ObjectDetector, DetectionAndClassification)
 {
-  using namespace Vision;
-
-  // Empty compressed image
-  CompressedImage cImg;
-  const std::vector<u8>& buffer = cImg.GetCompressedBuffer();
-
-  EXPECT_TRUE(buffer.empty());
-  EXPECT_EQ(cImg.GetTimestamp(), 0);
-  EXPECT_EQ(cImg.GetImageId(), 0);
-  EXPECT_EQ(cImg.GetNumRows(), 0);
-  EXPECT_EQ(cImg.GetNumCols(), 0);
-  EXPECT_EQ(cImg.GetNumChannels(), 0);
-
-  Image gray(5, 5, (u8)0);
-  gray.SetTimestamp(1);
-  gray.SetImageId(2);
-
-  // Compress a gray image
-  cImg.Compress(gray);
-
-  EXPECT_EQ(buffer.size(), 332);
-  EXPECT_EQ(cImg.GetTimestamp(), 1);
-  EXPECT_EQ(cImg.GetImageId(), 2);
-  EXPECT_EQ(cImg.GetNumRows(), 5);
-  EXPECT_EQ(cImg.GetNumCols(), 5);
-  EXPECT_EQ(cImg.GetNumChannels(), 1);
-
-  ImageRGB rgb(10, 10, {0, 0, 0});
-  rgb.SetTimestamp(3);
-  rgb.SetImageId(4);
-
-  // Construct and immediately compress an image
-  CompressedImage cImg2(rgb);
-  const std::vector<u8>& buffer2 = cImg2.GetCompressedBuffer();
+  Vision::ObjectDetector detector;
   
-  EXPECT_EQ(buffer2.size(), 631);
-  EXPECT_EQ(cImg2.GetTimestamp(), 3);
-  EXPECT_EQ(cImg2.GetImageId(), 4);
-  EXPECT_EQ(cImg2.GetNumRows(), 10);
-  EXPECT_EQ(cImg2.GetNumCols(), 10);
-  EXPECT_EQ(cImg2.GetNumChannels(), 3);
-}
-
-GTEST_TEST(CompressedImage, Decompress)
-{
-  using namespace Vision;
+  const std::string modelPath = std::string(getenv("TEST_DATA_PATH")) + "/resources/test/dnn_models";
+  const std::string testImagePath = std::string(getenv("TEST_DATA_PATH")) + "/resources/test/images";
   
-  Image rgb(5, 5, (u8)255);
-  CompressedImage img(rgb, 100);
+  // For now, to get this test to run, you need to have "dnn_models" symlinked to "~/DropBox/VictorDeepLearningModels"
+  // Andrew can share it with you.
+  // TODO: Remove this once we have models stored in the repo (VIC-1071)
+  if(Util::FileUtils::DirectoryDoesNotExist(modelPath))
+  {
+    PRINT_NAMED_WARNING("ObjectDetector.DetectionAndClassification.Skipping", "Model path not found: %s", modelPath.c_str());
+    return;
+  }
+                        
+  Json::Value config;
+  
+//  config["graph"] = "squeezenet_v1.1";
+//  config["labels"] = "squeezenet_labels.txt";
+//  config["mode"]   = "classification";
+//  config["input_width"] = 227;
+//  config["input_height"] = 227;
+//  config["input_mean_R"] = 104;
+//  config["input_mean_G"] = 117;
+//  config["input_mean_B"] = 123;
+//  config["input_std"]    = 1;
+//  config["top_K"] = 1;
+//  config["min_score"] = 0.5;
+  
+  config["graph"] = "mobilenet_v1_1.0_224_opencvdnn.pb";
+  config["labels"] = "mobilenet_labels.txt";
+  config["mode"] = "classification";
+  config["input_width"] = 224;
+  config["input_height"] = 224;
+  config["do_crop"] = false;
+  config["input_mean_R"] = 0;
+  config["input_mean_G"] = 0;
+  config["input_mean_B"] = 0;
+  config["input_std"] = 255;
+  config["input_layer"] = "input";
+  config["output_scores_layer"] = "MobilenetV1/Predictions/Reshape_1";
+  config["top_K"] = 1;
+  config["min_score"] = 0.1f;
+  
+  Result result;
+  std::string testImageFile;
+  Vision::ImageRGB testImg;
+  Vision::ImageCache imageCache;
+  std::list<Vision::ObjectDetector::DetectedObject> objects;
+  
+  // Helper to deal with the fact the detector runs asynchronously.
+  // This just waits for it to finish.
+  auto DetectionHelper = [&detector](Vision::ImageCache& imageCache, std::list<Vision::ObjectDetector::DetectedObject>& objects) -> Result
+  {
+    const bool started = detector.StartProcessingIfIdle(imageCache);
+    if(!started)
+    {
+      return RESULT_FAIL;
+    }
+    
+    bool gotResult = false;
+    BOUNDED_WHILE(10, (gotResult = detector.GetObjects(objects)) == false)
+    { 
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
 
-  ImageRGB outRGB;
-  bool res = img.Decompress(outRGB);
-  EXPECT_FALSE(res);
+    if(!gotResult)
+    {
+      return RESULT_FAIL;
+    }
+    
+    return RESULT_OK;
+  };
 
-  Image outGray;
-  res = img.Decompress(outGray);
-  EXPECT_TRUE(res);
-  EXPECT_EQ(rgb, outGray);
+  // Image classification test: verify expected name is returned for each image
+  {
+    testImageFile = Util::FileUtils::FullFilePath({testImagePath, "grace_hopper.jpg"});
+    result = detector.Init(modelPath, config);
+    ASSERT_EQ(RESULT_OK, result);
+    
+    result = testImg.Load(testImageFile);
+    ASSERT_EQ(RESULT_OK, result);
+    imageCache.Reset(testImg);
+    
+    result = DetectionHelper(imageCache, objects);
+    ASSERT_EQ(RESULT_OK, result);
+
+    for(auto const& object : objects)
+    {
+      printf("Found %s in image %s\n", object.name.c_str(), testImageFile.c_str());
+    }
+    EXPECT_EQ(1, objects.size());
+    if(!objects.empty())
+    {
+      EXPECT_EQ("653:military uniform", objects.front().name);
+    }
+    
+    testImageFile = Util::FileUtils::FullFilePath({testImagePath, "cat.jpg"});
+    result = testImg.Load(testImageFile);
+    ASSERT_EQ(RESULT_OK, result);
+    imageCache.Reset(testImg);
+    
+    result = DetectionHelper(imageCache, objects);
+    ASSERT_EQ(RESULT_OK, result);
+
+    EXPECT_EQ(1, objects.size());
+    
+    bool catFound = false;
+    for(auto const& object : objects)
+    {
+      printf("Found %s in image %s\n", object.name.c_str(), testImageFile.c_str());
+      
+      // Expecting "cat" to be somewhere in the object's name
+      if(objects.front().name.find("cat") != std::string::npos) {
+        catFound = true;
+      }
+    }
+
+    EXPECT_TRUE(catFound);
+  }
+  
+  // SSD object detection model (i.e. bounding boxes): test that expected object ("cat") is found in each image
+  // for a couple of models. Does not test accuracy of bounding box.
+  // NOTE: This uses the same ObjectDetector as above and for each model so is also testing model switching.
+  {
+    // Test both Caffe and TensorFlow models:
+    std::list<Json::Value> configs;
+    
+    Json::Value config;
+    config["graph"] = "ssd_mobilenet_v1_coco_11_06_2017_frozen.pb";
+    config["labels"] = "cocostuff-labels.txt";
+    config["mode"] = "detection";
+    config["input_width"]  = 224;
+    config["input_height"] = 224;
+    config["input_mean_R"] = 0;
+    config["input_mean_G"] = 0;
+    config["input_mean_B"] = 0;
+    config["input_std"] = 255;
+    config["top_K"] = 1;
+    config["min_score"] = 0.5f;
+    
+    configs.push_back(config);
+    
+    config["graph"] = "MobileNetSSD_deploy";
+    config["labels"] = "coco-labels-20.txt";
+    config["mode"] = "detection";
+    config["input_width"]  = 300;
+    config["input_height"] = 300;
+    config["input_mean_R"] = 127.5;
+    config["input_mean_G"] = 127.5;
+    config["input_mean_B"] = 127.5;
+    config["input_std"] = 127.5;
+    config["top_K"] = 1;
+    config["min_score"] = 0.5f;
+    
+    configs.push_back(config);
+    
+    for(auto const& config : configs)
+    {
+      result = detector.Init(modelPath, config);
+      ASSERT_EQ(RESULT_OK, result);
+      
+      for(auto const& filename : {"cat.jpg", "linus.jpg"})
+      {
+        testImageFile = Util::FileUtils::FullFilePath({testImagePath, filename});
+        result = testImg.Load(testImageFile);
+        ASSERT_EQ(RESULT_OK, result);
+        imageCache.Reset(testImg);
+        
+        result = DetectionHelper(imageCache, objects);
+        ASSERT_EQ(RESULT_OK, result);
+        
+        bool catFound = false;
+        std::for_each(objects.begin(), objects.end(),
+                      [&catFound](const Vision::ObjectDetector::DetectedObject& object)
+                      {
+                        if(object.name == "cat")
+                        {
+                          catFound = true;
+                        }
+                      });
+        EXPECT_TRUE(catFound);
+        
+        const bool kEnableDetectedObjectDisplay = false;
+        if(kEnableDetectedObjectDisplay)
+        {
+          Vision::ImageRGB dispImg(testImg);
+          for(auto const& object : objects)
+          {
+            dispImg.DrawRect(object.rect, NamedColors::RED);
+            std::stringstream caption;
+            caption << object.name << "[" << std::round(100.f*object.score) << "]";
+            dispImg.DrawText((object.rect.GetBottomLeft() + Point2i(2,-6)).CastTo<f32>(), caption.str(), NamedColors::RED, .5f, true);
+          }
+          dispImg.Display("Detections", 0);
+        }
+      }
+    }
+  }
 }

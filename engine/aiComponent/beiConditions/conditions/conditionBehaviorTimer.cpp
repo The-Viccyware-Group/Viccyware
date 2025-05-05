@@ -20,7 +20,7 @@
 #include "util/console/consoleInterface.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 CONSOLE_VAR_EXTERN(float, kTimeMultiplier);
 

@@ -4,14 +4,6 @@ so it should NOT be used for the original Cozmo because, for example, this
 version strips out the Left and Right backpack light data.
 """
 
-import sys
-import os
-import tempfile
-import subprocess
-import json
-import inspect
-
-
 BODY_MOTION_TRACK = "BodyMotionKeyFrame"
 ROBOT_AUDIO_TRACK = "RobotAudioKeyFrame"
 BACKPACK_LIGHT_TRACK = "BackpackLightsKeyFrame"
@@ -29,43 +21,12 @@ LIFT_HEIGHT_ATTR = "height_mm"
 
 HEAD_ANGLE_ATTR = "angle_deg"
 
-EYE_ATTRS = ["rightEye", "leftEye"]
-
-DEFAULT_EYE_SETTINGS = [
-    0,     # EyeCenterX
-    0,     # EyeCenterY
-    1.517, # EyeScaleX
-    1.145, # EyeScaleY
-    0,     # EyeAngle
-    0.6,   # LowerInnerRadiusX
-    0.6,   # LowerInnerRadiusY
-    0.6,   # UpperInnerRadiusX
-    0.6,   # UpperInnerRadiusY
-    0.6,   # UpperOuterRadiusX
-    0.6,   # UpperOuterRadiusY
-    0.6,   # LowerOuterRadiusX
-    0.6,   # LowerOuterRadiusY
-    0,     # UpperLidY
-    0,     # UpperLidAngle
-    0,     # UpperLidBend
-    0,     # LowerLidY
-    0,     # LowerLidAngle
-    0,     # LowerLidBend
-    1,     # Saturation
-    1,     # Lightness
-    0,     # GlowSize
-    0,     # HotSpotCenterX
-    0,     # HotSpotCenterY
-    0      # GlowLightness
-]
-
 
 # Audio JSON Attributes
 AUDIO_EVENT_GROUPS_ATTR = "eventGroups"
 AUDIO_EVENT_IDS_ATTR = "eventIds"
 AUDIO_VOLUMES_ATTR = "volumes"
 AUDIO_PROBABILITIES_ATTR = "probabilities"
-AUDIO_NAME_ATTR = "audioName"
 # Deprecated keys
 AUDIO_DEP_EVENT_ATTR = "audioEventId"
 AUDIO_DEP_VOLUME_ATTR = "volume"
@@ -91,6 +52,20 @@ BIN_FILE_EXT = ".bin"
 OLD_ANIM_TOOL_ATTRS = ["$type", "pathFromRoot"]
 
 OLD_BACKPACK_LIGHT_ATTRS = ["Left", "Right"]
+
+
+import sys
+import os
+import tempfile
+import json
+import pprint
+import subprocess
+import json
+import re
+import shutil
+import tarfile
+import inspect
+
 
 THIS_DIR = os.path.normpath(os.path.abspath(os.path.realpath(os.path.dirname(inspect.getfile(inspect.currentframe())))))
 
@@ -179,7 +154,7 @@ def prep_json_for_binary_conversion(anim_name, keyframes):
                     pass
 
         if track == ROBOT_AUDIO_TRACK:
-            # There are so many migration changes audio gets its own method
+            # There are so many migration changes audio gets its own method =)
             keyframe = prep_audio_key_frame_json(keyframe, anim_name)
 
         if track == PROCEDURAL_FACE_TRACK:
@@ -188,7 +163,6 @@ def prep_json_for_binary_conversion(anim_name, keyframes):
                 keyframe.pop(DURATION_TIME_ATTR)
             except KeyError:
                 pass
-            fill_out_eye_parameters(keyframe)
 
         # Since the 'radius_mm' attribute of 'BodyMotionKeyFrame' can be set to "TURN_IN_PLACE"
         # or "STRAIGHT", that attribute is always stored as a string for FlatBuffers. When the
@@ -213,20 +187,6 @@ def prep_json_for_binary_conversion(anim_name, keyframes):
         anim_dict[KEYFRAMES_ATTR][track].append(keyframe)
 
     return anim_dict
-
-
-def fill_out_eye_parameters(keyframe):
-    """
-    If the provided keyframe doesn't have enough attributes for each
-    eye (because it is an old animation from a time when we had fewer
-    attributes per eye), then use DEFAULT_EYE_SETTINGS to fill in
-    those missing attributes for each eye (using the default values
-    defined in DEFAULT_EYE_SETTINGS).
-    """
-    for eye_attr in EYE_ATTRS:
-        num_eye_settings = len(keyframe[eye_attr])
-        if num_eye_settings < len(DEFAULT_EYE_SETTINGS):
-            keyframe[eye_attr].extend(DEFAULT_EYE_SETTINGS[num_eye_settings:])
 
 
 def prep_audio_key_frame_json(keyframe, anim_name):
@@ -269,19 +229,7 @@ def prep_audio_key_frame_json(keyframe, anim_name):
 
     # Check audio key frame format
     if not AUDIO_DEP_EVENT_ATTR in keyframe:
-        # Key frame is in correct format, so we'll return it more or less as-is
-
-        # Check every event group and remove the 'audioName' data if present.
-        # We like the 'audioName' field in JSON data for humans, but the engine
-        # only uses an event's numerical ID, so we strip out the name string
-        # before converting to binary format.
-        if AUDIO_EVENT_GROUPS_ATTR in keyframe:
-            for eventGroup in keyframe[AUDIO_EVENT_GROUPS_ATTR]:
-                try:
-                    del eventGroup[AUDIO_NAME_ATTR]
-                except KeyError:
-                    pass
-
+        # Key frame is in correct format
         return keyframe
 
     # Migrate to new audio key frame format
@@ -357,25 +305,33 @@ def write_json_file(json_file, data):
 
 
 def convert_json_to_binary(file_path, flatc_dir, schema_file, bin_file_ext):
+    """
+    Given:
+        1: the path to a .json animation file
+        2: the path to a directory that contains the "flatc" binary
+        3: the path to an .fbs FlatBuffers schema file, eg. "cozmo_anim.fbs"
+        4: the desired file extension for the resulting binary file, eg. ".bin"
+    this function will use "flatc" to generate a binary animation
+    file and return the path to that file.
+
+    See https://google.github.io/flatbuffers/flatbuffers_guide_using_schema_compiler.html
+    for additional info about the "flatc" schema compiler.
+    """
     output_dir = os.path.dirname(file_path)
     flatc = os.path.join(flatc_dir, "flatc")
     if not os.path.isfile(flatc):
         raise EnvironmentError("%s is not a file so JSON data cannot be converted to binary" % flatc)
     args = [flatc, "-o", output_dir, "-b", schema_file, file_path]
     #print("Running: %s" % " ".join(args))
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(args)
     stdout, stderr = p.communicate()
-    exit_status = p.returncode
-    if exit_status != 0:
-        print("Error encountered: %s" % stderr)
-        raise ValueError("Unable to successfully generate binary file (exit status = %s)" % exit_status)
+    exit_status = p.poll()
     output_file = os.path.splitext(file_path)[0] + bin_file_ext
-    if not os.path.isfile(output_file):
-        raise ValueError("Unable to generate binary file: %s" % output_file)
-    print("Converted %s to %s" % (file_path, output_file))
+    if not os.path.isfile(output_file) or exit_status != 0:
+        raise ValueError("Unable to successfully generate binary file %s (exit status "
+                         "of external process = %s)" % (output_file, exit_status))
+    #print("Converted %s to %s" % (file_path, output_file))
     return output_file
-
-
 
 
 def main(json_files, bin_name, flatc_dir, schema_file=SCHEMA_FILE, bin_file_ext=BIN_FILE_EXT):
@@ -402,7 +358,6 @@ def main(json_files, bin_name, flatc_dir, schema_file=SCHEMA_FILE, bin_file_ext=
     write_json_file(tmp_json_file, {CLIPS_ATTR:anim_clips})
     bin_file = convert_json_to_binary(tmp_json_file, flatc_dir, schema_file, bin_file_ext)
     os.close(fd)
-    os.remove(tmp_json_file)
     renamed_bin_file = os.path.join(os.path.dirname(bin_file), bin_name)
     os.rename(bin_file, renamed_bin_file)
     if not os.path.isfile(renamed_bin_file):

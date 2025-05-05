@@ -17,7 +17,7 @@
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 //Forward declarations
 class ReactionObjectData;
@@ -34,7 +34,7 @@ protected:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Cozmo_Basestation_BehaviorSystem_ConditionObstacleDetected_H__

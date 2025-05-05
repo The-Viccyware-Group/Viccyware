@@ -12,7 +12,6 @@
 
 #include "engine/aiComponent/beiConditions/conditions/conditionFacePositionUpdated.h"
 
-#include "clad/externalInterface/messageEngineToGame.h"
 #include "coretech/common/engine/utils/timer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
@@ -22,7 +21,7 @@
 #include "util/console/consoleInterface.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 namespace{
 const bool kDebugFaceDist = false;
@@ -168,5 +167,5 @@ bool ConditionFacePositionUpdated::AddDesiredFace(BehaviorExternalInterface& beh
 }
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki

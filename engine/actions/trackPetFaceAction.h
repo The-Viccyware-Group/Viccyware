@@ -14,13 +14,12 @@
 #define __Anki_Cozmo_Basestation_TrackPetFaceAction_H__
 
 #include "engine/actions/trackActionInterface.h"
-#include "coretech/common/engine/robotTimeStamp.h"
 #include "coretech/vision/engine/faceIdTypes.h"
 
 #include "clad/types/petTypes.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class TrackPetFaceAction : public ITrackAction
 {
@@ -51,11 +50,11 @@ private:
   
   FaceID             _faceID  = Vision::UnknownFaceID;
   Vision::PetType    _petType = Vision::PetType::Unknown;
-  RobotTimeStamp_t   _lastFaceUpdate = 0;
+  TimeStamp_t        _lastFaceUpdate = 0;
   
 }; // class TrackPetFaceAction
     
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif /* __Anki_Cozmo_Basestation_TrackPetFaceAction_H__ */

@@ -20,7 +20,7 @@
 
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 namespace Audio {
 
 class EngineRobotAudioInput : public AudioEngine::Multiplexer::AudioMuxInput {

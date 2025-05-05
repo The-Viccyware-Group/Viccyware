@@ -16,7 +16,7 @@
 #include <cstdint>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 namespace ExternalInterface {
 class MessageEngineToGame;
@@ -27,7 +27,7 @@ enum class MessageGameToEngineTag : uint8_t;
 
 class IExternalInterface;
 
-} // end namespace Vector
+} // end namespace Cozmo
 } // end namespace Anki
 
 #endif //__Anki_Cozmo_Basestation_ExternalInterface_ExternalInterfaceFwd_H__

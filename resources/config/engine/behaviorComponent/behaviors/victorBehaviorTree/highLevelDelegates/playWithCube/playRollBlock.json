@@ -1,13 +1,5 @@
 {
   "behaviorClass": "RollBlock",
   "behaviorID": "PlayRollBlock",
-
-  "associatedActiveFeature": "RollBlock",
-
-  "wantsToBeActivatedCondition": {
-    "conditionType": "FeatureGate",
-    "feature": "RollCube"
-  },
-
   "isBlockRotationImportant" : false
 }

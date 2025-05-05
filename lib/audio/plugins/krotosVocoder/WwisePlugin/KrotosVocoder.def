@@ -1,6 +1,0 @@
-; KrotosVocoder.def : Declares the module parameters for the DLL.
-
-LIBRARY      "KrotosVocoder"
-
-EXPORTS
-	AkCreatePlugin

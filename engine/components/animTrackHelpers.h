@@ -16,7 +16,7 @@
 #include <string>
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
   
 enum class AnimTrackFlag : uint8_t;
 
@@ -28,7 +28,7 @@ public:
   
 };
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Anki_Cozmo_Basestation_Components_AnimTrackHelpers_H__

@@ -25,21 +25,12 @@ void SpeechRecognizer::Stop()
   StopInternal();
 }
 
-void SpeechRecognizer::DoCallback(const SpeechRecognizerCallbackInfo& info) const
+void SpeechRecognizer::DoCallback(const char* callbackArg, float score)
 {
   if (_speechCallback)
   {
-    _speechCallback(info);
+    _speechCallback(callbackArg, score);
   }
-}
-  
-const std::string SpeechRecognizerCallbackInfo::Description() const
-{
-  const auto desc = result + " StartTime_ms: " + std::to_string(startTime_ms) + " EndTime_ms: " +
-                    std::to_string(endTime_ms) + " Score: " + std::to_string(score) +
-                    " startSample: " + std::to_string(startSampleIndex) +
-                    " endSample: "   + std::to_string(endSampleIndex);
-  return desc;
 }
 
 } // end namespace AudioUtil

@@ -29,7 +29,7 @@ namespace Anki {
 
 class Pose3d;
 
-namespace Vector {
+namespace Cozmo {
 
 class CozmoContext;
 class IActionRunner;
@@ -54,7 +54,7 @@ enum class ERobotDriveToPoseStatus {
   // traversal. The robot is not currently following a path
   WaitingToBeginPath,
 
-  // Following a planned path. While in this state, it may also be replanning, sending new paths, scanning prox obstacles, etc.
+  // Following a planned path. While in this state, it may also be replanning, sending new paths, etc.
   FollowingPath,
     
   // Stopped and waiting (not planning or following)
@@ -96,9 +96,9 @@ public:
   //////
   // IDependencyManagedComponent functions
   //////
-  virtual void InitDependent(Vector::Robot* robot, const RobotCompMap& dependentComps) override;
+  virtual void InitDependent(Cozmo::Robot* robot, const RobotCompMap& dependentComponents) override;
   virtual void GetInitDependencies(RobotCompIDSet& dependencies) const override {
-    dependencies.insert(RobotComponentID::CozmoContextWrapper);
+    dependencies.insert(RobotComponentID::CozmoContext);
   };
   virtual void GetUpdateDependencies(RobotCompIDSet& dependencies) const override{
     dependencies.insert(RobotComponentID::AIComponent);
@@ -122,13 +122,7 @@ public:
   // this component, or will get set by the SpeedChooser if this component hasn't been set to use a custom
   // profile
   Result StartDrivingToPose(const std::vector<Pose3d>& poses,
-                            std::shared_ptr<Planning::GoalID> selectedPoseIndexPtr = {});
-
-  // Can be used to start the planner before calling StartDrivingToPose
-  Result PrecomputePath(const std::vector<Pose3d>& poses,
-                        std::shared_ptr<Planning::GoalID> selectedPoseIndexPtr = {});
-  // Check if a precomputed path is ready
-  bool IsPlanReady() const;
+                            std::shared_ptr<Planning::GoalID> selectedPoseIndex = {});
 
   // set or clear the custom motion profile that all motion should follow. If cleared, then defaults will be
   // used, or the speed chooser will be used if enabled
@@ -138,19 +132,11 @@ public:
   // Set a motion profile and have it cleared automatically when the action finishes. Note that this will
   // clear when the action is _destroyed_.
   void SetCustomMotionProfileForAction(const PathMotionProfile& motionProfile, IActionRunner* action);
-  
-  // Determines if replanning can select a different goal than was originally selected. no effect if there is only one goal
-  void SetCanReplanningChangeGoal(bool canChangeGoal) { _replanningCanChangeGoal = canChangeGoal; }
 
   // check / get the custom motion profile. Note that there is always _some_ motion profile that paths follow,
   // but these functions refer to the _custom_ profile which, for example, might get set by a behavior
   bool HasCustomMotionProfile() const;
-
-  // Returns a copy of the custom motion profile with speeds that
-  // have been clamped for speed safety.
-  // The returned profile also depends on whether or not the
-  // robot is currently carrying an object.
-  PathMotionProfile GetCustomMotionProfile() const;
+  const PathMotionProfile& GetCustomMotionProfile() const;
   
   // This function checks the planning / path following status of the robot. See the enum definition for
   // details. In 99% of cases you should prefer the direct bool functions below, like IsActive() or
@@ -160,28 +146,14 @@ public:
   // Opposite of IsReady, this component is actively doing something (planning, following, etc)
   bool IsActive() const;
 
-  // returns true if the automatic replanning is running, until the search is complete.
-  // returns false during the initial planning stage, or once a search is complete
-  bool IsReplanning() const { return _isReplanning; }
-  
   // True if there is a path to follow (state is following path or waiting to begin)
   bool HasPathToFollow() const;
-  
-  // True if the robot is following a path but is momentarily stopped (the robot issued a
-  // PATH_COMPLETED). This is probably because it's replanning and it exhaused its safe subpath
-  bool HasStoppedBeforeExecuting() const { return _hasStoppedBeforeExecuting; }
 
   // True if the last path failed (based on status of failure)
   bool LastPathFailed() const;
   
-  std::shared_ptr<Planning::GoalID> GetLastSelectedIndex() const { return _plannerSelectedPoseIndex; }
-  
   // Execute a manually-assembled path
   Result ExecuteCustomPath(const Planning::Path& path);
-
-  // Checks if the path provided is safe. If driveCenter is provided, then check using the angle of that pose 
-  // (PathPlanner interface does not yet support full start state specification, just starting angle)
-  bool IsPathSafe(const Planning::Path& path, const Pose3d* driveCenter = nullptr) const;
 
   // Handle new data from the robot
   void UpdateCurrentPathSegment(s8 currPathSegment);
@@ -189,12 +161,6 @@ public:
   // Stops planning and path following. Returns RESULT_OK if successfully aborted (this may fail, e.g., if
   // message sending to the robot fails)
   Result Abort();
-  
-  // If you called PrecomputePath, the robot will not start following the path until StartDrivingToPose
-  // is called. For replanning, the robot will automatically start following the path unless you call this
-  // with autoStart == false. Call it again with autoStart == true to start driving when replanning is finished,
-  // or now if replanning already finished
-  void SetStartPath(bool autoStart);
 
   // These should only be used for debugging / printing. Use more direct functions for checking the state of
   // this component
@@ -220,22 +186,15 @@ private:
   void RejiggerTargetsAndReplan();
 
   // Used when the planner finishes, to begin following the proposed plan (if desired and the plan is
-  // safe). Gets plan from _selectedPathPlanner. This method may set abort flags if the proposed plan
-  // is invalid, or it may set retry flags if the proposed plan is NOT YET valid (e.g., while still
-  // driving during replanning).
-  void TryCompletingPath();
+  // safe). Gets plan from _selectedPathPlanner
+  void HandlePlanComplete();  
 
   // Starts the selected planner with ComputePath, using the params in _currPlanParams, returns true if the
   // selected planner or its fallback starts successfully. The path may still contain obstacles if the
-  // selected planner didn't consider obstacles in its search. If the argument is omitted, the drive center
+  // selected planner didnt consider obstacles in its search. If the argument is omitted, the drive center
   // will be computed from the _robot pose. These functions do not modify _driveToPoseStatus
   bool StartPlanner();
   bool StartPlanner(const Pose3d& driveCenterPose);
-
-  // configures the start state and goal states for path, and launches the planner if it is 
-  // not already computing that path
-  Result ConfigureAndStartPlanner(const std::vector<Pose3d>& poses,
-                            std::shared_ptr<Planning::GoalID> selectedPoseIndexPtr = {});
 
   // Abort the plan and any path following, and set the status to Failure
   void AbortAndSetFailure();
@@ -253,8 +212,7 @@ private:
 
   // Clears the path that the robot is executing which also stops the robot
   Result ClearPath();
-  // Trims the end of the path that the robot is executing
-  Result TrimRobotPathToLength( uint8_t length );
+  Result SendClearPath() const;
 
   bool IsWaitingToCancelPath() const;
 
@@ -266,8 +224,6 @@ private:
 
   void SetDriveToPoseStatus(ERobotDriveToPoseStatus newValue);
   
-  PathMotionProfile ClampToCliffSafeSpeed(const PathMotionProfile& motionProfile) const;
-
   std::unique_ptr<SpeedChooser>   _speedChooser;
   std::unique_ptr<PathDolerOuter> _pdo;
 
@@ -294,11 +250,7 @@ private:
   u16                      _lastRecvdPathID              = 0;
   bool                     _plannerActive                = false;
   bool                     _hasCustomMotionProfile       = false;
-  bool                     _startFollowingPath           = true;
-  bool                     _isReplanning                 = false;
-  bool                     _replanningCanChangeGoal      = true;
-  bool                     _waitingToMatchReplanOrigin   = false;
-  bool                     _hasStoppedBeforeExecuting    = false;
+
 
   // keep track of the last path ID we canceled. Note that when we cancel a path we will transition to one of
   // the "waiting to cancel" statuses, but then we may start working on a new plan before we actually get a

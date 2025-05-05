@@ -14,10 +14,11 @@
 #ifndef __FACEANDAPPROACHPLANNER_H__
 #define __FACEANDAPPROACHPLANNER_H__
 
+#include "coretech/common/engine/math/point.h"
 #include "pathPlanner.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class FaceAndApproachPlanner : public IPathPlanner
 {
@@ -26,15 +27,14 @@ public:
   FaceAndApproachPlanner() : IPathPlanner("FaceAndApproach") {}
 
   virtual EComputePathStatus ComputeNewPathIfNeeded(const Pose3d& startPose,
-                                                    bool forceReplanFromScratch = false,
-                                                    bool allowGoalChange = true) override;
+                                                    bool forceReplanFromScratch = false) override;
 protected:
 
   virtual EComputePathStatus ComputePath(const Pose3d& startPose,
                                          const Pose3d& targetPose) override;
 
   Vec3f _targetVec;
-  float _finalTargetAngle = 0.f;
+  float _finalTargetAngle;
 };
 
 }

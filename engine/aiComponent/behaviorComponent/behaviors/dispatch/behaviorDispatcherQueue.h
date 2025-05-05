@@ -17,7 +17,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/dispatch/iBehaviorDispatcher.h"
 
 namespace Anki {
-namespace Vector {
+namespace Cozmo {
 
 class BehaviorDispatcherQueue : public IBehaviorDispatcher
 {
@@ -47,7 +47,7 @@ private:
 };
 
 
-} // namespace Vector
+} // namespace Cozmo
 } // namespace Anki
 
 #endif // __Engine_AiComponent_BehaviorComponent_Behaviors_Dispatch_BehaviorDispatcherQueue_H__

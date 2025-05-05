@@ -119,9 +119,9 @@ const ExperimentVariation* GetExperimentVariation(const Experiment* experiment,
 {
   ASSERT_NAMED(nullptr != experiment, "Experiment pointer must not be NULL");
 
-  LOG_DEBUG("AnkiLab.GetExperimentVariation.bucket",
-            "%s : %u",
-            experiment->GetKey().c_str(), userHashBucket);
+  LOG_INFO("AnkiLab.GetExperimentVariation.bucket",
+           "%s : %u",
+           experiment->GetKey().c_str(), userHashBucket);
 
   // Calculate population fraction of each variation
   const std::vector<ExperimentVariation>& variations = experiment->GetVariations();
@@ -137,10 +137,10 @@ const ExperimentVariation* GetExperimentVariation(const Experiment* experiment,
       if (bucketSize > 0) {
         uint8_t bucketEnd = bucketStart + bucketSize - 1;
 
-        LOG_DEBUG("AnkiLab.GetExperimentVariation.bucket.range",
-                  "|[%2u - %2u] - %2u| : %s",
-                  bucketStart, bucketEnd, maxBucketEnd,
-                  v.GetKey().c_str());
+        LOG_INFO("AnkiLab.GetExperimentVariation.bucket.range",
+                 "|[%2u - %2u] - %2u| : %s",
+                 bucketStart, bucketEnd, maxBucketEnd,
+                 v.GetKey().c_str());
 
         if ((userHashBucket >= bucketStart) && (userHashBucket <= bucketEnd)) {
           variation = &v;
@@ -156,11 +156,11 @@ const ExperimentVariation* GetExperimentVariation(const Experiment* experiment,
   if (!inExperiment) {
     return nullptr;
   } else {
-    LOG_DEBUG("AnkiLab.GetExperimentVariation.bucket.assign",
-              "%s : %u : %s",
-              experiment->GetKey().c_str(),
-              userHashBucket,
-              variation->GetKey().c_str());
+    LOG_INFO("AnkiLab.GetExperimentVariation.bucket.assign",
+             "%s : %u : %s",
+             experiment->GetKey().c_str(),
+             userHashBucket,
+             variation->GetKey().c_str());
     return variation;
   }
 }
