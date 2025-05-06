@@ -271,7 +271,7 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     METABUILD_INPUTS=`find . -name BUILD.in`
 fi
 
-if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
+if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 1 ]; then
   echo "Getting Go dependencies"
   # Process BUILD.in files (creates list of Go projects to fetch)
   ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \

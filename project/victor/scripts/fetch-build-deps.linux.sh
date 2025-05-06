@@ -36,8 +36,6 @@ function check_dep()
 
 pushd "${TOPLEVEL}" > /dev/null 2>&1
 
-$GIT config --global url."git@github.com:".insteadOf https://github.com
-
 # Check for required programs
 check_dep which python2
 check_dep which python3
@@ -63,8 +61,8 @@ vlog "Build output dirs"
 mkdir -p generated
 mkdir -p _build
 
-vlog "Fetch & extract external dependencies. This may take 1-5 min."
-./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+#vlog "Fetch & extract external dependencies. This may take 1-5 min."
+#./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
 
 vlog "Configure audio library"
 ./lib/audio/configure.py

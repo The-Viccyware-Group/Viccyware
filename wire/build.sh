@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+
+UNAME=$(uname)
+
+if [[ ! -f ./CPPLINT.cfg ]]; then
+    if [[ -f ../CPPLINT.cfg ]]; then
+        cd ..
+    else
+        echo "This script must be run in the victor repo. ./wire/build.sh"
+        exit 1
+    fi
+fi
+
+VICDIR="$(pwd)"
+
+cd ~
+if [[ ! -d .anki ]]; then
+    echo "Downloading ~/.anki folder contents..."
+    git clone https://github.com/kercre123/anki-deps
+    mv anki-deps .anki
+fi
+
+echo "Updating anki-deps..."
+cd ~/.anki
+git pull
+
+if [[ -d ~/.anki/cmake/3.9.6 ]]; then
+    echo "Removing old version of cmake"
+    rm -rf ~/.anki/cmake
+fi
+
+if [[ ${UNAME} == "Darwin" ]]; then
+    echo "Checking out macOS branch..."
+    cd ~/.anki
+    if [[ $(uname -a) == *"arm64"* ]]; then
+        git checkout macos-arm
+    else
+        git checkout macos
+    fi
+    git lfs install
+    git lfs pull
+else
+    if [[ $(uname -a) == *"aarch64"* ]]; then
+       cd ~/.anki
+       git checkout arm64-linux
+    fi
+fi
+
+cd "${VICDIR}"
+
+echo "Building victor..."
+
+./project/victor/scripts/victor_build.sh
+
+echo
+
+echo "Build was successful!"
