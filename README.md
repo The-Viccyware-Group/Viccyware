@@ -37,7 +37,7 @@ sudo chmod 660 /var/run/docker.sock
 3. Run the build script:
 ```
 cd ~/Viccyware
-./wire/build-v.sh
+./build/build-v.sh
 ```
 
 3. It should just work! The output will be in `./_build/vicos/Release/`
@@ -104,5 +104,5 @@ echo 192.168.1.150 > robot_ip.txt
 3. Run:
 
 ```
-./build/deploy-d.sh
+./build/deploy-v.sh
 ```
