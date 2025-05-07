@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
 
-  <title>Victor Web Viz</title>
+  <title>Cozmo Web Viz</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -64,7 +64,7 @@
   
     body {
       font: 14px 'Open Sans', sans-serif;
-      background-color: #121212;
+      background-color: #004a8f;
       color: #ffffff;
     }
   
@@ -82,7 +82,7 @@
       list-style: none;
       margin: 0;
       padding: 0 6px;
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid #49004d;
     }
   
     ul.tabs li {
@@ -90,7 +90,7 @@
       font-size: 14px;
       cursor: pointer;
       margin: 0 4px;
-      background-color: #1e1e1e;
+      background-color: #49004d;
       color: #ffffff;
       border-top-left-radius: 4px;
       border-top-right-radius: 4px;
@@ -101,7 +101,7 @@
     }
   
     ul.tabs li:hover {
-      background-color: #333;
+      background-color: #356bac;
     }
   
     ul.tabs li.current {
@@ -111,7 +111,7 @@
     }
   
     .tab-content {
-      background-color: #1e1e1e;
+      background-color: #356bac;
       padding: 15px;
       border: 1px solid #333;
       border-top: none;
@@ -177,7 +177,7 @@
     }
   
     #popouts .tab-content {
-      border-top: 1px solid #333;
+      border-top: 1px solid #9d0080;
       margin-bottom: 20px;
     }
   
@@ -207,11 +207,28 @@
   <div id="container">
 
     <ul class="tabs">
+      <style>
+        .tabs .tab-link {
+    background-color: #356bac !important; /* Purple */
+    color: white !important; /* White text for contrast */
+    border: 1px solid #003d66; /* Darker purple border */
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-align: center;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.tabs .tab-link.current {
+    background-color: #0085cc !important; 
+}
+
+      </style>
       <li class="tab-link current" data-tab="tab-overview">Overview</li>
     </ul>
 
     <div id="tab-overview" class="tab-content current">
-      <p>This page will display data "pushed" from Victor engine to multiple drawing modules.</p>
+      <p>This page will display data "pushed" from Viccy engine to multiple drawing modules.</p>
       <p>Each tab contains its own module. Open the tab to subscribe to the data source for that module.</p>
       <p>To add new modules, start with the template file module.js.template.</p>
       <p><b>Are you always disconnected from the robot? Not seeing new tabs or new functionality? In Chrome, hit Command + Shift + R to re-download all the assets for this site.</b></p>

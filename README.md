@@ -1,14 +1,18 @@
-# victor
+# Viccyware-tester
 
-Welcome to `victor`. This is the home of the Anki Vector robot's source code. Original README: [README-orig.md](/README-orig.md)
+Welcome to the unstable branch of `Viccyware`. This is the home of a modified copy of the Vector source
+code. Original README: [README-orig.md](/README-orig.md)
 
 Check the [wiki](https://github.com/kercre123/victor/wiki) for more information about the leak, what we can do with this, and general Vector info.
 
+## Branch info
+This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
+
 ## Changes
 
-- The wiki includes a list of changes I made: [Changes I Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
+- The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
-## Building (Linux)
+## Building (Linux or WSL)
 
  - Prereqs: Make sure you have `docker` and `git-lfs` installed.
 
@@ -16,8 +20,8 @@ Check the [wiki](https://github.com/kercre123/victor/wiki) for more information 
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd wire-os-victor
+git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Make sure you can run Docker as a normal user. This will probably involve:
@@ -32,8 +36,8 @@ sudo chmod 660 /var/run/docker.sock
 
 3. Run the build script:
 ```
-cd ~/wire-os-victor
-./build/build-v.sh
+cd ~/Viccyware
+./wire/build-v.sh
 ```
 
 3. It should just work! The output will be in `./_build/vicos/Release/`
@@ -49,8 +53,8 @@ cd ~/wire-os-victor
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/kercre123/victor -b snowboy
-cd victor
+git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
+cd Viccyware
 git lfs install
 git lfs pull
 ```
@@ -81,7 +85,7 @@ sudo spctl --global-disable
 
 4. Run the build script:
 ```
-cd ~/wire-os-victor
+cd ~/Viccyware
 ./build/build-v.sh
 ```
 

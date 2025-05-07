@@ -39,7 +39,7 @@ protected:
 
 private:
   void TransitionToPlayingPutDownAnimation();
-  void TransitionToHeadCalibration();
+  void TransitionToMotorCalibration();
   void TransitionToPlayingWaitAnimation();
 
   struct InstanceConfig {
