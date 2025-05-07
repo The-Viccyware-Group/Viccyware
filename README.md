@@ -42,9 +42,9 @@ cd ~/Viccyware
 
 3. It should just work! The output will be in `./_build/vicos/Release/`
 
-## Building (ARM64 macOS)
+## Building (Intel or ARM64 macOS)
 
-# only works on M1-M4 Macs at the moment, not Intel
+# ***NOT FUNCTIONAL YET***
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
    -  Then: `brew install pyenv git-lfs ccache wget`
@@ -86,7 +86,7 @@ sudo spctl --global-disable
 4. Run the build script:
 ```
 cd ~/Viccyware
-./build/build-v.sh
+./wire/build.sh
 ```
 
 5. It should just work! The output will be in `./_build/vicos/Release/`
@@ -104,5 +104,9 @@ echo 192.168.1.150 > robot_ip.txt
 3. Run:
 
 ```
-./build/deploy-d.sh
+# Linux
+./wire/deploy-d.sh
+
+# macOS
+./wire/deploy.sh
 ```
