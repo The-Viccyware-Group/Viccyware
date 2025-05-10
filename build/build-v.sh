@@ -61,7 +61,7 @@ else
 		--build-arg USER_NAME=$USER \
 		--build-arg UID=$(id -u $USER) \
 		--build-arg GID=$(id -g $USER) \
-		-t vic-standalone-builder-2 \
+		-t vic-standalone-builder-3 \
 		build/
 	else
 		echo "Reusing vic-standalone-builder-3"
