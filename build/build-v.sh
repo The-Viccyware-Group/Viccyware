@@ -44,18 +44,33 @@ if [[ "$(uname -a)" == *"Darwin"* ]]; then
 	./project/victor/scripts/victor_build_release.sh
 else
 	mkdir -p build/cache
-	docker build \
-	--build-arg DIR_PATH="$(pwd)" \
-	--build-arg USER_NAME=$USER \
-	--build-arg UID=$(id -u $USER) \
-	--build-arg GID=$(id -g $USER) \
-	-t vic-standalone-builder-2 \
-	build/
+	if [[ ! -z $(docker images -q vic-standalone-builder-2) ]]; then
+		echo "Purging old vic-standalone-builder-2 container..."
+		docker ps -a --filter "ancestor=vic-standalone-builder-2" -q | xargs -r docker rm -f
+		echo
+		echo -e "\033[5m\033[1m\033[31mOld Docker builder detected on system. If you have built victor or wire-os many times, it is recommended you run:\033[0m"
+		echo
+		echo -e "\033[1m\033[36mdocker system prune -a --volumes\033[0m"
+		echo
+		echo -e "\033[32mContinuing in 5 seconds... (you will only see this message once)\033[0m"
+		sleep 5
+	fi
+	if [[ -z $(docker images -q vic-standalone-builder-3) ]]; then
+		docker build \
+		--build-arg DIR_PATH="$(pwd)" \
+		--build-arg USER_NAME=$USER \
+		--build-arg UID=$(id -u $USER) \
+		--build-arg GID=$(id -g $USER) \
+		-t vic-standalone-builder-2 \
+		build/
+	else
+		echo "Reusing vic-standalone-builder-3"
+	fi
 	docker run -it \
 		-v $(pwd)/anki-deps:/home/$USER/.anki \
 		-v $(pwd):$(pwd) \
 		-v $(pwd)/build/cache:/home/$USER/.ccache \
-		vic-standalone-builder-2 bash -c \
+		vic-standalone-builder-3 bash -c \
 		"cd $(pwd) && \
 		./project/victor/scripts/victor_build_release.sh"
 fi
