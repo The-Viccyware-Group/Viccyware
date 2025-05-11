@@ -22,7 +22,7 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
 cd Viccyware
 ```
 
@@ -55,7 +55,7 @@ cd ~/Viccyware
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/Switch-modder/Viccyware -b Viccyware-tester
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
 cd Viccyware
 git lfs install
 git lfs pull
