@@ -342,7 +342,14 @@
       "cloud_intent": "intent_imperative_eyecolor",
       "feature_gate": "EyeColorVC"
     }
+
+    {
+      "user_intent": "singing",
+      "cloud_intent": "intent_singing"
+    },
   ],
 
+
+  
   "unmatched_intent": "unmatched_intent"
 }
