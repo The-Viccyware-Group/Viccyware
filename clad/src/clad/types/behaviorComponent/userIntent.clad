@@ -190,7 +190,8 @@ union dupes_allowed UserIntent
   UserIntent_Void             system_sleep,
   UserIntent_TakeAPhoto       take_a_photo,
   UserIntent_Void             test_wire,
-  UserIntent_WeatherResponse  weather_response,
+  UserIntent_WeatherResponse  weather_response
+  UserIntent_Voice            singing,
 
   // used for validation to know when the above "normal intents" end
   UserIntent_Void               test_SEPARATOR,
