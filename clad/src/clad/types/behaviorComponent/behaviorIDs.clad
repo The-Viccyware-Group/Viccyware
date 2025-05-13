@@ -359,6 +359,7 @@ enum uint_16 BehaviorID {
   PlayAGameVoiceCommand,
   PopAWheelieVoiceCommand,
   RollCubeVoiceCommand,
+  SingingVoiceCommand,
 
   // victorBehaviorTree/highLevelDelegates/voiceCommands/trickDispatchers
   CubeTrickDispatcher,

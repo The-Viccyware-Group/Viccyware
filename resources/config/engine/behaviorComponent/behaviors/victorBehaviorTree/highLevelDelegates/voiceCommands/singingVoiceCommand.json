@@ -1,0 +1,28 @@
+{
+  "behaviorID" : "SingingVoiceCommand",
+  "behaviorClass" : "DispatcherRandom",
+  
+  "respondToUserIntents": [
+    {
+      "type": "singing"
+    }
+  ],
+  
+  "behaviors" : [
+    {
+      "behavior" : "Singing_AbaDaba",
+      "cooldown_s" : 50.0,
+      "weight" : 1.0
+    },
+    {
+      "behavior" : "Singing_BeautifulDreamer",
+      "cooldown_s" : 50.0,
+      "weight" : 1.0
+    },
+    {
+      "behavior" : "Singing_EntryOfTheGladiators",
+      "cooldown_s" : 50.0,
+      "weight" : 1.0
+    }
+  ]
+}
