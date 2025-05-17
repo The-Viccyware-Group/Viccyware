@@ -40,6 +40,10 @@
       "AnimName": "offline_off"
   },
   {
+      "CladEvent": "Sleeping",
+      "AnimName": "sleeping"
+  },
+  {
       "CladEvent": "SpinnerBlueCelebration",
       "AnimName": "spinner_blue_celebration"
   },

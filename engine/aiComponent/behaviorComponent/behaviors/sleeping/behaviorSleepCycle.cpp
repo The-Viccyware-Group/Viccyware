@@ -28,6 +28,7 @@
 #include "engine/aiComponent/beiConditions/conditions/conditionLambda.h"
 #include "engine/aiComponent/timerUtility.h"
 #include "engine/audio/engineRobotAudioClient.h"
+#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include "engine/components/battery/batteryComponent.h"
 #include "engine/components/sdkComponent.h"
 #include "engine/cozmoContext.h"
@@ -109,6 +110,7 @@ BehaviorSleepCycle::BehaviorSleepCycle(const Json::Value& config)
   ParseWakeReasons(config);
 
   _iConfig.emergencyCondition = BEIConditionFactory::CreateBEICondition(config[kEmergencyConditionKey], GetDebugLabel());
+  BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -336,6 +338,13 @@ void BehaviorSleepCycle::InitBehavior()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSleepCycle::OnBehaviorActivated()
 {
+
+  // Start backpack lights
+
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  const bool shouldLoop = true;
+  blc.SetBackpackAnimation(_iConfig->backpackAnim, shouldLoop);
+
   // reset dynamic variables
   _dVars = DynamicVariables();
 
@@ -439,6 +448,12 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
   SetConditionsActiveForState( _dVars.currState, false);
 
   _iConfig.emergencyCondition->SetActive( GetBEI(), false );
+
+  // Kill backpack lights
+
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.ClearAllBackpackLightConfigs();
+
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
