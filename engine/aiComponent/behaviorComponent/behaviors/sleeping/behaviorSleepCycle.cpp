@@ -110,9 +110,7 @@ BehaviorSleepCycle::BehaviorSleepCycle(const Json::Value& config)
   ParseWakeReasons(config);
 
   _iConfig.emergencyCondition = BEIConditionFactory::CreateBEICondition(config[kEmergencyConditionKey], GetDebugLabel());
-  BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
 }
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorSleepCycle::~BehaviorSleepCycle()
 {
@@ -342,8 +340,7 @@ void BehaviorSleepCycle::OnBehaviorActivated()
   // Start backpack lights
 
   auto& blc = GetBEI().GetBackpackLightComponent();
-  const bool shouldLoop = true;
-  blc.SetBackpackAnimation(_iConfig->backpackAnim, shouldLoop);
+  blc.SetBackpackAnimation(_iConfig.backpackAnim);
 
   // reset dynamic variables
   _dVars = DynamicVariables();
