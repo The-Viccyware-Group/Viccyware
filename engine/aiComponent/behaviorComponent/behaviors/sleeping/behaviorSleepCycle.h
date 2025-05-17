@@ -132,6 +132,7 @@ private:
 
     std::vector< WakeReason > alwaysWakeReasons;
     std::map< SleepStateID, std::vector< WakeReason > > wakeReasonsPerState;
+    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
   };
 
   struct DynamicVariables {
