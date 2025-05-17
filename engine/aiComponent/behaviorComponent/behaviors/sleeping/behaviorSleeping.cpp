@@ -16,6 +16,7 @@
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
 #include "engine/aiComponent/behaviorComponent/sleepTracker.h"
+#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include "engine/components/visionComponent.h"
 #include "engine/faceWorld.h"
 #include "util/console/consoleInterface.h"
@@ -92,6 +93,11 @@ void BehaviorSleeping::OnBehaviorActivated()
   // always start with one round of sleeping to make sure the face is in a good state
   DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::GoToSleepSleeping),
                       &BehaviorSleeping::TransitionToSleeping);
+
+  // Start backpack lights
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.SetBackpackAnimation(_iConfig.backpackAnim);
+
 }
   
 void BehaviorSleeping::OnBehaviorDeactivated()
@@ -101,6 +107,12 @@ void BehaviorSleeping::OnBehaviorDeactivated()
   }
   
   GetBEI().GetSleepTracker().SetIsSleeping(false);
+
+  // Kill backpack lights
+
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.ClearAllBackpackLightConfigs();
+
 }
 
 void BehaviorSleeping::TransitionToSleeping()
@@ -111,6 +123,11 @@ void BehaviorSleeping::TransitionToSleeping()
   
   const float waitTime_s = GetRNG().RandDblInRange(kSleepingStirSpacing_min_s, kSleepingStirSpacing_max_s);
   HoldFaceForTime(waitTime_s, &BehaviorSleeping::TransitionToBoutOfStirring);
+
+  // Start backpack lights
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.SetBackpackAnimation(_iConfig.backpackAnim);
+
 }
 
 void BehaviorSleeping::TransitionToBoutOfStirring()

@@ -28,7 +28,6 @@
 #include "engine/aiComponent/beiConditions/conditions/conditionLambda.h"
 #include "engine/aiComponent/timerUtility.h"
 #include "engine/audio/engineRobotAudioClient.h"
-#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include "engine/components/battery/batteryComponent.h"
 #include "engine/components/sdkComponent.h"
 #include "engine/cozmoContext.h"
@@ -337,11 +336,6 @@ void BehaviorSleepCycle::InitBehavior()
 void BehaviorSleepCycle::OnBehaviorActivated()
 {
 
-  // Start backpack lights
-
-  auto& blc = GetBEI().GetBackpackLightComponent();
-  blc.SetBackpackAnimation(_iConfig.backpackAnim);
-
   // reset dynamic variables
   _dVars = DynamicVariables();
 
@@ -445,11 +439,6 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
   SetConditionsActiveForState( _dVars.currState, false);
 
   _iConfig.emergencyCondition->SetActive( GetBEI(), false );
-
-  // Kill backpack lights
-
-  auto& blc = GetBEI().GetBackpackLightComponent();
-  blc.ClearAllBackpackLightConfigs();
 
 }
 
