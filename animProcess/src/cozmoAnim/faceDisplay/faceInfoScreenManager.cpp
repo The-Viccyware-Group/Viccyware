@@ -1314,7 +1314,7 @@ void FaceInfoScreenManager::DrawMain()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "NOT CONNECTED";
+    ip = "NO INTERNET";
   }
 
   // ESN/serialNo and the HW version are drawn on the same line with serialNo default left aligned and
@@ -1342,7 +1342,7 @@ void FaceInfoScreenManager::DrawNetwork()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "NOT CONNECTED";
+    ip = "NO INTERNET";
   }
 
   std::tm timeObj;
