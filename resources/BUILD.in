@@ -6,9 +6,6 @@ asset_project(
                 ('assets', 'RewardedActions/RewardedActions.json'),
                 ('assets', 'cubeFirmware/cube.dfu'),
                 ('assets', 'LocalizedStrings/**/*.json'),
-                ('3rd/snowboy', 'snowboyModels/*.res'),
-                ('3rd/snowboy', 'snowboyModels/*.umdl'),
-                ('3rd/snowboy', 'snowboyModels/*.pmdl'),
                 ('3rd/pryon_lite', 'pryonSpeechRecModels/**/*.bin'),
                 ('externals/animation-assets', 'animations/**/*.bin'),
                 ('externals/animation-assets', 'animationGroups/**/*.json'),
@@ -17,6 +14,8 @@ asset_project(
                 ('externals/animation-assets', 'anim_manifest.json'),
                 ('externals/animation-assets', 'compositeImageResources/imageLayouts/**/*.json'),
                 ('externals/animation-assets', 'compositeImageResources/imageMaps/**/*.json'),
+		('speech-recognition', 'picovoice/**/*.pv'),
+		('speech-recognition', 'picovoice/**/*.ppn')
                 ],
                 prefix = 'assets'
             ),

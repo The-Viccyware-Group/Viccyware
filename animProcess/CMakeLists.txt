@@ -6,6 +6,7 @@ include(anki_build_cxx)
 include(aubio)
 include(flatbuffers)
 include(opencv)
+include(picovoice)
 include(text2speech)
 include(pryon_lite)
 include(robot_core)
@@ -54,6 +55,7 @@ target_link_libraries(victor_anim
   micdata
   libev
   # vendor
+  ${PICOVOICE_LIBS}
   ${OPENCV_LIBS}
   ${FLATBUFFERS_LIBS}
   signal_essence
