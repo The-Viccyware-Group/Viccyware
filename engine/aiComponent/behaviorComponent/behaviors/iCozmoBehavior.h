@@ -31,6 +31,7 @@
 #include <set>
 
 #include "clad/types/actionResults.h"
+#include "clad/types/behaviorComponent/behaviorObjectives.h"
 #include "clad/types/behaviorComponent/postBehaviorSuggestions.h"
 #include "clad/types/behaviorComponent/streamAndLightEffect.h"
 #include "clad/types/robotCompletedAction.h"
@@ -68,6 +69,11 @@ enum class CubeAnimationTrigger : int32_t;
 
 struct PathMotionProfile;
 struct TriggerWordResponseData;
+
+namespace ExternalInterface {
+struct BehaviorObjectiveAchieved;
+}
+
 
 // This struct defines some of the operation modes iCozmoBehavior
 // provides to derived classes. They have the opportunity to override
@@ -460,6 +466,10 @@ protected:
   // convenience wrapper for calling CancelSelf on the delegation component. It returns true if the behavior
   // was successfully canceled, false otherwise (e.g. the behavior wasn't active to begin with)
   bool CancelSelf();
+
+  // Behaviors should call this function when they reach their completion state
+  // in order to log das events and notify activity strategies if they listen for the message
+  void BehaviorObjectiveAchieved(BehaviorObjective objectiveAchieved) const;
   
   /////////////
   /// "Smart" helpers - Behaviors can call these functions to set properties that
