@@ -17,17 +17,18 @@ namespace Vector {
     Block_LIGHTCUBE1 = 1, // value is specified here for SDK backward compatibility
     Block_LIGHTCUBE2,
     Block_LIGHTCUBE3,
+    Block_LIGHTCUBE4,
 
     Block_LIGHTCUBE_GHOST,
 
     //////////////////////////////////////////////////////////////////////////
     // Charger
     //
-    Charger_Basic = 5, // value is specified here for SDK backward compatibility
+    Charger_Basic = 6, // value is specified here for SDK backward compatibility
 
     //////////////////////////////////////////////////////////////////////////
     // Custom Objects defined via DefineCustomObject
-    CustomType00 = 14, // value is specified here for SDK backward compatibility
+    CustomType00 = 15, // value is specified here for SDK backward compatibility
     CustomType01,
     CustomType02,
     CustomType03,
@@ -65,6 +66,7 @@ namespace Vector {
     Block_LIGHTCUBE1       = 1,
     Block_LIGHTCUBE2       = 1,
     Block_LIGHTCUBE3       = 1,
+    Block_LIGHTCUBE4       = 1,
     Block_LIGHTCUBE_GHOST  = 0,
     Charger_Basic          = 0,
     CustomType00           = 0,
@@ -95,6 +97,7 @@ namespace Vector {
     Block_LIGHTCUBE1       = 1,
     Block_LIGHTCUBE2       = 1,
     Block_LIGHTCUBE3       = 1,
+    Block_LIGHTCUBE4       = 1,
     Block_LIGHTCUBE_GHOST  = 1,
     Charger_Basic          = 0,
     CustomType00           = 0,
@@ -125,6 +128,7 @@ namespace Vector {
     Block_LIGHTCUBE1       = 0,
     Block_LIGHTCUBE2       = 0,
     Block_LIGHTCUBE3       = 0,
+    Block_LIGHTCUBE4       = 0,
     Block_LIGHTCUBE_GHOST  = 0,
     Charger_Basic          = 1,
     CustomType00           = 0,
@@ -155,6 +159,7 @@ namespace Vector {
     Block_LIGHTCUBE1       = 0,
     Block_LIGHTCUBE2       = 0,
     Block_LIGHTCUBE3       = 0,
+    Block_LIGHTCUBE4       = 0,
     Block_LIGHTCUBE_GHOST  = 0,
     Charger_Basic          = 0,
     CustomType00           = 1,
