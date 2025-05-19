@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-set -u
+#set -u
 
 GIT=`which git`
 if [ -z $GIT ]; then
@@ -60,7 +60,11 @@ mkdir -p generated
 mkdir -p _build
 
 vlog "Fetch & extract external dependencies. This may take 1-5 min."
-./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+if [[ ${DONT_ANIM} != "1" ]]; then
+	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+else
+	echo "Not extracing animation assets"
+fi
 
 vlog "Configure audio library"
 ./lib/audio/configure.py

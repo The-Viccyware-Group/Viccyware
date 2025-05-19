@@ -28,6 +28,7 @@ function usage() {
     echo "  -e                      export compile commands"
     echo "  -I                      ignore external dependencies"
     echo "  -S                      build static libraries"
+    echo "  -m			    don't extract animations from SVN"
 }
 
 #
@@ -43,6 +44,7 @@ CMAKE_TARGET=""
 EXPORT_COMPILE_COMMANDS=0
 IGNORE_EXTERNAL_DEPENDENCIES=0
 BUILD_SHARED_LIBS=1
+DONT_ANIM=0
 
 CONFIGURATION=Debug
 PLATFORM=vicos
@@ -51,7 +53,7 @@ FEATURES=""
 DEFINES=""
 ADDITIONAL_PLATFORM_ARGS=()
 
-while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
+while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
     case $opt in
         h)
             usage
@@ -117,6 +119,9 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
         X)
             RM_BUILD_ASSETS=1
             ;;
+	m)
+	    DONT_ANIM=1
+	    ;;
         :)
             echo "Option -${OPTARG} required an argument." >&2
             usage
@@ -168,7 +173,7 @@ fi
 
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
   echo "Attempting to run fetch-build-deps.sh"
-  ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
+  DONT_ANIM=$DONT_ANIM ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
 else
   echo "Ignore external dependencies"
 fi

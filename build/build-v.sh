@@ -41,7 +41,7 @@ fi
 cd "$DIR"
 
 if [[ "$(uname -a)" == *"Darwin"* ]]; then
-	./project/victor/scripts/victor_build_release.sh
+	./project/victor/scripts/victor_build_release.sh "$@"
 else
 	mkdir -p build/cache
 	if [[ ! -z $(docker images -q vic-standalone-builder-2) ]]; then
@@ -72,7 +72,7 @@ else
 		-v $(pwd)/build/cache:/home/$USER/.ccache \
 		vic-standalone-builder-3 bash -c \
 		"cd $(pwd) && \
-		./project/victor/scripts/victor_build_release.sh"
+		./project/victor/scripts/victor_build_release.sh $@"
 fi
 
 echo "Copying vic-cloud and vic-gateway..."

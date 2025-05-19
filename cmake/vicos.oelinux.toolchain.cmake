@@ -138,7 +138,7 @@ list(APPEND VICOS_COMPILER_FLAGS_DEBUG
 	-O0
         -fno-limit-debug-info)
 list(APPEND VICOS_COMPILER_FLAGS_RELEASE
-	-O2 -fmath-errno
+	-O3 -fmath-errno
         -DNDEBUG)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -153,7 +153,7 @@ endif()
 list(APPEND VICOS_COMPILER_FLAGS
 	-march=armv7-a
 	-mfloat-abi=softfp
-	-mfpu=vfpv3-d16)
+	-mfpu=vfpv4-neon)
 list(APPEND VICOS_LINKER_FLAGS
 	-Wl,--fix-cortex-a8)
 

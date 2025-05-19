@@ -4,7 +4,9 @@
 * Author: Jordan Rivas
 * Created: 10/23/2018
 *
-* Description: Speech Recognizer System handles high-level speech features, such as locale and multiple triggers.
+* Description: Speech Recognizer System handles high level speech features, such as, locale and multiple triggers
+*
+* Copyright: Anki, Inc. 2018
 *
 */
 
@@ -115,6 +117,7 @@ public:
   void SetAlexaSpeakingState(bool isSpeaking);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+
 private:
   
   // Trigger context
@@ -143,7 +146,7 @@ private:
   
   const Anim::AnimContext*                    _context = nullptr;
   MicData::MicDataSystem*                     _micDataSystem = nullptr;
-  std::unique_ptr<TriggerContextPicovoice>    _victorTrigger;
+  std::unique_ptr<TriggerContextPicovoice>          _victorTrigger;
   
   std::unique_ptr<TriggerContextPryon>        _alexaTrigger;
   Alexa*                                      _alexaComponent = nullptr;
@@ -167,7 +170,7 @@ private:
   // Alexa Methods
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Init Alexa trigger detector
-  // Note: This is done after Alex user has been authenticated
+  // Note: This is done after Alex user has been authicated
   void InitAlexa(const Util::Locale& locale,
                  const AlexaTriggerWordDetectedCallback callback);
   
@@ -181,14 +184,14 @@ private:
   
   // Set custom model and search files for locale
   // Return true when locale file was found and is different then current locale
-  // NOTE: This only sets the _nextTriggerPaths; the locale will be updated in the Update() call
+  // NOTE: This only sets the _nextTriggerPaths the locale will be updated in the Update() call
   template <class SpeechRecognizerType>
   bool UpdateTriggerForLocale(TriggerContext<SpeechRecognizerType>& trigger,
                               const Util::Locale newLocale,
                               const MicData::MicTriggerConfig::ModelType modelType,
                               const int searchFileIndex);
   
-  // This should only be called from the Update() methods; needs to be performed on the same thread
+  // This should only be called from the Update() methods, needs to be performed on the same thread
   void ApplyLocaleUpdate();
   
   template <class SpeechRecognizerType>
@@ -204,13 +207,13 @@ private:
   
   template <class SpeechRecognizerType>
   std::string UpdateRecognizerHelper(size_t& inOut_modelIdx, size_t new_modelIdx,
-                                     size_t& inOut_searchIdx, size_t new_searchIdx,
+                                     int& inOut_searchIdx, int new_searchIdx,
                                      const TriggerModelTypeData modelTypeDataList[],
                                      TriggerContext<SpeechRecognizerType>& trigger);
 };
+
 
 } // end namespace Vector
 } // end namespace Anki
 
 #endif // __AnimProcess_VictorAnim_SpeechRecognizerSystem_H_
-
