@@ -125,12 +125,12 @@ list(APPEND VICOS_LINKER_FLAGS
 	#-Wl,--gdb-index
 	-Wl,--warn-shared-textrel
 	-Wl,--gc-sections
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
+        -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
+        -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
 #	-Wl,--fatal-warnings)
 list(APPEND VICOS_LINKER_FLAGS_EXE
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-   -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
+        -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
+        -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
 	-Wl,-z,nocopyreloc)
 
 # Debug and release flags.
@@ -178,7 +178,7 @@ set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "")
 set(VICOS_CXX_STANDARD_LIBRARIES "${VICOS_SDK}/sysroot/usr/lib/libc++.so")
 
 # Add libunwind
-set(VICOS_CXX_STANDARD_LIBRARIES "${VICOS_SDK}/sysroot/usr/lib/libunwind.a")
+set(VICOS_CXX_STANDARD_LIBRARIES "${VICOS_SDK}/sysroot/usr/lib/libunwind.so.8")
 
 set(CMAKE_C_STANDARD_LIBRARIES_INIT "-lm")
 set(CMAKE_CXX_STANDARD_LIBRARIES_INIT "${CMAKE_C_STANDARD_LIBRARIES_INIT}")

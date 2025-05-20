@@ -18,3 +18,4 @@ endfunction()
 
 configure_shared_stl("sysroot/usr/lib" "libc++.so.1")
 configure_shared_stl("sysroot/usr/lib" "libatomic.so.1")
+configure_shared_stl("sysroot/usr/lib" "libunwind.so.1")
