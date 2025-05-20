@@ -170,6 +170,7 @@ def verify_signature(file_path_name, sig_path_name, public_key):
     openssl_out, openssl_err = openssl.communicate()
     return ret_code == 0, ret_code, openssl_out, openssl_err
 
+
 def get_prop(property_name):
     "Gets a value from the property server via subprocess"
     getprop = subprocess.Popen(["/usr/bin/getprop", property_name], shell=False, stdout=subprocess.PIPE)
@@ -809,6 +810,8 @@ def construct_update_url(os_version, cmdline):
 if __name__ == '__main__':
     das_event("robot.ota_download_start")
     clear_status()
+    if not os.path.isdir(STATUS_DIR):
+        os.mkdir(STATUS_DIR)
     DEBUG = os.getenv("UPDATE_ENGINE_DEBUG", "False") in TRUE_SYNONYMS
     url = os.getenv("UPDATE_ENGINE_URL", "auto")
     # We don't expect command line args, but handle them to facilitate developer testing
