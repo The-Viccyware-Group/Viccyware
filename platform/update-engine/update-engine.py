@@ -804,7 +804,7 @@ def construct_update_url(os_version, cmdline):
     use_sharding = os.getenv("UPDATE_ENGINE_USE_SHARDING", "False") in TRUE_SYNONYMS
     if use_sharding:
         shard_part = generate_shard_id() + "/"
-    url = "{0}{1}{2}/{3}.ota".format(base_url, shard_part, ota_type, os_version.rstrip("ud"))
+    url = "{0}{1}{2}/{3}.ota".format(base_url, shard_part, ota_type, os_version.decode("utf-8").rstrip("ud"))
     return url
 
 if __name__ == '__main__':
