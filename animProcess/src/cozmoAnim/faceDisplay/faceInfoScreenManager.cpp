@@ -217,17 +217,18 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG) || !ANKI_DEV_CHEATS;  // TODO: Use this line in master
   //const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG);                        // Use this line in factory branch
 
-  ADD_SCREEN_WITH_TEXT(Recovery, Recovery, {"RECOVERY (Wipes OS)"});
+  ADD_SCREEN_WITH_TEXT(Recovery, Recovery, {"REBOOT?"});
   ADD_SCREEN(None, None);
   ADD_SCREEN(Pairing, Pairing);
   ADD_SCREEN(FAC, None);
   ADD_SCREEN(CustomText, None);
-  ADD_SCREEN(Main, Network);
+  ADD_SCREEN(Main, Recovery);
   ADD_SCREEN_WITH_TEXT(ClearUserData, Main, {"CLEAR OUT SOUL?"});
   ADD_SCREEN_WITH_TEXT(ClearUserDataFail, Main, {"UNABLE TO CLEAR SOUL"});
   ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {"Cozmo will remember that..."});
   ADD_SCREEN_WITH_TEXT(SelfTest, Main, {"START SELF TEST?"});
-  ADD_SCREEN(SelfTestRunning, SelfTestRunning)
+  ADD_SCREEN(SelfTestRunning, SelfTestRunning);
+  ADD_SCREEN(Recovery, Network);
   ADD_SCREEN(Network, SensorInfo);
   ADD_SCREEN(SensorInfo, IMUInfo);
   ADD_SCREEN(IMUInfo, MotorInfo);
@@ -355,20 +356,17 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   };
   SET_ENTER_ACTION(Network, networkEnterFcn);
 
-  // === Recovery screen ===
+  // === Reboot screen ===
   FaceInfoScreen::MenuItemAction rebootAction = [this]() {
     LOG_INFO("FaceInfoScreenManager.Recovery.Rebooting", "");
 
-    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_a");
-    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_b");
     this->Reboot();
 
     return ScreenName::Rebooting;
   };
-  ADD_MENU_ITEM_WITH_ACTION(Recovery, "EXIT", rebootAction);
-  ADD_MENU_ITEM(Recovery, "CONTINUE", None);
+  ADD_MENU_ITEM(Recovery, "EXIT", None);
+  ADD_MENU_ITEM_WITH_ACTION(Recovery, "REBOOT", rebootAction);
   DISABLE_TIMEOUT(Recovery);
-
     
   // === Camera screen ===
   FaceInfoScreen::ScreenAction cameraEnterAction = [this]() {
