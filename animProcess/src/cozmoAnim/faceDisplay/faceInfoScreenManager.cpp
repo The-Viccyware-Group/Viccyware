@@ -318,7 +318,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "CLEAR" : "CLEAR OUT SOUL", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "NUKE" : "NUKE THE FLASH", ClearUserData);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
@@ -358,10 +358,9 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 
   // === Reboot screen ===
   FaceInfoScreen::MenuItemAction rebootAction = [this]() {
+    
     LOG_INFO("FaceInfoScreenManager.Recovery.Rebooting", "");
-
     this->Reboot();
-
     return ScreenName::Rebooting;
   };
   ADD_MENU_ITEM(Recovery, "EXIT", None);
