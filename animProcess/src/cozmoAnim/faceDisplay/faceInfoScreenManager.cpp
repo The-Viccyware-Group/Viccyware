@@ -555,7 +555,7 @@ void FaceInfoScreenManager::SetScreen(ScreenName screen)
     prevScreenWasMute = GetCurrScreenName() == ScreenName::ToggleMute;
   }
 
-  _currScreen = GetS/creen(screen);
+  _currScreen = GetScreen(screen);
 
   // If currScreen is null now, you probably haven't called Init yet!
   DEV_ASSERT(_currScreen != nullptr, "FaceInfoScreenManager.SetScreen.NullCurrScreen");
