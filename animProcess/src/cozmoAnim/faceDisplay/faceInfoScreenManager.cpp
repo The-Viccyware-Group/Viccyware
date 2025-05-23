@@ -1483,7 +1483,7 @@ void FaceInfoScreenManager::DrawBuildInfo() {
   const std::string sha = "SHA: " + osstate->GetBuildSha();
   const std::string creator = Creator;
   const std::string creatorWebsite = CreatorWebsite;
-  DrawTextOnScreen({osProject, branch, osVer, sha, creator, creatorWebsite});
+  DrawTextOnScreen({osProject, branch, osVerName, osVer, sha, creator, creatorWebsite});
 }
 
 void FaceInfoScreenManager::DrawIMUInfo(const RobotState& state)
