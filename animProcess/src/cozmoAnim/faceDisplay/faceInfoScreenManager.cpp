@@ -555,7 +555,7 @@ void FaceInfoScreenManager::SetScreen(ScreenName screen)
     prevScreenWasMute = GetCurrScreenName() == ScreenName::ToggleMute;
   }
 
-  _currScreen = GetScreen(screen);
+  _currScreen = GetS/creen(screen);
 
   // If currScreen is null now, you probably haven't called Init yet!
   DEV_ASSERT(_currScreen != nullptr, "FaceInfoScreenManager.SetScreen.NullCurrScreen");
@@ -1473,7 +1473,12 @@ void FaceInfoScreenManager::DrawSensorInfo(const RobotState& state)
 void FaceInfoScreenManager::DrawBuildInfo() {
   auto *osstate = OSState::getInstance();
   const std::string osProject = "OS: " + OSProject;
+<<<<<<< HEAD
   const std::string branch = "BUILD: " + OSBranch;
+=======
+  const std::string branch = "BRANCH: " + OSBranch;
+  const std::string osVerName = "BUILD: " + OSVerName;
+>>>>>>> 36c4305fa9 (Add a new BUILD slot in CCIS to show what build you are on. For now it will be set to Alpha 0.)
   const std::string osVer = "VER: " + osstate->GetOSBuildVersion();
   const std::string sha = "SHA: " + osstate->GetBuildSha();
   const std::string creator = Creator;
