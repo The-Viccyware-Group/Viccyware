@@ -125,7 +125,7 @@ int main(int argc, char** argv)
 
   // Keep track of how far in time we are in this loop of the animation
   // since drawing the frame takes longer than the frame should actually
-  // be displayed (~41ms to draw vs a desired frame rate of 24fps)
+  // be displayed (~50ms to draw vs a desired frame rate of 30fps)
   // we need to skip frames
   uint32_t timeCount = 0;
   
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
   {
     // Figure out which frame we should play in order to adhere to
     // a frame rate of kFrameDuration_ms
-    static const uint32_t kFrameDuration_ms = 41;
+    static const uint32_t kFrameDuration_ms = 33;
     const uint32_t nextFrameToDraw = timeCount / kFrameDuration_ms;
 
     // Time how long it takes to animate/draw this frame
@@ -147,7 +147,7 @@ int main(int argc, char** argv)
     const auto dif = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     timeCount += dif.count();
 
-    // Role timeCount over if it exceeds the total duration of the animation
+    //Role timeCount over if it exceeds the total duration of the animation
     if(timeCount >= ((kTotalNumFrames-1)*kFrameDuration_ms))
     {
       timeCount %= kTotalNumFrames * kFrameDuration_ms;

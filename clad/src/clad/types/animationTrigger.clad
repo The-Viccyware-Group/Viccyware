@@ -576,6 +576,11 @@ enum int_32 AnimationTrigger
   DEPRECATED_SearchForFace_Search,
   DEPRECATED_SearchForFace_FoundFace,
   DEPRECATED_StackBlocksSuccess,
+  DEPRECATED_Singing_80bpm,
+  DEPRECATED_Singing_100bpm,
+  DEPRECATED_Singing_120bpm,
+  DEPRECATED_Singing_GetIn,
+  DEPRECATED_Singing_GetOut,
 
   // Count can specify "none" or "unspecified"
   Count, // Keep count at end.
