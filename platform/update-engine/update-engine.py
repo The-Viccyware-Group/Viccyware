@@ -25,10 +25,11 @@ from select import select
 from hashlib import sha256
 from collections import OrderedDict
 from fcntl import fcntl, F_GETFL, F_SETFL
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 #from distutils.version import LooseVersion
 
 sys.path.append("/usr/bin")
-#import update_payload
+import update_payload
 
 BOOT_DEVICE = "/dev/block/bootdevice/by-name"
 STATUS_DIR = "/run/update-engine"
@@ -803,7 +804,7 @@ def construct_update_url(os_version, cmdline):
     use_sharding = os.getenv("UPDATE_ENGINE_USE_SHARDING", "False") in TRUE_SYNONYMS
     if use_sharding:
         shard_part = generate_shard_id() + "/"
-    url = "{0}{1}{2}/{3}.ota".format(base_url, shard_part, ota_type, os_version.rstrip("ud"))
+    url = "{0}{1}{2}/{3}.ota".format(base_url, shard_part, ota_type, os_version.decode("utf-8").rstrip("ud"))
     return url
 
 if __name__ == '__main__':
