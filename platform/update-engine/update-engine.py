@@ -54,6 +54,9 @@ TRUE_SYNONYMS = ["True", "true", "on", "1"]
 WIPE_DATA_COOKIE = "/run/wipe-data"
 DEBUG = False
 
+def inhibit_auto_update():
+    return os.path.exists('/etc/do-not-auto-update') or os.path.exists('/data/data/user-do-not-auto-update') or os.path.exists('/anki-devtools')
+
 def make_blocking(pipe, blocking):
     "Set a filehandle to blocking or not"
     fd = pipe.fileno()
@@ -820,6 +823,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 2 and sys.argv[2] == '-v':
         DEBUG = True
     if url == "auto":
+        if inhibit_auto_update():
+            die(217, "Auto-update inhibited")
         logv("Automatic update running.....")
         url = construct_update_url(get_prop("ro.anki.version"), get_cmdline())
         if not url:
