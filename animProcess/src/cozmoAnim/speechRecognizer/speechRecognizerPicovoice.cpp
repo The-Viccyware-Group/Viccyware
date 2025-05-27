@@ -14,13 +14,16 @@
 #include <thread>
 #include <cstdlib>
 #include <unistd.h>
+#include <fstream>
+#include <sstream>
 
 #include <sys/stat.h>
 
 const char* model_path   = "/anki/data/assets/cozmo_resources/assets/picovoice/porcupine_params.pv";
 const char* custom_ppn   = "/data/data/com.anki.victor/persistent/picovoice/custom.ppn";
-const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_cosmo.ppn";
-const float  sensitivity        = 0.45f;
+const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_vector.ppn";
+const char* sensitivity_path = "/data/data/com.anki.victor/persistent/picovoice/sensitivity";
+const float default_sensitivity = 0.10f;
 
 namespace Anki {
 namespace Vector {
@@ -97,7 +100,6 @@ bool SpeechRecognizerPicovoice::Init()
   const char* ppn_to_use = default_ppn;
   struct stat st{};
 
-
   _impl->audioBuffer.reserve(512 * 2);
 
   if (_impl->pvObj)
@@ -105,10 +107,27 @@ bool SpeechRecognizerPicovoice::Init()
     pv_porcupine_delete(_impl->pvObj);
     _impl->pvObj = nullptr;
   }
+
   if (stat(custom_ppn, &st) == 0) {
       ppn_to_use = custom_ppn;
   }
 
+  float sensitivity = default_sensitivity;
+
+  std::ifstream sensFile(sensitivity_path);
+  if (sensFile.is_open()) {
+    std::string line;
+    if (std::getline(sensFile, line)) {
+      std::istringstream iss(line);
+      float val = 0.0f;
+      if ((iss >> val) && val >= 0.0f && val <= 1.0f) {
+        sensitivity = val;
+      }
+    }
+  }
+
+
+  LOG_INFO("SpeechRecognizerPicovoice.Init", "Using sensitivity: %.4f", sensitivity);
   pv_status_t status = pv_porcupine_init(model_path, ppn_to_use, sensitivity, &_impl->pvObj);
 
   if (status != PV_STATUS_SUCCESS) {
@@ -139,10 +158,6 @@ void SpeechRecognizerPicovoice::Update(const AudioUtil::AudioSample* audioData, 
         return;
     }
     uint32_t frameLength = 512;
-    if (frameLength == 0) {
-        LOG_ERROR("SpeechRecognizerPicovoice.Update", "Invalid frame length from Picovoice");
-        return;
-    }
 
     _impl->audioBuffer.insert(_impl->audioBuffer.end(), audioData, audioData + audioDataLen);
 
