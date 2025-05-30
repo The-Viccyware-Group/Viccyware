@@ -1362,7 +1362,7 @@ void FaceInfoScreenManager::DrawNetwork()
       case CloudMic::ConnectionCode::Available:   { return ColoredText("CONNECTED",    NamedColors::GREEN); }
       case CloudMic::ConnectionCode::Connectivity:{ return ColoredText("CONNECTIVITY", NamedColors::RED); }
       case CloudMic::ConnectionCode::Tls:         { return ColoredText("TLS",          NamedColors::RED); }
-      case CloudMic::ConnectionCode::Auth:        { return ColoredText("AUTH",         NamedColors::RED); }
+      case CloudMic::ConnectionCode::Auth:        { return ColoredText("OFFLINE",         NamedColors::RED); }
       case CloudMic::ConnectionCode::Bandwidth:   { return ColoredText("BANDWIDTH",    NamedColors::RED); }
       default:                                    { return ColoredText("CHECKING...",  NamedColors::BLUE); }
     }
