@@ -68,7 +68,7 @@
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
 const std::string OSProject = "Viccyware";
 const std::string OSBranch = "Viccyware-tester";
-const std::string OSVerName = "Beta 5.2";
+const std::string OSVerName = "Beta 5.4";
 const std::string Creator = "Built by the Viccyware Team";
 const std::string CreatorWebsite = "vicw.xyz";
 
@@ -346,7 +346,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     return ScreenName::Rebooting;
   };
   ADD_MENU_ITEM(ClearUserData, "EXIT", Main);
-  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, IsXray() ? "KABOOM" : "KABOOM (RIP COZMO)", confirmClearUserData);
+  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, IsXray() ? "CONFIRM" : "CONFIRM", confirmClearUserData);
   SET_TIMEOUT(ClearUserDataFail, 2.f, Main);
 
 
