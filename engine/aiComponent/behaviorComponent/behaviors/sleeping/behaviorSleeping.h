@@ -52,7 +52,7 @@ private:
     bool shouldEnterPowerSave = true;
     bool shouldPlayEmergencyGetOut = true;
     bool canActivateOffTreads = false;
-    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
+    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Petting;
   };
 
   struct DynamicVariables {
