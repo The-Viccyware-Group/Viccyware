@@ -1,7 +1,7 @@
 [
   {
-    "CladEvent": "AlexaNotification",
-    "AnimName": "alexaNotification"
+      "CladEvent": "AlexaNotification",
+      "AnimName": "alexaNotification"
   },
   {
       "CladEvent": "Charging",
@@ -38,6 +38,10 @@
   {
       "CladEvent": "Offline_Off",
       "AnimName": "offline_off"
+  },
+  {
+      "CladEvent": "Petting",
+      "AnimName": "petting"
   },
   {
       "CladEvent": "Sleeping",
