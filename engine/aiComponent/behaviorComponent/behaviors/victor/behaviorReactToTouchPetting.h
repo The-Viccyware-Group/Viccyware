@@ -130,9 +130,10 @@ private:
 
   // iConfig for lights
   struct InstanceConfig {
-    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
+    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Petting;
   };
 
+  InstanceConfig   _iConfig;
 
 };
 
