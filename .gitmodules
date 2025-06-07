@@ -1,3 +1,6 @@
 [submodule "EXTERNALS"]
 	path = EXTERNALS
-	url = https://github.com/os-vector/wire-os-externals
+	url = https://github.com/Yrekcaz/EXTERNALS
+[submodule "resources/config/engine/animations"]
+	path = resources/config/engine/animations
+	url = https://github.com/Switch-modder/Viccyware-animation-assets

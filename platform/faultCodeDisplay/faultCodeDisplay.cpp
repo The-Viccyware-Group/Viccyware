@@ -24,8 +24,8 @@ namespace Anki {
 namespace Vector {
 
 namespace {
-  constexpr const char * kSupportURL = "error.pvic.xyz";
-  constexpr const char * kVectorWillRestart = "Vector will restart";
+  constexpr const char * kVectorWillRestart = "Cozmo will restart";
+  constexpr const char * kSupportURL = "error.vicw.xyz";
 
   // Map of fault codes that map to images that should be drawn instead of the number
   std::unordered_map<uint16_t, std::string> kFaultImageMap = {
