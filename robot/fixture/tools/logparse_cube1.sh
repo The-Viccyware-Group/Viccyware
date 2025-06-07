@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #cd "$(dirname ${BASH_SOURCE[0]})"
 
 #BREIF: parse CUBE fixture logfiles to collect LED data (arrays of current usage)

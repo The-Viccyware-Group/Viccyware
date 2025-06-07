@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # change dir to the project dir, no matter where script is executed from
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

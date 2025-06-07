@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # platform/config/bin/vic-log-uploader
 #

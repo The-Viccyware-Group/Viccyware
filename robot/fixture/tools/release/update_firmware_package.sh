@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #if [ ! -e $adb ]; then echo $adb does not exist; exit 1; fi
 

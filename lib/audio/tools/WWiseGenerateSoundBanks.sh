@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This scrip will generate sound banks and Tar them to the SVN folder.
 # I'm assuming the WWise Application is in the Application folder.

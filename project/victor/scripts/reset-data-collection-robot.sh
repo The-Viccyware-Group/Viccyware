@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Get the current date of the local system which we know is accurate.
 # We are going to use this along with other information to indentify

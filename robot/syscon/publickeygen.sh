@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #Breif: generates build/publickeys.h from bash
 rm -f build/publickeys.h

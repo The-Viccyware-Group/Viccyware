@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # This file is provided as a convenience for initiating reserved behavior
 # control for SDK scripts.  Mac users can double-click on this file in
 # the Finder to open a Terminal window and execute a Python script so

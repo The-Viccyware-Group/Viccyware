@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # see https://docs.smartling.com/display/docs/Files+API#FilesAPI-/file/list(GET)
 SUPPORTED_CONDITIONS=(haveAtLeastOneUnapproved haveAtLeastOneApproved haveAtLeastOneTranslated haveAllTranslated haveAllApproved haveAllUnapproved)

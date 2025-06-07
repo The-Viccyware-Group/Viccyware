@@ -33,7 +33,7 @@ test.build('copies-attribs.gyp', chdir='src')
 if sys.platform != 'win32':
   out_path = test.built_file_path('executable-file.sh', chdir='src')
   test.must_contain(out_path,
-                    '#!/bin/bash\n'
+                    '#!/usr/bin/env bash\n'
                     '\n'
                     'echo echo echo echo cho ho o o\n')
   check_attribs('executable-file.sh', expected_exec_bit=stat.S_IXUSR)

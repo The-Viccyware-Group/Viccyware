@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 DEPENDENCY_LIBS=(requests beautifulsoup4 lxml)
 

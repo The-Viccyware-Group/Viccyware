@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Note: requires environment variables:
 #  SAI_PATH referencing https://github.com/anki/sai-viclicensefile-upload-tool/blob/master/vic-file.py

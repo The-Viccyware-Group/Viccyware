@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Get latest SVN revision from project's generated sound bank svn repo, open Pull-Request for new clad files
 #
