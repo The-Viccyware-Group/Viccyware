@@ -28,6 +28,7 @@
 #include "engine/aiComponent/beiConditions/beiConditionFactory.h"
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 #include "engine/audio/engineRobotAudioClient.h"
+#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include "engine/components/robotStatsTracker.h"
 #include "engine/moodSystem/moodManager.h"
 
@@ -182,7 +183,11 @@ void BehaviorReactToTouchPetting::InitBehavior()
 void BehaviorReactToTouchPetting::OnBehaviorActivated()
 {
   SmartDisableKeepFaceAlive();
-  
+
+  // Start backpack lights
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.SetBackpackAnimation(_iConfig.backpackAnim);
+
   CancelAndPlayAnimation(_animPettingGetin);
 
   // set internal state to speed up entry into Level1 animations
@@ -386,6 +391,11 @@ void BehaviorReactToTouchPetting::OnBehaviorDeactivated()
     GetAIComp<AIWhiteboard>().OfferPostBehaviorSuggestion( PostBehaviorSuggestions::Nothing );
   }
 
+
+  // Kill backpack lights
+  auto& blc = GetBEI().GetBackpackLightComponent();
+  blc.ClearAllBackpackLightConfigs();
+
   ResetTouchState();
 }
 
@@ -403,5 +413,5 @@ void BehaviorReactToTouchPetting::ResetTouchState()
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Vic_Sfx__Purr_Loop_Stop, AMD_GOT::Behavior);
 }
 
-} // Cozmo
+} // Vector
 } // Anki

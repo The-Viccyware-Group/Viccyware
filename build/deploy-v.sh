@@ -13,6 +13,9 @@ if [[ ! -f robot_sshkey ]]; then
     echo "You must copy your robot's SSH key the root of this repo with the name robot_sshkey before running this script."
     exit 1
 fi
+
+chmod 600 robot_sshkey
+
 if [[ "$(uname -a)" == *"Darwin"* ]]; then
     ssh-add robot_sshkey && \
     ./project/victor/scripts/victor_deploy.sh -c Release -b && \
