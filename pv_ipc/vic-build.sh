@@ -13,8 +13,8 @@ $(pwd)/vic-toolchain/arm-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc -static -I$
 
 #$HOME/.anki/vicos-sdk/dist/1.1.0-r04/prebuilt/bin/arm-oe-linux-gnueabi-clang -static -I$(pwd)/include -L$(pwd)/lib/pi -lpv_porcupine -lpthread -o build/pv_server server/pv_server.c
 
-$(pwd)/../anki-deps/vicos-sdk/dist/4.0.0-r05/prebuilt/bin/arm-oe-linux-gnueabi-clang -c -fPIC -I$(pwd)/include -o build/pv_porcupine.o interface/pv_interface.c
-$(pwd)/../anki-deps/vicos-sdk/dist/4.0.0-r05/prebuilt/bin/arm-oe-linux-gnueabi-ar rcs build/libpv_porcupine_interface.a build/pv_porcupine.o
+$(pwd)/../anki-deps/vicos-sdk/dist/5.2.1-r06/prebuilt/bin/arm-oe-linux-gnueabi-clang -c -fPIC -I$(pwd)/include -o build/pv_porcupine.o interface/pv_interface.c
+$(pwd)/../anki-deps/vicos-sdk/dist/5.2.1-r06/prebuilt/bin/arm-oe-linux-gnueabi-ar rcs build/libpv_porcupine_interface.a build/pv_porcupine.o
 
 mv build/libpv_porcupine_interface.a ../3rd/picovoice/vicos/lib/
 mv build/pv_server ../3rd/picovoice/vicos/bin/

@@ -44,7 +44,7 @@ def install_cmake(version):
     platform_map = {
         'darwin': 'macos-universal',
         'linux': 'linux-x86_64',
-	    'linux-arm64': 'linux-aarch64',
+	'linux-arm64': 'linux-aarch64',
     }
 
     platform_name = platform.system().lower()

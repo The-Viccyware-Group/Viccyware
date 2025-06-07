@@ -90,7 +90,7 @@ int main(int argc, char** argv)
   const char *anim_path = use_santek_sizes() ? _animPathSantek : _animPathMidas;
   const char *true_anim_path = custom_exists() ? _animPathCustom : anim_path;
   
-  int fd = open(true_anim_path, O_RDONLY);
+  int fd = open(true_anim_path, O_RDONLY, 0644);
   if(fd < 0)
   {
     printf("Failed to open %s\n", true_anim_path);

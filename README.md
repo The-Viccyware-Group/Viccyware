@@ -12,7 +12,7 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 - The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
-## Building (Linux or WSL)
+## Building (x86_64/arm64 Linux)
 
  - Prereqs: Make sure you have `docker` installed.
 
