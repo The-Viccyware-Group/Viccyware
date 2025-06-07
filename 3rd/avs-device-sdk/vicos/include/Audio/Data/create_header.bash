@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This is used to create a header file that contains binary data from a file that can be used in this library.  The
 # files are downloaded from https://developer.amazon.com/docs/alexa-voice-service/ux-design-overview.html#sounds.

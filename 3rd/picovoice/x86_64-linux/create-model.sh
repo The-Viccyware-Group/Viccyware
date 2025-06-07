@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [[ ! -d oldpork ]]; then
 	wget https://archive.org/download/github.com-Picovoice-Porcupine_-_2018-10-07_02-31-11/Picovoice-Porcupine_-_2018-10-07_02-31-11.bundle

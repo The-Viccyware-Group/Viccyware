@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Tool for clearing shared memory segments that sometimes get orphaned occur when using Webots simulator.
 # If you are see red warning when you start the simulator mentioning some problem about shared memory

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Lists used animation names/groups/triggers, and, if the previous
 # build's artifact is available, reports changes in animation usage

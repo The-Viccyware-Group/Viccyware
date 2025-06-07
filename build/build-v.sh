@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 TOOLCHAIN_VERSION="5.2.1-r06"
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [[ ! -f ./CPPLINT.cfg ]]; then
     if [[ -f ../CPPLINT.cfg ]]; then

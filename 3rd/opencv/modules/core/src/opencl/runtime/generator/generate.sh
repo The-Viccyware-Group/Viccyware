@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 echo "Generate files for CL runtime..."
 python parser_cl.py opencl_core < sources/cl.h
 python parser_cl.py opencl_gl < sources/cl_gl.h

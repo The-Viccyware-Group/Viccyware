@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Get latest SVN revision from cozmosoundbanks, open Pull-Request for new clad files
 #

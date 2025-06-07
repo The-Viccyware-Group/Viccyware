@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 git reset --hard
 git submodule sync --recursive
 git submodule update --init --force --recursive

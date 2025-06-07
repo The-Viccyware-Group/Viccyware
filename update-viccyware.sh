@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 git pull
 cd EXTERNALS
 git checkout viccyware
