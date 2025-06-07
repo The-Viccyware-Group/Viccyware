@@ -121,6 +121,7 @@ RobotTimeStamp_t BehaviorPossiblePerformance::GetRecentFaceTime() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorPossiblePerformance::GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const
 {
+  modifiers.wantsToBeActivatedWhenOnCharger = true;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

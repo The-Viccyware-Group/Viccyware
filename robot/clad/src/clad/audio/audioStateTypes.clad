@@ -4,6 +4,15 @@ namespace Anki {
 namespace AudioMetaData {
 namespace GameState {
 
+enum uint_32 External_Language
+{
+  English = 3383237639,
+  French = 3133094709,
+  German = 4290373403,
+  Invalid = 0,
+  Japanese = 2008704848,
+}
+
 enum uint_32 GenericState
 {
   Invalid = 0,
@@ -20,6 +29,47 @@ enum uint_32 Mood
   Surprised = 2662801688,
 }
 
+enum uint_32 Music
+ {
+  Alarm_Clock = 3653788539,
+  Codelab = 730889831,
+  Connectivity = 1264085260,
+  Cozmo_Says = 2338198982,
+  Cozmo_Says_Speaking = 739906331,
+  Freeplay = 150865113,
+  Invalid = 0,
+  Minigame__Generic = 713847863,
+  Minigame__Keep_Away = 579475288,
+  Minigame__Keep_Away_Between_Rounds = 274928299,
+  Minigame__Keep_Away_Player_Fail = 2987088935,
+  Minigame__Keep_Away_Pounce = 3317810949,
+  Minigame__Keep_Away_Tension = 22918831,
+  Minigame__Meet_Cozmo = 1580491744,
+  Minigame__Meet_Cozmo_Say_Name = 2582275442,
+  Minigame__Memory_Match = 1731176119,
+  Minigame__Memory_Match_Fanfare = 2262040721,
+  Minigame__Memory_Match_Full_Life = 1451808254,
+  Minigame__Memory_Match_No_Lives = 2282047959,
+  Minigame__Quick_Tap_Between_Rounds = 2865488202,
+  Minigame__Quick_Tap_Round1 = 3954622599,
+  Minigame__Quick_Tap_Round2 = 3954622596,
+  Minigame__Quick_Tap_Round3 = 3954622597,
+  Minigame__Quick_Tap_Win = 2079381016,
+  Minigame__Ride_Along = 3234084100,
+  Minigame__Setup = 1317044071,
+  Nurture_Repair = 3081923682,
+  Onboarding = 3360093794,
+  Onboarding__Core_Upgrades = 102695299,
+  Onboarding__Meet_Cozmo = 4195748652,
+  Onboarding__Meet_Cozmo_Say_Name = 3775866302,
+  Onboarding__Play_Tab = 2360281734,
+  Onboarding__Show_Cube = 3253479049,
+  Pause = 3092587493,
+  Silent = 3160623154,
+  Sleep = 3671647190,
+  Spark = 155090436,
+}
+
 enum uint_32 Robot_Alexa_Locale
 {
   En_Au = 1906015505,
@@ -28,15 +78,6 @@ enum uint_32 Robot_Alexa_Locale
   En_Uk = 2107346979,
   En_Us = 2107347003,
   Invalid = 0,
-}
-
-enum uint_32 Robot_Vic_External_Language
-{
-  English = 3383237639,
-  French = 3133094709,
-  German = 4290373403,
-  Invalid = 0,
-  Japanese = 2008704848,
 }
 
 enum uint_32 Robot_Vic_External_Processing

@@ -32,11 +32,13 @@
     },
 
     "roll_cube": {
-      "type": "play_rollcube"
+      "type": "play_specific",
+      "entity_behavior": "roll_cube"
     },
 
     "fist_bump": {
-      "type": "play_fistbump"
+      "type": "play_specific",
+      "entity_behavior": "fist_bump"
     },
 
     // keep_away was removed from entity_behavior_entries_en.json in April

@@ -138,7 +138,7 @@ void BehaviorStayOnChargerUntilCharged::BehaviorUpdate()
 {
   if( IsActivated() ) {
 
-    // if nay condition wants to cancel, set this bool instead of directly cancelling so that all checks will
+    // if anyy condition wants to cancel, set this bool instead of directly cancelling so that all checks will
     // be performed (and the cooldown dVar can be set, if needed)
     bool cancel = false;
 
@@ -158,8 +158,10 @@ void BehaviorStayOnChargerUntilCharged::BehaviorUpdate()
     const bool isBatteryFull = (robotInfo.GetBatteryLevel() == BatteryLevel::Full);
     if (isBatteryFull) {
       LOG_INFO("StayOnChargerUntilCharged.BehaviorUpdate.BatteryFull", "Battery is full, canceling self.");
+      // Have your cooldown
+      const float currTime_s = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
+      _dVars.lastTimeCancelled_s = currTime_s;
       cancel = true;
-      // TODO: opinions wanted: should we do a cooldown in this case?
     }
 
     // check safeguard timer
@@ -172,7 +174,7 @@ void BehaviorStayOnChargerUntilCharged::BehaviorUpdate()
       _dVars.lastTimeCancelled_s = currTime_s;
       cancel = true;
     }
-    
+
     if (cancel) {
       CancelSelf();
     }

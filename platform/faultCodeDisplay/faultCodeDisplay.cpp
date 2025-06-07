@@ -32,7 +32,7 @@ static const std::unordered_map<uint16_t,std::string> kFaultText = {
 
 static const char* kSupportURL        = "error.pvic.xyz";
 static const char* kVectorWillRestart = "vector will restart";
-
+  
 static constexpr float kHeadScale = 0.7f;
 static constexpr int   kHeadThick = 1;
 static constexpr int   kHeadingGap = 5;     // teeny gap
