@@ -1,6 +1,6 @@
 [submodule "EXTERNALS"]
 	path = EXTERNALS
-	url = https://github.com/Yrekcaz/EXTERNALS
+	url = https://github.com/The-Viccyware-Group/EXTERNALS
 [submodule "resources/config/engine/animations"]
 	path = resources/config/engine/animations
-	url = https://github.com/Switch-modder/Viccyware-animation-assets
+	url = https://github.com/The-Viccyware-Group/Viccyware-animation-assets
