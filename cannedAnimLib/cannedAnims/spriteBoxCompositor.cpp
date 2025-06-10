@@ -112,6 +112,13 @@ Result SpriteBoxCompositor::AddKeyFrame(const CozmoAnim::SpriteBox* spriteBox)
   newKeyFrame.spriteBox.width = spriteBox->width();
   newKeyFrame.spriteBox.height = spriteBox->height();
 
+  if (IsXray()) {
+    newKeyFrame.spriteBox.width = newKeyFrame.spriteBox.width * 160 / 184;
+    newKeyFrame.spriteBox.height = newKeyFrame.spriteBox.height * 80 / 96;
+    newKeyFrame.spriteBox.xPos = newKeyFrame.spriteBox.xPos * 160 / 184;
+    newKeyFrame.spriteBox.yPos = newKeyFrame.spriteBox.yPos * 80 / 96;
+  }
+
   // Handle legacy "CustomHue" method as EyeColor
   std::string renderMethodString = spriteBox->renderMethod()->str();
   renderMethodString = ("CustomHue" == renderMethodString) ? "EyeColor" : renderMethodString;
@@ -145,6 +152,7 @@ Result SpriteBoxCompositor::AddKeyFrame(const Json::Value& json, const std::stri
     newKeyFrame.spriteBox.xPos = newKeyFrame.spriteBox.xPos * 160 / 184;
     newKeyFrame.spriteBox.yPos = newKeyFrame.spriteBox.yPos * 80 / 96;
   }
+
   // Handle legacy "CustomHue" method as EyeColor
   std::string renderMethodString = JsonTools::ParseString(json, kRenderMethodKey, animName);
   renderMethodString = ("CustomHue" == renderMethodString) ? "EyeColor" : renderMethodString;
