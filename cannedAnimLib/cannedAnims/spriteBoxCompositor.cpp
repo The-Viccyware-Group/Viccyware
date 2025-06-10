@@ -193,8 +193,10 @@ Result SpriteBoxCompositor::AddFullFaceSpriteSeqInternal(const Vision::SpritePat
   startKeyFrame.spriteBox.alpha = 100;
   startKeyFrame.spriteBox.xPos = 0;
   startKeyFrame.spriteBox.yPos = 0;
-  startKeyFrame.spriteBox.width = FACE_DISPLAY_WIDTH;
-  startKeyFrame.spriteBox.height = FACE_DISPLAY_HEIGHT;
+
+  startKeyFrame.spriteBox.width = IsXray() ? 160: 184;
+  startKeyFrame.spriteBox.height = IsXray() ? 80: 96;
+
   startKeyFrame.spriteBox.name = Vision::SpriteBoxName::SpriteBox_40;
   startKeyFrame.spriteBox.layer = Vision::LayerName::Layer_10;
   startKeyFrame.spriteBox.renderMethod = Vision::SpriteRenderMethod::RGBA;
