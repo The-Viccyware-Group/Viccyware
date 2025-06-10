@@ -272,6 +272,13 @@ void handle_syscon_version(const VersionInfo* versionInfo)
     _sysconVersionInfo = *versionInfo;
     record_body_version(versionInfo);
     das_log_version_info(versionInfo);
+    char versionTxt[sizeof(versionInfo->app_version) + 1] = {};
+    memcpy(versionTxt, versionInfo->app_version, sizeof(versionInfo->app_version));
+
+    if (strstr(versionTxt, "DevBuild") != nullptr) {
+      AnkiInfo("HAL.Init.DetectGeneration", "DVT2/3 robot detected (via DevBuild in version)")
+      isDVT2Robot_ = true;
+    }
   }
 }
 
