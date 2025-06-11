@@ -597,6 +597,9 @@ namespace Vector {
       {
         ANKI_CPU_PROFILE("DrawEyePixels");
 
+ 	const bool scanlineEnabled = kProcFace_Scanlines && faceData.GetScanlineOpacity() > 0.0f;
+	const f32 scanlineOpacity = faceData.GetScanlineOpacity();
+
         DEV_ASSERT_MSG(upperLeft.y()>=0 && bottomRight.y()<faceImg.GetNumRows(), "ProceduralFaceDrawer.DrawEye.BadRow", "%f %f", upperLeft.y(), bottomRight.y());
         DEV_ASSERT_MSG(upperLeft.x()>=0 && bottomRight.x()<faceImg.GetNumCols(), "ProceduralFaceDrawer.DrawEye.BadCol", "%f %f", upperLeft.x(), bottomRight.x());
         for(s32 i=upperLeft.y(); i<=bottomRight.y(); ++i) {
@@ -636,6 +639,14 @@ namespace Vector {
 #endif
 
               newValue *= eyeLightness;
+
+              if(scanlineEnabled) {
+                // Simple horizontal scanline effect - modify as needed
+                const bool isScanline = (i % 2 == 0); // Every other row
+                if(isScanline) {
+                  newValue *= (1.0f - scanlineOpacity); // Darken scanline rows
+                }
+              }
 
               // Put the final value into the face image
               // Note: If we're drawing the right eye, there may already be something in the image
