@@ -1,6 +1,6 @@
 {
   "behaviorClass": "DispatcherQueue",
-  "behaviorID": "CubeDriveCoordinator",
+  "behaviorID": "CubeDriveConnectionGate",
   "behaviors": [
     "ConnectToCube",
     "CubeDrive"

@@ -53,7 +53,7 @@ private:
   void TransitionToStuckOnEdge();
   void TransitionToPlayingCliffReaction();
   void TransitionToRecoveryBackup();
-  void TransitionToHeadCalibration();
+  void TransitionToMotorCalibration();
   void TransitionToVisualExtendCliffs();
   void TransitionToFaceAndBackAwayCliff();
   

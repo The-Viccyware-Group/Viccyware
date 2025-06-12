@@ -6,6 +6,9 @@ namespace GameParameter {
 
 enum uint_32 ParameterType
 {
+  Cozmo_Singing_Phaser = 265118809,
+  Cozmo_Singing_Tremolo = 1391957216,
+  Cozmo_Singing_Vibrato = 3255781855,
   Dev_Squawk_Volume = 847280258,
   Dev_Tone_Freq = 2324555758,
   Event_Volume = 3530059848,

@@ -441,51 +441,51 @@
   },
   {
     "CladEvent": "ReactToShake_Lvl1Loop",
-    "AnimName": "ag_rtshake_lv1loop"
+    "AnimName": "ag_dizzy_shake_loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl1Waiting",
-    "AnimName": "ag_rtshake_lv1pregetout"
+    "AnimName": "ag_dizzy_shake_stop"
   },
   {
     "CladEvent": "ReactToShake_Lvl1InHand",
-    "AnimName": "ag_rtshake_lv1rtonhand"
+    "AnimName": "ag_dizzy_reaction_soft"
   },
   {
     "CladEvent": "ReactToShake_Lvl1OnGround",
-    "AnimName": "ag_rtshake_lv1rtonground"
+    "AnimName": "ag_dizzy_reaction_soft"
   },
   {
     "CladEvent": "ReactToShake_Lvl2Loop",
-    "AnimName": "ag_rtshake_lv2loop"
+    "AnimName": "ag_dizzy_shake_loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl2Waiting",
-    "AnimName": "ag_rtshake_lv2pregetout"
+    "AnimName": "ag_dizzy_shake_stop"
   },
   {
     "CladEvent": "ReactToShake_Lvl2InHand",
-    "AnimName": "ag_rtshake_lv2rtonhand"
+    "AnimName": "ag_dizzy_reaction_medium"
   },
   {
     "CladEvent": "ReactToShake_Lvl2OnGround",
-    "AnimName": "ag_rtshake_lv2rtonground"
+    "AnimName": "ag_dizzy_reaction_medium"
   },
   {
     "CladEvent": "ReactToShake_Lvl3Loop",
-    "AnimName": "ag_rtshake_lv3loop"
+    "AnimName": "ag_dizzy_shake_loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl3Waiting",
-    "AnimName": "ag_rtshake_lv3pregetout"
+    "AnimName": "ag_dizzy_shake_stop_3"
   },
   {
     "CladEvent": "ReactToShake_Lvl3InHand",
-    "AnimName": "ag_rtshake_lv3rtonhand"
+    "AnimName": "ag_dizzy_reaction_hard"
   },
   {
     "CladEvent": "ReactToShake_Lvl3OnGround",
-    "AnimName": "ag_rtshake_lv3rtonground"
+    "AnimName": "ag_dizzy_reaction_hard"
   },
   {
     "CladEvent": "ReactToShakeSnowGlobe_GetIn",
@@ -2081,5 +2081,25 @@
   {
     "CladEvent": "IntentionalPerformance",
     "AnimName": "ag_iperformance"
+  },
+  {
+    "CladEvent": "DEPRECATED_Singing_80bpm",
+    "AnimName": "ag_cozmosings_80bpm"
+  },
+  {
+    "CladEvent": "DEPRECATED_Singing_100bpm",
+    "AnimName": "ag_cozmosings_100bpm"
+  },
+  {
+    "CladEvent": "DEPRECATED_Singing_120bpm",
+    "AnimName": "ag_cozmosings_120bpm"
+  },
+  {
+    "CladEvent": "DEPRECATED_Singing_GetIn",
+    "AnimName": "ag_cozmosings_getin"
+  },
+  {
+    "CladEvent": "DEPRECATED_Singing_GetOut",
+    "AnimName": "ag_cozmosings_getout"
   }
 ]

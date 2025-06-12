@@ -584,6 +584,13 @@ void BehaviorReactToVoiceCommand::BehaviorUpdate()
       }
     }
   }
+  else if ( _dVars.state == EState::Thinking )
+  {
+    // we may receive an intent AFTER we're done listening for various reasons,
+    // so poll for it while we're in the thinking state
+    // note: does nothing if intent is already set
+    UpdateUserIntentStatus();
+  }
 
   if ( ( _dVars.state != EState::ListeningGetIn ) && !IsControlDelegated() )
   {
@@ -763,7 +770,6 @@ void BehaviorReactToVoiceCommand::StopListening()
   OnStreamingEnd();
 
   UpdateUserIntentStatus();
-  OnVictorListeningEnd();
   TransitionToThinking();
 }
 
@@ -891,6 +897,10 @@ void BehaviorReactToVoiceCommand::TransitionToThinking()
 
   auto callback = [this]()
   {
+    // we're keeping our "listening feedback" open until the last possible moment, since the intent can come
+    // in after we've closed our recording stream.
+    OnVictorListeningEnd();
+
     const bool streamingToCloud = _dVars.expectingStream;
     if (!streamingToCloud && _iVars.exitAfterListeningIfNotStreaming) {
       PRINT_CH_INFO("Behaviors", "BehaviorReactToVoiceCommand.TransitionToThinkingCallback.NotStreaming",
@@ -902,6 +912,7 @@ void BehaviorReactToVoiceCommand::TransitionToThinking()
 
     // Play a reaction behavior if we were told to ...
     // ** only in the case that we've heard a valid intent **
+    UpdateUserIntentStatus();
     const bool heardValidIntent = ( _dVars.intentStatus == EIntentStatus::IntentHeard );
     if ( heardValidIntent && _iVars.reactionBehavior )
     {

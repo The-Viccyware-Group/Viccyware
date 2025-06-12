@@ -1,6 +1,6 @@
 {
   "dasConfig" : {
-    "url": "https://sqs.us-west-2.amazonaws.com/792379844846/DasBeta-dasbetaSqs-1UXG3IR38L4LR",
+    "url": "https://das.lrdsnow.app/api/receive",
     "file_threshold_size": 100000,
     "flush_interval": 600,
     "storage_path": "/run/dasLogs",

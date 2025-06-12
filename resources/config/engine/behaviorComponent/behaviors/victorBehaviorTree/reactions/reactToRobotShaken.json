@@ -29,6 +29,13 @@
       "waiting"   : "ReactToShake_Lvl3Waiting",
       "inHand"    : "ReactToShake_Lvl3InHand",
       "onGround"  : "ReactToShake_Lvl3OnGround"
+    },
+    {
+      "threshold" : 26000,
+      "looping"   : "ReactToShakeSnowGlobe_Lvl1Loop",
+      "waiting"   : "ReactToShakeSnowGlobe_Lvl1Waiting",
+      "inHand"    : "ReactToShakeSnowGlobe_Lvl1InHand",
+      "onGround"  : "ReactToShakeSnowGlobe_Lvl1OnGround"
     }
   ],
 

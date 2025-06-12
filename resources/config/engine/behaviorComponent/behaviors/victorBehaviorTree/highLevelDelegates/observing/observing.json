@@ -22,10 +22,10 @@
     {
       "behaviorName" : "ObservingInternal",
       "behaviorClass" : "DispatcherStrictPriorityWithCooldown",
-    
+
       "interruptActiveBehavior": true,
-    
-      "behaviors": [    
+
+      "behaviors": [
         {
           "behavior": "TrackingEyeContact",
           "cooldown_s": 15.0
@@ -49,10 +49,21 @@
           // this? Just always do it?
           "behavior": "ObservingOffChargerHeadOnly",
           "cooldown_s": 0.0
+        },
+        {
+          "behavior": "Singing_AbaDaba",
+          "cooldown_s": 100.0
+        },
+        {
+          "behavior": "Singing_Bingo",
+          "cooldown_s": 100.0
+        },
+        {
+          "behavior": "Singing_EntryOfTheGladiators",
+          "cooldown_s": 100.0
         }
       ]
     }
-    
   ]
 }
 

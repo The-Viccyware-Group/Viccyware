@@ -27,6 +27,11 @@ structure UserIntent_MeetVictor
   string username,
 }
 
+structure UserIntent_PlaySpecific
+{
+  string entity_behavior,
+}
+
 structure UserIntent_TimeInSeconds
 {
   uint_32 time_s
@@ -168,11 +173,13 @@ union dupes_allowed UserIntent
   UserIntent_Void             names_ask,
   UserIntent_Void             play_anygame,
   UserIntent_Void             play_anytrick,
+  UserIntent_PlaySpecific     play_specific, // slated for removal
   UserIntent_Void             play_blackjack,
   UserIntent_Void             play_fistbump,
   UserIntent_Void             play_pickupcube,
   UserIntent_Void             play_popawheelie,
   UserIntent_Void             play_rollcube,
+  UserIntent_Void             play_keepaway,
   UserIntent_Void             seasonal_happyholidays,
   UserIntent_Void             seasonal_happynewyear,
   UserIntent_TimeInSeconds    set_timer,

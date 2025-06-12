@@ -151,6 +151,9 @@ enum uint_8 BehaviorClass {
   PounceWithProx,
   PuzzleMaze,
 
+  // freeplay/oneShots
+  Singing,
+
   // gateBehaviors
   ConnectToCube,
 
