@@ -8,8 +8,8 @@ cd $DIR
 
 if [ ! -f "robot_ip.txt" ]; then
     read -p "Enter robot IP: " robotip
-    echo $ROBOT_IP > robot_ip.txt
     export ROBOT_IP="$robotip"
+    echo $ROBOT_IP > robot_ip.txt
     echo "Deploying to $ROBOT_IP"
 else
     export ROBOT_IP=$(cat robot_ip.txt)
