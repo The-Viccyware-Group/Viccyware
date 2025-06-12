@@ -125,6 +125,7 @@ list(APPEND VICOS_LINKER_FLAGS
 	#-Wl,--gdb-index
 	-Wl,--warn-shared-textrel
 	-Wl,--gc-sections
+	-Wl,--allow-multiple-definition
         -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
         -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
 #	-Wl,--fatal-warnings)

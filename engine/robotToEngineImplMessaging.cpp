@@ -538,7 +538,7 @@ void RobotToEngineImplMessaging::HandleSyncRobotAck(const AnkiEvent<RobotInterfa
   robot->SetSyncRobotAcked();
 
   // Move the head up when we sync time so that the customer can see the face easily
-  if(FACTORY_TEST && Factory::GetEMR()->fields.PACKED_OUT_FLAG)
+  if(FACTORY_TEST)
   {
     // Move head up
     const f32 kLookUpSpeed_radps = 2;

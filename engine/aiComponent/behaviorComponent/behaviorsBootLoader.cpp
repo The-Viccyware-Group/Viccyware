@@ -113,7 +113,7 @@ void BehaviorsBootLoader::InitDependent( Robot* robot, const BCCompMap& dependen
   bool startInPlaypen = false;
 # if FACTORY_TEST
   {
-    startInPlaypen = !Factory::GetEMR()->fields.PACKED_OUT_FLAG && !OSState::getInstance()->IsInRecoveryMode();
+    startInPlaypen = false;
   }
 # endif
   if(startInPlaypen) {
