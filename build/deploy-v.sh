@@ -6,17 +6,15 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 echo $DIR
 cd $DIR
 
-if [ -f "robot_ip.txt" ]; then
-       rm robot_ip.txt
+if [ ! -f "robot_ip.txt" ]; then
+    read -p "Enter robot IP: " robotip
+    echo $ROBOT_IP > robot_ip.txt
+    export ROBOT_IP=$(cat robot_ip.txt)
+    echo "Deploying to $ROBOT_IP"
+else
+    export ROBOT_IP=$(cat robot_ip.txt)
+    echo "Deploying to $ROBOT_IP"
 fi
-
-read -p "Enter robot IP: " robotip
-
-export ROBOT_IP="$robotip"
-
-echo $ROBOT_IP >> robot_ip.txt
-
-echo "Deploying to $ROBOT_IP"
 
 #if [[ ! -f robot_ip.txt ]]; then
 #    echo "You must echo your robot's IP to robot_ip.txt in the root of this repo before running this script."
