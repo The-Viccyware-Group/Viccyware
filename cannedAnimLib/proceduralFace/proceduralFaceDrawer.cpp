@@ -1034,7 +1034,7 @@ namespace Vector {
 
   } // GetNextBlinkFrame()
   
-  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGB& imageHsv, const float opacity, bool dirty)
+  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGBA& imageHsv, const float opacity, bool dirty)
   {
 #if PROCEDURALFACE_SCANLINE_FEATURE
     if(kProcFace_Scanlines) {
@@ -1055,6 +1055,8 @@ namespace Vector {
             for (int j=0 ; j < nCols ; j++) {
               // the 'blue' channel in an HSV image is the value
               thisRow[j].b() *= opacity;
+              thisRow[j].r() *= opacity;
+              thisRow[j].g() *= opacity;
             }
           }
         }

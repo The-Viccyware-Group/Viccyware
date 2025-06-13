@@ -1618,6 +1618,7 @@ namespace Anim {
 
         Vision::ImageRGBA img(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
         compImg.DrawIntoImage(img);
+        ProceduralFaceDrawer::ApplyScanlines(img, 0.4f, true);
         stateToSend.faceImg.SetFromImageRGB(img);
 
         stateToSend.haveFaceToSend = true;
