@@ -20,6 +20,10 @@
       "AnimName": "muted"
   },
   {
+      "CladEvent": "Petting",
+      "AnimName": "petting"
+  },
+  {
       "CladEvent": "Idle_09",
       "AnimName": "idle_09"
   },

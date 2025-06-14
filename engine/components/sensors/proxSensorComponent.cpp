@@ -133,7 +133,7 @@ void ProxSensorComponent::NotifyOfRobotStateInternal(const RobotState& msg)
 {
   if(IsWhiskey())
   {
-   return;
+    return;
   }
 
   // cache previous state for comparison later
