@@ -60,7 +60,11 @@ enum_concept string EnumToString[BackpackAnimationTrigger] {
   Off                       = verbatim "Off",
   Offline                   = verbatim "Offline",
   Offline_Off               = verbatim "Offline_Off",
+<<<<<<< HEAD
   Petting                  = verbatim "Petting",
+=======
+  Petting                   = verbatim "Petting",
+>>>>>>> 78610b34e241ef5e1da75e18d62681db6ea8e1f2
   Sleeping                  = verbatim "Sleeping",
   SpinnerBlueCelebration    = verbatim "SpinnerBlueCelebration",
   SpinnerBlueHoldTarget     = verbatim "SpinnerBlueHoldTarget",

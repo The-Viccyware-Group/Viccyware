@@ -1584,7 +1584,7 @@ namespace Anim {
     // Two conflicting refactors cause the eyes to be superimposed under the timer
     // when it goes off. There should be a configuration option to set, but for now
     // we do this hack for 1.7.0
-    if (anim != nullptr && anim->GetName() == "anim_timersup_beep_01" )
+    if (anim != nullptr && (anim->GetName() == "anim_timersup_beep_01" || anim->GetName() == "anim_iperformance_tangram_01"))
     {
       haveEyesToRender = false;
     }
@@ -1618,6 +1618,7 @@ namespace Anim {
 
         Vision::ImageRGBA img(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
         compImg.DrawIntoImage(img);
+        ProceduralFaceDrawer::ApplyScanlines(img, 0.4f, true);
         stateToSend.faceImg.SetFromImageRGB(img);
 
         stateToSend.haveFaceToSend = true;

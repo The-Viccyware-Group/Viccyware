@@ -73,7 +73,7 @@ namespace Vector {
     // Although the type of the input image is ImageRGB, it should be an HSV image, i.e.
     // the 'red' channel is hue, 'green' channel is saturation, and 'blue' channel is value
 
-    static bool ApplyScanlines(Vision::ImageRGB& imageHsv, const float opacity, bool dirty = true);
+    static bool ApplyScanlines(Vision::ImageRGBA& imageHsv, const float opacity, bool dirty = true);
     static bool ApplyScanlines(Vision::Image& image8, const float opacity, bool dirty = true);
 
   private:
