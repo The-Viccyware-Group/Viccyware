@@ -43,8 +43,9 @@ ConditionHighTemperature::ConditionHighTemperature(const Json::Value& config)
 bool ConditionHighTemperature::AreConditionsMetInternal(BehaviorExternalInterface& bei) const
 {
   const bool hotCPU     = bei.GetRobotInfo().GetCpuTemperature_degC() >= kCPUOverheatingThreshold_degC;
-  const bool hotBattery = bei.GetRobotInfo().GetBatteryComponent().GetBatteryTemperature_C() >= kBatteryOverheatingThreshold_degC;
-  return hotCPU || hotBattery;
+  //const bool hotBattery = bei.GetRobotInfo().GetBatteryComponent().GetBatteryTemperature_C() >= kBatteryOverheatingThreshold_degC;
+  //return hotCPU || hotBattery;
+  return hotCPU;
 }
 
 }
