@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-if [[ ! -f ./CPPLINT.cfg ]]; then
-    if [[ -f ../CPPLINT.cfg ]]; then
+if [[ ! -f ./ANKI_VERSION ]]; then
+    if [[ -f ../ANKI_VERSION ]]; then
         cd ..
     else
         echo "This script must be run in the victor repo. ./wire/build.sh"
