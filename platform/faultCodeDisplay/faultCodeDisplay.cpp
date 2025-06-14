@@ -26,7 +26,10 @@ namespace Anki { namespace Vector {
 static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {898,  "Body communication timeout (898)."},
   {899,  "Body communication failure (899)."},
+  {917,  "vic-robot crashed. Vector will restart."},
+  {916,  "vic-robot crashed. Vector will restart."},
   {915,  "vic-engine crashed. Vector will restart."},
+  {914,  "vic-engine crashed. Vector will restart."},
   {980,  "Camera issue. Reboot the robot if this persists."},
 };
 
@@ -104,30 +107,36 @@ static void DrawMultiline(const std::string& txt)
                   img565.GetNumRows() * img565.GetNumCols() * sizeof(u16));
 }
 
-static void DrawNumber(uint16_t code,bool willRestart)
+static void DrawNumber(uint16_t code, bool willRestart)
 {
-  static Vision::ImageRGB img(FACE_DISPLAY_HEIGHT,FACE_DISPLAY_WIDTH);
+  static Vision::ImageRGB img(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
   img.FillWith(0);
 
-  int y=0;
-  DrawHeading(img,y);
-
-  std::string num=std::to_string(code);
-  auto sz=Vision::Image::GetTextSize(num,1.5f,2);
-  img.DrawTextCenteredHorizontally(num,CV_FONT_NORMAL,1.5f,2,
-                                   NamedColors::WHITE,y+sz.y()/2+4,false);
-  y+=sz.y()+8;
-
-  const std::string& footer=willRestart?kVectorWillRestart:kSupportURL;
-  sz=Vision::Image::GetTextSize(footer,0.5f,1);
-  img.DrawTextCenteredHorizontally(footer,CV_FONT_NORMAL,0.5f,1,
+  std::string s = std::to_string(code);
+  Vec2f sz = Vision::Image::GetTextSize(s, 1.5f, 2);
+  img.DrawTextCenteredHorizontally(s,
+                                   CV_FONT_NORMAL,
+                                   1.5f,
+                                   2,
                                    NamedColors::WHITE,
-                                   FACE_DISPLAY_HEIGHT-sz.y(),false);
+                                   (FACE_DISPLAY_HEIGHT / 2 + sz.y() / 4),
+                                   false);
+
+  const std::string& footer = willRestart ? kVectorWillRestart : kSupportURL;
+  sz = Vision::Image::GetTextSize(footer, 0.5f, 1);
+  img.DrawTextCenteredHorizontally(footer,
+                                   CV_FONT_NORMAL,
+                                   0.5f,
+                                   1,
+                                   NamedColors::WHITE,
+                                   FACE_DISPLAY_HEIGHT - sz.y(),
+                                   false);
 
   Vision::ImageRGB565 img565(img);
   lcd_draw_frame2(reinterpret_cast<u16*>(img565.GetDataPointer()),
-                  img565.GetNumRows()*img565.GetNumCols()*sizeof(u16));
+                  img565.GetNumRows() * img565.GetNumCols() * sizeof(u16));
 }
+
 
 }} // ns
 
