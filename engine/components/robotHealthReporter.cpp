@@ -160,15 +160,16 @@ void RobotHealthReporter::CPUInfoCheck(const OSState * osState)
 {
   DEV_ASSERT(osState != nullptr, "RobotHealthReporter.CPUInfoCheck.InvalidOSState");
 
+  // FILLS the logs, i don't care
   // Report if cpu frequency has changed
-  const uint32_t cpuFreq_kHz = osState->GetCPUFreq_kHz();
-  if (cpuFreq_kHz != _cpuFreq_kHz) {
-    DASMSG(robot_cpu_info, "robot.cpu_info", "CPU frequency has changed");
-    DASMSG_SET(i1, cpuFreq_kHz, "New CPU frequency");
-    DASMSG_SET(i2, _cpuFreq_kHz, "Old CPU frequency");
-    DASMSG_SEND();
-    _cpuFreq_kHz = cpuFreq_kHz;
-  }
+  //const uint32_t cpuFreq_kHz = osState->GetCPUFreq_kHz();
+  //if (cpuFreq_kHz != _cpuFreq_kHz) {
+  //  DASMSG(robot_cpu_info, "robot.cpu_info", "CPU frequency has changed");
+  //  DASMSG_SET(i1, cpuFreq_kHz, "New CPU frequency");
+  //  DASMSG_SET(i2, _cpuFreq_kHz, "Old CPU frequency");
+  //  DASMSG_SEND();
+  //  _cpuFreq_kHz = cpuFreq_kHz;
+  //}
 }
 
 void RobotHealthReporter::OncePerBootCheck()

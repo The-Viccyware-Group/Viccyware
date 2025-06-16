@@ -27,7 +27,8 @@ IMPLEMENT_ENUM_INCREMENT_OPERATORS(VisionMode);
 static const Util::SymmetricMap<VisionMode, std::string> sNetModeLUT{
   {VisionMode::People,    "person_detector"},
   {VisionMode::Hands,     "hand_detector"},
-  {VisionMode::Pets,      "mobilenet"}, // TODO: Update to real network
+// this made robo crash  :(
+//  {VisionMode::Pets,      "mobilenet"}, // TODO: Update to real network
 
 // Offboard models only allowed in non-shipping builds
 #ifdef ANKI_DEV_CHEATS

@@ -41,6 +41,7 @@ protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override
   {
     modifiers.behaviorAlwaysDelegates = false;
+    modifiers.visionModesForActiveScope->insert({ VisionMode::Pets, EVisionUpdateFrequency::Low });
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
   virtual void GetAllDelegates(std::set<IBehavior*>& delegates) const override;

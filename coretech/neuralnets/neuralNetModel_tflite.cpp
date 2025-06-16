@@ -84,19 +84,30 @@ Result TFLiteModel::LoadModelInternal(const std::string& modelPath,
   tflite::InterpreterBuilder builder(*_model, resolver);
 
   // the GPU delegate actually works!
-  // however, models take FOREVER to load
-  // we will use CPU for now
+  // however, models take FOREVER to load.
+  // we will use CPU for now.
+  // if you wanna try it, run:
+  // mkdir /tmp/tflitegpu && chown engine:anki /tmp/tflitegpu && chmod 777 /tmp/tflitegpu
+  // right now, it's tuned for accuracy rather than performance
 
-  // if (!g_gpu_delegate) {
-  //   g_gpu_opts.inference_preference  = TFLITE_GPU_INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER;
-  //   g_gpu_opts.inference_priority1   = TFLITE_GPU_INFERENCE_PRIORITY_MIN_LATENCY;
-  //   g_gpu_opts.inference_priority2   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
-  //   g_gpu_opts.inference_priority3   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
-  //   _interpreter = nullptr; // ensure reset
-  //   g_gpu_delegate = TfLiteGpuDelegateV2Create(&g_gpu_opts);
-  // }
-  // if (g_gpu_delegate) {
-  //   builder.AddDelegate(g_gpu_delegate);
+  // const char* kCacheDir = "/tmp/tflitegpu";
+  // struct stat st{};
+  // if (stat(kCacheDir, &st) == 0 && S_ISDIR(st.st_mode)) {
+  //   if (!g_gpu_delegate) {
+  //     g_gpu_opts.inference_preference  = TFLITE_GPU_INFERENCE_PREFERENCE_SUSTAINED_SPEED;
+  //     g_gpu_opts.inference_priority1   = TFLITE_GPU_INFERENCE_PRIORITY_MAX_PRECISION;
+  //     g_gpu_opts.inference_priority2   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
+  //     g_gpu_opts.inference_priority3   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
+  //     g_gpu_opts.experimental_flags = TFLITE_GPU_EXPERIMENTAL_FLAGS_ENABLE_SERIALIZATION;
+  //     g_gpu_opts.experimental_flags |= TFLITE_GPU_EXPERIMENTAL_FLAGS_ENABLE_QUANT;
+  //     g_gpu_opts.model_token = "anki";
+  //     g_gpu_opts.serialization_dir = kCacheDir;
+  //     _interpreter = nullptr; // ensure reset
+  //     g_gpu_delegate = TfLiteGpuDelegateV2Create(&g_gpu_opts);
+  //   }
+  //   if (g_gpu_delegate) {
+  //     builder.AddDelegate(g_gpu_delegate);
+  //   }
   // }
 
   if (builder(&_interpreter) != kTfLiteOk || !_interpreter) {

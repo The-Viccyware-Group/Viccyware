@@ -85,6 +85,13 @@ protected:
 
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
     modifiers.wantsToBeActivatedWhenCarryingObject = true;
+    // here, we want pets to have priority
+    // pets can very much cause this behavior
+    // - Wire
+    modifiers.visionModesForActiveScope->insert({
+      {VisionMode::Faces, EVisionUpdateFrequency::Low},
+      {VisionMode::Pets, EVisionUpdateFrequency::High}
+    });
   }
   virtual void GetBehaviorJsonKeys( std::set<const char*>& expectedKeys ) const override;
 

@@ -1052,6 +1052,14 @@
     "AnimName": "ag_pickupcube_success"
   },
   {
+    "CladEvent":"PetDetectionDog",
+    "AnimName": "ag_petdetection_reaction_dog"
+  },
+  {
+    "CladEvent":"PetDetectionCat",
+    "AnimName": "ag_petdetection_reaction_cat"
+  },
+  {
     "CladEvent":"PlaceCubeByChargerFail",
     "AnimName": "ag_reacttoblock_dropfail"
   },

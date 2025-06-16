@@ -23,6 +23,7 @@
     "ReactToUnclaimedIntent",
     "HeldInPalmDispatcher",
     "WhileInAirDispatcher",
+    "PetDetection",
     "ReactToPutDown",
     "OptionalReactions",
     "StayOnChargerUntilCharged", // delegate includes ReactToSoundAwake
