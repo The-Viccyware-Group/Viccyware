@@ -238,6 +238,7 @@ bool BackpackLightComponent::IsBehaviorBackpackLightActive() const
   // _mostRecentTrigger tracks the last trigger that was requested from the engine
   switch ( _mostRecentTrigger )
   {
+    case BackpackAnimationTrigger::Petting:
     case BackpackAnimationTrigger::WorkingOnIt:
     case BackpackAnimationTrigger::SpinnerBlueCelebration:
     case BackpackAnimationTrigger::SpinnerBlueHoldTarget:
