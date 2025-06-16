@@ -15,6 +15,12 @@
     // contains internal cooldowns and requirements
     "PossibleUnintentionalPerformance",
 
+    "Singing_AbaDaba",
+  
+    "Singing_Bingo",
+  
+    "Singing_EntryOfTheGladiators",
+
     "ObservingInternal"
   ],
 
@@ -49,18 +55,6 @@
           // this? Just always do it?
           "behavior": "ObservingOffChargerHeadOnly",
           "cooldown_s": 0.0
-        },
-        {
-          "behavior": "Singing_AbaDaba",
-          "cooldown_s": 100.0
-        },
-        {
-          "behavior": "Singing_Bingo",
-          "cooldown_s": 100.0
-        },
-        {
-          "behavior": "Singing_EntryOfTheGladiators",
-          "cooldown_s": 100.0
         }
       ]
     }
