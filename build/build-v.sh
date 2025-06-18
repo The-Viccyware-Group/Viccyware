@@ -27,9 +27,11 @@ fi
 
 echo $HOST
 
-# remove old toolchain
-echo "Deleting old 4.0.0-r05 toolchain if it exists..."
-rm -rf $ADEPS/vicos-sdk/dist/4.0.0-r05
+# Only try to remove toolchain if it's there in the first place
+if [ -f "$ADEPS/vicos-sdk/dist/4.0.0-r05" ]; then
+    echo "Deleting old 4.0.0-r05 toolchain if it exists..."
+    rm -rf $ADEPS/vicos-sdk/dist/4.0.0-r05
+fi
 
 if [[ ! -d "$ADEPS/vicos-sdk/dist/${TOOLCHAIN_VERSION}/prebuilt" ]]; then
 	mkdir -p "$ADEPS/vicos-sdk/dist/${TOOLCHAIN_VERSION}"

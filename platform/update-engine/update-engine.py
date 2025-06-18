@@ -352,7 +352,7 @@ def extract_ti(manifest, tar_stream, expected_name, section, dest_fh, progress_c
     "Extract an image from a tar_info object"
     tar_info = tar_stream.next()
     if tar_info.name.endswith("manifest.sha256"):
-        print("Ignoring manifest.sha256")
+        print("Fuck you manifest.sha256, nobody likes you")
         tar_info = tar_stream.next()
     if not tar_info.name.endswith(expected_name):
         die(200, "Expected \"{0}\" to be next in tar but found \"{1}\"".format(expected_name, tar_info.name))
