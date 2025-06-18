@@ -34,6 +34,7 @@ protected:
     modifiers.behaviorAlwaysDelegates               = true;
     modifiers.wantsToBeActivatedWhenOnCharger       = true;
     modifiers.wantsToBeActivatedWhenOffTreads       = true;
+    modifiers.visionModesForActiveScope->insert({VisionMode::Pets, EVisionUpdateFrequency::Low});
   }
 
   virtual void GetAllDelegates(std::set<IBehavior*>& delegates) const override;

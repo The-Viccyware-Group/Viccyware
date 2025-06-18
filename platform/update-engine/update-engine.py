@@ -800,6 +800,7 @@ def construct_update_url(os_version, cmdline):
     if use_sharding:
         shard_part = generate_shard_id() + "/"
     url = "{0}{1}{2}/{3}.ota".format(base_url, shard_part, ota_type, os_version.decode("utf-8").rstrip("ud"))
+    das_event("robot.ota_download_url_log", ["url", url])
     return url
 
 if __name__ == '__main__':
