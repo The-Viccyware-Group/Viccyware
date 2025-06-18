@@ -12,6 +12,8 @@
 # be set in /anki/etc/vic-crashuploader.env.
 #
 
+exit 0
+
 : ${VIC_CRASH_UPLOADER_KEEP_LATEST:=30}
 : ${VIC_CRASH_FOLDER:="/data/data/com.anki.victor/cache/crashDumps"}
 : ${VIC_CRASH_UPLOAD_URL:='https://anki.sp.backtrace.io:6098/post?format=minidump&token=6fd2bd053e8dd542ee97c05903b1ea068f090d37c7f6bbfa873c5f3b9c40b1d9'}

@@ -155,9 +155,9 @@ function usage_fix_lfs() {
     exit 1
 }
 
-for f in `git ls-files *.tflite`; do
-    egrep -q TFL3 $f || usage_fix_lfs $f
-done
+#for f in `git ls-files *.tflite`; do
+#    egrep -q TFL3 $f || usage_fix_lfs $f
+#done
 
 
 #

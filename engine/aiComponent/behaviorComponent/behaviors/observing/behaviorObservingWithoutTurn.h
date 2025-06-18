@@ -34,7 +34,8 @@ protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override{
     modifiers.wantsToBeActivatedWhenOnCharger = true;
     
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::Low});
+    modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::Standard});
+    modifiers.visionModesForActiveScope->insert({ VisionMode::Pets, EVisionUpdateFrequency::Standard});
   }
   virtual void GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const override;
   virtual bool CanBeGentlyInterruptedNow() const override;

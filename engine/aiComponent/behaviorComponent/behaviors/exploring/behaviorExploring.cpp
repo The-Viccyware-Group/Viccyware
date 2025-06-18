@@ -251,7 +251,8 @@ void BehaviorExploring::GetBehaviorOperationModifiers(BehaviorOperationModifiers
   modifiers.visionModesForActivatableScope->insert({ VisionMode::Markers, EVisionUpdateFrequency::Low });
   modifiers.visionModesForActiveScope->insert({
     {VisionMode::Markers, EVisionUpdateFrequency::Low},
-    {VisionMode::Faces, EVisionUpdateFrequency::Med} // so it is able to occasionally look back at faces
+    {VisionMode::Faces, EVisionUpdateFrequency::Med}, // so it is able to occasionally look back at faces
+    {VisionMode::Pets, EVisionUpdateFrequency::Med} // pets too
   });
 }
 

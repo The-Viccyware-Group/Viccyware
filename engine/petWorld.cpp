@@ -146,8 +146,8 @@ Result PetWorld::Update(const std::list<Vision::TrackedPet>& pets)
     }
 
     // Visualize the detection
-    if(ANKI_DEV_CHEATS)
-    {
+    // if(ANKI_DEV_CHEATS)
+    // {
       const ColorRGBA& vizColor = ColorRGBA::CreateFromColorIndex(knownPet.GetID());
       _robot->GetContext()->GetVizManager()->DrawCameraOval(Point2f(knownPet.GetRect().GetXmid(),
                                                                    knownPet.GetRect().GetYmid()),
@@ -167,7 +167,7 @@ Result PetWorld::Update(const std::list<Vision::TrackedPet>& pets)
       _robot->GetContext()->GetVizManager()->DrawCameraText(Point2f(knownPet.GetRect().GetX(),
                                                                    knownPet.GetRect().GetY()),
                                                            strbuffer, vizColor);
-    }
+    //}
   }
 
   return RESULT_OK;
