@@ -50,7 +50,7 @@ void BehaviorPetDetection::InitBehavior()
 {
   const auto& BC = GetBEI().GetBehaviorContainer();
 
-  _iConfig.driveOffChargerBehavior = BC.FindBehaviorByID( BEHAVIOR_ID( DriveOffChargerStraight ) );
+  _iConfig.driveOffChargerBehavior = BC.FindBehaviorByID( BEHAVIOR_ID( DriveOffChargerFace ) );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -74,18 +74,18 @@ void BehaviorPetDetection::GetBehaviorJsonKeys(std::set<const char*>&) const
 void BehaviorPetDetection::OnBehaviorActivated()
 {
 
-  // ther first three events have a 10 second cooldown
+  // the first three events have a 10 second cooldown
   // the next one has a 100-200 second cooldown
   CancelDelegates();
   _activationCount++;
 
   if (_activationCount >= 3) {
     _activationCount = 0;
-    int randSec = GetRNG().RandIntInRange(100, 200);
+    int randSec = GetRNG().RandIntInRange(150, 200);
     ("", "");
     _cooldownUntil = Clock::now() + std::chrono::seconds(randSec);
   } else {
-    _cooldownUntil = Clock::now() + std::chrono::seconds(10);
+    _cooldownUntil = Clock::now() + std::chrono::seconds(15);
   }
 
   AnimationTrigger trig = _isDog ? AnimationTrigger::PetDetectionDog
@@ -112,7 +112,7 @@ void BehaviorPetDetection::PlayAnimation() {
   AnimationTrigger trig = _isDog ? AnimationTrigger::PetDetectionDog
                                  : AnimationTrigger::PetDetectionCat;
   auto* action = new TriggerLiftSafeAnimationAction(trig);
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Down_Long_Excited, AMD_GOT::Behavior);
+  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Up_Long_Curious, AMD_GOT::Animation);
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Single, AMD_GOT::Behavior);
 
   DelegateIfInControl(action, [](const ActionResult& result) {
@@ -141,9 +141,17 @@ void BehaviorPetDetection::AlwaysHandleInScope(const EngineToGameEvent& ev)
   const auto& petMsg = ev.GetData().Get_RobotObservedPet();
   // okao hits us with a burst of events whenever a pet is seen.
   // let's account for false-positives a little bit by needing 3 events
-  if (petMsg.numTimesObserved >= 3) {
-    _isDog = (petMsg.petType == Anki::Vision::PetType::Dog);
-    _activate = true;
+  if (!_activate) {
+    if (petMsg.numTimesObserved >= 6) {
+      if (petMsg.img_rect.height > 100) {
+        _isDog = (petMsg.petType == Anki::Vision::PetType::Dog);
+        _activate = true;
+      } else {
+        PRINT_NAMED_INFO("BehaviorPetDetection", "height below 100");
+      }
+    }
+  } else {
+    PRINT_NAMED_INFO("BehaviorPetDetection", "tried to activate while already activated");
   }
 }
 
