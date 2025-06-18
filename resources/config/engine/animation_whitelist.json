@@ -1,4 +1,4 @@
-{
+\{
   // NOTE: for now, see also InvalidateBannedTracks
   
   // animations which start on the charger and need to move the body
@@ -15,5 +15,4 @@
     "anim_launch_firsttimewakeup",
     "anim_launch_altwakeup_01"
   ]
-
 }
