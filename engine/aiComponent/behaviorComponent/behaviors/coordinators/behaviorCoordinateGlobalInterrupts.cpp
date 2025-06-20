@@ -110,6 +110,7 @@ namespace{
     BEHAVIOR_ID(DanceToTheBeat),
     BEHAVIOR_ID(ReactToObstacle),
     BEHAVIOR_ID(ReactToSoundAwake),
+    BEHAVIOR_ID(TriggerWordDetected),
   };
 
   static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnUntintentionalPerformance = {
@@ -118,6 +119,7 @@ namespace{
     BEHAVIOR_ID(DanceToTheBeat),
     BEHAVIOR_ID(ReactToObstacle),
     BEHAVIOR_ID(ReactToSoundAwake),
+    BEHAVIOR_ID(TriggerWordDetected),
   };
 
   // while the behavior is actually activated
