@@ -691,11 +691,11 @@ def update_from_url(url):
         validate_new_os_version(current_os_version, next_boot_os_version, cmdline)
         if DEBUG:
             print("Updating to version {}".format(next_boot_os_version))
-        if is_dev_robot(cmdline):
-            if not manifest.getint("META", "ankidev"):
-                die(214, "Ankidev OS can't install non-ankidev OTA file")
-        elif manifest.getint("META", "ankidev"):
-            die(214, "Non-ankidev OS can't install ankidev OTA file")
+        #if is_dev_robot(cmdline):
+        #    if not manifest.getint("META", "ankidev"):
+        #        die(214, "Ankidev OS can't install non-ankidev OTA file")
+        #elif manifest.getint("META", "ankidev"):
+        #    die(214, "Non-ankidev OS can't install ankidev OTA file")
 
         num_images = manifest.getint("META", "num_images")
 
