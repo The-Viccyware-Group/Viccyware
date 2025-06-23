@@ -185,7 +185,7 @@ union dupes_allowed UserIntent
   UserIntent_TimeInSeconds    set_timer,
   UserIntent_Void             show_clock,
   UserIntent_Void             silence,
-  UserIntent_Voice            singing,
+  UserIntent_Void             singing,
   UserIntent_Void             status_feeling,
   UserIntent_Void             system_charger,
   UserIntent_Void             system_sleep,
