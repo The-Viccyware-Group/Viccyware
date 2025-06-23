@@ -14,5 +14,7 @@
   "CONFUSION_MATRIX_GREEN" :
     { "Hue" : 0.30, "Saturation" : 1.00 },
   "RAINBOW_EYES" :
+    { "Hue" : 0.97, "Saturation" : 0.98 },
+  "ROBOT_RED" :
     { "Hue" : 0.97, "Saturation" : 0.98 }
 }

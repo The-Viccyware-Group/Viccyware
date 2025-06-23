@@ -13,7 +13,7 @@ RUN apt-get install -y \
 RUN apt-get install -y \
     gawk chrpath texinfo p7zip-full android-sdk-libsparse-utils mime-support
 RUN apt-get install -y \
-    ruby subversion libssl-dev
+    ruby subversion libssl-dev protobuf-compiler
 RUN apt-get install -y \
     pkg-config
 RUN apt-get install -y \
@@ -26,7 +26,6 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 RUN usermod -u ${UID} ${USER_NAME} && groupmod -g ${GID} ${USER_NAME}
-
 
 #RUN wget http://ftp.debian.org/debian/pool/main/libf/libffi/libffi7_3.3-6_amd64.deb
 #RUN wget http://ftp.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1w-0+deb11u1_amd64.deb
@@ -42,7 +41,6 @@ RUN usermod -u ${UID} ${USER_NAME} && groupmod -g ${GID} ${USER_NAME}
 #RUN dpkg -i libpython2.7-stdlib_2.7.18-8+deb11u1_amd64.deb
 #RUN dpkg -i python2.7_2.7.18-8+deb11u1_amd64.deb
 
-# all in one so the layer stays tidy, nyaa~
 RUN set -e; \
     arch="$(dpkg --print-architecture)"; \
     for url in \
@@ -51,13 +49,27 @@ RUN set -e; \
         "http://ftp.debian.org/debian/pool/main/p/python2.7/libpython2.7-minimal_2.7.18-8+deb11u1_${arch}.deb" \
         "http://ftp.debian.org/debian/pool/main/p/python2.7/python2.7-minimal_2.7.18-8+deb11u1_${arch}.deb" \
         "http://ftp.debian.org/debian/pool/main/p/python2.7/libpython2.7-stdlib_2.7.18-8+deb11u1_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/p/python2.7/python2.7_2.7.18-8+deb11u1_${arch}.deb"; \
+        "http://ftp.debian.org/debian/pool/main/p/python2.7/python2.7_2.7.18-8+deb11u1_${arch}.deb" \
+	"https://github.com/upx/upx/releases/download/v5.0.0/upx-5.0.0-${arch}_linux.tar.xz" \
+	"https://go.dev/dl/go1.24.4.linux-${arch}.tar.gz"; \
     do \
         wget -q "$url"; \
     done && \
     dpkg -i *.deb && \
-    rm -f *.deb
+    tar -zxf go1.24.4.linux-${arch}.tar.gz && \
+    tar -xvf upx-5.0.0-${arch}_linux.tar.xz && \
+    mv upx-5.0.0-${arch}_linux/upx /usr/bin/ && \
+    rm -f *.deb *.tar.gz *.tar.xz
 
+RUN mv go /usr/local/
+RUN ln -sf /usr/local/go/bin/go /usr/bin/go
+RUN mkdir /root/go
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+RUN mv $(go env GOPATH)/bin/* /usr/bin/
+
+RUN chmod 0755 /usr/bin/upx
 
 RUN ln -sf /usr/bin/python2.7 /usr/bin/python2
 RUN ln -sf /usr/bin/python2.7 /usr/bin/python

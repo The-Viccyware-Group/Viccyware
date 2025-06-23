@@ -16,6 +16,8 @@
 
 syntax = "proto3";
 
+option go_package = "Anki.Vector.external_interface";
+
 package Anki.Vector.external_interface;
 
 import "google/protobuf/descriptor.proto";

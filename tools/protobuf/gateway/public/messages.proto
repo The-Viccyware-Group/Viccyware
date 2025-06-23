@@ -18,6 +18,8 @@ syntax = "proto3";
 
 package Anki.Vector.external_interface;
 
+option go_package = "Anki.Vector.external_interface";
+
 import "response_status.proto";
 import "extensions.proto";
 import "alexa.proto"; // App only
@@ -1573,4 +1575,8 @@ message CheckCloudResponse{
   string status_message = 3;
   int32 num_packets = 4;
   int32 expected_packets = 5;
+}
+
+message _FakeAlexaUsage {
+  AlexaAuthState ignored = 1 [deprecated = true];
 }
