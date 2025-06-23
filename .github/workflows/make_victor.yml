@@ -1,99 +1,56 @@
-name: Build and Cache Workflow
+name: Build anki folder
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or Tag to build'
+        required: true
+        default: 'Viccyware-tester'
   push:
     tags:
       - '*'
 
 jobs:
   make_victor:
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          lfs: true
-          token: ${{ secrets.GH_PAT }}
+    - name: Determine Checkout Ref
+      id: get-ref
+      run: |
+        if [ -n "${{ github.event.inputs.ref }}" ]; then
+          echo "ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
+        elif [ -n "${{ github.ref_name }}" ]; then
+          echo "ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+        else
+          echo "ref=Viccyware-tester" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        clean: false
+        ref: ${{ steps.get-ref.outputs.ref }}
+        submodules: recursive
+        fetch-depth: 0
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get remove containerd.io
-          sudo apt-get update
-          sudo add-apt-repository ppa:longsleep/golang-backports
-          sudo apt-get install -y docker.io git-lfs rsync ssh build-essential docker-buildx libtinfo5 golang-go upx
-          sudo systemctl start docker
-          sudo gpasswd -a $USER docker
-          newgrp docker
+    - name: Build inside Docker
+      run: |
+         ./build/clean.sh
+         chmod +rwx build/actions.sh
+         ./build/actions.sh
 
-      - name: Restore ccache from server
-        continue-on-error: true
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa
-          if ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "test -e /wire/gh-persist.tar.gz"; then
-            ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} 'cat /wire/gh-persist.tar.gz' | tar --preserve-permissions -xzf - -C ~/
-          else
-            echo "No persist found."
-          fi
-          if ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "test -e /wire/gh-cache.tar.gz"; then
-            ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} 'cat /wire/gh-cache.tar.gz' | tar --preserve-permissions -xzf - -C ~/
-          else
-            echo "No cache found."
-          fi
-      
-      - name: Clone anki-deps to ~/.anki
-        run: |
-          if [[ ! -d ~/.anki ]]; then
-            git clone https://kercre123:${{ secrets.GH_PAT }}@github.com/kercre123/anki-deps.git ~/.anki
-          fi
+    - name: Stage anki folder
+      run: |
+         ./project/victor/scripts/stage.sh -c Release -b
+         cd _build/staging/Release/
+         tar czf anki.tar.gz anki/
 
-      - name: Build inside Docker
-        run: |
-          cd $GITHUB_WORKSPACE
-          ./docker-buildx/buildv.sh
+    - name: Upload anki folder
+      uses: actions/upload-artifact@v4
+      with:
+        name: anki-folder-${{ steps.get-ref.outputs.ref }}
+        path: _build/staging/Release/anki.tar.gz
+        retention-days: 30
+        if-no-files-found: warn
 
-      - name: Get tag version
-        id: get_tag
-        run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
-      - name: Build OTA files
-        run: |
-          tag_version=${{ env.tag_name }}
-          cd ota
-          sudo ln -s /home/runner/.anki /root/.anki
-          ./make.sh $tag_version
-        env:
-          DOCKER_BUILDKIT: 1
-
-      - name: Transfer OTA files to server
-        continue-on-error: true
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa
-          tag_version=${{ env.tag_name }}
-          for target in dvt3 dev oskr dvt2; do
-            local_path="ota/out/$tag_version/$target/$tag_version.ota"
-            remote_path="/wire/otas/full/$target/$tag_version.ota"
-            ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "mkdir -p /wire/otas/full/$target && touch /wire/otas/dnar"
-            rsync -av -e "ssh -o StrictHostKeyChecking=no" $local_path ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:$remote_path
-            ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "sync"
-          done
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo $tag_version > /wire/otas/latest && rm /wire/otas/dnar"
-
-      - name: Compress and upload ccache and build-docker to server
-        if: success()
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa
-          cd ~
-          tar --preserve-permissions --same-owner -czf - .ccache | ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} 'cat > /wire/gh-cache.tar.gz'
