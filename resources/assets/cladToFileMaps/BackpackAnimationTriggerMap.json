@@ -1,7 +1,7 @@
 [
   {
-    "CladEvent": "AlexaNotification",
-    "AnimName": "alexaNotification"
+      "CladEvent": "AlexaNotification",
+      "AnimName": "alexaNotification"
   },
   {
       "CladEvent": "Charging",
@@ -18,6 +18,10 @@
   {
       "CladEvent": "Muted",
       "AnimName": "muted"
+  },
+  {
+      "CladEvent": "Petting",
+      "AnimName": "petting"
   },
   {
       "CladEvent": "Idle_09",
@@ -38,6 +42,14 @@
   {
       "CladEvent": "Offline_Off",
       "AnimName": "offline_off"
+  },
+  {
+      "CladEvent": "Petting",
+      "AnimName": "petting"
+  },
+  {
+      "CladEvent": "Sleeping",
+      "AnimName": "sleeping"
   },
   {
       "CladEvent": "SpinnerBlueCelebration",

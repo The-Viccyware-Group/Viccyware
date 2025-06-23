@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This script will checkout the repo to a temporary directory
 # and update version numbers ready for release.

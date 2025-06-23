@@ -372,13 +372,145 @@ function(check_licenses)
     foreach(lib libcutils libglib libgio libgobject libffi libdl libz libresolv libgmodule libpcre
                 Accelerate AppKit AudioToolbox AudioUnit CoreAudio CoreBluetooth CoreFoundation
                 OpenCL OpenGL Foundation GLUT Security
-                "-Wl" "-ldl" "-fsanitize=address"
+                "-Wl" "-ldl" "-fsanitize=address" "-lm" "-lpthread" "-pthread"
                 ankiutil                     # hack: because of other hacks
                 Controller CppController ode # webots
                 opus                         # cloud
                 gtest                        # special case, imported library can't have our checks
                 babile                       # special case, imported library can't have our checks
-                libtensorflow-lite.a         # handled elsewhere
+                libabsl_bad_any_cast_impl.a  # start: tensorflow lite libs
+                libabsl_bad_optional_access.a
+                libabsl_bad_variant_access.a
+                libabsl_base.a
+                libabsl_city.a
+                libabsl_civil_time.a
+                libabsl_cord.a
+                libabsl_cord_internal.a
+                libabsl_cordz_functions.a
+                libabsl_cordz_handle.a
+                libabsl_cordz_info.a
+                libabsl_cordz_sample_token.a
+                libabsl_crc32c.a
+                libabsl_crc_cord_state.a
+                libabsl_crc_cpu_detect.a
+                libabsl_crc_internal.a
+                libabsl_debugging_internal.a
+                libabsl_demangle_internal.a
+                libabsl_die_if_null.a
+                libabsl_examine_stack.a
+                libabsl_exponential_biased.a
+                libabsl_failure_signal_handler.a
+                libabsl_flags.a
+                libabsl_flags_commandlineflag.a
+                libabsl_flags_commandlineflag_internal.a
+                libabsl_flags_config.a
+                libabsl_flags_internal.a
+                libabsl_flags_marshalling.a
+                libabsl_flags_parse.a
+                libabsl_flags_private_handle_accessor.a
+                libabsl_flags_program_name.a
+                libabsl_flags_reflection.a
+                libabsl_flags_usage.a
+                libabsl_flags_usage_internal.a
+                libabsl_graphcycles_internal.a
+                libabsl_hash.a
+                libabsl_hashtablez_sampler.a
+                libabsl_int128.a
+                libabsl_leak_check.a
+                libabsl_log_entry.a
+                libabsl_log_flags.a
+                libabsl_log_globals.a
+                libabsl_log_initialize.a
+                libabsl_log_internal_check_op.a
+                libabsl_log_internal_conditions.a
+                libabsl_log_internal_format.a
+                libabsl_log_internal_globals.a
+                libabsl_log_internal_log_sink_set.a
+                libabsl_log_internal_message.a
+                libabsl_log_internal_nullguard.a
+                libabsl_log_internal_proto.a
+                libabsl_log_severity.a
+                libabsl_log_sink.a
+                libabsl_low_level_hash.a
+                libabsl_malloc_internal.a
+                libabsl_periodic_sampler.a
+                libabsl_random_distributions.a
+                libabsl_random_internal_distribution_test_util.a
+                libabsl_random_internal_platform.a
+                libabsl_random_internal_pool_urbg.a
+                libabsl_random_internal_randen.a
+                libabsl_random_internal_randen_hwaes.a
+                libabsl_random_internal_randen_hwaes_impl.a
+                libabsl_random_internal_randen_slow.a
+                libabsl_random_internal_seed_material.a
+                libabsl_random_seed_gen_exception.a
+                libabsl_random_seed_sequences.a
+                libabsl_raw_hash_set.a
+                libabsl_raw_logging_internal.a
+                libabsl_scoped_set_env.a
+                libabsl_spinlock_wait.a
+                libabsl_stacktrace.a
+                libabsl_status.a
+                libabsl_statusor.a
+                libabsl_strerror.a
+                libabsl_str_format_internal.a
+                libabsl_strings.a
+                libabsl_strings_internal.a
+                libabsl_symbolize.a
+                libabsl_synchronization.a
+                libabsl_throw_delegate.a
+                libabsl_time.a
+                libabsl_time_zone.a
+                libcpuinfo.a
+                libcpuinfo_internals.a
+                libfarmhash.a
+                libfft2d_alloc.a
+                libfft2d_fft4f2d.a
+                libfft2d_fftsg2d.a
+                libfft2d_fftsg3d.a
+                libfft2d_fftsg.a
+                libfft2d_shrtdct.a
+                libflatbuffers.a
+                libgemmlowp_eight_bit_int_gemm.a
+                libpthreadpool.a
+                libruy_allocator.a
+                libruy_apply_multiplier.a
+                libruy_blocking_counter.a
+                libruy_block_map.a
+                libruy_context.a
+                libruy_context_get_ctx.a
+                libruy_cpuinfo.a
+                libruy_ctx.a
+                libruy_denormal.a
+                libruy_frontend.a
+                libruy_have_built_path_for_avx2_fma.a
+                libruy_have_built_path_for_avx512.a
+                libruy_have_built_path_for_avx.a
+                libruy_kernel_arm.a
+                libruy_kernel_avx2_fma.a
+                libruy_kernel_avx512.a
+                libruy_kernel_avx.a
+                libruy_pack_arm.a
+                libruy_pack_avx2_fma.a
+                libruy_pack_avx512.a
+                libruy_pack_avx.a
+                libruy_prepacked_cache.a
+                libruy_prepare_packed_matrices.a
+                libruy_profiler_instrumentation.a
+                libruy_profiler_profiler.a
+                libruy_system_aligned_alloc.a
+                libruy_thread_pool.a
+                libruy_trmul.a
+                libruy_tune.a
+                libruy_wait.a
+                libprotobuf.a
+                libprotoc.a
+                libxnnpack-delegate.a
+                libmicrokernels-all.a
+                libmicrokernels-prod.a
+                libabsl_kernel_timeout_internal.a
+                libtensorflow-lite.a
+                libXNNPACK.a # end: tensorflow lite libs
                 liblttng-ust.so
                 liblttng-ust-tracepoint.so
                 liblttng-ust-dl.so

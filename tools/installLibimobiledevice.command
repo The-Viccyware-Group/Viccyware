@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 sudo pwd
 
 mkdir ~/libimobiledeviceinstall

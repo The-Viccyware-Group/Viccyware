@@ -1,6 +1,6 @@
 # Package Information for pkg-config
 
-prefix=/Users/build/buildAgent/work/b5d3ba53e49a4b81/build-victor-deps/build-opencv/opencv/build_vicos/install
+prefix=/home/kerigan/projects/NDA/build-tools/build-victor-deps/build-opencv/opencv/build_vicos/install
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir_old=${prefix}/include/opencv

@@ -159,6 +159,7 @@ include(mpg123)
 
 import(util "lib/util")
 import(DAS "lib/das-client")
+#include(picovoice)
 
 # BRC-TODO: Make this top-level include into an "interface"
 # lib so that other target can depend on it, instead of manually injecting

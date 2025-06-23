@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Fix permissions on robot to match expected values required for access by non-root
 # members of the anki group.

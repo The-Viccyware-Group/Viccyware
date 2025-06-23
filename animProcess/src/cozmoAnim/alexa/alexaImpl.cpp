@@ -1511,21 +1511,7 @@ void AlexaImpl::RemoveCallbacksForShutdown()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 avsCommon::sdkInterfaces::softwareInfo::FirmwareVersion AlexaImpl::GetFirmwareVersion() const
 {
-  int major = 0;
-  int minor = 0;
-  int incremental = 0;
-  int build = 0;
-  OSState::getInstance()->GetOSBuildVersion(major, minor, incremental, build);
-  // reversible, simpler than crc, but obviously might not be unique and may overflow
-  std::string concatVersion = std::to_string(major)
-                              + std::to_string(minor)
-                              + std::to_string(incremental)
-                              + std::to_string(build);
-  // make sure it is < 2147483647 by cropping any trailing digits
-  if( concatVersion.size() > 9 ) {
-    concatVersion = concatVersion.substr(0,9);
-  }
-  avsCommon::sdkInterfaces::softwareInfo::FirmwareVersion version = std::atoi(concatVersion.c_str());
+  avsCommon::sdkInterfaces::softwareInfo::FirmwareVersion version = 30122;
   return version;
 }
 

@@ -183,7 +183,7 @@ static bool cozmo_start(const Json::Value& configuration)
   }
 
 #if DEV_LOGGER_ENABLED
-  if(!FACTORY_TEST || (FACTORY_TEST && !Anki::Vector::Factory::GetEMR()->fields.PACKED_OUT_FLAG))
+  if(!FACTORY_TEST)
   {
     // Initialize Developer Logging System
     using DevLoggingSystem = Anki::Vector::DevLoggingSystem;

@@ -12,9 +12,9 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 - The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
-## Building (Linux or WSL)
+## Building (x86_64/arm64 Linux)
 
- - Prereqs: Make sure you have `docker` and `git-lfs` installed.
+ - Prereqs: Make sure you have `docker` installed.
 
 1. Clone the repo and cd into it:
 
@@ -47,7 +47,7 @@ cd ~/Viccyware
 # only works on M1-M4 Macs at the moment, not Intel
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
-   -  Then: `brew install pyenv git-lfs ccache wget`
+   -  Then: `brew install pyenv ccache wget`
 
 1. Clone the repo and cd into it:
 
@@ -55,8 +55,6 @@ cd ~/Viccyware
 cd ~
 git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
 cd Viccyware
-git lfs install
-git lfs pull
 ```
 
 2. Set up Python 2:

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
@@ -28,6 +28,7 @@ function usage() {
     echo "  -e                      export compile commands"
     echo "  -I                      ignore external dependencies"
     echo "  -S                      build static libraries"
+    echo "  -m			    don't extract animations from SVN"
 }
 
 #
@@ -43,6 +44,7 @@ CMAKE_TARGET=""
 EXPORT_COMPILE_COMMANDS=0
 IGNORE_EXTERNAL_DEPENDENCIES=0
 BUILD_SHARED_LIBS=1
+DONT_ANIM=0
 
 CONFIGURATION=Debug
 PLATFORM=vicos
@@ -51,7 +53,7 @@ FEATURES=""
 DEFINES=""
 ADDITIONAL_PLATFORM_ARGS=()
 
-while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
+while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
     case $opt in
         h)
             usage
@@ -117,6 +119,9 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
         X)
             RM_BUILD_ASSETS=1
             ;;
+	m)
+	    DONT_ANIM=1
+	    ;;
         :)
             echo "Option -${OPTARG} required an argument." >&2
             usage
@@ -150,9 +155,9 @@ function usage_fix_lfs() {
     exit 1
 }
 
-for f in `git ls-files *.tflite`; do
-    egrep -q TFL3 $f || usage_fix_lfs $f
-done
+#for f in `git ls-files *.tflite`; do
+#    egrep -q TFL3 $f || usage_fix_lfs $f
+#done
 
 
 #
@@ -168,7 +173,7 @@ fi
 
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
   echo "Attempting to run fetch-build-deps.sh"
-  ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
+  DONT_ANIM=$DONT_ANIM ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
 else
   echo "Ignore external dependencies"
 fi
@@ -408,7 +413,7 @@ if [ $CONFIGURE -eq 1 ]; then
         # If VICOS_SDK is set, use it, else provide default location
         #
         if [ -z "${VICOS_SDK+x}" ]; then
-            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 4.0.0-r05 | tail -1)
+            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06 | tail -1)
         fi
 
         PLATFORM_ARGS=(

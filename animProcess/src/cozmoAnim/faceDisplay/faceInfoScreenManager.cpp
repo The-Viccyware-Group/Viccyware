@@ -67,7 +67,8 @@
 
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
 const std::string OSProject = "Viccyware";
-const std::string OSBranch = "Beta 4";
+const std::string OSBranch = "Viccyware-tester";
+const std::string OSVerName = "I-Beta 6";
 const std::string Creator = "Built by the Viccyware Team";
 const std::string CreatorWebsite = "vicw.xyz";
 
@@ -225,7 +226,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_SCREEN(Main, Network);
   ADD_SCREEN_WITH_TEXT(ClearUserData, Main, {"CLEAR OUT SOUL?"});
   ADD_SCREEN_WITH_TEXT(ClearUserDataFail, Main, {"UNABLE TO CLEAR SOUL"});
-  ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {"Cozmo will remember that..."});
+  ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {IsXray() ? "Cozmo will remember..." : "Cozmo will remember that..."});
   ADD_SCREEN_WITH_TEXT(SelfTest, Main, {"START SELF TEST?"});
   ADD_SCREEN(SelfTestRunning, SelfTestRunning)
   ADD_SCREEN(Network, SensorInfo);
@@ -317,7 +318,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "CLEAR" : "CLEAR OUT SOUL", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "NUKE" : "NUKE THE FLASH", ClearUserData);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
@@ -345,7 +346,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     return ScreenName::Rebooting;
   };
   ADD_MENU_ITEM(ClearUserData, "EXIT", Main);
-  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, IsXray() ? "CONFIRM" : "CONFIRM (RIP COZMO)", confirmClearUserData);
+  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, IsXray() ? "CONFIRM" : "CONFIRM", confirmClearUserData);
   SET_TIMEOUT(ClearUserDataFail, 2.f, Main);
 
 
@@ -1314,7 +1315,7 @@ void FaceInfoScreenManager::DrawMain()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "NOT CONNECTED";
+    ip = "NO INTERNET";
   }
 
   // ESN/serialNo and the HW version are drawn on the same line with serialNo default left aligned and
@@ -1342,7 +1343,7 @@ void FaceInfoScreenManager::DrawNetwork()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "NOT CONNECTED";
+    ip = "NO INTERNET";
   }
 
   std::tm timeObj;
@@ -1361,7 +1362,7 @@ void FaceInfoScreenManager::DrawNetwork()
       case CloudMic::ConnectionCode::Available:   { return ColoredText("CONNECTED",    NamedColors::GREEN); }
       case CloudMic::ConnectionCode::Connectivity:{ return ColoredText("CONNECTIVITY", NamedColors::RED); }
       case CloudMic::ConnectionCode::Tls:         { return ColoredText("TLS",          NamedColors::RED); }
-      case CloudMic::ConnectionCode::Auth:        { return ColoredText("AUTH",         NamedColors::RED); }
+      case CloudMic::ConnectionCode::Auth:        { return ColoredText("OFFLINE",         NamedColors::RED); }
       case CloudMic::ConnectionCode::Bandwidth:   { return ColoredText("BANDWIDTH",    NamedColors::RED); }
       default:                                    { return ColoredText("CHECKING...",  NamedColors::BLUE); }
     }
@@ -1473,12 +1474,13 @@ void FaceInfoScreenManager::DrawSensorInfo(const RobotState& state)
 void FaceInfoScreenManager::DrawBuildInfo() {
   auto *osstate = OSState::getInstance();
   const std::string osProject = "OS: " + OSProject;
-  const std::string branch = "BUILD: " + OSBranch;
+  const std::string branch = "BRANCH: " + OSBranch;
+  const std::string osVerName = "BUILD: " + OSVerName;
   const std::string osVer = "VER: " + osstate->GetOSBuildVersion();
   const std::string sha = "SHA: " + osstate->GetBuildSha();
   const std::string creator = Creator;
   const std::string creatorWebsite = CreatorWebsite;
-  DrawTextOnScreen({osProject, branch, osVer, sha, creator, creatorWebsite});
+  DrawTextOnScreen({osProject, branch, osVerName, osVer, sha, creator, creatorWebsite});
 }
 
 void FaceInfoScreenManager::DrawIMUInfo(const RobotState& state)

@@ -5,17 +5,19 @@
  * Date:   12/5/2017
  *
  * Description: Implementation of ObjectDetector Model class which wraps TensorFlow Lite.
+ *              Updated for TF Lite 2.19: GPU delegate via InterpreterBuilder,
+ *              and uses C++ API for tensor access.
  *
  * Copyright: Anki, Inc. 2017
  **/
 
-// NOTE: this wrapper completely compiles out if we're using a different model (e.g. TensorFlow)
 #ifdef ANKI_NEURALNETS_USE_TFLITE
 
 #include "coretech/neuralnets/neuralNetModel_tflite.h"
 #include "coretech/vision/engine/image.h"
 #include <list>
 #include <queue>
+#include <sys/stat.h>
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/logging/logging.h"
@@ -23,74 +25,54 @@
 #include "opencv2/imgcodecs/imgcodecs.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
-#include "tensorflow/contrib/lite/kernels/register.h"
-#include "tensorflow/contrib/lite/model.h"
-#include "tensorflow/contrib/lite/string_util.h"
+#include "tensorflow/lite/model.h"
+#include "tensorflow/lite/interpreter.h"
+#include "tensorflow/lite/interpreter_builder.h"
+#include "tensorflow/lite/kernels/register.h"
+#include "tensorflow/lite/string_util.h"
+#include "tensorflow/lite/profiling/profiler.h"
+#include "tensorflow/lite/profiling/profile_buffer.h"
+#include "tensorflow/lite/delegates/gpu/delegate.h"
 
 namespace Anki {
 namespace NeuralNets {
 
 #define LOG_CHANNEL "NeuralNets"
-
-// TODO: Make this a parameter in config?
 constexpr int kNumThreads = 1;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 namespace {
+TfLiteGpuDelegateOptionsV2 g_gpu_opts = TfLiteGpuDelegateOptionsV2Default();
+TfLiteDelegate*           g_gpu_delegate = nullptr;
+}
 
-// A TFLite error reporter that uses our error logging system
-struct TFLiteLogReporter : public tflite::ErrorReporter {
-  int Report(const char* format, va_list args) override
-  {
-    constexpr size_t kMaxStringBufferSize = 1024;
-    char buf[kMaxStringBufferSize];
-    vsnprintf(buf, sizeof(buf), format, args);
-    LOG_ERROR("TFLiteLogReporter.Report", "%s", buf);
-    return 0;
-  }
-};
-
-TFLiteLogReporter gLogReporter;
-
-} // anonymous namespace
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TFLiteModel::TFLiteModel() = default;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TFLiteModel::~TFLiteModel()
 {
+  if (g_gpu_delegate) {
+    TfLiteGpuDelegateV2Delete(g_gpu_delegate);
+    g_gpu_delegate = nullptr;
+  }
   LOG_DEBUG("TFLiteModel.Destructor", "");
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Result TFLiteModel::LoadModelInternal(const std::string& modelPath, const Json::Value& config)
+Result TFLiteModel::LoadModelInternal(const std::string& modelPath,
+                                     const Json::Value& config)
 {
   DEV_ASSERT(!modelPath.empty(), "TFLiteModel.LoadModelInternal.EmptyModelPath");
 
-  std::vector<int> sizes = {1, _params.inputHeight, _params.inputWidth, 3};
-
-  const std::string graphFileName = Util::FileUtils::FullFilePath({modelPath,_params.graphFile});
-
-  if(!Util::FileUtils::FileExists(graphFileName))
-  {
-    LOG_ERROR("TFLiteModel.LoadModelInternal.GraphFileDoesNotExist", "%s", graphFileName.c_str());
+  const std::string graphFile = Util::FileUtils::FullFilePath({modelPath, _params.graphFile});
+  if (!Util::FileUtils::FileExists(graphFile)) {
+    LOG_ERROR("TFLiteModel.LoadModelInternal.GraphFileDoesNotExist", "%s", graphFile.c_str());
     return RESULT_FAIL;
   }
 
-  _model = tflite::FlatBufferModel::BuildFromFile(graphFileName.c_str(), &gLogReporter);
-
-  if (!_model)
-  {
-    LOG_ERROR("TFLiteModel.LoadModelInternal.FailedToBuildFromFile", "%s", graphFileName.c_str());
+  _model = tflite::FlatBufferModel::BuildFromFile(graphFile.c_str());
+  if (!_model) {
+    LOG_ERROR("TFLiteModel.LoadModelInternal.FailedToBuildFromFile", "%s", graphFile.c_str());
     return RESULT_FAIL;
   }
-
-  LOG_INFO("TFLiteModel.LoadModelInternal.Success", "Loaded: %s",
-           graphFileName.c_str());
-
-  //_model->error_reporter();
-  //LOG_INFO("TFLiteModel.LoadModelInternal.ResolvedReporter", "");
+  LOG_INFO("TFLiteModel.LoadModelInternal.Success", "Loaded: %s", graphFile.c_str());
 
 #ifdef TFLITE_CUSTOM_OPS_HEADER
   tflite::MutableOpResolver resolver;
@@ -99,183 +81,119 @@ Result TFLiteModel::LoadModelInternal(const std::string& modelPath, const Json::
   tflite::ops::builtin::BuiltinOpResolver resolver;
 #endif
 
-  tflite::InterpreterBuilder(*_model, resolver)(&_interpreter);
-  if (!_interpreter)
-  {
-    LOG_ERROR("TFLiteModel.LoadModelInternal.FailedToConstructInterpreter", "");
+  tflite::InterpreterBuilder builder(*_model, resolver);
+
+  // the GPU delegate actually works!
+  // however, models take FOREVER to load.
+  // we will use CPU for now.
+  // if you wanna try it, run:
+  // mkdir /tmp/tflitegpu && chown engine:anki /tmp/tflitegpu && chmod 777 /tmp/tflitegpu
+  // right now, it's tuned for accuracy rather than performance
+
+  // const char* kCacheDir = "/tmp/tflitegpu";
+  // struct stat st{};
+  // if (stat(kCacheDir, &st) == 0 && S_ISDIR(st.st_mode)) {
+  //   if (!g_gpu_delegate) {
+  //     g_gpu_opts.inference_preference  = TFLITE_GPU_INFERENCE_PREFERENCE_SUSTAINED_SPEED;
+  //     g_gpu_opts.inference_priority1   = TFLITE_GPU_INFERENCE_PRIORITY_MAX_PRECISION;
+  //     g_gpu_opts.inference_priority2   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
+  //     g_gpu_opts.inference_priority3   = TFLITE_GPU_INFERENCE_PRIORITY_AUTO;
+  //     g_gpu_opts.experimental_flags = TFLITE_GPU_EXPERIMENTAL_FLAGS_ENABLE_SERIALIZATION;
+  //     g_gpu_opts.experimental_flags |= TFLITE_GPU_EXPERIMENTAL_FLAGS_ENABLE_QUANT;
+  //     g_gpu_opts.model_token = "anki";
+  //     g_gpu_opts.serialization_dir = kCacheDir;
+  //     _interpreter = nullptr; // ensure reset
+  //     g_gpu_delegate = TfLiteGpuDelegateV2Create(&g_gpu_opts);
+  //   }
+  //   if (g_gpu_delegate) {
+  //     builder.AddDelegate(g_gpu_delegate);
+  //   }
+  // }
+
+  if (builder(&_interpreter) != kTfLiteOk || !_interpreter) {
+    LOG_ERROR("TFLiteModel.LoadModelInternal.DelegateBuilderFailed", "");
     return RESULT_FAIL;
   }
 
-  if (kNumThreads != -1)
-  {
+  if (kNumThreads != -1) {
     _interpreter->SetNumThreads(kNumThreads);
   }
+  _interpreter->SetAllowFp16PrecisionForFp32(true);
 
   const int input = _interpreter->inputs()[0];
+  std::vector<int> sizes = {1, _params.inputHeight, _params.inputWidth, 3};
   _interpreter->ResizeInputTensor(input, sizes);
-
-  if (_interpreter->AllocateTensors() != kTfLiteOk)
-  {
+  if (_interpreter->AllocateTensors() != kTfLiteOk) {
     LOG_ERROR("TFLiteModel.LoadModelInternal.FailedToAllocateTensors", "");
     return RESULT_FAIL;
   }
 
-  // Read the label list
-  const std::string labelsFileName = Util::FileUtils::FullFilePath({modelPath, _params.labelsFile});
-  const Result readLabelsResult = ReadLabelsFile(labelsFileName, _labels);
-  if(RESULT_OK != readLabelsResult)
-  {
-    return readLabelsResult;
-  }
+  const std::string labelsFile = Util::FileUtils::FullFilePath({modelPath, _params.labelsFile});
+  const Result rl = ReadLabelsFile(labelsFile, _labels);
+  if (rl != RESULT_OK) return rl;
 
   return RESULT_OK;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TFLiteModel::ScaleImage(Vision::ImageRGB& img)
 {
-  DEV_ASSERT(_interpreter != nullptr, "TFLiteModel.ScaleImage.NullInterpreter");
+  DEV_ASSERT(_interpreter, "TFLiteModel.ScaleImage.NullInterpreter");
+  const int idx = _interpreter->inputs()[0];
+  const auto method = Vision::ResizeMethod::Linear;
 
-  const int inputIndex = _interpreter->inputs()[0];
-
-  const auto kResizeMethod = Vision::ResizeMethod::Linear;
-
-  if(_params.useFloatInput)
-  {
-    float* scaledInputData = _interpreter->typed_tensor<float>(inputIndex);
-    DEV_ASSERT(scaledInputData != nullptr, "TFLiteModel.ScaleImage.NullInputData");
-
-    // Resize uint8 image data, and *then* convert smaller image to float below
-    // TODO: Resize and convert directly into the scaledInputData (ideally using NEON?)
-    if(img.GetNumRows() != _params.inputHeight || img.GetNumCols() != _params.inputWidth)
-    {
-      img.Resize(_params.inputHeight, _params.inputWidth, kResizeMethod);
+  if (_params.useFloatInput) {
+    float* data = _interpreter->typed_tensor<float>(idx);
+    if (img.GetNumRows() != _params.inputHeight || img.GetNumCols() != _params.inputWidth) {
+      img.Resize(_params.inputHeight, _params.inputWidth, method);
     }
-    else if(_params.verbose)
-    {
-      LOG_INFO("TFLiteModel.ScaleImage.SkipResize", "Skipping actual resize: image already correct size");
-    }
-    DEV_ASSERT(img.IsContinuous(), "TFLiteModel.ScaleImage.ImageNotContinuous");
-
-    // Scale/shift resized image directly into the tensor data
-    DEV_ASSERT(img.GetNumChannels() == 3, "TFLiteModel.ScaleImage.BadNumChannels");
-
-    cv::Mat cvTensor(_params.inputHeight, _params.inputWidth, CV_32FC3, scaledInputData);
-
-    img.get_CvMat_().convertTo(cvTensor, CV_32FC3, 1.f/_params.inputScale, _params.inputShift);
-  }
-  else
-  {
-    // Resize uint8 input image directly into the uint8 tensor data by wrapping image "header"
-    // around the tensor's data buffer
-    uint8_t* scaledInputData = _interpreter->typed_tensor<uint8_t>(inputIndex);
-    Vision::ImageRGB tensorImg(_params.inputHeight, _params.inputWidth, scaledInputData);
-    img.Resize(tensorImg, kResizeMethod);
+    cv::Mat cvMat(_params.inputHeight, _params.inputWidth, CV_32FC3, data);
+    img.get_CvMat_().convertTo(cvMat, CV_32FC3, 1.f/_params.inputScale, _params.inputShift);
+  } else {
+    uint8_t* data = _interpreter->typed_tensor<uint8_t>(idx);
+    Vision::ImageRGB tensorImg(_params.inputHeight, _params.inputWidth, data);
+    img.Resize(tensorImg, method);
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Result TFLiteModel::Detect(Vision::ImageRGB& img, std::list<Vision::SalientPoint>& salientPoints)
+Result TFLiteModel::Detect(Vision::ImageRGB& img,
+                           std::list<Vision::SalientPoint>& salientPoints)
 {
-  // Scale image, subtract mean, divide by standard deviation and store in the interpreter's input tensor
   ScaleImage(img);
-
-  if (_params.benchmarkRuns == 0){
-    const auto invokeResult = _interpreter->Invoke();
-    if (kTfLiteOk != invokeResult)
-    {
-      LOG_ERROR("TFLiteModel.Detect.FailedToInvoke", "");
-      return RESULT_FAIL;
-    }
-  }
-  else
-  {
-    tflite::profiling::Profiler profiler;
-
-    _interpreter->SetProfiler(&profiler);
-
-    profiler.StartProfiling();
-    {
-      tflite::profiling::ScopedProfile profile(&profiler, "benchmarkRuns");
-      for (uint32_t i = 0; i < _params.benchmarkRuns; ++i)
-      {
-        const auto invokeResult = _interpreter->Invoke();
-        if (kTfLiteOk != invokeResult) {
-          LOG_ERROR("TFLiteModel.Detect.FailedToInvokeBenchmark", "");
-          return RESULT_FAIL;
-        }
-      }
-    }
-    profiler.StopProfiling();
-    // TODO: Upgrade to TF r1.10 in order to build profile_summarizer.cc for detailed timing
-    auto profile_events = profiler.GetProfileEvents();
-    for (auto const& e : profile_events)
-    {
-      auto op_index = e->event_metadata;
-      const auto node_and_registration =
-          _interpreter->node_and_registration(op_index);
-      const TfLiteRegistration registration = node_and_registration->second;
-      LOG_INFO("TFLiteModel.Detect.Profiling", "Num Runs: %d, Avg: %f ms, Node: %u, OpCode: %i, %s \n",
-              _params.benchmarkRuns,
-              (e->end_timestamp_us - e->begin_timestamp_us) / (1000.0 * _params.benchmarkRuns),
-              op_index, registration.builtin_code,
-              EnumNameBuiltinOperator(
-                static_cast<tflite::BuiltinOperator>(registration.builtin_code)));
-    }
+  if (_interpreter->Invoke() != kTfLiteOk) {
+    LOG_ERROR("TFLiteModel.Detect.FailedToInvoke", "");
+    return RESULT_FAIL;
   }
 
-  switch(_params.outputType)
-  {
-    case NeuralNetParams::OutputType::Classification:
-    {
-      if(_params.useFloatInput)
-      {
-        const float* outputData = _interpreter->typed_output_tensor<float>(0);
-        ClassificationOutputHelper(outputData, img.GetTimestamp(), salientPoints);
+  switch (_params.outputType) {
+    case NeuralNetParams::OutputType::Classification: {
+      if (_params.useFloatInput) {
+        const float* output = _interpreter->typed_output_tensor<float>(0);
+        ClassificationOutputHelper(output, img.GetTimestamp(), salientPoints);
+      } else {
+        const uint8_t* output = _interpreter->typed_output_tensor<uint8_t>(0);
+        ClassificationOutputHelper(output, img.GetTimestamp(), salientPoints);
       }
-      else
-      {
-        const uint8_t* outputData = _interpreter->typed_output_tensor<uint8_t>(0);
-        ClassificationOutputHelper(outputData, img.GetTimestamp(), salientPoints);
-      }
-
       break;
     }
-
-    case NeuralNetParams::OutputType::BinaryLocalization:
-    {
-      if(_params.useFloatInput)
-      {
-        const float* outputData = _interpreter->typed_output_tensor<float>(0);
-        LocalizedBinaryOutputHelper(outputData, img.GetTimestamp(),  1.f, 0, salientPoints);
+    case NeuralNetParams::OutputType::BinaryLocalization: {
+      if (_params.useFloatInput) {
+        const float* output = _interpreter->typed_output_tensor<float>(0);
+        LocalizedBinaryOutputHelper(output, img.GetTimestamp(), 1.f, 0, salientPoints);
+      } else {
+        const uint8_t* output = _interpreter->typed_output_tensor<uint8_t>(0);
+        TfLiteTensor* t = _interpreter->tensor(_interpreter->outputs()[0]);
+        LocalizedBinaryOutputHelper(output, img.GetTimestamp(), t->params.scale, t->params.zero_point, salientPoints);
       }
-      else
-      {
-        const uint8_t* outputData = _interpreter->typed_output_tensor<uint8_t>(0);
-        const std::vector<int>& outputs_ = _interpreter->outputs();
-        TfLiteTensor* outputTensor = _interpreter->tensor(outputs_[0]);
-        const float scale = outputTensor->params.scale;
-        const int zero_point = outputTensor->params.zero_point;
-        LocalizedBinaryOutputHelper(outputData, img.GetTimestamp(), scale, zero_point, salientPoints);
-      }
-
       break;
     }
-
-    case NeuralNetParams::OutputType::AnchorBoxes:
-      //GetDetectedObjects(outputTensors, t, salientPoints);
-    case NeuralNetParams::OutputType::Segmentation:
-    {
-      LOG_ERROR("TFLiteModel.Detect.OutputTypeNotSupported",
-                "TFLite model needs more output types implemented");
+    default:
+      LOG_ERROR("TFLiteModel.Detect.OutputTypeNotSupported", "");
       return RESULT_FAIL;
-    }
   }
-
   return RESULT_OK;
 }
 
-} // namespace Vision
+} // namespace NeuralNets
 } // namespace Anki
 
-#endif // #if ANKI_NEURALNETS_USE_TFLITE
+#endif // ANKI_NEURALNETS_USE_TFLITE

@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
-set -u
+#set -u
 
 GIT=`which git`
 if [ -z $GIT ]; then
@@ -46,7 +46,7 @@ check_dep which ninja
 echo `pwd`
 
 vlog "vicos-sdk"
-./tools/build/tools/ankibuild/vicos.py --install 4.0.0-r05
+./tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06
 
 vlog "CMake"
 ./tools/build/tools/ankibuild/cmake.py
@@ -60,7 +60,11 @@ mkdir -p generated
 mkdir -p _build
 
 vlog "Fetch & extract external dependencies. This may take 1-5 min."
-./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+if [[ ${DONT_ANIM} != "1" ]]; then
+	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+else
+	echo "Not extracing animation assets"
+fi
 
 vlog "Configure audio library"
 ./lib/audio/configure.py

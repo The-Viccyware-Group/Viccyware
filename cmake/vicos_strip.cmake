@@ -26,6 +26,9 @@ function(vicos_strip)
             ${TARGET_OUT_PATH}
             ${TARGET_OUT_PATH}.full
         COMMAND ${STRIP_CMD} --strip-unneeded ${TARGET_OUT_PATH}
+	#   COMMAND ${OBJCOPY_CMD} --remove-section=.gnu_debuglink
+    #         	${TARGET_OUT_PATH}.full
+    #         	${TARGET_OUT_PATH}
         COMMAND ${OBJCOPY_CMD} --add-gnu-debuglink
             ${TARGET_OUT_PATH}.full
             ${TARGET_OUT_PATH}

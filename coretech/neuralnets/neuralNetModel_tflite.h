@@ -6,8 +6,8 @@
  *
  * Description: Implementation of NeuralNetModel class which wraps TensorFlow Lite.
  *
- *              NOTE: this implementation (.cpp) of this wrapper completely compiles out if
- *              not using the TFLite platform for neural nets.
+ * NOTE: this implementation (.cpp) of this wrapper completely compiles out if
+ *       not using the TFLite platform for neural nets.
  *
  * Copyright: Anki, Inc. 2017
  **/
@@ -16,15 +16,13 @@
 #define __Anki_NeuralNets_NeuralNetModel_TFLite_H__
 
 #include "coretech/neuralnets/neuralNetModel_interface.h"
-
 #include <list>
+#include <memory>
+#include <string>
+#include <json/json.h>
 
-// Forward declaration
-namespace tflite
-{
-  class FlatBufferModel;
-  class Interpreter;
-}
+#include "tensorflow/lite/model.h"
+#include "tensorflow/lite/interpreter.h"
 
 namespace Anki {
 namespace NeuralNets {
@@ -32,27 +30,24 @@ namespace NeuralNets {
 class TFLiteModel : public INeuralNetModel
 {
 public:
-  
   TFLiteModel();
   virtual ~TFLiteModel();
-  
-  virtual Result Detect(Vision::ImageRGB& img, std::list<Vision::SalientPoint>& salientPoints) override;
-  
+
+  virtual Result Detect(Vision::ImageRGB& img,
+                        std::list<Vision::SalientPoint>& salientPoints) override;
+
 protected:
-  
-  virtual Result LoadModelInternal(const std::string& modelPath, const Json::Value& config) override;
-  
+  virtual Result LoadModelInternal(const std::string& modelPath,
+                                   const Json::Value& config) override;
+
 private:
-  
   void ScaleImage(Vision::ImageRGB& img);
-  
+
   std::unique_ptr<tflite::FlatBufferModel> _model;
   std::unique_ptr<tflite::Interpreter>     _interpreter;
-
-}; // class NeuralNetModel
+};
 
 } // namespace NeuralNets
 } // namespace Anki
 
-#endif /* __Anki_Vision_NeuralNetModel_TFLite_H__ */
-
+#endif /* __Anki_NeuralNets_NeuralNetModel_TFLite_H__ */
