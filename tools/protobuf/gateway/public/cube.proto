@@ -18,6 +18,8 @@ syntax = "proto3";
 
 package Anki.Vector.external_interface;
 
+option go_package = "Anki.Vector.external_interface";
+
 import "messages.proto";
 import "response_status.proto";
 

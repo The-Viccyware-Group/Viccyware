@@ -671,8 +671,7 @@ bool BehaviorSleepCycle::WasNightlyReboot() const
   const float currTime_s = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   const bool engineStartedRecently = currTime_s < kSecondsThatMeanRecentBoot;
   const bool wasReboot = OSState::getInstance()->RebootedForMaintenance();
-  const bool isNight = GetBEI().GetSleepTracker().IsNightTime();
-  const bool wasNightlyReboot = engineStartedRecently && wasReboot && isNight;
+  const bool wasNightlyReboot = engineStartedRecently && wasReboot;
 
   return wasNightlyReboot;
 }

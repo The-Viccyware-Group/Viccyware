@@ -67,10 +67,11 @@
 
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
 const std::string OSProject = "Viccyware";
-const std::string OSBranch = "Viccyware-tester";
+const std::string OSBranch = "frog/cdn-dev";
 const std::string OSVerName = "I-Beta 6";
 const std::string Creator = "Built by the Viccyware Team";
 const std::string CreatorWebsite = "vicw.xyz";
+
 
 // Log options
 #define LOG_CHANNEL    "FaceInfoScreenManager"
