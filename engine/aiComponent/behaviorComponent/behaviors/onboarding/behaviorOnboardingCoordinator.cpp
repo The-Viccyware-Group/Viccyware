@@ -335,6 +335,9 @@ void BehaviorOnboardingCoordinator::HandleOnboardingMessageFromApp(const AppToEn
     case AppToEngineTag::kOnboardingMarkCompleteAndExit:
     {
       _dVars.markCompleteAndExitOnNextUpdate = true;
+      // Hack to make it work until we can force websetup
+      // to play wakeup and then exit.
+      _dVars.pendingPhase = OnboardingPhase::WakeUp;
       break;
     }
     case AppToEngineTag::kAppDisconnected:
