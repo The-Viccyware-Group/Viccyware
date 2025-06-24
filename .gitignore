@@ -416,7 +416,6 @@ robot_ip.txt
 victor-packages
 log.txt
 
-robot_sshkey
 ota/out
 ota/ota-server/*.ota
 snowboy/server/main

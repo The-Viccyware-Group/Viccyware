@@ -8,7 +8,7 @@
   },
   "eye_color" :
   {
-    "defaultValue" : 0,
+    "defaultValue" : 5,
     "updateCloudOnChange" : false
   },
   "custom_eye_color" :
