@@ -69,15 +69,15 @@
   },
   {
     "feature": "Alexa",
-    "enabled": true
+    "enabled": false
   },
   {
     "feature": "Alexa_UK",
-    "enabled": true // this must match kAlexaEnabledInUK
+    "enabled": false // this must match kAlexaEnabledInUK
   },
   {
     "feature": "Alexa_AU",
-    "enabled": true // this must match kAlexaEnabledInAU
+    "enabled": false // this must match kAlexaEnabledInAU
   },
   {
     "feature": "HeldInPalm",
