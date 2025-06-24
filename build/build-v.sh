@@ -54,7 +54,15 @@ fi
 cd "$DIR"
 
 if [[ "$(uname -a)" == *"Darwin"* ]]; then
+	echo "Installing required Go stuff..."
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+	export PATH="$PATH:$HOME/go/bin"
 	./project/victor/scripts/victor_build_release.sh "$@"
+	echo
+	echo -e "\033[1;32mComplete.\033[0m"
+	echo
 else
 	mkdir -p build/cache
 	mkdir -p build/gocache
@@ -90,9 +98,8 @@ else
 		-v $(pwd)/build/usercache:/home/$USER/.cache \
 		vic-standalone-builder-6 bash -c \
 		"cd $(pwd) && \
-		./project/victor/scripts/victor_build_release.sh $@"
+		./project/victor/scripts/victor_build_release.sh $@ && \
+		echo && \
+		echo -e \"\e[1;32mComplete.\e[0m\" && \
+		echo"
 fi
-
-echo
-echo -e "\e[1;32mComplete.\e[0m"
-echo
