@@ -1270,30 +1270,30 @@ void FaceInfoScreenManager::DrawMain()
   auto *osstate = OSState::getInstance();
 
   std::string esn = osstate->GetSerialNumberAsString();
-  if(esn.empty())
-  {
+//  if(esn.empty())
+//  {
     // TODO Remove once DVT2s are phased out
     // ESN is 0 assume this is a DVT2 with a fake birthcertificate
     // so look for serial number in "/proc/cmdline"
-    static std::string serialNum = "";
-    if(serialNum == "")
-    {
-      std::ifstream infile("/proc/cmdline");
+    //static std::string serialNum = "";
+//    if(serialNum == "")
+//    {
+//      std::ifstream infile("/proc/cmdline");
 
-      std::string line;
-      while(std::getline(infile, line))
-      {
-        static const std::string kProp = "androidboot.serialno=";
-        size_t index = line.find(kProp);
-        if(index != std::string::npos)
-        {
-          serialNum = line.substr(index + kProp.length(), 8);
-        }
-      }
-      infile.close();
-    }
-    esn =  serialNum;
-  }
+//      std::string line;
+//      while(std::getline(infile, line))
+//      {
+//        static const std::string kProp = "androidboot.serialno=";
+//        size_t index = line.find(kProp);
+//        if(index != std::string::npos)
+//        {
+//          serialNum = line.substr(index + kProp.length(), 8);
+//        }
+//      }
+//      infile.close();
+//    }
+//    esn =  serialNum;
+//  }
 
   std::transform(esn.begin(), esn.end(), esn.begin(),
     [](unsigned char c){ return std::tolower(c); });
