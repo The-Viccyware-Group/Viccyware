@@ -140,6 +140,9 @@ void BehaviorReactToTouchPetting::AlwaysHandleInScope(const EngineToGameEvent& e
         auto touchTimePress = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
         _checkForTransitionTime = touchTimePress + _timeTilTouchCheck;
         _numPressesAtCurrentBlissLevel++;
+
+	// Undoes this commit https://github.com/kercre123/victor/commit/48344a779ad6be70e398b96f3c79db069263e8a1
+        GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Touch_React, AMD_GOT::Behavior);
       } else {
         auto touchTimeRelease = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
         _checkForTimeoutTimeBliss = touchTimeRelease + _blissTimeout;
