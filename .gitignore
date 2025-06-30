@@ -420,5 +420,7 @@ ota/out
 ota/ota-server/*.ota
 snowboy/server/main
 
+# oelinux specific
 oe-logs
 oe-workdir
+cloud/internal/proto/external_interface/
