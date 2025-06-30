@@ -1,0 +1,12 @@
+prefix=/home/kerigan/projects/mpg123/outbuild
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libsyn123
+Description: A signal synthesis library accompanying mpg123
+Requires: 
+Version: 1.33.1-dev
+Libs: -L${libdir} -lsyn123 
+Libs.private: -lm
+Cflags: -I${includedir} 

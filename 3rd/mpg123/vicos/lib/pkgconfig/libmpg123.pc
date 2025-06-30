@@ -1,11 +1,12 @@
-prefix=/Users/build/buildAgent/work/8a03c47c0838b1c1/dist/mpg123/vicos
-exec_prefix=/Users/build/buildAgent/work/8a03c47c0838b1c1/dist/mpg123/vicos
+prefix=/home/kerigan/projects/mpg123/outbuild
+exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
 Name: libmpg123
 Description: An optimised MPEG Audio decoder
 Requires: 
-Version: 1.25.10
+Version: 1.33.1-dev
 Libs: -L${libdir} -lmpg123 
+Libs.private: -lm 
 Cflags: -I${includedir} 

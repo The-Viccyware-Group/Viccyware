@@ -1,7 +1,7 @@
 /*
-	libmpg123: MPEG Audio Decoder library (version 1.25.10)
+	libmpg123: MPEG Audio Decoder library
 
-	copyright 1995-2015 by the mpg123 project
+	copyright 1995-2023 by the mpg123 project
 	free software under the terms of the LGPL 2.1
 	see COPYING and AUTHORS files in distribution or http://mpg123.org
 */
@@ -9,15 +9,21 @@
 #ifndef MPG123_LIB_H
 #define MPG123_LIB_H
 
-#include <fmt123.h>
+#include "fmt123.h"
 
 /** \file mpg123.h The header file for the libmpg123 MPEG Audio decoder */
 
+/** \defgroup mpg123_h mpg123 header general settings and notes
+ * @{
+ */
+
 /** A macro to check at compile time which set of API functions to expect.
- * This should be incremented at least each time a new symbol is added
+ * This must be incremented at least each time a new symbol is added
  * to the header.
  */
-#define MPG123_API_VERSION 44
+#define MPG123_API_VERSION 49
+/** library patch level at client build time */
+#define MPG123_PATCHLEVEL  3
 
 #ifndef MPG123_EXPORT
 /** Defines needed for MS Visual Studio(tm) DLL builds.
@@ -41,37 +47,120 @@
 #endif
 #endif
 
-/* This is for Visual Studio, so this header works as distributed in the binary downloads */
-#if defined(_MSC_VER) && !defined(MPG123_DEF_SSIZE_T)
-#define MPG123_DEF_SSIZE_T
-#include <stddef.h>
-typedef ptrdiff_t ssize_t;
+/** \page enumapi About enum API
+ *
+ * Earlier versions of libmpg123 put enums into public API calls,
+ * which is not exactly safe. There are ABI rules, but you can use
+ * compiler switches to change the sizes of enums. It is safer not
+ * to have them in API calls. Thus, the default is to remap calls and
+ * structs to variants that use plain ints. Define MPG123_ENUM_API to
+ * prevent that remapping.
+ *
+ * You might want to define this to increase the chance of your binary
+ * working with an older version of the library. But if that is your goal,
+ * you should better build with an older version to begin with.
+ *
+ * You can avoid renamed symbols by using the non-enum names directly:
+ *
+ * - mpg123_param2()
+ * - mpg123_getparam2()
+ * - mpg123_feature2()
+ * - mpg123_eq2()
+ * - mpg123_geteq2()
+ * - mpg123_frameinfo2()
+ * - mpg123_info2()
+ * - mpg123_getstate2()
+ * - mpg123_enc_from_id3_2()
+ * - mpg123_store_utf8_2()
+ * - mpg123_par2()
+ * - mpg123_getpar2()
+ */
+#ifndef MPG123_ENUM_API
+
+#define mpg123_param        mpg123_param2
+#define mpg123_getparam     mpg123_getparam2
+#define mpg123_feature      mpg123_feature2
+#define mpg123_eq           mpg123_eq2
+#define mpg123_geteq        mpg123_geteq2
+#define mpg123_frameinfo    mpg123_frameinfo2
+#define mpg123_info         mpg123_info2
+#define mpg123_getstate     mpg123_getstate2
+#define mpg123_enc_from_id3 mpg123_enc_from_id3_2
+#define mpg123_store_utf8   mpg123_store_utf8_2
+#define mpg123_par          mpg123_par2
+#define mpg123_getpar       mpg123_getpar2
+
 #endif
 
-#ifndef MPG123_NO_CONFIGURE /* Enable use of this file without configure. */
-#include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifndef MPG123_PORTABLE_API
 #include <sys/types.h>
+/** A little hack to help MSVC not having ssize_t. */
+#ifdef _MSC_VER
+typedef ptrdiff_t mpg123_ssize_t;
+#else
+typedef ssize_t mpg123_ssize_t;
+#endif
+#endif
 
-/* Simplified large file handling.
-	I used to have a check here that prevents building for a library with conflicting large file setup
-	(application that uses 32 bit offsets with library that uses 64 bits).
-	While that was perfectly fine in an environment where there is one incarnation of the library,
-	it hurt GNU/Linux and Solaris systems with multilib where the distribution fails to provide the
-	correct header matching the 32 bit library (where large files need explicit support) or
-	the 64 bit library (where there is no distinction).
 
-	New approach: When the app defines _FILE_OFFSET_BITS, it wants non-default large file support,
-	and thus functions with added suffix (mpg123_open_64).
-	Any mismatch will be caught at link time because of the _FILE_OFFSET_BITS setting used when
-	building libmpg123. Plus, there's dual mode large file support in mpg123 since 1.12 now.
-	Link failure is not the expected outcome of any half-sane usage anymore.
+/** \page lfs Handling of large file offsets
+ *
+ * When client code defines _FILE_OFFSET_BITS, it wants non-default large file
+ * support, and thus functions with added suffix (mpg123_open_64). The default
+ * library build provides wrapper and alias functions to accomodate client code
+ * variations (dual-mode library like glibc).
+ *
+ * Client code can definie MPG123_NO_LARGENAME and MPG123_LARGESUFFIX,
+ * respectively, for disabling or enforcing the suffixes. You should *not* do
+ * this, though, unless you *really* want to deal with symbol ABI yourself.
+ * If explicit usage of 64 bit offsets is desired, the int64_t API
+ * consisting of functions with 64 suffix without underscore, notably
+ * mpg123_reader64(), can be used since API version 48 (mpg123 1.32). A matching
+ * mpg123_open64(), stripped-down mpg123_open_handle_64() is present since API
+ * version 49 (mpg123 1.33). 
+ *
+ * When in doubt, use the explicit 64 bit functions and avoid off_t in the API.
+ * You can define MPG123_PORTABLE_API to ensure that. That being said, if you
+ * and your compiler do not have problems with the	concept of off_t, just use
+ * the normal AP like the I/O API of the standard C library. Both 32 and 64 bit
+ * versions of functions will be present where appropriate.
+ *
+ * If your toolchain enforces _FILE_OFFSET_BITS also during build of libmpg123,
+ * only that setting will be supported for client code.
+ */
 
-	More complication: What about client code defining _LARGEFILE64_SOURCE? It might want direct access to the _64 functions, along with the ones without suffix. Well, that's possible now via defining MPG123_NO_LARGENAME and MPG123_LARGESUFFIX, respectively, for disabling or enforcing the suffix names.
-*/
-
-/*
-	Now, the renaming of large file aware functions.
-	By default, it appends underscore _FILE_OFFSET_BITS (so, mpg123_seek_64 for mpg123_seek), if _FILE_OFFSET_BITS is defined. You can force a different suffix via MPG123_LARGESUFFIX (that must include the underscore), or you can just disable the whole mess by defining MPG123_NO_LARGENAME.
+#ifndef MPG123_PORTABLE_API
+/** \page lfs_names Renaming of functions for largefile support
+ *
+ * Now, the renaming of large file aware functions.
+ * By default, it appends underscore _FILE_OFFSET_BITS (so, mpg123_seek_64() for mpg123_seek()),
+ * if _FILE_OFFSET_BITS is defined. These are the affected API functions:
+ *
+ * - mpg123_open_fixed()
+ * - mpg123_open()
+ * - mpg123_open_fd()
+ * - mpg123_open_handle()
+ * - mpg123_framebyframe_decode()
+ * - mpg123_decode_frame()
+ * - mpg123_tell()
+ * - mpg123_tellframe()
+ * - mpg123_tell_stream()
+ * - mpg123_seek()
+ * - mpg123_feedseek()
+ * - mpg123_seek_frame()
+ * - mpg123_timeframe()
+ * - mpg123_index()
+ * - mpg123_set_index()
+ * - mpg123_position()
+ * - mpg123_length()
+ * - mpg123_framelength()
+ * - mpg123_set_filesize()
+ * - mpg123_replace_reader()
+ * - mpg123_replace_reader_handle()
+ * - mpg123_framepos()
 */
 #if (!defined MPG123_NO_LARGENAME) && ((defined _FILE_OFFSET_BITS) || (defined MPG123_LARGESUFFIX))
 
@@ -83,6 +172,7 @@ typedef ptrdiff_t ssize_t;
 #endif
 #define MPG123_LARGENAME(func) MPG123_MACROCAT(func, MPG123_LARGESUFFIX)
 
+#define mpg123_open_fixed   MPG123_LARGENAME(mpg123_open_fixed)
 #define mpg123_open         MPG123_LARGENAME(mpg123_open)
 #define mpg123_open_fd      MPG123_LARGENAME(mpg123_open_fd)
 #define mpg123_open_handle  MPG123_LARGENAME(mpg123_open_handle)
@@ -106,8 +196,9 @@ typedef ptrdiff_t ssize_t;
 #define mpg123_framepos MPG123_LARGENAME(mpg123_framepos)
 
 #endif /* largefile hackery */
+#endif
 
-#endif /* MPG123_NO_CONFIGURE */
+/** @} */
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,15 +221,41 @@ struct mpg123_handle_struct;
  */
 typedef struct mpg123_handle_struct mpg123_handle;
 
-/** Function to initialise the mpg123 library. 
- *	This function is not thread-safe. Call it exactly once per process, before any other (possibly threaded) work with the library.
+/** Get version of the mpg123 distribution this library build came with.
+ * (optional means non-NULL)
+ * \param major optional address to store major version number
+ * \param minor optional address to store minor version number
+ * \param patch optional address to store patchlevel version number
+ * \return full version string (like "1.2.3-beta4 (experimental)")
+ */
+const char *mpg123_distversion(unsigned int *major, unsigned int *minor, unsigned int *patch);
+
+/** Get API version of library build.
+ * \param patch optional address to store patchlevel
+ * \return API version of library
+ */
+unsigned int mpg123_libversion(unsigned int *patch);
+
+/** Useless no-op that used to do initialization work.
+ *
+ * For API version before 46 (mpg123 1.27.0), you had to ensure to have
+ * this called once before creating a handle. To be pure, this had to
+ * happen in a single-threaded context, too (while in practice, there was no
+ * harm done possibly racing to compute the same numbers again).
+ *
+ * Now this function really does nothing anymore. The only reason to call
+ * it is to be compatible with old versions of the library that still require
+ * it.
  *
  *	\return MPG123_OK if successful, otherwise an error number.
  */
 MPG123_EXPORT int mpg123_init(void);
 
-/** Function to close down the mpg123 library. 
- *	This function is not thread-safe. Call it exactly once per process, before any other (possibly threaded) work with the library. */
+/** Superfluous Function to close down the mpg123 library.
+ * This was created with the thought that there sometime will be cleanup code
+ * to be run after library use. This never materialized. You can forget about
+ * this function and it is only here for old programs that do call it.
+ */
 MPG123_EXPORT void mpg123_exit(void);
 
 /** Create a handle with optional choice of decoder (named by a string, see mpg123_decoders() or mpg123_supported_decoders()).
@@ -156,6 +273,13 @@ MPG123_EXPORT mpg123_handle *mpg123_new(const char* decoder, int *error);
  */
 MPG123_EXPORT void mpg123_delete(mpg123_handle *mh);
 
+/** Free plain memory allocated within libmpg123.
+ *  This is for library users that are not sure to use the same underlying
+ *  memory allocator as libmpg123. It is just a wrapper over free() in
+ *  the underlying C library.
+ */
+MPG123_EXPORT void mpg123_free(void *ptr);
+
 /** Enumeration of the parameters types that it is possible to set/get. */
 enum mpg123_parms
 {
@@ -169,7 +293,8 @@ enum mpg123_parms
 	MPG123_UPSPEED,        /**< play every Nth frame (integer) */
 	MPG123_START_FRAME,    /**< start with this frame (skip frames before that, integer) */ 
 	MPG123_DECODE_FRAMES,  /**< decode only this number of frames (integer) */
-	MPG123_ICY_INTERVAL,   /**< stream contains ICY metadata with this interval (integer) */
+	MPG123_ICY_INTERVAL,   /**< Stream contains ICY metadata with this interval (integer).
+	                            Make sure to set this _before_ opening a stream.*/
 	MPG123_OUTSCALE,       /**< the scale for output samples (amplitude - integer or float according to mpg123 output format, normally integer) */
 	MPG123_TIMEOUT,        /**< timeout for reading from a stream (not supported on win32, integer) */
 	MPG123_REMOVE_FLAGS,   /**< remove some flags (inverse of MPG123_ADD_FLAGS, integer) */
@@ -178,6 +303,11 @@ enum mpg123_parms
 	,MPG123_PREFRAMES /**< Decode/ignore that many frames in advance for layer 3. This is needed to fill bit reservoir after seeking, for example (but also at least one frame in advance is needed to have all "normal" data for layer 3). Give a positive integer value, please.*/
 	,MPG123_FEEDPOOL  /**< For feeder mode, keep that many buffers in a pool to avoid frequent malloc/free. The pool is allocated on mpg123_open_feed(). If you change this parameter afterwards, you can trigger growth and shrinkage during decoding. The default value could change any time. If you care about this, then set it. (integer) */
 	,MPG123_FEEDBUFFER /**< Minimal size of one internal feeder buffer, again, the default value is subject to change. (integer) */
+	,MPG123_FREEFORMAT_SIZE /**< Tell the parser a free-format frame size to
+	 * avoid read-ahead to get it. A value of -1 (default) means that the parser
+	 * will determine it. The parameter value is applied during decoder setup
+	 * for a freshly opened stream only.
+	 */
 };
 
 /** Flag bits for MPG123_FLAGS, use the usual binary or to combine. */
@@ -208,6 +338,37 @@ enum mpg123_param_flags
 	 *  the stream is assumed as non-seekable unless overridden.
 	 */
 	,MPG123_FORCE_SEEKABLE = 0x40000 /**< 19th bit: Force the stream to be seekable. */
+	,MPG123_STORE_RAW_ID3  = 0x80000 /**< store raw ID3 data (even if skipping) */
+	,MPG123_FORCE_ENDIAN   = 0x100000 /**< Enforce endianess of output samples.
+	 *  This is not reflected in the format codes. If this flag is set along with
+	 *  MPG123_BIG_ENDIAN, MPG123_ENC_SIGNED16 means s16be, without
+	 *  MPG123_BIG_ENDIAN, it means s16le. Normal operation without
+	 *  MPG123_FORCE_ENDIAN produces output in native byte order.
+	 */
+	,MPG123_BIG_ENDIAN     = 0x200000 /**< Choose big endian instead of little. */
+	,MPG123_NO_READAHEAD   = 0x400000 /**< Disable read-ahead in parser. If
+	 * you know you provide full frames to the feeder API, this enables
+	 * decoder output from the first one on, instead of having to wait for
+	 * the next frame to confirm that the stream is healthy. It also disables
+	 * free format support unless you provide a frame size using
+	 * MPG123_FREEFORMAT_SIZE.
+	 */
+	,MPG123_FLOAT_FALLBACK = 0x800000 /**< Consider floating point output encoding only after
+	 * trying other (possibly downsampled) rates and encodings first. This is to
+	 * support efficient playback where floating point output is only configured for
+	 * an external resampler, bypassing that resampler when the desired rate can
+	 * be produced directly. This is enabled by default to be closer to older versions
+	 * of libmpg123 which did not enable float automatically at all. If disabled,
+	 * float is considered after the 16 bit default and higher-bit integer encodings
+	 * for any rate. */
+	,MPG123_NO_FRANKENSTEIN = 0x1000000 /**< Disable support for Frankenstein streams
+	 * (different MPEG streams stiched together). Do not accept serious change of MPEG
+	 * header inside a single stream. With this flag, the audio output format cannot
+	 * change during decoding unless you open a new stream. This also stops decoding
+	 * after an announced end of stream (Info header contained a number of frames
+	 * and this number has been reached). This makes your MP3 files behave more like
+	 * ordinary media files with defined structure, rather than stream dumps with
+	 * some sugar. */
 };
 
 /** choices for MPG123_RVA */
@@ -219,8 +380,12 @@ enum mpg123_param_rva
 	,MPG123_RVA_MAX   = MPG123_RVA_ALBUM /**< The maximum RVA code, may increase in future. */
 };
 
-/** Set a specific parameter, for a specific mpg123_handle, using a parameter 
- *  type key chosen from the mpg123_parms enumeration, to the specified value.
+#ifdef MPG123_ENUM_API
+/** Set a specific parameter on a handle.
+ *
+ *  Note that this name is mapped to mpg123_param2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mh handle
  *  \param type parameter choice
  *  \param value integer value
@@ -229,9 +394,28 @@ enum mpg123_param_rva
  */
 MPG123_EXPORT int mpg123_param( mpg123_handle *mh
 ,	enum mpg123_parms type, long value, double fvalue );
+#endif
 
-/** Get a specific parameter, for a specific mpg123_handle. 
- *  See the mpg123_parms enumeration for a list of available parameters.
+/** Set a specific parameter on a handle. No enums.
+ *
+ *  This is actually called instead of mpg123_param()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param mh handle
+ *  \param type parameter choice (from enum #mpg123_parms)
+ *  \param value integer value
+ *  \param fvalue floating point value
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_param2( mpg123_handle *mh
+,	int type, long value, double fvalue );
+
+#ifdef MPG123_ENUM_API
+/** Get a specific parameter from a handle.
+ *
+ *  Note that this name is mapped to mpg123_getparam2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mh handle
  *  \param type parameter choice
  *  \param value integer value return address
@@ -240,6 +424,21 @@ MPG123_EXPORT int mpg123_param( mpg123_handle *mh
  */
 MPG123_EXPORT int mpg123_getparam( mpg123_handle *mh
 ,	enum mpg123_parms type, long *value, double *fvalue );
+#endif
+
+/** Get a specific parameter from a handle. No enums.
+ *
+ *  This is actually called instead of mpg123_getparam() unless MPG123_ENUM_API
+ *  is defined.
+ *
+ *  \param mh handle
+ *  \param type parameter choice (from enum #mpg123_parms)
+ *  \param value integer value return address
+ *  \param fvalue floating point value return address
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_getparam2( mpg123_handle *mh
+,	int type, long *value, double *fvalue );
 
 /** Feature set available for query with mpg123_feature. */
 enum mpg123_feature_set
@@ -259,15 +458,34 @@ enum mpg123_feature_set
 	,MPG123_FEATURE_PARSE_ICY            /**< ICY support                  */
 	,MPG123_FEATURE_TIMEOUT_READ         /**< Reader with timeout (network). */
 	,MPG123_FEATURE_EQUALIZER            /**< tunable equalizer */
+	,MPG123_FEATURE_MOREINFO             /**< more info extraction (for frame analyzer) */
+	,MPG123_FEATURE_OUTPUT_FLOAT32      /**< 32 bit float output */
+	,MPG123_FEATURE_OUTPUT_FLOAT64      /**< 64 bit float output (as of now: never!) */
 };
 
+#ifdef MPG123_ENUM_API
 /** Query libmpg123 features.
+ *
+ *  Note that this name is mapped to mpg123_feature2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param key feature selection
  *  \return 1 for success, 0 for unimplemented functions
  */
 MPG123_EXPORT int mpg123_feature(const enum mpg123_feature_set key);
+#endif
 
-/* @} */
+/** Query libmpg123 features. No enums.
+ *
+ *  This is actually called instead of mpg123_feature() unless MPG123_ENUM_API
+ *  is defined.
+ *
+ *  \param key feature selection (from enum #mpg123_feature_set)
+ *  \return 1 for success, 0 for unimplemented functions
+ */
+MPG123_EXPORT int mpg123_feature2(int key);
+
+/** @} */
 
 
 /** \defgroup mpg123_error mpg123 error handling
@@ -332,7 +550,7 @@ enum mpg123_errors
 	MPG123_NO_TIMEOUT,		/**< Build does not support stream timeouts. */
 	MPG123_BAD_FILE,		/**< File access error. */
 	MPG123_NO_SEEK,			/**< Seek not supported by stream. */
-	MPG123_NO_READER,		/**< No stream opened. */
+	MPG123_NO_READER,		/**< No stream opened or no reader callback setup. */
 	MPG123_BAD_PARS,		/**< Bad parameter handle. */
 	MPG123_BAD_INDEX_PAR,	/**< Bad parameters to mpg123_index() and mpg123_set_index() */
 	MPG123_OUT_OF_SYNC,	/**< Lost track in bytestream and did not try to resync. */
@@ -352,6 +570,7 @@ enum mpg123_errors
 	,MPG123_BAD_CUSTOM_IO /**< Custom I/O not prepared. */
 	,MPG123_LFS_OVERFLOW /**< Offset value overflow during translation of large file API calls -- your client program cannot handle that large file. */
 	,MPG123_INT_OVERFLOW /**< Some integer overflow. */
+	,MPG123_BAD_FLOAT /**< Floating-point computations work not as expected. */
 };
 
 /** Look up error strings given integer code.
@@ -375,7 +594,7 @@ MPG123_EXPORT const char* mpg123_strerror(mpg123_handle *mh);
  */
 MPG123_EXPORT int mpg123_errcode(mpg123_handle *mh);
 
-/*@}*/
+/** @} */
 
 
 /** \defgroup mpg123_decoder mpg123 decoder selection
@@ -392,6 +611,10 @@ MPG123_EXPORT int mpg123_errcode(mpg123_handle *mh);
 MPG123_EXPORT const char **mpg123_decoders(void);
 
 /** Get supported decoder list.
+ *
+ * This possibly writes to static storage in the library, so avoid
+ * calling concurrently, please.
+ *
  *  \return NULL-terminated array of the decoders supported by the CPU (plain 8bit ASCII)
  */
 MPG123_EXPORT const char **mpg123_supported_decoders(void);
@@ -414,14 +637,19 @@ MPG123_EXPORT int mpg123_decoder(mpg123_handle *mh, const char* decoder_name);
  */
 MPG123_EXPORT const char* mpg123_current_decoder(mpg123_handle *mh);
 
-/*@}*/
+/** @} */
 
 
 /** \defgroup mpg123_output mpg123 output audio format 
  *
  * Functions to get and select the format of the decoded audio.
  *
- * Before you dive in, please be warned that you might get confused by this. This seems to happen a lot, therefore I am trying to explain in advance.
+ * Before you dive in, please be warned that you might get confused by this.
+ * This seems to happen a lot, therefore I am trying to explain in advance.
+ * If you do feel confused and just want to decode your normal MPEG audio files that
+ * don't alter properties in the middle, just use mpg123_open_fixed() with a fixed encoding
+ * and channel count and forget about a matrix of audio formats. If you want to get funky,
+ * read ahead ...
  *
  * The mpg123 library decides what output format to use when encountering the first frame in a stream, or actually any frame that is still valid but differs from the frames before in the prompted output format. At such a deciding point, an internal table of allowed encodings, sampling rates and channel setups is consulted. According to this table, an output format is chosen and the decoding engine set up accordingly (including optimized routines for different output formats). This might seem unusual but it just follows from the non-existence of "MPEG audio files" with defined overall properties. There are streams, streams are concatenations of (semi) independent frames. We store streams on disk and call them "MPEG audio files", but that does not change their nature as the decoder is concerned (the LAME/Xing header for gapless decoding makes things interesting again).
  *
@@ -443,7 +671,9 @@ enum mpg123_channelcount
 
 /** An array of supported standard sample rates
  *  These are possible native sample rates of MPEG audio files.
- *  You can still force mpg123 to resample to a different one, but by default you will only get audio in one of these samplings.
+ *  You can still force mpg123 to resample to a different one, but by
+ *  default you will only get audio in one of these samplings.
+ *  This list is in ascending order.
  *  \param list Store a pointer to the sample rates array there.
  *  \param number Store the number of sample rates there. */
 MPG123_EXPORT void mpg123_rates(const long **list, size_t *number);
@@ -480,6 +710,19 @@ MPG123_EXPORT int mpg123_format_all(mpg123_handle *mh);
  *  \param encodings A combination of accepted encodings for rate and channels, p.ex MPG123_ENC_SIGNED16 | MPG123_ENC_ULAW_8 (or 0 for no support). Please note that some encodings may not be supported in the library build and thus will be ignored here.
  *  \return MPG123_OK on success, MPG123_ERR if there was an error. */
 MPG123_EXPORT int mpg123_format( mpg123_handle *mh
+,	long rate, int channels, int encodings );
+
+/** Set the audio format support of a mpg123_handle in detail:
+ *  \param mh handle
+ *  \param rate The sample rate value (in Hertz). Special value 0 means
+ *     all rates (the reason for this variant of mpg123_format()).
+ *  \param channels A combination of MPG123_STEREO and MPG123_MONO.
+ *  \param encodings A combination of accepted encodings for rate and channels,
+ *     p.ex MPG123_ENC_SIGNED16 | MPG123_ENC_ULAW_8 (or 0 for no support).
+ *     Please note that some encodings may not be supported in the library build
+ *     and thus will be ignored here.
+ *  \return MPG123_OK on success, MPG123_ERR if there was an error. */
+MPG123_EXPORT int mpg123_format2( mpg123_handle *mh
 ,	long rate, int channels, int encodings );
 
 /** Check to see if a specific format at a specific rate is supported 
@@ -520,7 +763,7 @@ MPG123_EXPORT int mpg123_getformat( mpg123_handle *mh
 MPG123_EXPORT int mpg123_getformat2( mpg123_handle *mh
 ,	long *rate, int *channels, int *encoding, int clear_flag );
 
-/*@}*/
+/** @} */
 
 
 /** \defgroup mpg123_input mpg123 file input and decoding
@@ -530,12 +773,64 @@ MPG123_EXPORT int mpg123_getformat2( mpg123_handle *mh
  * @{
  */
 
-/* reading samples / triggering decoding, possible return values: */
-/** Enumeration of the error codes returned by libmpg123 functions. */
+#ifndef MPG123_PORTABLE_API
+/** Open a simple MPEG file with fixed properties.
+ *
+ *  This function shall simplify the common use case of a plain MPEG
+ *  file on disk that you want to decode, with one fixed sample
+ *  rate and channel count, and usually a length defined by a Lame/Info/Xing
+ *  tag. It will:
+ *
+ *  - set the MPG123_NO_FRANKENSTEIN flag
+ *  - set up format support according to given parameters,
+ *  - open the file,
+ *  - query audio format,
+ *  - fix the audio format support table to ensure the format stays the same,
+ *  - call mpg123_scan() if there is no header frame to tell the track length.
+ *
+ *  From that on, you can call mpg123_getformat() for querying the sample
+ *  rate (and channel count in case you allowed both) and mpg123_length()
+ *  to get a pretty safe number for the duration.
+ *  Only the sample rate is left open as that indeed is a fixed property of
+ *  MPEG files. You could set MPG123_FORCE_RATE beforehand, but that may trigger
+ *  low-quality resampling in the decoder, only do so if in dire need.
+ *  The library will convert mono files to stereo for you, and vice versa.
+ *  If any constraint cannot be satisified (most likely because of a non-default
+ *  build of libmpg123), you get MPG123_ERR returned and can query the detailed
+ *  cause from the handle. Only on MPG123_OK there will an open file that you
+ *  then close using mpg123_close(), or implicitly on mpg123_delete() or the next
+ *  call to open another file.
+ *
+ *  So, for your usual CD rip collection, you could use
+ *
+ *    mpg123_open_fixed(mh, path, MPG123_STEREO, MPG123_ENC_SIGNED_16)
+ *
+ *  and be happy calling mpg123_getformat() to verify 44100 Hz rate, then just
+ *  playing away with mpg123_read(). The occasional mono file, or MP2 file,
+ *  will also be decoded without you really noticing. Just the speed could be
+ *  wrong if you do not care about sample rate at all.
+ *  \param mh handle
+ *  \param path filesystem path (see mpg123_open())
+ *  \param channels allowed channel count, either 1 (MPG123_MONO) or
+ *    2 (MPG123_STEREO), or bitwise or of them, but then you're halfway back to
+ *    calling mpg123_format() again;-)
+ *  \param encoding a definite encoding from enum mpg123_enc_enum
+ *    or a bitmask like for mpg123_format(), defeating the purpose somewhat
+ */
+MPG123_EXPORT int mpg123_open_fixed(mpg123_handle *mh, const char *path
+,	int channels, int encoding);
 
 /** Open and prepare to decode the specified file by filesystem path.
  *  This does not open HTTP urls; libmpg123 contains no networking code.
  *  If you want to decode internet streams, use mpg123_open_fd() or mpg123_open_feed().
+ *
+ *  The path parameter usually is just a string that is handed to the underlying
+ *  OS routine for opening, treated as a blob of binary data. On platforms
+ *  where encoding needs to be involved, something like _wopen() is called
+ *  underneath and the path argument to libmpg123 is assumed to be encoded in UTF-8.
+ *  So, if you have to ask yourself which encoding is needed, the answer is
+ *  UTF-8, which also fits any sane modern install of Unix-like systems.
+ *
  *  \param mh handle
  *  \param path filesystem path
  *  \return MPG123_OK on success
@@ -551,16 +846,66 @@ MPG123_EXPORT int mpg123_open(mpg123_handle *mh, const char *path);
 MPG123_EXPORT int mpg123_open_fd(mpg123_handle *mh, int fd);
 
 /** Use an opaque handle as bitstream input. This works only with the
- *  replaced I/O from mpg123_replace_reader_handle()!
- *  mpg123_close() will call the cleanup callback for your handle (if you gave one).
+ *  replaced I/O from mpg123_replace_reader_handle() or mpg123_reader64()!
+ *  mpg123_close() will call the cleanup callback for your non-NULL
+ *  handle (if you gave one).
+ *  Note that this used to be usable with MPG123_PORTABLE_API defined in
+ *  mpg123 1.32.x and was in fact the only entry point for handle I/O.
+ *  Since mpg123 1.33.0 and API version 49, there is
+ *  mpg123_open_handle64() for the portable case and has to be used
+ *  instead of this function here, even if it _would_ work just fine,
+ *  the inclusion of a largefile-renamed symbol in the portable set was wrong.
+ *
  *  \param mh handle
  *  \param iohandle your handle
  *  \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_open_handle(mpg123_handle *mh, void *iohandle);
+#endif
+
+/** Open and prepare to decode the specified file by filesystem path.
+ *  This works exactly like mpg123_open() in modern libmpg123, see there
+ *  for more description. This name is not subject to largefile symbol renaming.
+ *  You can also use it with MPG123_PORTABLE_API.
+ *
+ *  \param mh handle
+ *  \param path filesystem path of your resource
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_open64(mpg123_handle *mh, const char *path);
+
+/** Open a simple MPEG file with fixed properties.
+ *  This is the same as mpg123_open_fixed(), just with a stable
+ *  symbol name for int64_t portable API.
+ *
+ *  \param mh handle
+ *  \param path filesystem path (see mpg123_open())
+ *  \param channels allowed channel count, either 1 (MPG123_MONO) or
+ *    2 (MPG123_STEREO), or bitwise or of them, but then you're halfway back to
+ *    calling mpg123_format() again;-)
+ *  \param encoding a definite encoding from enum mpg123_enc_enum
+ *    or a bitmask like for mpg123_format(), defeating the purpose somewhat
+ */
+MPG123_EXPORT int mpg123_open_fixed64(mpg123_handle *mh, const char *path
+,	int channels, int encoding);
+
+/** Use an opaque handle as bitstream input. This works only with the
+ *  replaced I/O from mpg123_reader64()!
+ *  mpg123_close() will call the cleanup callback for your non-NULL
+ *  handle (if you gave one).
+ *  This is a simplified variant of mpg123_open_handle() that only
+ *  supports the int64_t API, available with MPG123_PORTABLE_API.
+ *
+ *  \param mh handle
+ *  \param iohandle your handle
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_open_handle64(mpg123_handle *mh, void *iohandle);
 
 /** Open a new bitstream and prepare for direct feeding
  *  This works together with mpg123_decode(); you are responsible for reading and feeding the input bitstream.
+ *  Also, you are expected to handle ICY metadata extraction yourself. This
+ *  input method does not handle MPG123_ICY_INTERVAL. It does parse ID3 frames, though.
  *  \param mh handle
  *  \return MPG123_OK on success
  */
@@ -573,6 +918,10 @@ MPG123_EXPORT int mpg123_open_feed(mpg123_handle *mh);
 MPG123_EXPORT int mpg123_close(mpg123_handle *mh);
 
 /** Read from stream and decode up to outmemsize bytes.
+ *
+ *  Note: The type of outmemory changed to a void pointer in mpg123 1.26.0
+ *  (API version 45).
+ *
  *  \param mh handle
  *  \param outmemory address of output buffer to write to
  *  \param outmemsize maximum number of bytes to write
@@ -580,7 +929,7 @@ MPG123_EXPORT int mpg123_close(mpg123_handle *mh);
  *  \return MPG123_OK or error/message code
  */
 MPG123_EXPORT int mpg123_read(mpg123_handle *mh
-,	unsigned char *outmemory, size_t outmemsize, size_t *done );
+,	void *outmemory, size_t outmemsize, size_t *done );
 
 /** Feed data for a stream that has been opened with mpg123_open_feed().
  *  It's give and take: You provide the bytestream, mpg123 gives you the decoded samples.
@@ -599,6 +948,10 @@ MPG123_EXPORT int mpg123_feed( mpg123_handle *mh
  *  without taking decoded data.
  *  Think of this function being the union of mpg123_read() and mpg123_feed() (which it actually is, sort of;-).
  *  You can actually always decide if you want those specialized functions in separate steps or one call this one here.
+ *
+ *  Note: The type of outmemory changed to a void pointer in mpg123 1.26.0
+ *  (API version 45).
+ *
  *  \param mh handle
  *  \param inmemory input buffer
  *  \param inmemsize number of input bytes
@@ -609,8 +962,9 @@ MPG123_EXPORT int mpg123_feed( mpg123_handle *mh
  */
 MPG123_EXPORT int mpg123_decode( mpg123_handle *mh
 ,	const unsigned char *inmemory, size_t inmemsize
-,	unsigned char *outmemory, size_t outmemsize, size_t *done );
+,	void *outmemory, size_t outmemsize, size_t *done );
 
+#ifndef MPG123_PORTABLE_API
 /** Decode next MPEG frame to internal buffer
  *  or read a frame and return after setting a new format.
  *  \param mh handle
@@ -633,6 +987,30 @@ MPG123_EXPORT int mpg123_decode_frame( mpg123_handle *mh
  */
 MPG123_EXPORT int mpg123_framebyframe_decode( mpg123_handle *mh
 ,	off_t *num, unsigned char **audio, size_t *bytes );
+#endif /* un-portable API */
+
+/** Decode next MPEG frame to internal buffer
+ *  or read a frame and return after setting a new format.
+ *  \param mh handle
+ *  \param num current frame offset gets stored there
+ *  \param audio This pointer is set to the internal buffer to read the decoded audio from.
+ *  \param bytes number of output bytes ready in the buffer
+ *  \return MPG123_OK or error/message code
+ */
+MPG123_EXPORT int mpg123_decode_frame64( mpg123_handle *mh
+,	int64_t *num, unsigned char **audio, size_t *bytes );
+
+/** Decode current MPEG frame to internal buffer.
+ * Warning: This is experimental API that might change in future releases!
+ * Please watch mpg123 development closely when using it.
+ *  \param mh handle
+ *  \param num last frame offset gets stored there
+ *  \param audio this pointer is set to the internal buffer to read the decoded audio from.
+ *  \param bytes number of output bytes ready in the buffer
+ *  \return MPG123_OK or error/message code
+ */
+MPG123_EXPORT int mpg123_framebyframe_decode64( mpg123_handle *mh
+,	int64_t *num, unsigned char **audio, size_t *bytes );
 
 /** Find, read and parse the next mp3 frame
  * Warning: This is experimental API that might change in future releases!
@@ -660,6 +1038,7 @@ MPG123_EXPORT int mpg123_framebyframe_next(mpg123_handle *mh);
 MPG123_EXPORT int mpg123_framedata( mpg123_handle *mh
 ,	unsigned long *header, unsigned char **bodydata, size_t *bodybytes );
 
+#ifndef MPG123_PORTABLE_API
 /** Get the input position (byte offset in stream) of the last parsed frame.
  *  This can be used for external seek index building, for example.
  *  It just returns the internally stored offset, regardless of validity --
@@ -668,79 +1047,193 @@ MPG123_EXPORT int mpg123_framedata( mpg123_handle *mh
  * \return byte offset in stream
  */
 MPG123_EXPORT off_t mpg123_framepos(mpg123_handle *mh);
+#endif
 
-/*@}*/
+/** Get the 64 bit input position (byte offset in stream) of the last parsed frame.
+ *  This can be used for external seek index building, for example.
+ *  It just returns the internally stored offset, regardless of validity --
+ *  you ensure that a valid frame has been parsed before!
+ * \param mh handle
+ * \return byte offset in stream
+ */
+MPG123_EXPORT int64_t mpg123_framepos64(mpg123_handle *mh);
+
+/** @} */
 
 
 /** \defgroup mpg123_seek mpg123 position and seeking
  *
  * Functions querying and manipulating position in the decoded audio bitstream.
- * The position is measured in decoded audio samples, or MPEG frame offset for the specific functions.
- * If gapless code is in effect, the positions are adjusted to compensate the skipped padding/delay - meaning, you should not care about that at all and just use the position defined for the samples you get out of the decoder;-)
+ * The position is measured in decoded audio samples or MPEG frame offset for
+ * the specific functions. The term sample refers to a group of samples for
+ * multiple channels, normally dubbed PCM frames. The latter term is
+ * avoided here because frame means something different in the context of MPEG
+ * audio. Since all samples of a PCM frame occur at the same time, there is only
+ * very limited ambiguity when talking about playback offset, as counting each
+ * channel sample individually does not make sense.
+ *
+ * If gapless code is in effect, the positions are adjusted to compensate the
+ * skipped padding/delay - meaning, you should not care about that at all and
+ * just use the position defined for the samples you get out of the decoder;-)
  * The general usage is modelled after stdlib's ftell() and fseek().
- * Especially, the whence parameter for the seek functions has the same meaning as the one for fseek() and needs the same constants from stdlib.h: 
+ * Especially, the whence parameter for the seek functions has the same meaning
+ * as the one for fseek() and needs the same constants from stdlib.h: 
+ *
  * - SEEK_SET: set position to (or near to) specified offset
  * - SEEK_CUR: change position by offset from now
  * - SEEK_END: set position to offset from end
  *
- * Note that sample-accurate seek only works when gapless support has been enabled at compile time; seek is frame-accurate otherwise.
- * Also, really sample-accurate seeking (meaning that you get the identical sample value after seeking compared to plain decoding up to the position) is only guaranteed when you do not mess with the position code by using MPG123_UPSPEED, MPG123_DOWNSPEED or MPG123_START_FRAME. The first two mainly should cause trouble with NtoM resampling, but in any case with these options in effect, you have to keep in mind that the sample offset is not the same as counting the samples you get from decoding since mpg123 counts the skipped samples, too (or the samples played twice only once)!
- * Short: When you care about the sample position, don't mess with those parameters;-)
- * Also, seeking is not guaranteed to work for all streams (underlying stream may not support it).
- * And yet another caveat: If the stream is concatenated out of differing pieces (Frankenstein stream), seeking may suffer, too.
+ * Since API version 48 (mpg123 1.32), the offset given with SEEK_END is always
+ * taken to be  negative in the terms of standard lseek(). You can only seek from
+ * the end towards the beginning. All earlier versions had the sign wrong, positive
+ * was towards the beginning, negative past the end (which results in error,
+ * anyway).
+ *
+ * Note that sample-accurate seek only works when gapless support has been
+ * enabled at compile time; seek is frame-accurate otherwise.
+ * Also, really sample-accurate seeking (meaning that you get the identical
+ * sample value after seeking compared to plain decoding up to the position)
+ * is only guaranteed when you do not mess with the position code by using
+ * #MPG123_UPSPEED, #MPG123_DOWNSPEED or #MPG123_START_FRAME. The first two mainly
+ * should cause trouble with NtoM resampling, but in any case with these options
+ * in effect, you have to keep in mind that the sample offset is not the same
+ * as counting the samples you get from decoding since mpg123 counts the skipped
+ * samples, too (or the samples played twice only once)!
+ *
+ * Short: When you care about the sample position, don't mess with those
+ * parameters;-)
+ *
+ * Streams may be openend in ways that do not support seeking. Also, consider
+ * the effect of #MPG123_FUZZY.
  *
  * @{
  */
 
+#ifndef MPG123_PORTABLE_API
 /** Returns the current position in samples.
- *  On the next successful read, you'd get that sample.
+ *  On the next successful read, you'd get audio data with that offset.
  *  \param mh handle
- *  \return sample offset or MPG123_ERR (null handle)
+ *  \return sample (PCM frame) offset or MPG123_ERR (null handle)
  */
 MPG123_EXPORT off_t mpg123_tell(mpg123_handle *mh);
+#endif
 
+/** Returns the current 64 bit position in samples.
+ *  On the next successful read, you'd get audio data with that offset.
+ *  \param mh handle
+ *  \return sample (PCM frame) offset or MPG123_ERR (null handle)
+ */
+MPG123_EXPORT int64_t mpg123_tell64(mpg123_handle *mh);
+
+#ifndef MPG123_PORTABLE_API
 /** Returns the frame number that the next read will give you data from.
  *  \param mh handle
  *  \return frame offset or MPG123_ERR (null handle)
  */
 MPG123_EXPORT off_t mpg123_tellframe(mpg123_handle *mh);
+#endif
 
+/** Returns the 64 bit frame number that the next read will give you data from.
+ *  \param mh handle
+ *  \return frame offset or MPG123_ERR (null handle)
+ */
+MPG123_EXPORT int64_t mpg123_tellframe64(mpg123_handle *mh);
+
+#ifndef MPG123_PORTABLE_API
 /** Returns the current byte offset in the input stream.
  *  \param mh handle
  *  \return byte offset or MPG123_ERR (null handle)
  */
 MPG123_EXPORT off_t mpg123_tell_stream(mpg123_handle *mh);
+#endif
 
+/** Returns the current 64 bit byte offset in the input stream.
+ *  \param mh handle
+ *  \return byte offset or MPG123_ERR (null handle)
+ */
+MPG123_EXPORT int64_t mpg123_tell_stream64(mpg123_handle *mh);
+
+
+#ifndef MPG123_PORTABLE_API
 /** Seek to a desired sample offset.
  *  Usage is modelled afer the standard lseek().
  * \param mh handle
- * \param sampleoff offset in PCM samples
+ * \param sampleoff offset in samples (PCM frames)
  * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative since API
+ *        version 48, was inverted from lseek() usage since ever before.)
  * \return The resulting offset >= 0 or error/message code
  */
 MPG123_EXPORT off_t mpg123_seek( mpg123_handle *mh
 ,	off_t sampleoff, int whence );
+#endif
 
-/** Seek to a desired sample offset in data feeding mode. 
- *  This just prepares things to be right only if you ensure that the next chunk of input data will be from input_offset byte position.
- *  \param mh handle
- *  \param sampleoff offset in PCM samples
- *  \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
- *  \param input_offset The position it expects to be at the 
- *                      next time data is fed to mpg123_decode().
- *  \return The resulting offset >= 0 or error/message code */
+/** Seek to a desired 64 bit sample offset.
+ *  Usage is modelled afer the standard lseek().
+ * \param mh handle
+ * \param sampleoff offset in samples (PCM frames)
+ * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative.)
+ * \return The resulting offset >= 0 or error/message code
+ */
+MPG123_EXPORT int64_t mpg123_seek64( mpg123_handle *mh
+,	int64_t sampleoff, int whence );
+
+#ifndef MPG123_PORTABLE_API
+/** Seek to a desired sample offset in data feeding mode.
+ *  This just prepares things to be right only if you ensure that the next chunk
+ *  of input data will be from input_offset byte position.
+ * \param mh handle
+ * \param sampleoff offset in samples (PCM frames)
+ * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative since API
+ *        version 48, was inverted from lseek() usage since ever before.)
+ * \param input_offset The position it expects to be at the 
+ *                     next time data is fed to mpg123_decode().
+ * \return The resulting offset >= 0 or error/message code
+ */
 MPG123_EXPORT off_t mpg123_feedseek( mpg123_handle *mh
 ,	off_t sampleoff, int whence, off_t *input_offset );
+#endif
 
+/** Seek to a desired 64 bit sample offset in data feeding mode.
+ *  This just prepares things to be right only if you ensure that the next chunk
+ *  of input data will be from input_offset byte position.
+ * \param mh handle
+ * \param sampleoff offset in samples (PCM frames)
+ * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative.)
+ * \param input_offset The position it expects to be at the 
+ *                     next time data is fed to mpg123_decode().
+ * \return The resulting offset >= 0 or error/message code
+ */
+MPG123_EXPORT int64_t mpg123_feedseek64( mpg123_handle *mh
+,	int64_t sampleoff, int whence, int64_t *input_offset );
+
+#ifndef MPG123_PORTABLE_API
 /** Seek to a desired MPEG frame offset.
  *  Usage is modelled afer the standard lseek().
  * \param mh handle
  * \param frameoff offset in MPEG frames
  * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative since API
+ *        version 48, was inverted from lseek() usage since ever before.)
  * \return The resulting offset >= 0 or error/message code */
 MPG123_EXPORT off_t mpg123_seek_frame( mpg123_handle *mh
 ,	off_t frameoff, int whence );
+#endif
 
+/** Seek to a desired 64 bit MPEG frame offset.
+ *  Usage is modelled afer the standard lseek().
+ * \param mh handle
+ * \param frameoff offset in MPEG frames
+ * \param whence one of SEEK_SET, SEEK_CUR or SEEK_END
+ *        (Offset for SEEK_END is always effectively negative.)
+ * \return The resulting offset >= 0 or error/message code */
+MPG123_EXPORT int64_t mpg123_seek_frame64( mpg123_handle *mh
+,	int64_t frameoff, int whence );
+
+#ifndef MPG123_PORTABLE_API
 /** Return a MPEG frame offset corresponding to an offset in seconds.
  *  This assumes that the samples per frame do not change in the file/stream, which is a good assumption for any sane file/stream only.
  *  \return frame offset >= 0 or error/message code */
@@ -748,7 +1241,9 @@ MPG123_EXPORT off_t mpg123_timeframe(mpg123_handle *mh, double sec);
 
 /** Give access to the frame index table that is managed for seeking.
  *  You are asked not to modify the values... Use mpg123_set_index to set the
- *  seek index
+ *  seek index.
+ *  Note: This can be just a copy of the data in case a conversion is done
+ *  from the internal 64 bit values.
  *  \param mh handle
  *  \param offsets pointer to the index array
  *  \param step one index byte offset advances this many MPEG frames
@@ -757,10 +1252,31 @@ MPG123_EXPORT off_t mpg123_timeframe(mpg123_handle *mh, double sec);
  */
 MPG123_EXPORT int mpg123_index( mpg123_handle *mh
 ,	off_t **offsets, off_t *step, size_t *fill );
+#endif
 
+/** Return a 64 bit MPEG frame offset corresponding to an offset in seconds.
+ *  This assumes that the samples per frame do not change in the file/stream, which is a good assumption for any sane file/stream only.
+ *  \return frame offset >= 0 or error/message code */
+MPG123_EXPORT int64_t mpg123_timeframe64(mpg123_handle *mh, double sec);
+
+/** Give access to the 64 bit frame index table that is managed for seeking.
+ *  You are asked not to modify the values... Use mpg123_set_index to set the
+ *  seek index.
+ *  \param mh handle
+ *  \param offsets pointer to the index array
+ *  \param step one index byte offset advances this many MPEG frames
+ *  \param fill number of recorded index offsets; size of the array
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_index64( mpg123_handle *mh
+,	int64_t **offsets, int64_t *step, size_t *fill );
+
+#ifndef MPG123_PORTABLE_API
 /** Set the frame index table
  *  Setting offsets to NULL and fill > 0 will allocate fill entries. Setting offsets
  *  to NULL and fill to 0 will clear the index and free the allocated memory used by the index.
+ *  Note that this function might involve conversion/copying of data because of
+ *  the varying nature of off_t. Better use mpg123_set_index64().
  *  \param mh handle
  *  \param offsets pointer to the index array
  *  \param step    one index byte offset advances this many MPEG frames
@@ -769,17 +1285,33 @@ MPG123_EXPORT int mpg123_index( mpg123_handle *mh
  */
 MPG123_EXPORT int mpg123_set_index( mpg123_handle *mh
 ,	off_t *offsets, off_t step, size_t fill );
+#endif
 
+/** Set the 64 bit frame index table
+ *  Setting offsets to NULL and fill > 0 will allocate fill entries. Setting offsets
+ *  to NULL and fill to 0 will clear the index and free the allocated memory used by the index.
+ *  \param mh handle
+ *  \param offsets pointer to the index array
+ *  \param step    one index byte offset advances this many MPEG frames
+ *  \param fill    number of recorded index offsets; size of the array
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_set_index64( mpg123_handle *mh
+,	int64_t *offsets, int64_t step, size_t fill );
+
+
+#ifndef MPG123_PORTABLE_API
 /** An old crutch to keep old mpg123 binaries happy.
  *  WARNING: This function is there only to avoid runtime linking errors with
- *  standalone mpg123 before version 1.23.0 (if you strangely update the
+ *  standalone mpg123 before version 1.32.0 (if you strangely update the
  *  library but not the end-user program) and actually is broken
  *  for various cases (p.ex. 24 bit output). Do never use. It might eventually
  *  be purged from the library.
  */
-MPG123_EXPORT int mpg123_position( mpg123_handle *mh, off_t frame_offset, off_t buffered_bytes, off_t *current_frame, off_t *frames_left, double *current_seconds, double *seconds_left);
+MPG123_EXPORT int mpg123_position( mpg123_handle *mh, off_t INT123_frame_offset, off_t buffered_bytes, off_t *current_frame, off_t *frames_left, double *current_seconds, double *seconds_left);
+#endif
 
-/*@}*/
+/** @} */
 
 
 /** \defgroup mpg123_voleq mpg123 volume and equalizer
@@ -795,23 +1327,88 @@ enum mpg123_channels
 	,MPG123_LR=0x3	/**< Both left and right channel; same as MPG123_LEFT|MPG123_RIGHT */
 };
 
+#ifdef MPG123_ENUM_API
 /** Set the 32 Band Audio Equalizer settings.
+ *
+ *  Note that this name is mapped to mpg123_eq2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mh handle
- *  \param channel Can be MPG123_LEFT, MPG123_RIGHT or MPG123_LEFT|MPG123_RIGHT for both.
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *    #MPG123_LEFT|#MPG123_RIGHT for both.
  *  \param band The equaliser band to change (from 0 to 31)
  *  \param val The (linear) adjustment factor.
  *  \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_eq( mpg123_handle *mh
 ,	enum mpg123_channels channel, int band, double val );
+#endif
 
-/** Get the 32 Band Audio Equalizer settings.
+/** Set the 32 Band Audio Equalizer settings. No enums.
+ *
+ *  This is actually called instead of mpg123_eq() unless MPG123_ENUM_API
+ *  is defined.
+ *
  *  \param mh handle
- *  \param channel Can be MPG123_LEFT, MPG123_RIGHT or MPG123_LEFT|MPG123_RIGHT for (arithmetic mean of) both.
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *    #MPG123_LEFT|#MPG123_RIGHT for both.
+ *  \param band The equaliser band to change (from 0 to 31)
+ *  \param val The (linear) adjustment factor.
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_eq2( mpg123_handle *mh
+,	int channel, int band, double val );
+
+/** Set a range of equalizer bands
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *    #MPG123_LEFT|#MPG123_RIGHT for both.
+ *  \param mh handle
+ *  \param a The first equalizer band to set (from 0 to 31)
+ *  \param b The last equalizer band to set (from 0 to 31)
+ *  \param factor The (linear) adjustment factor, 1 being neutral.
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_eq_bands( mpg123_handle *mh
+,	int channel, int a, int b, double factor );
+
+/** Change a range of equalizer bands
+ *  \param mh handle
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *    #MPG123_LEFT|#MPG123_RIGHT for both.
+ *  \param a The first equalizer band to change (from 0 to 31)
+ *  \param b The last equalizer band to change (from 0 to 31)
+ *  \param db The adjustment in dB (limited to +/- 60 dB).
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_eq_change( mpg123_handle *mh
+,	int channel, int a, int b, double db );
+
+#ifdef MPG123_ENUM_API
+/** Get the 32 Band Audio Equalizer settings.
+ *
+ *  Note that this name is mapped to mpg123_geteq2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
+ *  \param mh handle
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *     #MPG123_LEFT|MPG123_RIGHT for (arithmetic mean of) both.
  *  \param band The equaliser band to change (from 0 to 31)
  *  \return The (linear) adjustment factor (zero for pad parameters) */
 MPG123_EXPORT double mpg123_geteq(mpg123_handle *mh
                                  , enum mpg123_channels channel, int band);
+#endif
+
+/** Get the 32 Band Audio Equalizer settings.
+ *
+ *  This is actually called instead of mpg123_geteq() unless MPG123_ENUM_API
+ *  is defined.
+ *
+ *  \param mh handle
+ *  \param channel Can be #MPG123_LEFT, #MPG123_RIGHT or
+ *     #MPG123_LEFT|MPG123_RIGHT for (arithmetic mean of) both.
+ *  \param band The equaliser band to change (from 0 to 31)
+ *  \return The (linear) adjustment factor (zero for pad parameters) */
+MPG123_EXPORT double mpg123_geteq2(mpg123_handle *mh, int channel, int band);
 
 /** Reset the 32 Band Audio Equalizer settings to flat
  *  \param mh handle
@@ -834,6 +1431,13 @@ MPG123_EXPORT int mpg123_volume(mpg123_handle *mh, double vol);
  */
 MPG123_EXPORT int mpg123_volume_change(mpg123_handle *mh, double change);
 
+/** Adjust output volume including the RVA setting by chosen amount
+ *  \param mh handle
+ *  \param db volume adjustment in decibels (limited to +/- 60 dB)
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_volume_change_db(mpg123_handle *mh, double db);
+
 /** Return current volume setting, the actual value due to RVA, and the RVA 
  *  adjustment itself. It's all as double float value to abstract the sample 
  *  format. The volume values are linear factors / amplitudes (not percent) 
@@ -848,7 +1452,7 @@ MPG123_EXPORT int mpg123_getvolume(mpg123_handle *mh, double *base, double *real
 
 /* TODO: Set some preamp in addition / to replace internal RVA handling? */
 
-/*@}*/
+/** @} */
 
 
 /** \defgroup mpg123_status mpg123 status and information
@@ -889,6 +1493,7 @@ enum mpg123_flags {
 	MPG123_ORIGINAL=0x8	/**< The bitstream is an original, not a copy. */
 };
 
+#ifdef MPG123_ENUM_API
 /** Data structure for storing information about a frame of MPEG Audio */
 struct mpg123_frameinfo
 {
@@ -904,13 +1509,82 @@ struct mpg123_frameinfo
 	int abr_rate;					/**< The target average bitrate. */
 	enum mpg123_vbr vbr;			/**< The VBR mode. */
 };
+#endif
 
-/** Get frame information about the MPEG audio bitstream and store it in a mpg123_frameinfo structure.
+/** Data structure for storing information about a frame of MPEG Audio without enums */
+struct mpg123_frameinfo2
+{
+	int version;   /**< The MPEG version (1.0/2.0/2.5), enum mpg123_version. */
+	int layer;     /**< The MPEG Audio Layer (MP1/MP2/MP3). */
+	long rate;     /**< The sampling rate in Hz. */
+	int mode;      /**< The audio mode (enum mpg123_mode, Mono, Stereo, Joint-stero, Dual Channel). */
+	int mode_ext;  /**< The mode extension bit flag. */
+	int framesize; /**< The size of the frame (in bytes, including header). */
+	int flags;     /**< MPEG Audio flag bits. Bitwise combination of enum mpg123_flags values. */
+	int emphasis;  /**< The emphasis type. */
+	int bitrate;   /**< Bitrate of the frame (kbps). */
+	int abr_rate;  /**< The target average bitrate. */
+	int vbr;       /**< The VBR mode, enum mpg123_vbr. */
+};
+
+/** Data structure for even more detailed information out of the decoder,
+  * for MPEG layer III only.
+  * This was added to support the frame analyzer by the Lame project and
+  * just follows what was used there before. You know what the fields mean
+  * if you want use this structure. */
+struct mpg123_moreinfo
+{
+	double xr[2][2][576];  /**< internal data */
+	double sfb[2][2][22];  /**< [2][2][SBMAX_l] */
+	double sfb_s[2][2][3*13]; /**< [2][2][3*SBMAX_s] */
+	int qss[2][2];  /**< internal data */
+	int big_values[2][2]; /**< internal data */
+	int sub_gain[2][2][3]; /**< internal data */
+	int scalefac_scale[2][2]; /**< internal data */
+	int preflag[2][2]; /**< internal data */
+	int blocktype[2][2]; /**< internal data */
+	int mixed[2][2]; /**< internal data */
+	int mainbits[2][2]; /**< internal data */
+	int sfbits[2][2]; /**< internal data */
+	int scfsi[2]; /**< internal data */
+	int maindata; /**< internal data */
+	int padding; /**< internal data */
+};
+
+#ifdef MPG123_ENUM_API
+/** Get frame information about the MPEG audio bitstream and store
+ *  it in a mpg123_frameinfo structure.
+ *
+ *  Note that this name is mapped to mpg123_info2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mh handle
  *  \param mi address of existing frameinfo structure to write to
  *  \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_info(mpg123_handle *mh, struct mpg123_frameinfo *mi);
+#endif
+
+/** Get frame information about the MPEG audio bitstream and store
+ *  it in a mpg123_frameinfo2 structure.
+ *
+ *  This is actually called instead of mpg123_info()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param mh handle
+ *  \param mi address of existing frameinfo structure to write to
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_info2(mpg123_handle *mh, struct mpg123_frameinfo2 *mi);
+
+/** Trigger collection of additional decoder information while decoding.
+ *  \param mh handle
+ *  \param mi pointer to data storage (NULL to disable collection)
+ *  \return MPG123_OK if the collection was enabled/disabled as desired, MPG123_ERR
+ *    otherwise (e.g. if the feature is disabled)
+ */
+MPG123_EXPORT int mpg123_set_moreinfo( mpg123_handle *mh
+,	struct mpg123_moreinfo *mi );
 
 /** Get the safe output buffer size for all cases
  *  (when you want to replace the internal buffer)
@@ -927,13 +1601,23 @@ MPG123_EXPORT size_t mpg123_safe_buffer(void);
  */
 MPG123_EXPORT int mpg123_scan(mpg123_handle *mh);
 
-/** Return, if possible, the full (expected) length of current track in frames.
+#ifndef MPG123_PORTABLE_API
+/** Return, if possible, the full (expected) length of current track in
+ *  MPEG frames.
  * \param mh handle
  * \return length >= 0 or MPG123_ERR if there is no length guess possible.
  */
 MPG123_EXPORT off_t mpg123_framelength(mpg123_handle *mh);
 
-/** Return, if possible, the full (expected) length of current track in samples.
+/** Return, if possible, the full (expected) length of current
+ *  track in samples (PCM frames).
+ *
+ *  This relies either on an Info frame at the beginning or a previous
+ *  call to mpg123_scan() to get the real number of MPEG frames in a
+ *  file. It will guess based on file size if neither Info frame nor
+ *  scan data are present. In any case, there is no guarantee that the
+ *  decoder will not give you more data, for example in case the open
+ *  file gets appended to during decoding.
  * \param mh handle
  * \return length >= 0 or MPG123_ERR if there is no length guess possible.
  */
@@ -946,6 +1630,36 @@ MPG123_EXPORT off_t mpg123_length(mpg123_handle *mh);
  *  \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_set_filesize(mpg123_handle *mh, off_t size);
+#endif
+
+/** Return, if possible, the full (expected) length of current track in
+ *  MPEG frames as 64 bit number.
+ * \param mh handle
+ * \return length >= 0 or MPG123_ERR if there is no length guess possible.
+ */
+MPG123_EXPORT int64_t mpg123_framelength64(mpg123_handle *mh);
+
+/** Return, if possible, the full (expected) length of current
+ *  track in samples (PCM frames) as 64 bit value.
+ *
+ *  This relies either on an Info frame at the beginning or a previous
+ *  call to mpg123_scan() to get the real number of MPEG frames in a
+ *  file. It will guess based on file size if neither Info frame nor
+ *  scan data are present. In any case, there is no guarantee that the
+ *  decoder will not give you more data, for example in case the open
+ *  file gets appended to during decoding.
+ * \param mh handle
+ * \return length >= 0 or MPG123_ERR if there is no length guess possible.
+ */
+MPG123_EXPORT int64_t mpg123_length64(mpg123_handle *mh);
+
+/** Override the 64 bit value for file size in bytes.
+ *  Useful for getting sensible track length values in feed mode or for HTTP streams.
+ *  \param mh handle
+ *  \param size file size in bytes
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_set_filesize64(mpg123_handle *mh, int64_t size);
 
 /** Get MPEG frame duration in seconds.
  *  \param mh handle
@@ -973,9 +1687,17 @@ enum mpg123_state
 	,MPG123_BUFFERFILL   /**< Get fill of internal (feed) input buffer as integer byte count returned as long and as double. An error is returned on integer overflow while converting to (signed) long, but the returned floating point value shold still be fine. */
 	,MPG123_FRANKENSTEIN /**< Stream consists of carelessly stitched together files. Seeking may yield unexpected results (also with MPG123_ACCURATE, it may be confused). */
 	,MPG123_FRESH_DECODER /**< Decoder structure has been updated, possibly indicating changed stream (integer value, 0 if false, 1 if true). Flag is cleared after retrieval. */
+	,MPG123_ENC_DELAY /** Encoder delay read from Info tag (layer III, -1 if unknown). */
+	,MPG123_ENC_PADDING /** Encoder padding read from Info tag (layer III, -1 if unknown). */
+	,MPG123_DEC_DELAY /** Decoder delay (for layer III only, -1 otherwise). */
 };
 
+#ifdef MPG123_ENUM_API
 /** Get various current decoder/stream state information.
+ *
+ *  Note that this name is mapped to mpg123_getstate2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mh handle
  *  \param key the key to identify the information to give.
  *  \param val the address to return (long) integer values to
@@ -984,8 +1706,23 @@ enum mpg123_state
  */
 MPG123_EXPORT int mpg123_getstate( mpg123_handle *mh
 ,	enum mpg123_state key, long *val, double *fval );
+#endif
 
-/*@}*/
+/** Get various current decoder/stream state information. No enums.
+ *
+ *  This is actually called instead of mpg123_getstate()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param mh handle
+ *  \param key the key to identify the information to give (enum mpg123_state)
+ *  \param val the address to return (long) integer values to
+ *  \param fval the address to return floating point values to
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_getstate2( mpg123_handle *mh
+,	int key, long *val, double *fval );
+
+/** @} */
 
 
 /** \defgroup mpg123_metadata mpg123 metadata handling
@@ -1005,12 +1742,26 @@ typedef struct
 	size_t fill; /**< number of used bytes (including closing zero byte) */
 } mpg123_string;
 
-/** Create and allocate memory for a new mpg123_string
+/** Allocate and intialize a new string.
+ *  \param val optional initial string value (can be NULL)
+ */
+MPG123_EXPORT mpg123_string* mpg123_new_string(const char* val);
+
+/** Free memory of contents and the string structure itself.
+ *  \param sb string handle
+ */
+MPG123_EXPORT void mpg123_delete_string(mpg123_string* sb);
+
+/** Initialize an existing mpg123_string structure to {NULL, 0, 0}.
+ *  If you hand in a NULL pointer here, your program should crash. The other
+ *  string functions are more forgiving, but this one here is too basic.
  *  \param sb string handle (address of existing structure on your side)
  */
 MPG123_EXPORT void mpg123_init_string(mpg123_string* sb);
 
-/** Free-up mempory for an existing mpg123_string
+/** Free-up memory of the contents of an mpg123_string (not the struct itself).
+ *  This also calls mpg123_init_string() and hence is safe to be called
+ *  repeatedly.
  *  \param sb string handle
  */
 MPG123_EXPORT void mpg123_free_string(mpg123_string* sb);
@@ -1040,6 +1791,20 @@ MPG123_EXPORT int mpg123_grow_string(mpg123_string* sb, size_t news);
  *  \return 0 on error, 1 on success
  */
 MPG123_EXPORT int mpg123_copy_string(mpg123_string* from, mpg123_string* to);
+
+/** Move the contents of one mpg123_string string to another.
+ *  This frees any memory associated with the target and moves over the
+ *  pointers from the source, leaving the source without content after
+ *  that. The only possible error is that you hand in NULL pointers.
+ *  If you handed in a valid source, its contents will be gone, even if
+ *  there was no target to move to. If you hand in a valid target, its
+ *  original contents will also always be gone, to be replaced with the
+ *  source's contents if there was some.
+ *  \param from source string handle
+ *  \param to   target string handle
+ *  \return 0 on error, 1 on success
+ */
+MPG123_EXPORT int mpg123_move_string(mpg123_string* from, mpg123_string* to);
 
 /** Append a C-String to an mpg123_string
  *  \param sb string handle
@@ -1075,8 +1840,10 @@ MPG123_EXPORT int mpg123_set_string(mpg123_string* sb, const char* stuff);
 MPG123_EXPORT int mpg123_set_substring( mpg123_string *sb
 ,	const char *stuff, size_t from, size_t count );
 
-/** Count characters in a mpg123 string (non-null bytes or UTF-8 characters).
- *  Even with the fill property, the character count is not obvious as there could be multiple trailing null bytes.
+/** Count characters in a mpg123 string (non-null bytes or Unicode points).
+ *  This function is of limited use, as it does just count code points
+ *  encoded in an UTF-8 string, only loosely related to the count of visible
+ *  characters. Get your full Unicode handling support elsewhere.
  *  \param sb string handle
  *  \param utf8 a flag to tell if the string is in utf8 encoding
  *  \return character count
@@ -1088,6 +1855,15 @@ MPG123_EXPORT size_t mpg123_strlen(mpg123_string *sb, int utf8);
  *  \return 0 on error, 1 on success
  */
 MPG123_EXPORT int mpg123_chomp_string(mpg123_string *sb);
+
+/** Determine if two strings contain the same data.
+ *  This only returns 1 if both given handles are non-NULL and
+ *  if they are filled with the same bytes.
+ *  \param a first string handle
+ *  \param b second string handle
+ *  \return 0 for different strings, 1 for identical
+ */
+MPG123_EXPORT int mpg123_same_string(mpg123_string *a, mpg123_string *b);
 
 /** The mpg123 text encodings. This contains encodings we encounter in ID3 tags or ICY meta info. */
 enum mpg123_text_encoding
@@ -1119,14 +1895,34 @@ enum mpg123_id3_enc
 	,mpg123_id3_enc_max  = 3 /**< Placeholder to check valid range of encoding byte. */
 };
 
+#ifdef MPG123_ENUM_API
 /** Convert ID3 encoding byte to mpg123 encoding index.
+ *
+ *  Note that this name is mapped to mpg123_enc_from_id3_2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param id3_enc_byte the ID3 encoding code
  *  \return the mpg123 encoding index
  */
-
 MPG123_EXPORT enum mpg123_text_encoding mpg123_enc_from_id3(unsigned char id3_enc_byte);
+#endif
 
-/** Store text data in string, after converting to UTF-8 from indicated encoding
+/** Convert ID3 encoding byte to mpg123 encoding index. No enums.
+ *
+ *  This is actually called instead of mpg123_enc_from_id3()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param id3_enc_byte the ID3 encoding code
+ *  \return the mpg123 encoding index
+ */
+MPG123_EXPORT int mpg123_enc_from_id3_2(unsigned char id3_enc_byte);
+
+#ifdef MPG123_ENUM_API
+/** Store text data in string, after converting to UTF-8 from indicated encoding.
+ *
+ *  Note that this name is mapped to mpg123_store_utf8_2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  A prominent error can be that you provided an unknown encoding value, or this build of libmpg123 lacks support for certain encodings (ID3 or ICY stuff missing).
  *  Also, you might want to take a bit of care with preparing the data; for example, strip leading zeroes (I have seen that).
  *  \param sb  target string
@@ -1136,11 +1932,30 @@ MPG123_EXPORT enum mpg123_text_encoding mpg123_enc_from_id3(unsigned char id3_en
  *  \return 0 on error, 1 on success (on error, mpg123_free_string is called on sb)
  */
 MPG123_EXPORT int mpg123_store_utf8(mpg123_string *sb, enum mpg123_text_encoding enc, const unsigned char *source, size_t source_size);
+#endif
+
+/** Store text data in string, after converting to UTF-8 from indicated encoding. No enums.
+ *
+ *  This is actually called instead of mpg123_store_utf8()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  A prominent error can be that you provided an unknown encoding value, or this build of libmpg123 lacks support for certain encodings (ID3 or ICY stuff missing).
+ *  Also, you might want to take a bit of care with preparing the data; for example, strip leading zeroes (I have seen that).
+ *  \param sb  target string
+ *  \param enc mpg123 text encoding value (enum mpg123_text_encoding)
+ *  \param source source buffer with plain unsigned bytes (you might need to cast from signed char)
+ *  \param source_size number of bytes in the source buffer
+ *  \return 0 on error, 1 on success (on error, mpg123_free_string is called on sb)
+ */
+MPG123_EXPORT int mpg123_store_utf8_2(mpg123_string *sb
+,	int enc, const unsigned char *source, size_t source_size);
 
 /** Sub data structure for ID3v2, for storing various text fields (including comments).
  *  This is for ID3v2 COMM, TXXX and all the other text fields.
- *  Only COMM and TXXX have a description, only COMM and USLT have a language.
- *  You should consult the ID3v2 specification for the use of the various text fields ("frames" in ID3v2 documentation, I use "fields" here to separate from MPEG frames). */
+ *  Only COMM, TXXX and USLT may have a description, only COMM and USLT
+ *  have a language.
+ *  You should consult the ID3v2 specification for the use of the various text fields
+ * ("frames" in ID3v2 documentation, I use "fields" here to separate from MPEG frames). */
 typedef struct
 {
 	char lang[3]; /**< Three-letter language code (not terminated). */
@@ -1210,7 +2025,8 @@ typedef struct
 	size_t          texts;        /**< Numer of text fields. */
 	mpg123_text    *extra;        /**< The array of extra (TXXX) fields. */
 	size_t          extras;       /**< Number of extra text (TXXX) fields. */
-	mpg123_picture  *picture;     /**< Array of ID3v2 pictures fields (APIC). */
+	mpg123_picture  *picture;     /**< Array of ID3v2 pictures fields (APIC).
+		Only populated if MPG123_PICTURE flag is set! */
 	size_t           pictures;    /**< Number of picture (APIC) fields. */
 } mpg123_id3v2;
 
@@ -1252,6 +2068,23 @@ MPG123_EXPORT void mpg123_meta_free(mpg123_handle *mh);
 MPG123_EXPORT int mpg123_id3( mpg123_handle *mh
 ,	mpg123_id3v1 **v1, mpg123_id3v2 **v2 );
 
+/** Return pointers to and size of stored raw ID3 data if storage has
+ *  been configured with MPG123_STORE_RAW_ID3 and stream parsing passed the
+ *  metadata already. Null value with zero size is a possibility!
+ *  The storage can change at any next API call.
+ *
+ *  \param mh mpg123 handle
+ *  \param v1 address to store pointer to v1 tag
+ *  \param v1_size size of v1 data in bytes
+ *  \param v2 address to store pointer to v2 tag
+ *  \param v2_size size of v2 data in bytes
+ *  \return MPG123_OK or MPG123_ERR. Only on MPG123_OK the output
+ *          values are set.
+ */
+MPG123_EXPORT int mpg123_id3_raw( mpg123_handle *mh
+,	unsigned char **v1, size_t *v1_size
+,	unsigned char **v2, size_t *v2_size );
+
 /** Point icy_meta to existing data structure wich may change on any next read/decode function call.
  *  \param mh handle
  *  \param icy_meta return address for ICY meta string (set to NULL if nothing there)
@@ -1266,7 +2099,7 @@ MPG123_EXPORT int mpg123_icy(mpg123_handle *mh, char **icy_meta);
 MPG123_EXPORT char* mpg123_icy2utf8(const char* icy_text);
 
 
-/* @} */
+/** @} */
 
 
 /** \defgroup mpg123_advpar mpg123 advanced parameter API
@@ -1336,6 +2169,19 @@ MPG123_EXPORT int mpg123_fmt_all(mpg123_pars *mp);
 MPG123_EXPORT int mpg123_fmt(mpg123_pars *mp
 ,	long rate, int channels, int encodings);
 
+/** Set the audio format support of a mpg123_pars in detail:
+ * \param mp parameter handle
+ * \param rate The sample rate value (in Hertz). Special value 0 means
+ *             all rates (reason for this variant of mpg123_fmt).
+ * \param channels A combination of MPG123_STEREO and MPG123_MONO.
+ * \param encodings A combination of accepted encodings for rate and channels,
+ *                  p.ex MPG123_ENC_SIGNED16|MPG123_ENC_ULAW_8 (or 0 for no
+ *                  support).
+ * \return MPG123_OK on success
+*/
+MPG123_EXPORT int mpg123_fmt2(mpg123_pars *mp
+,	long rate, int channels, int encodings);
+
 /** Check to see if a specific format at a specific rate is supported
  *  by mpg123_pars.
  *  \param mp parameter handle
@@ -1345,8 +2191,12 @@ MPG123_EXPORT int mpg123_fmt(mpg123_pars *mp
  *          MPG123_MONO or MPG123_STEREO|MPG123_MONO. */
 MPG123_EXPORT int mpg123_fmt_support(mpg123_pars *mp, long rate, int encoding);
 
-/** Set a specific parameter, for a specific mpg123_pars, using a parameter 
- *  type key chosen from the mpg123_parms enumeration, to the specified value.
+#ifdef MPG123_ENUM_API
+/** Set a specific parameter in a par handle.
+ *
+ *  Note that this name is mapped to mpg123_par2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mp parameter handle
  *  \param type parameter choice
  *  \param value integer value
@@ -1355,9 +2205,28 @@ MPG123_EXPORT int mpg123_fmt_support(mpg123_pars *mp, long rate, int encoding);
  */
 MPG123_EXPORT int mpg123_par( mpg123_pars *mp
 ,	enum mpg123_parms type, long value, double fvalue );
+#endif
 
-/** Get a specific parameter, for a specific mpg123_pars. 
- *  See the mpg123_parms enumeration for a list of available parameters.
+/** Set a specific parameter in a par handle. No enums.
+ *
+ *  This is actually called instead of mpg123_par()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param mp parameter handle
+ *  \param type parameter choice (enum mpg123_parms)
+ *  \param value integer value
+ *  \param fvalue floating point value
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_par2( mpg123_pars *mp
+,	int type, long value, double fvalue );
+
+#ifdef MPG123_ENUM_API
+/** Get a specific parameter from a par handle.
+ *
+ *  Note that this name is mapped to mpg123_getpar2() instead unless
+ *  MPG123_ENUM_API is defined.
+ *
  *  \param mp parameter handle
  *  \param type parameter choice
  *  \param value integer value return address
@@ -1365,9 +2234,24 @@ MPG123_EXPORT int mpg123_par( mpg123_pars *mp
  *  \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_getpar( mpg123_pars *mp
-,	enum mpg123_parms type, long *value, double *fvalue);
+,	enum mpg123_parms type, long *value, double *fvalue );
+#endif
 
-/* @} */
+/** Get a specific parameter from a par handle. No enums.
+ *
+ *  This is actually called instead of mpg123_getpar()
+ *  unless MPG123_ENUM_API is defined.
+ *
+ *  \param mp parameter handle
+ *  \param type parameter choice (enum mpg123_parms)
+ *  \param value integer value return address
+ *  \param fvalue floating point value return address
+ *  \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_getpar2( mpg123_pars *mp
+,	int type, long *value, double *fvalue );
+
+/** @} */
 
 
 /** \defgroup mpg123_lowio mpg123 low level I/O
@@ -1380,13 +2264,17 @@ MPG123_EXPORT int mpg123_getpar( mpg123_pars *mp
   * Note that the required buffer size could be bigger than expected from output
   * encoding if libmpg123 has to convert from primary decoder output (p.ex. 32 bit
   * storage for 24 bit output).
+  *
+  *  Note: The type of data changed to a void pointer in mpg123 1.26.0
+  *  (API version 45).
+  *
   * \param mh handle
   * \param data pointer to user buffer
   * \param size of buffer in bytes
   * \return MPG123_OK on success
   */
 MPG123_EXPORT int mpg123_replace_buffer(mpg123_handle *mh
-,	unsigned char *data, size_t size);
+,	void *data, size_t size);
 
 /** The max size of one frame's decoded output with current settings.
  *  Use that to determine an appropriate minimum buffer size for decoding one frame.
@@ -1395,12 +2283,13 @@ MPG123_EXPORT int mpg123_replace_buffer(mpg123_handle *mh
  */
 MPG123_EXPORT size_t mpg123_outblock(mpg123_handle *mh);
 
+#ifndef MPG123_PORTABLE_API
 /** Replace low-level stream access functions; read and lseek as known in POSIX.
  *  You can use this to make any fancy file opening/closing yourself, 
  *  using mpg123_open_fd() to set the file descriptor for your read/lseek
  *  (doesn't need to be a "real" file descriptor...).
- *  Setting a function to NULL means that the default internal read is 
- *  used (active from next mpg123_open call on).
+ *  Setting a function to NULL means that just a call to POSIX read/lseek is
+ *  done (without handling signals).
  *  Note: As it would be troublesome to mess with this while having a file open,
  *  this implies mpg123_close().
  * \param mh handle
@@ -1409,7 +2298,7 @@ MPG123_EXPORT size_t mpg123_outblock(mpg123_handle *mh);
  * \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_replace_reader( mpg123_handle *mh
-,	ssize_t (*r_read) (int, void *, size_t)
+,	mpg123_ssize_t (*r_read) (int, void *, size_t)
 ,	off_t (*r_lseek)(int, off_t, int)
 );
 
@@ -1423,16 +2312,38 @@ MPG123_EXPORT int mpg123_replace_reader( mpg123_handle *mh
  *  \param mh handle
  *  \param r_read callback for reading (behaviour like POSIX read)
  *  \param r_lseek callback for seeking (like POSIX lseek)
- *  \param cleanup A callback to clean up an I/O handle on mpg123_close,
+ *  \param cleanup A callback to clean up a non-NULL I/O handle on mpg123_close,
  *         can be NULL for none (you take care of cleaning your handles).
  * \return MPG123_OK on success
  */
 MPG123_EXPORT int mpg123_replace_reader_handle( mpg123_handle *mh
-,	ssize_t (*r_read) (void *, void *, size_t)
+,	mpg123_ssize_t (*r_read) (void *, void *, size_t)
 ,	off_t (*r_lseek)(void *, off_t, int)
 ,	void (*cleanup)(void*) );
+#endif
 
-/* @} */
+/** Set up portable read functions on an opaque handle.
+ *  The handle is a void pointer, so you can pass any data you want...
+ *  mpg123_open64() (since API 49) or mpg123_open_handle() is the call you make
+ *  to use the I/O defined here.
+ *  There is no fallback to internal read/seek here.
+ *  Note: As it would be troublesome to mess with this while having a file open,
+ *  this mpg123_close() is implied here.
+ *  \param mh handle
+ *  \param r_read callback for reading
+ *     The parameters are the handle, the buffer to read into, a byte count to read,
+ *     address to store the returned byte count. Return value is zero for
+ *     no issue, non-zero for some error. Recoverable signal handling has to happen
+ *     inside the callback.
+ *  \param r_lseek callback for seeking (like POSIX lseek), maybe NULL for
+ *         non-seekable streams
+ *  \param cleanup A callback to clean up a non-NULL I/O handle on mpg123_close,
+ *         maybe NULL for none
+ * \return MPG123_OK on success
+ */
+MPG123_EXPORT int mpg123_reader64( mpg123_handle *mh, int (*r_read) (void *, void *, size_t, size_t *), int64_t (*r_lseek)(void *, int64_t, int), void (*cleanup)(void*) );
+
+/** @} */
 
 #ifdef __cplusplus
 }
