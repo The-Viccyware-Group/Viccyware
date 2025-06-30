@@ -17,6 +17,7 @@
     // TEMP: maybe only one of these  // TEMP:  // TEMP: 
     "PossibleIntentionalPerformance",
     "ReactToGazeDirection",
+    "Singing_EntryOfTheGladiators",
     "SocializeInteraction"
 
     // TEMP: add intentional and unintentional after "look at me" voice command?
