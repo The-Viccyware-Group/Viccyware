@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
@@ -73,8 +75,24 @@ func testReader(serv ipc.Server, send voice.MsgSender) {
 	}
 }
 
-func main() {
+func randomString() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 20)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+	return string(b)
+}
 
+func main() {
+	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
+	if err != nil {
+		token.PerRuntimeToken = randomString()
+		os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
+	} else {
+		token.PerRuntimeToken = string(f)
+	}
 	var pool = rootcerts.ServerCertPool()
 	// load custom cert
 	// /anki/etc/wirepod-cert.crt

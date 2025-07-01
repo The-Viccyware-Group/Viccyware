@@ -65,9 +65,14 @@ func randomString() string {
 }
 
 func (ctm *ClientTokenManager) Init() error {
-
-	token.PerRuntimeToken = randomString()
-	os.WriteFile("/data/data/com.anki.victor/persistent/token/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
+	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
+	if err != nil {
+		token.PerRuntimeToken = randomString()
+		err = os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
+		fmt.Println("HEY WIRE LOOK AT ME!!!:", err)
+	} else {
+		token.PerRuntimeToken = string(f)
+	}
 	ctm.forceClearFile = false
 	ctm.lastUpdatedTokens = time.Now().Add(-24 * time.Hour) // older than our startup time
 	// Limit the updates of the AppTokens with the following logic:
@@ -92,7 +97,7 @@ func (ctm *ClientTokenManager) Init() error {
 	ctm.notifyValid = make(chan struct{})
 	ctm.updateNowChan = make(chan chan struct{})
 	ctm.jdocIPC.Connect(ipc.GetSocketPath(jdocDomainSocket), jdocSocketSuffix)
-	err := ctm.readTokensFile()
+	err = ctm.readTokensFile()
 	if err != nil {
 		return ctm.UpdateTokens()
 	}
