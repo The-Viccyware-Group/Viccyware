@@ -67,6 +67,11 @@ private:
     ICozmoBehaviorPtr unintentionalPerformanceBehavior;
     std::vector<ICozmoBehaviorPtr> toSuppressWhenInAnPerformance;
 
+    ICozmoBehaviorPtr singing80Behavior;
+    ICozmoBehaviorPtr singing100Behavior;
+    ICozmoBehaviorPtr singing120Behavior;
+    std::vector<ICozmoBehaviorPtr> toSuppressWhenSinging;
+
     ICozmoBehaviorPtr petDetectionBehavior;
     std::vector<ICozmoBehaviorPtr> toSuppressWhileDetectingPets;
 
