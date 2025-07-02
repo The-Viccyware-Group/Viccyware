@@ -104,16 +104,7 @@ namespace{
     USER_INTENT(movement_turnaround),
   }};
 
-  static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnIntentionalPerformance = {
-    BEHAVIOR_ID(DanceToTheBeatCoordinator),
-    BEHAVIOR_ID(ListenForBeats),
-    BEHAVIOR_ID(DanceToTheBeat),
-    BEHAVIOR_ID(ReactToObstacle),
-    BEHAVIOR_ID(ReactToSoundAwake),
-    BEHAVIOR_ID(TriggerWordDetected),
-  };
-
-  static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnUntintentionalPerformance = {
+  static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnPerformance = {
     BEHAVIOR_ID(DanceToTheBeatCoordinator),
     BEHAVIOR_ID(ListenForBeats),
     BEHAVIOR_ID(DanceToTheBeat),
@@ -183,12 +174,8 @@ void BehaviorCoordinateGlobalInterrupts::InitPassThrough()
     _iConfig.toSuppressWhenGoingHome.push_back( BC.FindBehaviorByID(id) );
   }
 
-  for( const auto& id : kBehaviorIDsToSuppressWhenInAnUntintentionalPerformance ) {
-    _iConfig.toSuppressWhenInAnUnintentionalPerformance.push_back( BC.FindBehaviorByID(id) );
-  }
-
-  for( const auto& id : kBehaviorIDsToSuppressWhenInAnIntentionalPerformance ) {
-    _iConfig.toSuppressWhenInAnIntentionalPerformance.push_back( BC.FindBehaviorByID(id) );
+  for( const auto& id : kBehaviorIDsToSuppressWhenInAnPerformance ) {
+    _iConfig.toSuppressWhenInAnPerformance.push_back( BC.FindBehaviorByID(id) );
   }
 
   for( const auto& id : kBehaviorIDsToSuppressWhileDetectingPets ) {
@@ -285,15 +272,10 @@ void BehaviorCoordinateGlobalInterrupts::PassThroughUpdate()
     }
   }
 
-  // Stop behaviors from interrupting intentional performances
-  if( _iConfig.intentionalPerformanceBehavior->IsActivated() ) {
-    for( const auto& beh : _iConfig.toSuppressWhenInAnIntentionalPerformance ) {
-      beh->SetDontActivateThisTick(GetDebugLabel());
-    }
-  }
-
-  if( _iConfig.unintentionalPerformanceBehavior->IsActivated() ) {
-    for( const auto& beh : _iConfig.toSuppressWhenInAnUnintentionalPerformance ) {
+  // Stop certain behaviors from interrupting performances
+  if( _iConfig.intentionalPerformanceBehavior->IsActivated() || 
+      _iConfig.unintentionalPerformanceBehavior->IsActivated() ) {
+    for( const auto& beh : _iConfig.toSuppressWhenInAnPerformance ) {
       beh->SetDontActivateThisTick(GetDebugLabel());
     }
   }
