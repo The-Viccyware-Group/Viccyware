@@ -107,20 +107,23 @@ namespace{
     USER_INTENT(movement_turnaround),
   }};
 
-  static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnPerformance = {
-    BEHAVIOR_ID(DanceToTheBeatCoordinator),
-    BEHAVIOR_ID(ListenForBeats),
-    BEHAVIOR_ID(DanceToTheBeat),
-    BEHAVIOR_ID(ReactToObstacle),
-    BEHAVIOR_ID(ReactToSoundAwake),
-    BEHAVIOR_ID(TriggerWordDetected),
-    BEHAVIOR_ID(FindHome),
-    BEHAVIOR_ID(FindHomeInHabitat),
-    BEHAVIOR_ID(FindAndRequestHome),
-  };
-
+  static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenInAnPerformance = { // <-
+    BEHAVIOR_ID(DanceToTheBeatCoordinator), // <------------------------------------- |
+    BEHAVIOR_ID(ListenForBeats), // <------------------------------------------------ |
+    BEHAVIOR_ID(DanceToTheBeat), // <------------------------------------------------ |
+    BEHAVIOR_ID(ReactToObstacle), // <----------------------------------------------- |
+    BEHAVIOR_ID(ReactToUnexpectedMovement), // <------------------------------------- |
+    BEHAVIOR_ID(ReactToSoundAwake), // <--------------------------------------------- |
+    BEHAVIOR_ID(TriggerWordDetected), // <------------------------------------------- |
+    BEHAVIOR_ID(FindHome), // <------------------------------------------------------ |
+    BEHAVIOR_ID(FindHomeInHabitat), // <--------------------------------------------- |
+    BEHAVIOR_ID(FindAndRequestHome), // <-------------------------------------------- |
+  }; //                                                                               |
+  //                                                                                  |
+  // I could prolly make this use the same set as performance to simplify this a bit --
+  // because they are the same but it's prolly better to seperate them
   static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenSinging = {
-    BEHAVIOR_ID(DanceToTheBeatCoordinator),
+    BEHAVIOR_ID(DanceToTheBeatCoordinator), 
     BEHAVIOR_ID(ListenForBeats),
     BEHAVIOR_ID(DanceToTheBeat),
     BEHAVIOR_ID(ReactToObstacle),
