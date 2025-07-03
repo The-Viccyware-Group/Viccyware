@@ -114,6 +114,9 @@ namespace{
     BEHAVIOR_ID(ReactToObstacle),
     BEHAVIOR_ID(ReactToSoundAwake),
     BEHAVIOR_ID(TriggerWordDetected),
+    BEHAVIOR_ID(FindHome),
+    BEHAVIOR_ID(FindHomeInHabitat),
+    BEHAVIOR_ID(FindAndRequestHome),
   };
 
   static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenSinging = {
@@ -124,6 +127,9 @@ namespace{
     BEHAVIOR_ID(ReactToUnexpectedMovement),
     BEHAVIOR_ID(ReactToSoundAwake),
     BEHAVIOR_ID(TriggerWordDetected),
+    BEHAVIOR_ID(FindHome),
+    BEHAVIOR_ID(FindHomeInHabitat),
+    BEHAVIOR_ID(FindAndRequestHome),
   };
 
   // while the behavior is actually activated
