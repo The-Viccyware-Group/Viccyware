@@ -1054,9 +1054,9 @@ namespace Vector {
             auto* thisRow = imageHsv.GetRow(i);
             for (int j=0 ; j < nCols ; j++) {
               // the 'blue' channel in an HSV image is the value
-              thisRow[j].b() *= opacity;
               thisRow[j].r() *= opacity;
               thisRow[j].g() *= opacity;
+              thisRow[j].b() *= opacity;
             }
           }
         }
