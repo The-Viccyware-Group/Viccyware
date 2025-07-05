@@ -115,13 +115,11 @@ namespace{
     BEHAVIOR_ID(ReactToUnexpectedMovement), // <------------------------------------- |
     BEHAVIOR_ID(ReactToSoundAwake), // <--------------------------------------------- |
     BEHAVIOR_ID(TriggerWordDetected), // <------------------------------------------- |
-    BEHAVIOR_ID(FindHome), // <------------------------------------------------------ |
-    BEHAVIOR_ID(FindHomeInHabitat), // <--------------------------------------------- |
-    BEHAVIOR_ID(FindAndRequestHome), // <-------------------------------------------- |
   }; //                                                                               |
   //                                                                                  |
   // I could prolly make this use the same set as performance to simplify this a bit --
   // because they are the same but it's prolly better to seperate them
+
   static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenSinging = {
     BEHAVIOR_ID(DanceToTheBeatCoordinator), 
     BEHAVIOR_ID(ListenForBeats),
@@ -130,9 +128,6 @@ namespace{
     BEHAVIOR_ID(ReactToUnexpectedMovement),
     BEHAVIOR_ID(ReactToSoundAwake),
     BEHAVIOR_ID(TriggerWordDetected),
-    BEHAVIOR_ID(FindHome),
-    BEHAVIOR_ID(FindHomeInHabitat),
-    BEHAVIOR_ID(FindAndRequestHome),
   };
 
   // while the behavior is actually activated
