@@ -27,6 +27,14 @@ if [[ "$(uname -a)" == *"Darwin"* ]]; then
     ./project/victor/scripts/victor_start.sh
 else
 
+if [[ "${nodocker}" != "" ]]; then
+    eval $(ssh-agent) && \
+    ssh-add robot_sshkey && \
+    ./project/victor/scripts/victor_deploy.sh -c Release -b && \
+    ./project/victor/scripts/victor_start.sh
+    exit 0
+fi
+
 docker run --rm -it \
     -v $(pwd)/anki-deps:/home/$USER/.anki \
     -v $(pwd):$(pwd) \

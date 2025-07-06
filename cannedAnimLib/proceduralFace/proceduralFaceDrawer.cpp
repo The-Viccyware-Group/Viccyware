@@ -14,6 +14,7 @@
 #include "util/math/math.h"
 #include "util/math/numericCast.h"
 #include "util/random/randomGenerator.h"
+#include <mutex>
 
 // switch std::round() to macro for easier change
 // switched from (x) to std::round(x) as it was noticed edges were jittering when
@@ -26,6 +27,8 @@
 
 namespace Anki {
 namespace Vector {
+
+  static std::mutex gCustomEyeMtx;
 
   #define CONSOLE_GROUP "Face.ParameterizedFace"
 
@@ -42,11 +45,18 @@ namespace Vector {
 
   CONSOLE_VAR(bool,         kProcFace_HotspotRender,              CONSOLE_GROUP, true); // Render glow
   CONSOLE_VAR_RANGED(f32,   kProcFace_HotspotFalloff,             CONSOLE_GROUP, 1.f, 0.05f, 1.f);
-
   CONSOLE_VAR(bool,         kProcFace_EnableAntiAliasing,         CONSOLE_GROUP, true);
   CONSOLE_VAR_RANGED(s32,   kProcFace_AntiAliasingSize,           CONSOLE_GROUP, 15, 0, 15); // full image antialiasing (3 will use NEON)
   CONSOLE_VAR_ENUM(uint8_t, kProcFace_AntiAliasingFilter,         CONSOLE_GROUP, (uint8_t)Filter::GaussianFilter, "None,Box,Gaussian");
   CONSOLE_VAR_RANGED(f32,   kProcFace_AntiAliasingSigmaFraction,  CONSOLE_GROUP, 0.5f, 0.0f, 1.0f);
+  CONSOLE_VAR(bool, kProcFace_CustomEyes, CONSOLE_GROUP, false);
+  CONSOLE_VAR_RANGED(f32, kProcFace_CustomEyeOpacity, CONSOLE_GROUP, 0.8f, 0.f, 1.f);
+  CONSOLE_VAR_ENUM(u8, kProcFace_FlavorOfGay, CONSOLE_GROUP, 0, "Lesbian,Gay,Bi,Trans,Pan,Frog,All,Custom");
+  static void LOOK_LoadFaceOverlay(ConsoleFunctionContextRef context)
+  {
+    ProceduralFaceDrawer::LoadCustomEyePNG();
+  }
+  CONSOLE_FUNC(LOOK_LoadFaceOverlay, CONSOLE_GROUP);
 
 
 #if PROCEDURALFACE_GLOW_FEATURE
@@ -89,6 +99,10 @@ namespace Vector {
   s32 ProceduralFaceDrawer::_faceColMax;
   s32 ProceduralFaceDrawer::_faceRowMin;
   s32 ProceduralFaceDrawer::_faceRowMax;
+
+  Vision::ImageRGB565 ProceduralFaceDrawer::_customEyeOverlay;
+  bool ProceduralFaceDrawer::_hasCustomEyes = false;
+  Vision::Image ProceduralFaceDrawer::_customEyeAlpha;
 
   Matrix_3x3f ProceduralFaceDrawer::GetTransformationMatrix(f32 angleDeg, f32 scaleX, f32 scaleY,
                                                             f32 tX, f32 tY, f32 x0, f32 y0)
@@ -238,6 +252,72 @@ namespace Vector {
       }
     }
   }
+
+  void ProceduralFaceDrawer::LoadCustomEyePNG()
+{
+  std::lock_guard<std::mutex> lk(gCustomEyeMtx);
+  _hasCustomEyes = false;
+  static const cv::String kFaceOverlays[8] = { 
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/lesbian.jpg", 
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/gay.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/bi.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/trans.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/pan.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/frog.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/all.jpg",
+    "/data/data/customFaceOverlay.jpg"
+  };
+  const cv::String kFaceOverlay = kFaceOverlays[kProcFace_FlavorOfGay];
+  cv::Mat img = cv::imread(kFaceOverlay, cv::IMREAD_UNCHANGED);
+  if(img.empty()) {
+    return;
+  }
+
+  // for vector 2.0 we will have to scale
+  if(img.cols != FACE_DISPLAY_WIDTH || img.rows != FACE_DISPLAY_HEIGHT) {
+    return;
+  }
+
+  bool hasAlpha = (img.channels() == 4);
+  if(!hasAlpha && img.channels() != 3) {
+    // what silly image is this
+    return;
+  }
+
+  _customEyeOverlay.Allocate(img.rows, img.cols);
+  _customEyeAlpha  .Allocate(img.rows, img.cols);
+
+  for(int r=0; r<img.rows; ++r)
+  {
+    const cv::Vec4b* src4 = hasAlpha ? img.ptr<cv::Vec4b>(r) : nullptr;
+    const cv::Vec3b* src3 = !hasAlpha? img.ptr<cv::Vec3b>(r) : nullptr;
+    auto* dstPix = _customEyeOverlay.GetRow(r);
+    u8*   dstA   = _customEyeAlpha .GetRow(r);
+
+    for(int c=0; c<img.cols; ++c)
+    {
+
+      u8 b,g,r8,a;
+      if(hasAlpha) { 
+        b=src4[c][0]; 
+        g=src4[c][1]; 
+        r8=src4[c][2]; 
+         a=src4[c][3]; }
+      else { 
+        b=src3[c][0]; 
+        g=src3[c][1]; 
+        r8=src3[c][2]; 
+        a = Util::Clamp<u8>(kProcFace_CustomEyeOpacity*255.f,0,255); 
+      }
+
+      dstPix[c] = { 
+        static_cast<u16>( ((r8 & 0xF8)<<8) | ((g & 0xFC)<<3) | (b>>3) ) 
+      };
+      dstA  [c] = a;
+    }
+  }
+  _hasCustomEyes = true;
+}
 
   void ProceduralFaceDrawer::DrawEye(const ProceduralFace& faceData, WhichEye whichEye, const Matrix_3x3f* W_facePtr,
                                      Vision::Image& faceImg, Rectangle<f32>& eyeBoundingBox)
@@ -678,6 +758,7 @@ namespace Vector {
     dirty = DistortScanlines(faceData, dirty);
     dirty = ApplyNoise(rng, dirty);
     dirty = ConvertColorspace(faceData, output, dirty);
+    dirty = ApplyCustomOverlay(faceData, output, dirty);
   } // DrawFace()
 
   bool ProceduralFaceDrawer::DrawEyes(const ProceduralFace& faceData, bool dirty)
@@ -896,48 +977,138 @@ namespace Vector {
     return dirty;
   } // ApplyNoise()
 
-  bool ProceduralFaceDrawer::ConvertColorspace(const ProceduralFace& faceData, Vision::ImageRGB565& output, bool dirty)
-  {
-    ANKI_CPU_PROFILE("ConvertColorspace");
-    
-    output.Allocate(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
-    output.FillWith(Vision::PixelRGB(0,0,0));
+bool ProceduralFaceDrawer::ConvertColorspace(const ProceduralFace& faceData,
+                                             Vision::ImageRGB565& output,
+                                             bool dirty)
+{
+  ANKI_CPU_PROFILE("ConvertColorspace");
 
-    if(!dirty) {
-      if (!Util::IsFltNear(_faceCache.faceData.GetHue(), faceData.GetHue()) ||
-          !Util::IsFltNear(_faceCache.faceData.GetSaturation(), faceData.GetSaturation())) {
-        // Something changed, we must draw
-        dirty = true;
+  output.Allocate(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
+  output.FillWith(Vision::PixelRGB(0,0,0));
+
+  if(!dirty) {
+    if(!Util::IsFltNear(_faceCache.faceData.GetHue(), faceData.GetHue()) ||
+       !Util::IsFltNear(_faceCache.faceData.GetSaturation(), faceData.GetSaturation()))
+      dirty = true;
+  }
+
+  if(dirty)
+  {
+    _faceCache.faceData.SetHue(faceData.GetHue());
+    _faceCache.faceData.SetSaturation(faceData.GetSaturation());
+
+    const u8 drawHue = ROUND(255.f*faceData.GetHue());
+
+    f32 satF = 1.f;
+#if PROCEDURALFACE_ANIMATED_SATURATION
+    satF *= faceData.GetParameter(whichEye, Parameter::Saturation);
+#endif
+#if PROCEDURALFACE_PROCEDURAL_SATURATION
+    satF *= faceData.GetSaturation();
+#endif
+    const u8 drawSat = ROUND(255.f*satF);
+
+    Rectangle<s32> roiR(_faceColMin,_faceRowMin,
+                        _faceColMax-_faceColMin+1,
+                        _faceRowMax-_faceRowMin+1);
+
+    Vision::ImageRGB565 outROI = output.GetROI(roiR);
+    _faceCache.img8[_faceCache.finalFace]
+            .GetROI(roiR)
+            .ConvertV2RGB565(drawHue,drawSat, outROI);
+  }
+
+  return dirty;
+}
+
+bool ProceduralFaceDrawer::ApplyCustomOverlay(const ProceduralFace& faceData,
+                                             Vision::ImageRGB565& output,
+                                             bool dirty)
+{
+  static bool _didLoadCustom = (LoadCustomEyePNG(), true);
+
+  if(kProcFace_CustomEyes && _hasCustomEyes)
+  {
+    std::lock_guard<std::mutex> lk(gCustomEyeMtx);
+
+    const int padX = 5;
+    int xMin0 = _faceColMin - padX;
+    int xMax0 = _faceColMax + padX;
+    int yMin0 = _faceRowMin;
+    int yMax0 = _faceRowMax;
+    int fullW = xMax0 - xMin0 + 1;
+    int fullH = yMax0 - yMin0 + 1;
+
+    int xMin = std::max(0, xMin0);
+    int xMax = std::min(ProceduralFace::WIDTH - 1, xMax0);
+    int yMin = std::max(0, yMin0);
+    int yMax = std::min(ProceduralFace::HEIGHT - 1, yMax0);
+    Rectangle<s32> roiR(xMin, yMin,
+                        xMax - xMin + 1,
+                        yMax - yMin + 1);
+
+    auto dstROI  = output.GetROI(roiR);
+    auto maskROI = _faceCache.img8[_faceCache.finalFace].GetROI(roiR);
+
+    int overlayW = _customEyeOverlay.GetNumCols();
+    int overlayH = _customEyeOverlay.GetNumRows();
+    float scaleX = overlayW / float(fullW);
+    float scaleY = overlayH / float(fullH);
+
+    for(int y = 0; y < roiR.GetHeight(); ++y) {
+      auto* dstRow  = dstROI .GetRow(y);
+      auto* maskRow = maskROI.GetRow(y);
+      int globalY    = yMin + y;
+      int sampleY    = std::min(overlayH - 1, std::max(0, int((globalY - yMin0) * scaleY)));
+      for(int x = 0; x < roiR.GetWidth(); ++x) {
+        if(maskRow[x] == 0) continue;
+        int globalX = xMin + x;
+        int sampleX = std::min(overlayW - 1, std::max(0, int((globalX - xMin0) * scaleX)));
+        u8 alpha = _customEyeAlpha.GetRow(sampleY)[sampleX];
+        if(alpha == 0) continue;
+
+        // unpack d
+        u16 destVal = dstRow[x].GetValue();
+        u8 dR = (destVal >> 11) & 0x1F;
+        u8 dG = (destVal >> 5)  & 0x3F;
+        u8 dB =  destVal        & 0x1F;
+        u8 D_R = (dR << 3) | (dR >> 2);
+        u8 D_G = (dG << 2) | (dG >> 4);
+        u8 D_B = (dB << 3) | (dB >> 2);
+
+        // overlay
+        u16 oVal = _customEyeOverlay.GetRow(sampleY)[sampleX].GetValue();
+        u8 oR = (oVal >> 11) & 0x1F;
+        u8 oG = (oVal >> 5)  & 0x3F;
+        u8 oB =  oVal        & 0x1F;
+        u8 O_R = (oR << 3) | (oR >> 2);
+        u8 O_G = (oG << 2) | (oG >> 4);
+        u8 O_B = (oB << 3) | (oB >> 2);
+
+        // modulate by d intensity
+        u8 dV = std::max({D_R, D_G, D_B});
+        O_R = O_R * dV / 255;
+        O_G = O_G * dV / 255;
+        O_B = O_B * dV / 255;
+
+        // alpha blend
+        u8 invA = 255 - alpha;
+        u8 R = (O_R * alpha + D_R * invA) / 255;
+        u8 G = (O_G * alpha + D_G * invA) / 255;
+        u8 B = (O_B * alpha + D_B * invA) / 255;
+
+        // pack
+        u16 packed = ((R & 0xF8) << 8) | ((G & 0xFC) << 3) | (B >> 3);
+        dstRow[x].SetValue(packed);
       }
     }
 
-    if (dirty) {
-      // Update parameters used to generate this cached image
-      _faceCache.faceData.SetHue(faceData.GetHue());
-      _faceCache.faceData.SetSaturation(faceData.GetSaturation());
+    dirty = true;
+  }
+  return dirty;
+}
 
-      const f32 hueFactor = faceData.GetHue();
-      DEV_ASSERT(Util::InRange(hueFactor, 0.f, 1.f), "ProceduralFaceDrawer.DrawEye.InvalidHue");
-      const u8 drawHue = ROUND(255.f*hueFactor);
 
-      f32 satFactor = 1.0f;
-#if PROCEDURALFACE_ANIMATED_SATURATION
-      satFactor *= faceData.GetParameter(whichEye, Parameter::Saturation);
-#endif
-#if PROCEDURALFACE_PROCEDURAL_SATURATION
-      satFactor *= faceData.GetSaturation();
-#endif
-      DEV_ASSERT(Util::InRange(satFactor, -1.f, 1.f), "ProceduralFaceDrawer.DrawEye.InvalidSaturation");
-      const u8 drawSat = ROUND(255.f * satFactor);
-
-      // ... otherwise convert final image, limited by bounding box, to RGB565
-      Rectangle<s32> eyesROI(_faceColMin, _faceRowMin, _faceColMax-_faceColMin+1, _faceRowMax-_faceRowMin+1);
-      Vision::ImageRGB565 roi = output.GetROI(eyesROI);
-      _faceCache.img8[_faceCache.finalFace].GetROI(eyesROI).ConvertV2RGB565(drawHue, drawSat, roi);
-    }
-
-    return dirty;
-  } // ConvertColorspace()
 
   bool ProceduralFaceDrawer::GetNextBlinkFrame(ProceduralFace& faceData,
                                                BlinkState& out_blinkState,
