@@ -66,10 +66,11 @@
 #endif
 
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
-const std::string OSProject = "WireOS";
-const std::string OSBranch = "main";
-const std::string Creator = "By Wire/kercre123";
-const std::string CreatorWebsite = "keriganc.com";
+const std::string OSProject = "Viccyware";
+const std::string OSBranch = "Viccyware-tester";
+const std::string OSVerName = "Beta 6.1";
+const std::string Creator = "Built by the Viccyware Team";
+const std::string CreatorWebsite = "vicw.xyz";
 
 // Log options
 #define LOG_CHANNEL    "FaceInfoScreenManager"
@@ -137,8 +138,8 @@ namespace {
 
   const char* kAlexaIconSpriteName = "face_alexa_icon";
 
-  // TODO (VIC-11606): don't use timeout for mute
-  CONSOLE_VAR_RANGED(f32, kToggleMuteTimeout_s, "FaceInfoScreenManager", 1.2f, 0.001f, 3.0f);
+  // TODO (VIC-11606): don't use timeout for mute <-- // VIC-11606 seems to be lost to time so this fix will likely never happen.
+  CONSOLE_VAR_RANGED(f32, kToggleMuteTimeout_s, "FaceInfoScreenManager", 1.8f, 0.001f, 3.0f);  // Change the mute timeout from 1.2 to 1.8 for now
   CONSOLE_VAR_RANGED(f32, kAlexaNotificationTimeout_s, "FaceInfoScreenManager", 2.0f, 0.001f, 3.0f);
 
   // How long the button needs to be pressed for before it should trigger shutdown animation
@@ -217,7 +218,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG) || !ANKI_DEV_CHEATS;  // TODO: Use this line in master
   //const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG);                        // Use this line in factory branch
 
-  ADD_SCREEN_WITH_TEXT(Recovery, Recovery, {"RECOVERY MODE"});
+  ADD_SCREEN_WITH_TEXT(Recovery, Recovery, {"RECOVERY (Wipes OS)"});
   ADD_SCREEN(None, None);
   ADD_SCREEN(Pairing, Pairing);
   ADD_SCREEN(FAC, None);
@@ -225,7 +226,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_SCREEN(Main, Network);
   ADD_SCREEN_WITH_TEXT(ClearUserData, Main, {"CLEAR OUT SOUL?"});
   ADD_SCREEN_WITH_TEXT(ClearUserDataFail, Main, {"UNABLE TO CLEAR SOUL"});
-  ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {"Vector will remember that..."});
+  ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {IsXray() ? "Cozmo will remember..." : "Cozmo will remember that..."});
   ADD_SCREEN_WITH_TEXT(SelfTest, Main, {"START SELF TEST?"});
   ADD_SCREEN(SelfTestRunning, SelfTestRunning)
   ADD_SCREEN(Network, SensorInfo);
@@ -260,7 +261,6 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   }
 
   ADD_SCREEN(BuildInfo, Main); // Last screen cycles back to Main
-
 
   // ========== Screen Customization ========= 
   // Enter/Exit fcns, menu items, timeouts
@@ -318,7 +318,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "CLEAR" : "CLEAR OUT SOUL", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "NUKE" : "NUKE THE FLASH", ClearUserData);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
@@ -329,7 +329,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     RobotInterface::SendAnimToEngine(RobotInterface::StartSelfTest());
     return ScreenName::SelfTestRunning;
   };
-  ADD_MENU_ITEM_WITH_ACTION(SelfTest, "CONFIRM", confirmSelfTest);
+  ADD_MENU_ITEM_WITH_ACTION(SelfTest, "START", confirmSelfTest);
   DISABLE_TIMEOUT(SelfTestRunning);
   
   // Clear User Data menu
@@ -346,7 +346,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     return ScreenName::Rebooting;
   };
   ADD_MENU_ITEM(ClearUserData, "EXIT", Main);
-  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, "CONFIRM", confirmClearUserData);
+  ADD_MENU_ITEM_WITH_ACTION(ClearUserData, IsXray() ? "CONFIRM" : "CONFIRM", confirmClearUserData);
   SET_TIMEOUT(ClearUserDataFail, 2.f, Main);
 
 
@@ -359,6 +359,9 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   // === Recovery screen ===
   FaceInfoScreen::MenuItemAction rebootAction = [this]() {
     LOG_INFO("FaceInfoScreenManager.Recovery.Rebooting", "");
+
+    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_a");
+    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_b");
     this->Reboot();
 
     return ScreenName::Rebooting;
@@ -428,7 +431,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   // === Camera Motor Test ===
   // Add menu item to camera screen to start a test mode where the motors run back and forth
   // and camera images are streamed to the face
-  ADD_MENU_ITEM(Camera, "TEST MODE", CameraMotorTest);
+  ADD_MENU_ITEM(Camera, "START TEST", CameraMotorTest);
   SET_TIMEOUT(CameraMotorTest, 300.f, None);
 
   auto cameraMotorTestExitAction = [cameraExitAction]() {
@@ -1267,30 +1270,30 @@ void FaceInfoScreenManager::DrawMain()
   auto *osstate = OSState::getInstance();
 
   std::string esn = osstate->GetSerialNumberAsString();
-  if(esn.empty())
-  {
+//  if(esn.empty())
+//  {
     // TODO Remove once DVT2s are phased out
     // ESN is 0 assume this is a DVT2 with a fake birthcertificate
     // so look for serial number in "/proc/cmdline"
-    static std::string serialNum = "";
-    if(serialNum == "")
-    {
-      std::ifstream infile("/proc/cmdline");
+    //static std::string serialNum = "";
+//    if(serialNum == "")
+//    {
+//      std::ifstream infile("/proc/cmdline");
 
-      std::string line;
-      while(std::getline(infile, line))
-      {
-        static const std::string kProp = "androidboot.serialno=";
-        size_t index = line.find(kProp);
-        if(index != std::string::npos)
-        {
-          serialNum = line.substr(index + kProp.length(), 8);
-        }
-      }
-      infile.close();
-    }
-    esn =  serialNum;
-  }
+//      std::string line;
+//      while(std::getline(infile, line))
+//      {
+//        static const std::string kProp = "androidboot.serialno=";
+//        size_t index = line.find(kProp);
+//        if(index != std::string::npos)
+//        {
+//          serialNum = line.substr(index + kProp.length(), 8);
+//        }
+//      }
+//      infile.close();
+//    }
+//    esn =  serialNum;
+//  }
 
   std::transform(esn.begin(), esn.end(), esn.begin(),
     [](unsigned char c){ return std::tolower(c); });
@@ -1312,7 +1315,7 @@ void FaceInfoScreenManager::DrawMain()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "XXX.XXX.XXX.XXX";
+    ip = "NO INTERNET";
   }
 
   // ESN/serialNo and the HW version are drawn on the same line with serialNo default left aligned and
@@ -1340,7 +1343,7 @@ void FaceInfoScreenManager::DrawNetwork()
 
   std::string ip             = osstate->GetIPAddress();
   if (ip.empty()) {
-    ip = "XXX.XXX.XXX.XXX";
+    ip = "NO INTERNET";
   }
 
   std::tm timeObj;
@@ -1356,10 +1359,10 @@ void FaceInfoScreenManager::DrawNetwork()
 
   auto getStatusString = [](const auto& status) {
     switch (status) {
-      case CloudMic::ConnectionCode::Available:   { return ColoredText("AVAILABLE",    NamedColors::GREEN); }
+      case CloudMic::ConnectionCode::Available:   { return ColoredText("CONNECTED",    NamedColors::GREEN); }
       case CloudMic::ConnectionCode::Connectivity:{ return ColoredText("CONNECTIVITY", NamedColors::RED); }
       case CloudMic::ConnectionCode::Tls:         { return ColoredText("TLS",          NamedColors::RED); }
-      case CloudMic::ConnectionCode::Auth:        { return ColoredText("AUTH",         NamedColors::RED); }
+      case CloudMic::ConnectionCode::Auth:        { return ColoredText("OFFLINE",         NamedColors::RED); }
       case CloudMic::ConnectionCode::Bandwidth:   { return ColoredText("BANDWIDTH",    NamedColors::RED); }
       default:                                    { return ColoredText("CHECKING...",  NamedColors::BLUE); }
     }
@@ -1472,11 +1475,12 @@ void FaceInfoScreenManager::DrawBuildInfo() {
   auto *osstate = OSState::getInstance();
   const std::string osProject = "OS: " + OSProject;
   const std::string branch = "BRANCH: " + OSBranch;
+  const std::string osVerName = "BUILD: " + OSVerName;
   const std::string osVer = "VER: " + osstate->GetOSBuildVersion();
   const std::string sha = "SHA: " + osstate->GetBuildSha();
   const std::string creator = Creator;
   const std::string creatorWebsite = CreatorWebsite;
-  DrawTextOnScreen({osProject, branch, osVer, sha, creator, creatorWebsite});
+  DrawTextOnScreen({osProject, branch, osVerName, osVer, sha, creator, creatorWebsite});
 }
 
 void FaceInfoScreenManager::DrawIMUInfo(const RobotState& state)
@@ -1736,7 +1740,7 @@ void FaceInfoScreenManager::DrawTextOnScreen(const std::vector<std::string>& tex
   // TODO: Expose line and location(?) as arguments
   const u8  textLineThickness = 8;
 
-  textScale = IsXray() ? textScale - 0.05f : textScale;
+  textScale = IsXray() ? textScale - 0.06f : textScale;
 
   for(const auto& text : textVec)
   {

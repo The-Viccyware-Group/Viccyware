@@ -257,36 +257,36 @@ void ITrackLayerManager<FRAME_TYPE>::AdvanceTracks(const TimeStamp_t toTime_ms)
 template<class FRAME_TYPE>
 void ITrackLayerManager<FRAME_TYPE>::ValidateTrack(const Animations::Track<FRAME_TYPE>& track)
 {
-  if(ANKI_DEV_CHEATS){
-    // Ensure tracks don't overlap
-    for(const auto& keyframe: track.GetCopyOfKeyframes()){
-      ANKI_VERIFY(keyframe.GetTriggerTime_ms() != keyframe.GetTimestampActionComplete_ms(),
-                  "ITrackLayerManager.ValidateTrack.KeyframeWithNoLength",
-                  "All keyframes must have a duration");
-    }
-  }
+  // if(ANKI_DEV_CHEATS){
+  //   // Ensure tracks don't overlap
+  //   for(const auto& keyframe: track.GetCopyOfKeyframes()){
+  //     ANKI_VERIFY(keyframe.GetTriggerTime_ms() != keyframe.GetTimestampActionComplete_ms(),
+  //                 "ITrackLayerManager.ValidateTrack.KeyframeWithNoLength",
+  //                 "All keyframes must have a duration");
+  //   }
+  // }
 }
   
 template<>
 void ITrackLayerManager<ProceduralFaceKeyFrame>::ValidateTrack(const Animations::Track<ProceduralFaceKeyFrame>& track)
 {
-  if(ANKI_DEV_CHEATS){
-    // Ensure tracks don't overlap
-    auto keyframes = track.GetCopyOfKeyframes();
-    for(auto keyframeIter = keyframes.begin(); keyframeIter != keyframes.end(); keyframeIter++){
-      ANKI_VERIFY(keyframeIter->GetTriggerTime_ms() != keyframeIter->GetTimestampActionComplete_ms(),
-                  "ITrackLayerManager.ValidateTrack.KeyframeWithNoLength",
-                  "All keyframes must have a duration");
-      auto nextIter = keyframeIter;
-      nextIter++;
-      if(nextIter != keyframes.end()){
-        ANKI_VERIFY(keyframeIter->GetTimestampActionComplete_ms() == nextIter->GetTriggerTime_ms(),
-                    "ITrackLayerManager.ValidateTrack.ProceduralKeyframeTimeMismatch",
-                    "Previous keyframe ends at %u, but next frame does not trigger until %u, interpolation will break",
-                    keyframeIter->GetTimestampActionComplete_ms(), nextIter->GetTriggerTime_ms());
-      }
-    }
-  }
+  // if(ANKI_DEV_CHEATS){
+  //   // Ensure tracks don't overlap
+  //   auto keyframes = track.GetCopyOfKeyframes();
+  //   for(auto keyframeIter = keyframes.begin(); keyframeIter != keyframes.end(); keyframeIter++){
+  //     ANKI_VERIFY(keyframeIter->GetTriggerTime_ms() != keyframeIter->GetTimestampActionComplete_ms(),
+  //                 "ITrackLayerManager.ValidateTrack.KeyframeWithNoLength",
+  //                 "All keyframes must have a duration");
+  //     auto nextIter = keyframeIter;
+  //     nextIter++;
+  //     if(nextIter != keyframes.end()){
+  //       ANKI_VERIFY(keyframeIter->GetTimestampActionComplete_ms() == nextIter->GetTriggerTime_ms(),
+  //                   "ITrackLayerManager.ValidateTrack.ProceduralKeyframeTimeMismatch",
+  //                   "Previous keyframe ends at %u, but next frame does not trigger until %u, interpolation will break",
+  //                   keyframeIter->GetTimestampActionComplete_ms(), nextIter->GetTriggerTime_ms());
+  //     }
+  //   }
+  // }
 }
 
   

@@ -44,11 +44,10 @@ namespace Vector {
   CONSOLE_VAR_RANGED(f32,   kProcFace_EyeLightnessMultiplier,     CONSOLE_GROUP, 1.f, 0.f, 2.f);
 
   CONSOLE_VAR(bool,         kProcFace_HotspotRender,              CONSOLE_GROUP, true); // Render glow
-  CONSOLE_VAR_RANGED(f32,   kProcFace_HotspotFalloff,             CONSOLE_GROUP, 0.48f, 0.05f, 1.f);
- 
+  CONSOLE_VAR_RANGED(f32,   kProcFace_HotspotFalloff,             CONSOLE_GROUP, 1.f, 0.05f, 1.f);
   CONSOLE_VAR(bool,         kProcFace_EnableAntiAliasing,         CONSOLE_GROUP, true);
-  CONSOLE_VAR_RANGED(s32,   kProcFace_AntiAliasingSize,           CONSOLE_GROUP, 3, 0, 15); // full image antialiasing (3 will use NEON)
-  CONSOLE_VAR_ENUM(uint8_t, kProcFace_AntiAliasingFilter,         CONSOLE_GROUP, (uint8_t)Filter::BoxFilter, "None,Box,Gaussian");
+  CONSOLE_VAR_RANGED(s32,   kProcFace_AntiAliasingSize,           CONSOLE_GROUP, 15, 0, 15); // full image antialiasing (3 will use NEON)
+  CONSOLE_VAR_ENUM(uint8_t, kProcFace_AntiAliasingFilter,         CONSOLE_GROUP, (uint8_t)Filter::GaussianFilter, "None,Box,Gaussian");
   CONSOLE_VAR_RANGED(f32,   kProcFace_AntiAliasingSigmaFraction,  CONSOLE_GROUP, 0.5f, 0.0f, 1.0f);
   CONSOLE_VAR(bool, kProcFace_CustomEyes, CONSOLE_GROUP, false);
   CONSOLE_VAR_RANGED(f32, kProcFace_CustomEyeOpacity, CONSOLE_GROUP, 0.8f, 0.f, 1.f);
@@ -67,7 +66,7 @@ namespace Vector {
 #endif
 
 #if PROCEDURALFACE_SCANLINE_FEATURE
-  CONSOLE_VAR(bool,                         kProcFace_Scanlines,              CONSOLE_GROUP, false);
+  CONSOLE_VAR(bool,                         kProcFace_Scanlines,              CONSOLE_GROUP, true);
   CONSOLE_VAR_RANGED(ProceduralFace::Value, kProcFace_DefaultScanlineOpacity, CONSOLE_GROUP, 1.f, 0.f, 1.f);
 #endif
 
@@ -75,8 +74,8 @@ namespace Vector {
   static const s32 kNumNoiseImages = 7;
 
   CONSOLE_VAR_RANGED(s32, kProcFace_NoiseNumFrames,              CONSOLE_GROUP, 5, 0, kNumNoiseImages);
-  CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMinLightness,           CONSOLE_GROUP, IsXray() ? 0.98f : 0.92f, 0.f, 2.f); // replaces kProcFace_NoiseFraction
-  CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMaxLightness,           CONSOLE_GROUP, IsXray() ? 1.05f : 1.14f, 0.f, 2.f);
+  CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMinLightness,           CONSOLE_GROUP, 0.92f, 0.f, 2.f); // replaces kProcFace_NoiseFraction
+  CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMaxLightness,           CONSOLE_GROUP, 1.14f, 0.f, 2.f); // replaces kProcFace_NoiseFraction
 
   CONSOLE_VAR_EXTERN(s32, kProcFace_NoiseNumFrames);
 #else
@@ -678,6 +677,9 @@ namespace Vector {
       {
         ANKI_CPU_PROFILE("DrawEyePixels");
 
+ 	const bool scanlineEnabled = kProcFace_Scanlines && faceData.GetScanlineOpacity() > 0.0f;
+	const f32 scanlineOpacity = faceData.GetScanlineOpacity();
+
         DEV_ASSERT_MSG(upperLeft.y()>=0 && bottomRight.y()<faceImg.GetNumRows(), "ProceduralFaceDrawer.DrawEye.BadRow", "%f %f", upperLeft.y(), bottomRight.y());
         DEV_ASSERT_MSG(upperLeft.x()>=0 && bottomRight.x()<faceImg.GetNumCols(), "ProceduralFaceDrawer.DrawEye.BadCol", "%f %f", upperLeft.x(), bottomRight.x());
         for(s32 i=upperLeft.y(); i<=bottomRight.y(); ++i) {
@@ -717,6 +719,14 @@ namespace Vector {
 #endif
 
               newValue *= eyeLightness;
+
+              if(scanlineEnabled) {
+                // Simple horizontal scanline effect - modify as needed
+                const bool isScanline = (i % 2 == 0); // Every other row
+                if(isScanline) {
+                  newValue *= (1.0f - scanlineOpacity); // Darken scanline rows
+                }
+              }
 
               // Put the final value into the face image
               // Note: If we're drawing the right eye, there may already be something in the image
@@ -1195,7 +1205,7 @@ bool ProceduralFaceDrawer::ApplyCustomOverlay(const ProceduralFace& faceData,
 
   } // GetNextBlinkFrame()
   
-  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGB& imageHsv, const float opacity, bool dirty)
+  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGBA& imageHsv, const float opacity, bool dirty)
   {
 #if PROCEDURALFACE_SCANLINE_FEATURE
     if(kProcFace_Scanlines) {
@@ -1215,6 +1225,8 @@ bool ProceduralFaceDrawer::ApplyCustomOverlay(const ProceduralFace& faceData,
             auto* thisRow = imageHsv.GetRow(i);
             for (int j=0 ; j < nCols ; j++) {
               // the 'blue' channel in an HSV image is the value
+              thisRow[j].r() *= opacity;
+              thisRow[j].g() *= opacity;
               thisRow[j].b() *= opacity;
             }
           }
