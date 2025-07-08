@@ -273,10 +273,10 @@ namespace Vector {
     return;
   }
 
-  // for vector 2.0 we will have to scale
-  if(img.cols != FACE_DISPLAY_WIDTH || img.rows != FACE_DISPLAY_HEIGHT) {
-    return;
-  }
+  // might want to set a maximum resolution, but we don't need it to match face anymore
+  // if(img.cols != FACE_DISPLAY_WIDTH || img.rows != FACE_DISPLAY_HEIGHT) {
+  //   return;
+  // }
 
   bool hasAlpha = (img.channels() == 4);
   if(!hasAlpha && img.channels() != 3) {
