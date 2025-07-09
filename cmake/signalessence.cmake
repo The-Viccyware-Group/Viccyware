@@ -15,7 +15,7 @@ set(SIGNALESSENCE_VERSION_PATH "v008") # Updated prototype version with Echo Can
 
 message(STATUS "Signal Essence lib ${SIGNALESSENCE_VERSION_PATH}")
 
-set(SIGNALESSENCE_HOME "${ANKI_EXTERNAL_DIR}/anki-thirdparty/signalEssence/${SIGNALESSENCE_VERSION_PATH}")
+set(SIGNALESSENCE_HOME "${ANKI_THIRD_PARTY_DIR}/signalEssence/${SIGNALESSENCE_VERSION_PATH}")
 
 set(SIGNALESSENCE_LIB_PATH "${SIGNALESSENCE_HOME}/${SIGNALESSENCE_PLATFORM_DIR}/platform/anki_victor_example/build")
 

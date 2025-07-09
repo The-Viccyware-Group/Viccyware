@@ -40,7 +40,7 @@ pushd "${TOPLEVEL}" > /dev/null 2>&1
 check_dep which python2
 check_dep which python3
 check_dep which ninja
-check_dep which git-lfs
+#check_dep which git-lfs
 
 
 echo `pwd`
@@ -54,8 +54,8 @@ vlog "CMake"
 vlog "Go"
 ./tools/build/tools/ankibuild/go.py
 
-vlog "git lfs"
-$GIT lfs install
+#vlog "git lfs"
+#$GIT lfs install
 
 vlog "Build output dirs"
 mkdir -p generated

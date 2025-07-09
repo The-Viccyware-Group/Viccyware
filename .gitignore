@@ -411,7 +411,8 @@ robot_ip.txt
 !okaoVision/lib/MacOSX/*.a
 
 # The 3rd directory contains drops from 3rd party vendors and all files should be allowed
-!3rd/**
+# Scratch the above, 3rd shouldn't be committed ever as it is downloaded from a server
+3rd/
 
 victor-packages
 log.txt

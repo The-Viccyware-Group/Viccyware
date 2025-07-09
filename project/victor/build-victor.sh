@@ -297,7 +297,7 @@ if [ -z "${GOROOT+x}" ]; then
 else
     GO_EXE=$GOROOT/bin/go
 fi
-export GOPATH=${TOPLEVEL}/cloud/go:${TOPLEVEL}/generated/cladgo:${TOPLEVEL}/generated/go:${TOPLEVEL}/tools/message-buffers/support/go
+export GOPATH=${TOPLEVEL}/cloud/go:${TOPLEVEL}/generated/cladgo:${TOPLEVEL}/generated/go:${TOPLEVEL}/victor-clad/tools/message-buffers/support/go
 
 if [ ! -f ${GO_EXE} ]; then
   echo "Missing Go executable: ${GO_EXE}"
@@ -336,25 +336,14 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     METABUILD_INPUTS=`find . -name BUILD.in`
 
     # Process BUILD.in files (creates list of Go projects to fetch)
-    PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
-      -o ${GEN_SRC_DIR} \
-      ${METABUILD_INPUTS}
-fi
-
-if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
-  echo "Getting Go dependencies"
-  # Check out specified revisions of repositories we've versioned
-  # Append a dummy dir to the GOPATH so that `go get` doesn't barf
-  # on nonexistent clad files
-  GODUMMY=${TOPLEVEL}/cloud/dummy
-  (cd ${TOPLEVEL}; PATH="$(dirname $GO_EXE):$PATH" GOPATH="$GOPATH:$GODUMMY" ./godeps.js execute ${GEN_SRC_DIR})
-else
-  echo "Ignore Go dependencies"
+    #PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
+    #  -o ${GEN_SRC_DIR} \
+    #  ${METABUILD_INPUTS}
 fi
 
 # Set protobuf location
 HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
-PROTOBUF_HOME=${TOPLEVEL}/EXTERNALS/protobuf/${HOST}
+PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
 
 # Build protocCppPlugin if needed
 if [[ ! -x ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin ]]; then
@@ -372,16 +361,16 @@ if [[ $BUILD_PROTOC_PLUGIN -eq 1 ]]; then
 fi
 
 # Build/Install the protoc generators for go
-GOBIN="${TOPLEVEL}/cloud/go/bin"
-if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
-    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
-    GOBIN=$GOBIN \
-    CC=/usr/bin/cc \
-    CXX=/usr/bin/c++ \
-    "${GOROOT}/bin/go" install \
-    github.com/golang/protobuf/protoc-gen-go \
-    github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-fi
+#GOBIN="${TOPLEVEL}/cloud/go/bin"
+#if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
+#    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
+#    GOBIN=$GOBIN \
+#    CC=/usr/bin/cc \
+#    CXX=/usr/bin/c++ \
+#    "${GOROOT}/bin/go" install \
+#    github.com/golang/protobuf/protoc-gen-go \
+#    github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+#fi
 
 #
 # generate source file lists

@@ -22,7 +22,7 @@ if [ ! -z "${LLDB_SERVER_PID}" ]; then
 fi
 
 # Deploy to robot?
-DEPLOY_FROM="${TOPLEVEL}/EXTERNALS/lldb-server/vicos/bin/lldb-server"
+DEPLOY_FROM="${TOPLEVEL}/3rd/lldb-server/vicos/bin/lldb-server"
 DEPLOY_TO="/anki/bin/lldb-server"
 
 robot_sh "test -f ${DEPLOY_TO}"

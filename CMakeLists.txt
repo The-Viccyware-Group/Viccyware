@@ -57,8 +57,8 @@ if(MACOSX)
 elseif(VICOS)
   set(ANKI_PLATFORM_NAME "vicos")
   set(SYMBOL_VISIBILITY_FLAGS "-fvisibility=hidden")
-else()
-  message(FATAL_ERROR "unsupported platform: ${ANKI_PLATFORM_NAME}")
+#else()
+#  message(FATAL_ERROR "unsupported platform: ${ANKI_PLATFORM_NAME}")
 endif()
 
 message(STATUS "ANKI_PLATFORM_NAME: ${ANKI_PLATFORM_NAME}")
@@ -135,6 +135,7 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
 endif()
 
 set(ANKI_EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/EXTERNALS")
+set(ANKI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rd")
 set(OKAO_VISION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/okaoVision")
 
 set(ANKI_SRCLIST_DIR "${CMAKE_SOURCE_DIR}/generated/cmake")
