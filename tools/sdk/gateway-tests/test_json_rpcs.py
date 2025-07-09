@@ -175,6 +175,8 @@ def test_pull_jdocs(vector_connection, data):
     '{"settings": {"eye_color": -1}}',
     '{"settings":{"clock_24_hour":true,"eye_color":5}}',
     '{"settings":{"clock_24_hour":true}}',
+    '{"settings": {"custom_eye_color": { "enabled": true, "hue": 1, "saturation": 1.0 }}}',
+    '{"settings": { "eye_color": 6, "custom_eye_color": { "enabled": false, "hue": 1, "saturation": 1.0 }}}',
 ])
 def test_update_settings_raw(vector_connection, data):
     def callback(response, response_type):
@@ -303,6 +305,9 @@ def test_alexa_opt_out(vector_connection, data):
 
 def test_set_eye_color(vector_connection):
     vector_connection.send("v1/set_eye_color", p.SetEyeColorRequest(), p.SetEyeColorResponse())
+
+def test_cancel_behavior(vector_connection):
+    vector_connection.send("v1/cancel_behavior", p.CancelBehaviorRequest(), p.CancelBehaviorResponse())
 
 # TODO Turn back on
 #def test_capture_single_image(vector_connection):
