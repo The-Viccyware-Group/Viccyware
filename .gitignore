@@ -424,4 +424,7 @@ snowboy/server/main
 # oelinux specific
 oe-logs
 oe-workdir
+
+# make these not get added to the repo as they are downloaded
 cloud/internal/proto/external_interface/
+cloud/go/src/google.golang.org/
