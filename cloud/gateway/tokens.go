@@ -2,22 +2,19 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"time"
 
-	cloud_clad "github.com/digital-dream-labs/vector-cloud/internal/clad/cloud"
+	"anki/ipc"
+	"anki/log"
+	"anki/robot"
+	cloud_clad "clad/cloud"
 
-	"github.com/digital-dream-labs/vector-cloud/internal/ipc"
-	"github.com/digital-dream-labs/vector-cloud/internal/log"
-	"github.com/digital-dream-labs/vector-cloud/internal/robot"
-	"github.com/digital-dream-labs/vector-cloud/internal/token"
-
+	"github.com/anki/sai-token-service/client/clienthash"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -54,25 +51,7 @@ type ClientTokenManager struct {
 	limiter           *MultiLimiter      `json:"-"`
 }
 
-func randomString() string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, 20)
-	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		b[i] = charset[n.Int64()]
-	}
-	return string(b)
-}
-
 func (ctm *ClientTokenManager) Init() error {
-	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
-	if err != nil {
-		token.PerRuntimeToken = randomString()
-		err = os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
-		fmt.Println("HEY WIRE LOOK AT ME!!!:", err)
-	} else {
-		token.PerRuntimeToken = string(f)
-	}
 	ctm.forceClearFile = false
 	ctm.lastUpdatedTokens = time.Now().Add(-24 * time.Hour) // older than our startup time
 	// Limit the updates of the AppTokens with the following logic:
@@ -97,7 +76,7 @@ func (ctm *ClientTokenManager) Init() error {
 	ctm.notifyValid = make(chan struct{})
 	ctm.updateNowChan = make(chan chan struct{})
 	ctm.jdocIPC.Connect(ipc.GetSocketPath(jdocDomainSocket), jdocSocketSuffix)
-	err = ctm.readTokensFile()
+	err := ctm.readTokensFile()
 	if err != nil {
 		return ctm.UpdateTokens()
 	}
@@ -127,7 +106,7 @@ func (ctm *ClientTokenManager) CheckToken(clientToken string) (string, error) {
 		return "", grpc.Errorf(codes.Unauthenticated, "no valid tokens")
 	}
 	recentToken := ctm.ClientTokens[ctm.recentTokenIndex]
-	err := token.CompareHashAndToken(recentToken.Hash, clientToken)
+	err := clienthash.CompareHashAndToken(recentToken.Hash, clientToken)
 	if err == nil {
 		return recentToken.ClientName, nil
 	}
@@ -135,7 +114,7 @@ func (ctm *ClientTokenManager) CheckToken(clientToken string) (string, error) {
 		if idx == ctm.recentTokenIndex || len(validToken.Hash) == 0 {
 			continue
 		}
-		err = token.CompareHashAndToken(validToken.Hash, clientToken)
+		err = clienthash.CompareHashAndToken(validToken.Hash, clientToken)
 		if err == nil {
 			ctm.recentTokenIndex = idx
 			return validToken.ClientName, nil

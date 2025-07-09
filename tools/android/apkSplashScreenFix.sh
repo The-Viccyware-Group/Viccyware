@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # this should be invoked by build scripts with the usage:
 # apkSplashScreenFix.sh IN-APKFILE OUT-APKFILE

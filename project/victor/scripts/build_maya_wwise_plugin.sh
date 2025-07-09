@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Properly build Anki Maya Wwise Plugin.
 # Add environment variables to include plugin CMake project

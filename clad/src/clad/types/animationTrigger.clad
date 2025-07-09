@@ -234,7 +234,6 @@ enum int_32 AnimationTrigger
 
   ICantDoThat,
   InitialWakeUp,
-  IntentionalPerformance,
   InteractWithFaceTrackingIdle,
   InteractWithFacesInitialNamed,
   InteractWithFacesInitialUnnamed,
@@ -283,6 +282,7 @@ enum int_32 AnimationTrigger
   MessagingMessageDeletedShort,
   MessagingMessageRewind,
 
+  MovementDriveForward,
   MovementDriveBackward,
   MovementTurnLeft,
   MovementTurnRight,
@@ -342,8 +342,6 @@ enum int_32 AnimationTrigger
   PettingLevel4Getout,
   PettingBlissLoop,
   PettingBlissGetout,
-  PetDetectionDog,
-  PetDetectionCat,
   PickupCubePreperation,
   PickupCubeRetry,
   PickupCubeSuccess,
@@ -535,7 +533,6 @@ enum int_32 AnimationTrigger
   TextToSpeechGetIn,
   TextToSpeechGetLoop,
   TextToSpeechGetOut,
-  UnintentionalPerformance,
   UnitTestAnim,
   VC_ListeningGetIn,
   VC_ListeningLoop,
@@ -578,11 +575,6 @@ enum int_32 AnimationTrigger
   DEPRECATED_SearchForFace_Search,
   DEPRECATED_SearchForFace_FoundFace,
   DEPRECATED_StackBlocksSuccess,
-  DEPRECATED_Singing_80bpm,
-  DEPRECATED_Singing_100bpm,
-  DEPRECATED_Singing_120bpm,
-  DEPRECATED_Singing_GetIn,
-  DEPRECATED_Singing_GetOut,
 
   // Count can specify "none" or "unspecified"
   Count, // Keep count at end.

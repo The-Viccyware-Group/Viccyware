@@ -8,8 +8,8 @@
  **********************************************************************************************************************/
 
 
-#include "textToSpeechWrapper.h"
-#include "textToSpeechCoordinator.h"
+#include "components/textToSpeech/textToSpeechWrapper.h"
+#include "components/textToSpeech/textToSpeechCoordinator.h"
 
 #include "util/global/globalDefinitions.h"
 #include "util/logging/logging.h"
@@ -147,9 +147,10 @@ bool TextToSpeechWrapper::SetUtteranceText( const std::string& text, OnUtterance
     _id = _ttsCoordinator->CreateUtterance( text,
                                             _triggerType,
                                             AudioTTSProcessStyle::Default_Processed,
+                                            1.0f,
                                             std::bind( &TextToSpeechWrapper::OnUtteranceUpdated, this, std::placeholders::_1 ));
 
-    // if we were successful, set the callback
+    // if we were successful, set the callbcak
     if ( kInvalidUtteranceID != _id )
     {
       _readyCallback = std::move( readyCallback );
@@ -207,7 +208,7 @@ void TextToSpeechWrapper::CancelUtterance()
   {
     PRINT_DEBUG( "Cancelling utterance id %d", (int)_id );
 
-
+    
     _ttsCoordinator->CancelUtterance( _id );
   }
 }

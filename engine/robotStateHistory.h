@@ -216,7 +216,8 @@ namespace Anki {
       u32 GetNumRawStatesWithFrameID(const PoseFrameID_t frameID) const;
       
       // Checks whether or not the given key is associated with a valid computed state
-      bool IsValidKey(const HistStateKey key) const;     
+      bool IsValidKey(const HistStateKey key) const;
+      
       
       RobotTimeStamp_t GetOldestTimeStamp() const;
       RobotTimeStamp_t GetNewestTimeStamp() const;
@@ -229,7 +230,7 @@ namespace Anki {
       
       typedef std::map<RobotTimeStamp_t, HistRobotState> StateMap_t;
       
-      const StateMap_t& GetRawStates() const { return _states; }
+      const StateMap_t& GetRawPoses() const { return _states; }
       
     private:
       

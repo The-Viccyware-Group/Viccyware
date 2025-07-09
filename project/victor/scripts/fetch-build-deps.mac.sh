@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 set -u
 
@@ -35,17 +35,19 @@ vlog "Check homebrew dependencies"
     node \
     rsync \
     openssl \
-    curl
+    curl-openssl
 
 vlog "vicos sdk"
-./tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06
+./tools/build/tools/ankibuild/vicos.py --install 1.1.0-r04
 
 vlog "CMake"
 ./tools/build/tools/ankibuild/cmake.py
 
+vlog "Go"
+./tools/build/tools/ankibuild/go.py
+
 vlog "git-lfs"
 $GIT lfs install
-$GIT lfs pull
 
 if [ -d "/Applications/Webots.app" ]; then
   vlog "check webots version"

@@ -42,16 +42,14 @@ namespace Util {
   
 namespace Vector {
 
+enum class AnimationTrigger : int32_t;
 class BackpackLightComponent;
 class BehaviorComponentCloudServer;
 class CozmoContext;
 class Robot;
-class UnitTestKey;
 class UserIntent;
 class UserIntentMap;
-enum class AnimationTrigger : int32_t;
 
-struct MetaUserIntent_SimpleVoiceResponse;
 struct TriggerWordResponseData;
 
 namespace ExternalInterface{
@@ -62,30 +60,17 @@ namespace RobotInterface{
 struct TriggerWordDetected;
 }
 
-using OnNewUserIntentCallback = std::function<void(const UserIntentTag)>;
-using UserIntentCallbackId = uint32_t;
-
 // helper to avoid .h dependency on userIntent.clad
 const UserIntentSource& GetIntentSource(const UserIntentData& intentData);
 
 class UserIntentComponent : public IDependencyManagedComponent<BCComponentID>, private Util::noncopyable
 {
 public:
-
-  struct UserIntentCallbackHandle
-  {
-    UserIntentCallbackId id;
-    OnNewUserIntentCallback callback;
-  };
   
   UserIntentComponent(const Robot& robot, const Json::Value& userIntentMapConfig);
 
   ~UserIntentComponent();
-
-  virtual void AdditionalInitAccessibleComponents(BCCompIDSet& dependencies) const override {
-    // needed for checking the validity of simple mood events, already init'd before AIComponent
-    dependencies.insert(BCComponentID::MoodManager);
-  }
+  
   virtual void InitDependent( Vector::Robot* robot, const BCCompMap& dependentComps ) override;
   virtual void UpdateDependent(const BCCompMap& dependentComps) override;
 
@@ -252,9 +237,6 @@ public:
   // have some work to do at the moment
   // note: this is re-enabled with each new intent
   void SetUserIntentTimeoutEnabled(bool isEnabled);
-
-  UserIntentCallbackId RegisterNewUserIntentCallback(OnNewUserIntentCallback callback);
-  void UnRegisterNewUserIntentCallback(UserIntentCallbackId id);
   
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -286,10 +268,6 @@ public:
   // get list of cloud/app intents from json
   std::vector<std::string> DevGetCloudIntentsList() const;
   std::vector<std::string> DevGetAppIntentsList() const;
-
-  // for unit tests, iterate over the simple voice responses in the map
-  using SimpleVoiceResponseLambda = std::function< void( const MetaUserIntent_SimpleVoiceResponse& ) >;
-  void DEVONLY_IterateSimpleVoiceResponse(UnitTestKey key, SimpleVoiceResponseLambda lambda);
 
 private:
   
@@ -400,8 +378,6 @@ private:
   AnimationTag _tagForTriggerWordGetInCallbacks;
   bool _waitingForTriggerWordGetInToFinish = false;
   float _waitingForTriggerWordGetInToFinish_setTime_s = 0.0f;
-
-  std::vector<UserIntentCallbackHandle> _newUserIntentCallbacks;
 
 };
 

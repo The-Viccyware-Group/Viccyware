@@ -9,23 +9,25 @@
  * Copyright: Anki, Inc. 2014
  **/
 
-#include "coretech/common/engine/math/polygon.h"
-#include "coretech/common/engine/math/quad.h"
+#include "coretech/common/engine/math/polygon_impl.h"
+#include "coretech/common/engine/math/quad_impl.h"
 #include "coretech/vision/engine/cameraCalibration.h"
-#include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/image_impl.h"
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/helpers/ankiDefines.h"
 #include "util/helpers/boundedWhile.h"
 #include "util/cpuProfiler/cpuProfiler.h"
 
+#if ANKICORETECH_USE_OPENCV
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
 #include "image.h"
 
+#endif
+
 #include <fstream>
-#include "anki/cozmo/shared/factory/emrHelper.h"
 
 namespace {
 
@@ -1991,11 +1993,7 @@ namespace Vision {
   }
 
   void ImageRGB::ConvertToShowableFormat(cv::Mat& showImg) const {
-    if (Vector::IsXray()) {
-      this->get_CvMat_().copyTo(showImg);
-    } else {
-      cv::cvtColor(this->get_CvMat_(), showImg, cv::COLOR_RGB2BGR);
-    }
+    cv::cvtColor(this->get_CvMat_(), showImg, cv::COLOR_RGB2BGR);
   }
 
   void ImageRGB::SetFromShowableFormat(const cv::Mat& showImg) {
@@ -2063,21 +2061,6 @@ namespace Vision {
     std::function<PixelRGB565(const PixelRGB&)> convertFcn = [&gammaLUT](const PixelRGB& pixRGB)
     {
       PixelRGB565 pixRGB565(gammaLUT[pixRGB.r()], gammaLUT[pixRGB.g()], gammaLUT[pixRGB.b()]);
-      return pixRGB565;
-    };
-
-    imageRGB.ApplyScalarFunction(convertFcn, *this);
-
-    return *this;
-  }
-
-  ImageRGB565& ImageRGB565::SetFromImageRGB2BGR(const ImageRGB& imageRGB, const std::array<u8, 256>& gammaLUT)
-  {
-    Allocate(imageRGB.GetNumRows(), imageRGB.GetNumCols());
-
-    std::function<PixelRGB565(const PixelRGB&)> convertFcn = [&gammaLUT](const PixelRGB& pixRGB)
-    {
-      PixelRGB565 pixRGB565(gammaLUT[pixRGB.b()], gammaLUT[pixRGB.g()], gammaLUT[pixRGB.r()]);
       return pixRGB565;
     };
 

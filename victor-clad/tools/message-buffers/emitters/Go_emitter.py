@@ -160,7 +160,7 @@ class StructEmitter(ast.NodeVisitor):
                     global defaults_warned
                     if not defaults_warned:
                         defaults_warned = True
-                        #print("Warning: The Go emitter does not support default values for members. They have been ignored.")
+                        print("Warning: The Go emitter does not support default values for members. They have been ignored.")
                     pass
                 self.output.write('\t')
                 visitor.visit(member.type, member_name=goify(member.name))

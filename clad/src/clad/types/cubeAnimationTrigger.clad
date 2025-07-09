@@ -13,7 +13,6 @@ enum int_32 CubeAnimationTrigger
 
   Carrying,
   Connected,
-  CubeDrive,
   CubePouncePlayerLose,
   CubePouncePlayerWin,
   DrivingTo,

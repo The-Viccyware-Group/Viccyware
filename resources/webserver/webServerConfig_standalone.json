@@ -1,7 +1,7 @@
 {
   "port": "8887",
-  "title0": "Cozmo Web Server (vic-webserver)",
-  "title1": "This web server is running in vic-webserver",
+  "title0": "Victor Web Server",
+  "title1": "This web server is running in the WebServer process",
   "whichWebServer": 0,
   "tickBudget_ms": 0,
   "startPage": "page_main",

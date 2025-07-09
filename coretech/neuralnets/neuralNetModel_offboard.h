@@ -5,9 +5,8 @@
  * Date:   3/8/2018
  *
  * Description: Implementation of INeuralNetModel interface class does not actually run forward inference through
- *              a neural network model but instead communicates with an "offboard" process using a
- *              Vision::OffboardProcessor. (Really just a thin wrapper around OffboardProcessor to match
- *              the INeuralNetModel interface, so it can be used by a NeuralNetRunner.)
+ *              a neural network model but instead communicates with an "offboard" process via file I/O.
+ *              This eventually could be a local laptop, the cloud, or simply another process on the same device.
  *
  * Copyright: Anki, Inc. 2018
  **/
@@ -16,27 +15,21 @@
 #define __Anki_NeuralNets_OffboardModel_H__
 
 #include "coretech/neuralnets/neuralNetModel_interface.h"
-#include "coretech/vision/engine/offboardProcessor.h"
-
-namespace Json {
-  class Value;
-}
 
 namespace Anki {
 namespace NeuralNets {
-  
+
 class OffboardModel : public INeuralNetModel
 {
 public:
   
-  OffboardModel(const std::string& cachePath);
+  explicit OffboardModel(const std::string& cachePath);
   
-  virtual ~OffboardModel();
+  virtual ~OffboardModel() = default;
   
   virtual Result Detect(Vision::ImageRGB& img, std::list<Vision::SalientPoint>& salientPoints) override;
   
-  using Filenames = Vision::OffboardProcessor::Filenames;
-  using JsonKeys  = Vision::OffboardProcessor::JsonKeys;
+  bool IsVerbose() const { return _isVerbose; }
   
 protected:
   
@@ -44,9 +37,12 @@ protected:
   
 private:
   
-  std::unique_ptr<Vision::OffboardProcessor> _offboardProc;
+  std::string _cachePath;
+  int         _pollPeriod_ms;
+  bool        _isVerbose = false;
+  float       _timeoutDuration_sec = 10.f;
   
-}; // class OffboardModel
+}; // class Model
 
 } // namespace NeuralNets
 } // namespace Anki

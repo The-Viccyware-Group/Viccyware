@@ -14,7 +14,6 @@
 #define __Engine_AiComponent_BehaviorComponent_Behaviors_BehaviorSleeping_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 
 namespace Anki {
 namespace Vector {
@@ -52,7 +51,6 @@ private:
     bool shouldEnterPowerSave = true;
     bool shouldPlayEmergencyGetOut = true;
     bool canActivateOffTreads = false;
-    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Sleeping;
   };
 
   struct DynamicVariables {

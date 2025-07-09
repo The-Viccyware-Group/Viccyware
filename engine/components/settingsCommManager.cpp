@@ -44,10 +44,10 @@ namespace
 
 #if REMOTE_CONSOLE_ENABLED
 
-
   static const char* kConsoleGroup = "RobotSettings";
   static const char* kConsoleGroupAccountSettings = "AccountSettings";
   static const char* kConsoleGroupUserEntitlements = "UserEntitlements";
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // ROBOT SETTINGS console vars and functions:
 
@@ -63,7 +63,7 @@ namespace
   CONSOLE_FUNC(DebugSetMasterVolume, kConsoleGroup);
 
   // NOTE: Need to keep kEyeColors in sync with enum EyeColor in settings.proto
-  constexpr const char* kEyeColors = "TIP_OVER_TEAL,OVERFIT_ORANGE,UNCANNY_YELLOW,NON_LINEAR_LIME,SINGULARITY_SAPPHIRE,FALSE_POSITIVE_PURPLE,CONFUSION_MATRIX_GREEN,RAINBOW_EYES,ROBOT_RED";
+  constexpr const char* kEyeColors = "TIP_OVER_TEAL,OVERFIT_ORANGE,UNCANNY_YELLOW,NON_LINEAR_LIME,SINGULARITY_SAPPHIRE,FALSE_POSITIVE_PURPLE,CONFUSION_MATRIX_GREEN";
   CONSOLE_VAR_ENUM(u8, kEyeColor, kConsoleGroup, 0, kEyeColors);
   void DebugSetEyeColor(ConsoleFunctionContextRef context)
   {
@@ -442,20 +442,6 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
     {
       updateSettingsJdoc = true;
       saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::eye_color);
-    }
-  }
-
-  if (settings.oneof_custom_eye_color_case() == external_interface::RobotSettingsConfig::OneofCustomEyeColorCase::kCustomEyeColor)
-  {
-    const auto it = settings.custom_eye_color();
-    Json::Value customEyeColor;
-    customEyeColor[kCustomEyeColorEnabledKey]     = it.enabled();
-    customEyeColor[kCustomEyeColorHueKey]         = it.hue();
-    customEyeColor[kCustomEyeColorSaturationKey]  = it.saturation();
-    if (HandleRobotSettingChangeRequest(external_interface::RobotSetting::custom_eye_color, customEyeColor))
-    {
-      updateSettingsJdoc = true;
-      saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::custom_eye_color);
     }
   }
 

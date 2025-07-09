@@ -1,6 +1,6 @@
 
 /**
- * File: BehaviorOnboardingLookAtPhone.cpp
+ * File: BehaviorOnboardingLookAtPhone.h
  *
  * Author: Sam
  * Created: 2018-06-27
@@ -16,11 +16,7 @@
 #include "engine/actions/animActions.h"
 #include "engine/actions/basicActions.h"
 #include "clad/externalInterface/messageGameToEngine.h"
-#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/onboardingMessageHandler.h"
-#include "engine/components/animationComponent.h"
-#include "engine/components/battery/batteryComponent.h"
-#include "engine/cozmoContext.h"
 
 #define LOG_CHANNEL "Behaviors"
 
@@ -37,8 +33,7 @@ BehaviorOnboardingLookAtPhone::InstanceConfig::InstanceConfig()
 BehaviorOnboardingLookAtPhone::DynamicVariables::DynamicVariables()
 {
   hasRun = false;
-  allowTooHotToChargeCheck = false;
-  displayingTooHotToCharge = false;
+  receivedMessage = false;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -131,8 +126,8 @@ void BehaviorOnboardingLookAtPhone::OnBehaviorActivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorOnboardingLookAtPhone::BehaviorUpdate()
 {
-  if( IsActivated()) {
-    CheckIfTooHotToCharge();
+  if( IsActivated() && !IsControlDelegated() ) {
+    // this can happen if the robot cancels all actions (like when it detect that it's falling)
   }
 }
 
@@ -140,13 +135,13 @@ void BehaviorOnboardingLookAtPhone::BehaviorUpdate()
 void BehaviorOnboardingLookAtPhone::MoveHeadUp()
 {
   if(_hasBleKeys) {
-     GetBehaviorComp<OnboardingMessageHandler>().ShowUrlFace(false);
-     auto* action = new TriggerLiftSafeAnimationAction{ AnimationTrigger::OnboardingLookAtPhoneUp };
-     action->SetRenderInEyeHue( false );
-     DelegateIfInControl(action, [this](const ActionResult& res){
-       RunLoopAction();
-     });
-   } else {
+    GetBehaviorComp<OnboardingMessageHandler>().ShowUrlFace(false);
+    auto* action = new TriggerLiftSafeAnimationAction{ AnimationTrigger::OnboardingLookAtPhoneUp };
+    action->SetRenderInEyeHue( false );
+    DelegateIfInControl(action, [this](const ActionResult& res){
+      RunLoopAction();
+    });
+  } else {
     MoveHeadToAngleAction* action = new MoveHeadToAngleAction(MAX_HEAD_ANGLE);
     DelegateNow(action);
     GetBehaviorComp<OnboardingMessageHandler>().ShowUrlFace(true);
@@ -154,50 +149,11 @@ void BehaviorOnboardingLookAtPhone::MoveHeadUp()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorOnboardingLookAtPhone::CheckIfTooHotToCharge()
-{
-  if (!_dVars.allowTooHotToChargeCheck) {
-    return;
-  }
-
-  // If battery is too hot to charge then display too hot image
-  auto& robotInfo = GetBEI().GetRobotInfo();
-  const auto& battComp = robotInfo.GetBatteryComponent();  
-  if (battComp.IsChargingStalledBecauseTooHot()) {
-    if (!_dVars.displayingTooHotToCharge) {
-      CancelDelegates(); // Cancel the looping phone anim if running
-
-      LOG_INFO("BehaviorOnboardingLookAtPhone.CheckIfTooHotToCharge.BatteryIsTooHot", "");
-      const auto& dataPlatform = robotInfo.GetContext()->GetDataPlatform();
-      static const std::string kTooHotToChargeImg = "config/sprites/independentSprites/battery_overheated.png";
-      const std::string imgPath = dataPlatform->pathToResource(Anki::Util::Data::Scope::Resources, 
-                                                               kTooHotToChargeImg);
-      Vision::ImageRGB img;
-      img.Load(imgPath);
-      auto& animComp = GetBEI().GetAnimationComponent();
-      animComp.DisplayFaceImage(img, 0, true);
-
-      _dVars.displayingTooHotToCharge = true;
-    }
-  } else if (_dVars.displayingTooHotToCharge) {
-    // Loop phone anim now that battery is no longer too hot to charge
-    _dVars.displayingTooHotToCharge = false;
-    RunLoopAction();
-  }
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorOnboardingLookAtPhone::RunLoopAction()
 {
-  _dVars.allowTooHotToChargeCheck = true;
-  CheckIfTooHotToCharge();
-
-  // Loop phone animation
-  if (!_dVars.displayingTooHotToCharge) {
-    auto* loopAction = new ReselectingLoopAnimationAction{ AnimationTrigger::OnboardingLookAtPhoneLoop };
-    loopAction->SetRenderInEyeHue( false );
-    DelegateIfInControl( loopAction ); // loop forever, waiting for a message
-  }
+  auto* loopAction = new ReselectingLoopAnimationAction{ AnimationTrigger::OnboardingLookAtPhoneLoop };
+  loopAction->SetRenderInEyeHue( false );
+  DelegateIfInControl( loopAction ); // loop forever, waiting for a message
 }
 
 } // namespace Vector

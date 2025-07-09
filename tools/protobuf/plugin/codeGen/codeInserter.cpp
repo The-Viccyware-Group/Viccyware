@@ -12,7 +12,6 @@
 #include "codeGen/codeInserter.h"
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <memory>
-#include <string>
 
 using namespace google::protobuf;
 
@@ -28,7 +27,7 @@ CodeInserter::CodeInserter( const std::string& messageName, const std::string in
   }
 }
 
-bool CodeInserter::Write( const std::string& filename, compiler::GeneratorContext* context )
+bool CodeInserter::Write( const string& filename, compiler::GeneratorContext* context )
 {
   std::unique_ptr<io::ZeroCopyOutputStream> output( context->OpenForInsert(filename, _insertionPoint) );
   io::Printer printer( output.get(), '$' );

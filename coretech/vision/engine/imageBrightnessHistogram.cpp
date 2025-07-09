@@ -10,7 +10,7 @@
  **/
 
 #include "coretech/vision/engine/imageBrightnessHistogram.h"
-#include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/image_impl.h"
 
 namespace Anki {
 namespace Vision {

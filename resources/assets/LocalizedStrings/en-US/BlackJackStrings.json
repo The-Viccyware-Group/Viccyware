@@ -42,15 +42,6 @@
   "BlackJack.DealerTurn": {
     "translation": "Dealer's turn!"
   },
-  "BlackJack.DrawQuestion": {
-    "translation": "Another card?"
-  },
-  "BlackJack.PlayQuestion": {
-    "translation": "Play BlackJack?"
-  },
-  "BlackJack.PlayAgainQuestion": {
-    "translation": "Play another round?"
-  },
   "BlackJack.PlayerScore": {
     "translation": "{0}"
   },

@@ -23,12 +23,9 @@
 #include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/externalInterface/externalInterface.h"
-#include "engine/moodSystem/moodManager.h"
 #include "engine/robot.h"
 #include "engine/robotDataLoader.h"
 #include "engine/robotInterface/messageHandler.h"
-#include "engine/robotTest.h"
-#include "engine/unitTestKey.h"
 #include "engine/utils/cozmoFeatureGate.h"
 
 #include "audioEngine/multiplexer/audioCladMessageHelper.h"
@@ -85,11 +82,10 @@ UserIntentComponent::UserIntentComponent(const Robot& robot, const Json::Value& 
 
   // setup cloud intent handler
   const auto& serverName = GetServerName( robot );
-  _server.reset( new BehaviorComponentCloudServer( _context,
-                                                  std::bind( &UserIntentComponent::OnCloudData,
-                                                             this,
-                                                             std::placeholders::_1),
-                                                  serverName ) );
+  _server.reset( new BehaviorComponentCloudServer( _context, std::bind( &UserIntentComponent::OnCloudData,
+                                                                        this,
+                                                                        std::placeholders::_1),
+                                                                        serverName ) );
 
   // setup trigger word handler
   auto triggerWordCallback = [this]( const AnkiEvent<RobotInterface::RobotToEngine>& event ){
@@ -245,7 +241,7 @@ void UserIntentComponent::DeactivateUserIntent(UserIntentTag userIntent)
   if (userIntent != UserIntentTag::INVALID) {
     _activeIntentFeedback.Deactivate(userIntent);
   }
-
+    
   if (!IsUserIntentActive(userIntent)) {
     LOG_ERROR("UserIntentComponent.DeactivateUserIntent.NotActive",
               "Attempting to deactivate intent '%s' (activated by %s) but '%s' is active",
@@ -262,11 +258,6 @@ void UserIntentComponent::DeactivateUserIntent(UserIntentTag userIntent)
   _activeIntent.reset();
   _activeIntentOwner.clear();
 
-  if (_robot) // No robot pointer in 'test_engine', so must check here at runtime
-  {
-    auto* rt = _robot->GetContext()->GetRobotTest();
-    rt->OnCloudIntentCompleted();
-  }
 }
 
 void UserIntentComponent::StopActiveUserIntentFeedback()
@@ -528,11 +519,6 @@ void UserIntentComponent::SetUserIntentPending(UserIntent&& userIntent, const Us
     _robot->GetComponent<AIComponent>().GetComponent<AIWhiteboard>().NotifyNewUserIntentPending(
       _pendingIntent->intent.GetTag() );
   }
-
-  // call any registered callbacks
-  for(auto& cb : _newUserIntentCallbacks) {
-    cb.callback( _pendingIntent->intent.GetTag() );
-  }
 }
 
 void UserIntentComponent::DevSetUserIntentPending(UserIntentTag userIntent, const UserIntentSource& source)
@@ -579,8 +565,6 @@ bool UserIntentComponent::SetCloudIntentPendingFromExpandedJSON(const std::strin
 
   return SetIntentPendingFromCloudJSONValue(std::move(json));
 }
-
-
 bool UserIntentComponent::SetIntentPendingFromCloudJSONValue(Json::Value json)
 {
   std::string cloudIntent;
@@ -597,56 +581,51 @@ bool UserIntentComponent::SetIntentPendingFromCloudJSONValue(Json::Value json)
   Json::Value emptyJson;
   Json::Value& intentJson = hasParams ? params : emptyJson;
 
-  const UserIntentTag userIntentTag = _intentMap->GetUserIntentFromCloudIntent(cloudIntent);
+  UserIntentTag userIntentTag = _intentMap->GetUserIntentFromCloudIntent(cloudIntent);
+
+  if (hasParams) {
+    // translate variable names, if necessary
+    _intentMap->SanitizeCloudIntentVariables( cloudIntent, params );
+  }
+
+  ANKI_VERIFY( json["type"].isNull(),
+               "UserIntentComponent.SetIntentPendingFromCloudJSONValue.Reserved",
+               "cloud intent '%s' contains reserved key 'type'",
+               cloudIntent.c_str() );
 
   UserIntent pendingIntent;
 
-  if( userIntentTag == UserIntentTag::simple_voice_response ) {
-    // special (simpler) case for a simple voice response. The map has the fully-formed intent already
-    pendingIntent = _intentMap->GetSimpleVoiceResponse(cloudIntent);
+  // Set up json to look like a union
+  intentJson["type"] = UserIntentTagToString(userIntentTag);
+  const bool setOK = pendingIntent.SetFromJSON(intentJson);
+
+  // the UserIntent will have size 1 if it's a UserIntent_Void, which means the user intent
+  // corresponding to this cloud intent should _not_ have data.
+  using Tag = std::underlying_type<UserIntentTag>::type;
+  const bool expectedParams = (pendingIntent.Size() > sizeof(Tag));
+  static_assert( std::is_same<Tag, uint8_t>::value,
+                 "If the type changes, you need to rethink this");
+
+  if (!setOK) {
+    LOG_WARNING("UserIntentComponent.SetCloudIntentPendingFromJSON.BadParams",
+                "could not parse user intent '%s' from cloud intent of type '%s'",
+                UserIntentTagToString(userIntentTag),
+                cloudIntent.c_str());
+    // NOTE: also don't set the pending intent, since the request was malformed
+    return false;
+  } else if (!expectedParams && hasParams) {
+    // simply ignore the extraneous data but continue
+    LOG_WARNING("UserIntentComponent.SetIntentPendingFromCloudJSONValue.ExtraData",
+                "Intent '%s' has unexpected params",
+                cloudIntent.c_str() );
+  } else if (expectedParams && !hasParams) {
+    // missing params, bail
+    LOG_WARNING("UserIntentComponent.SetIntentPendingFromCloudJSONValue.MissingParams",
+                "Intent '%s' did not contain required params",
+                cloudIntent.c_str() );
+    return false;
   }
-  else {
-    if (hasParams) {
-      // translate variable names, if necessary
-      _intentMap->SanitizeCloudIntentVariables( cloudIntent, params );
-    }
 
-    ANKI_VERIFY( json["type"].isNull(),
-                 "UserIntentComponent.SetIntentPendingFromCloudJSONValue.Reserved",
-                 "cloud intent '%s' contains reserved key 'type'",
-                 cloudIntent.c_str() );
-
-    // Set up json to look like a union
-    intentJson["type"] = UserIntentTagToString(userIntentTag);
-    const bool setOK = pendingIntent.SetFromJSON(intentJson);
-
-    // the UserIntent will have size 1 if it's a UserIntent_Void, which means the user intent
-    // corresponding to this cloud intent should _not_ have data.
-    using Tag = std::underlying_type<UserIntentTag>::type;
-    const bool expectedParams = (pendingIntent.Size() > sizeof(Tag));
-    static_assert( std::is_same<Tag, uint8_t>::value,
-                   "If the type changes, you need to rethink this");
-
-    if (!setOK) {
-      LOG_WARNING("UserIntentComponent.SetCloudIntentPendingFromJSON.BadParams",
-                  "could not parse user intent '%s' from cloud intent of type '%s'",
-                  UserIntentTagToString(userIntentTag),
-                  cloudIntent.c_str());
-      // NOTE: also don't set the pending intent, since the request was malformed
-      return false;
-    } else if (!expectedParams && hasParams) {
-      // simply ignore the extraneous data but continue
-      LOG_WARNING("UserIntentComponent.SetIntentPendingFromCloudJSONValue.ExtraData",
-                  "Intent '%s' has unexpected params",
-                  cloudIntent.c_str() );
-    } else if (expectedParams && !hasParams) {
-      // missing params, bail
-      LOG_WARNING("UserIntentComponent.SetIntentPendingFromCloudJSONValue.MissingParams",
-                  "Intent '%s' did not contain required params",
-                  cloudIntent.c_str() );
-      return false;
-    }
-  }
 
   if (!_whitelistedIntents.empty()) {
     // only pass on whitelisted intents
@@ -674,45 +653,6 @@ void UserIntentComponent::InitDependent( Vector::Robot* robot, const BCCompMap& 
   _tagForTriggerWordGetInCallbacks = _robot->GetAnimationComponent().SetTriggerWordGetInCallback(callback);
 
   _activeIntentFeedback.Init(robot);
-
-  const AnimationComponent& animComponent = _robot->GetAnimationComponent();
-  const MoodManager& moodManager = dependentComps.GetComponent<MoodManager>();
-
-  auto verifySimpleVoiceResponse = [&animComponent, &moodManager](const MetaUserIntent_SimpleVoiceResponse& response) {
-    bool ok = true;
-
-    if( !response.emotion_event.empty() ) {
-      if( !moodManager.IsValidEmotionEvent( response.emotion_event ) ) {
-        LOG_ERROR("UserIntentComponent.Init.VerifySimpleVoiceResponses.InvalidEmotionEvent",
-                  "response to cloud intent has invalid emotion event '%s'",
-                  response.emotion_event.c_str());
-        ok = false;
-      }
-    }
-
-    if( !animComponent.IsAnimationGroup( response.anim_group ) ) {
-      LOG_ERROR("UserIntentComponent.Init.VerifySimpleVoiceResponses.InvalidAnimGroup",
-                "response to cloud intent has invalid anim group '%s', removing from map",
-                response.anim_group.c_str());
-      ok = false;
-    }
-
-    return ok;
-  };
-
-  _intentMap->VerifySimpleVoiceResponses( verifySimpleVoiceResponse, "UserIntentComponent.Init" );
-}
-
-void UserIntentComponent::DEVONLY_IterateSimpleVoiceResponse(UnitTestKey key,
-                                                             UserIntentComponent::SimpleVoiceResponseLambda lambda)
-{
-  // unit tests use the "Verify" interface to iterate, but always return "true" to keep the intents in the map
-  const auto verifyLmabda = [&lambda](const MetaUserIntent_SimpleVoiceResponse& r) {
-    lambda(r);
-    return true;
-  };
-
-  _intentMap->VerifySimpleVoiceResponses( verifyLmabda, "UNIT_TEST" );
 }
 
 bool UserIntentComponent::SetCloudIntentPendingFromString(const std::string& cloudStr)
@@ -1201,44 +1141,6 @@ std::vector<std::string> UserIntentComponent::DevGetAppIntentsList() const
   return _intentMap->DevGetAppIntentsList();
 }
 
-  void UserIntentComponent::SendWebVizIntents()
-  {
-    if (_context != nullptr) {
-      if( auto webSender = WebService::WebVizSender::CreateWebVizSender("intents",
-                                                                        _context->GetWebService()) ) {
-
-        Json::Value& toSend = webSender->Data();
-        toSend = Json::arrayValue;
-
-        {
-          Json::Value blob;
-          blob["intentType"] = "user";
-          blob["type"] = "current-intent";
-          blob["value"] = UserIntentTagToString( _pendingIntent->intent.GetTag() );
-          toSend.append(blob);
-        }
-
-        if( !_devLastReceivedCloudIntent.empty() ) {
-          Json::Value blob;
-          blob["intentType"] = "cloud";
-          blob["type"] = "current-intent";
-          blob["value"] = _devLastReceivedCloudIntent;
-          toSend.append(blob);
-          _devLastReceivedCloudIntent.clear();
-        }
-
-        if( !_devLastReceivedAppIntent.empty() ) {
-          Json::Value blob;
-          blob["intentType"] = "app";
-          blob["type"] = "current-intent";
-          blob["value"] = _devLastReceivedAppIntent;
-          toSend.append(blob);
-          _devLastReceivedAppIntent.clear();
-        }
-      } // if (webSender ...
-    }
-  }
-
 void UserIntentComponent::HandleTriggerWordEventForDas(const RobotInterface::TriggerWordDetected& msg)
 {
   DASMSG(wakeword_triggered, "wakeword.triggered", "Wake word was detected");
@@ -1246,6 +1148,44 @@ void UserIntentComponent::HandleTriggerWordEventForDas(const RobotInterface::Tri
   DASMSG_SET(i2, msg.isButtonPress, "Source (0=Voice, 1=Button)");
   DASMSG_SET(i3, msg.willOpenStream, "Will stream (0=No, 1=Yes)");
   DASMSG_SEND();
+}
+
+void UserIntentComponent::SendWebVizIntents()
+{
+  if (_context != nullptr) {
+    if( auto webSender = WebService::WebVizSender::CreateWebVizSender("intents",
+                                                                      _context->GetWebService()) ) {
+
+      Json::Value& toSend = webSender->Data();
+      toSend = Json::arrayValue;
+
+      {
+        Json::Value blob;
+        blob["intentType"] = "user";
+        blob["type"] = "current-intent";
+        blob["value"] = UserIntentTagToString( _pendingIntent->intent.GetTag() );
+        toSend.append(blob);
+      }
+
+      if( !_devLastReceivedCloudIntent.empty() ) {
+        Json::Value blob;
+        blob["intentType"] = "cloud";
+        blob["type"] = "current-intent";
+        blob["value"] = _devLastReceivedCloudIntent;
+        toSend.append(blob);
+        _devLastReceivedCloudIntent.clear();
+      }
+
+      if( !_devLastReceivedAppIntent.empty() ) {
+        Json::Value blob;
+        blob["intentType"] = "app";
+        blob["type"] = "current-intent";
+        blob["value"] = _devLastReceivedAppIntent;
+        toSend.append(blob);
+        _devLastReceivedAppIntent.clear();
+      }
+    } // if (webSender ...
+  }
 }
 
 void UserIntentComponent::SetupConsoleFuncs()
@@ -1269,44 +1209,6 @@ void UserIntentComponent::SetupConsoleFuncs()
     };
     _consoleFuncs.emplace_front( "EnableDevTriggerWord", std::move(enableTrigger), "UserIntentComponent", "" );
   }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-UserIntentCallbackId UserIntentComponent::RegisterNewUserIntentCallback(OnNewUserIntentCallback callback)
-{
-  static UserIntentCallbackId sLastId = 0;
-
-  // get the next good id
-  ++sLastId;
-  // we'll have a problem if we register 4294967295 listeners
-  // if we were really worried we could use uuids with a larger range for ids,
-  // and/or check for duplicate ids when we roll over.
-  // But if we registered callbacks at 10Hz it would take about 13 years to exhaust a uint32.
-  if (sLastId == 0) {
-    LOG_WARNING("UserIntentComponent.RegisterNewUserIntentCallback.IdOverflow",
-                "UserIntentComponent UserIntentCallbackId overflowed its range. This probably indicates a pathological number of callback registrations.");
-  }
-  _newUserIntentCallbacks.push_back( { sLastId, callback } );
-  return sLastId;
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void UserIntentComponent::UnRegisterNewUserIntentCallback(UserIntentCallbackId id)
-{
-  for (size_t index = _newUserIntentCallbacks.size(); index > 0;)
-  {
-    --index;
-    if (id == _newUserIntentCallbacks[index].id) {
-      _newUserIntentCallbacks[index] = _newUserIntentCallbacks.back();
-      _newUserIntentCallbacks.pop_back();
-
-      return;
-    }
-  }
-
-  LOG_WARNING("UserIntentComponent.UnRegisterNewUserIntentCallback", "No UserIntentCallback found with id %d", (int)id);
 }
 
 }

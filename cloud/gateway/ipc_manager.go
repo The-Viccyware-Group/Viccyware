@@ -14,6 +14,7 @@
 package main
 
 import (
+	"anki/ipc"
 	"bytes"
 	"encoding/binary"
 	"math/rand"
@@ -22,12 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/digital-dream-labs/vector-cloud/internal/ipc"
-
-	gw_clad "github.com/digital-dream-labs/vector-cloud/internal/clad/gateway"
-	extint "github.com/digital-dream-labs/vector-cloud/internal/proto/external_interface"
-
-	"github.com/digital-dream-labs/vector-cloud/internal/log"
+	"anki/log"
+	gw_clad "clad/gateway"
+	extint "proto/external_interface"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"

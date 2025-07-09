@@ -25,15 +25,9 @@ IMPLEMENT_ENUM_INCREMENT_OPERATORS(VisionMode);
 // add it to this lookup table initialization. Note that multiple
 // VisionModes _can_ refer to the same network name.
 static const Util::SymmetricMap<VisionMode, std::string> sNetModeLUT{
-  {VisionMode::People,    "person_detector"},
-  {VisionMode::Hands,     "hand_detector"},
-// this made robo crash  :(
-//  {VisionMode::Pets,      "mobilenet"}, // TODO: Update to real network
-
-// Offboard models only allowed in non-shipping builds
-#ifdef ANKI_DEV_CHEATS
-  {VisionMode::Offboard,  "offboard_person_detection"},
-#endif
+  {VisionMode::People, "person_detector"},
+  {VisionMode::Hands,  "hand_detector"},
+  {VisionMode::Pets,   "mobilenet"}, // TODO: Update to real network
 };
   
 bool GetNeuralNetsForVisionMode(const VisionMode mode, std::set<std::string>& networkNames)

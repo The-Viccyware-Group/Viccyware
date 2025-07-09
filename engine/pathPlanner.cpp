@@ -102,6 +102,45 @@ EPlannerErrorType IPathPlanner::GetErrorType() const
          : EPlannerErrorType::None;
 }
 
+bool IPathPlanner::GetCompletePath(const Pose3d& currentRobotPose,
+                                   Planning::Path &path,
+                                   const PathMotionProfile* motionProfile)
+{
+  if (GetCompletePath_Internal(currentRobotPose, path)) {
+    
+    if (motionProfile != nullptr) {
+      ApplyMotionProfile(path, *motionProfile, _path);
+      path = _path;
+    } else {
+      _path = path;
+    }
+    return true;
+    
+  }
+  
+  return false;
+}
+  
+bool IPathPlanner::GetCompletePath(const Pose3d& currentRobotPose,
+                                   Planning::Path &path,
+                                   Planning::GoalID& selectedTargetIndex,
+                                   const PathMotionProfile* motionProfile)
+{
+  if (GetCompletePath_Internal(currentRobotPose, path, selectedTargetIndex)) {
+    
+    if (motionProfile != nullptr) {
+      ApplyMotionProfile(path, *motionProfile, _path);
+      path = _path;
+    } else {
+      _path = path;
+    }
+    return true;
+    
+  }
+  
+  return false;
+}
+
 bool IPathPlanner::CheckIsPathSafe(const Planning::Path& path, float startAngle) const
 {
   Planning::Path waste;
@@ -114,11 +153,37 @@ bool IPathPlanner::CheckIsPathSafe(const Planning::Path& path, float startAngle,
   return true;
 }
 
-
-Planning::Path IPathPlanner::ApplyMotionProfile(const Planning::Path &in, const PathMotionProfile& motionProfile)
-{
-  Planning::Path out;
   
+bool IPathPlanner::GetCompletePath_Internal(const Pose3d& currentRobotPose,
+                                            Planning::Path &path)
+{
+  if( ! _hasValidPath ) {
+    return false;
+  }
+  
+  path = _path;
+  return true;
+}
+
+bool IPathPlanner::GetCompletePath_Internal(const Pose3d& currentRobotPose,
+                                            Planning::Path &path,
+                                            Planning::GoalID& selectedTargetIndex)
+{
+  if( ! _hasValidPath ) {
+    return false;
+  }
+  
+  path = _path;
+  selectedTargetIndex = _selectedTargetIdx;
+  return true;
+}
+
+
+bool IPathPlanner::ApplyMotionProfile(const Planning::Path &in,
+                                      const PathMotionProfile& motionProfile,
+                                      Planning::Path &out)
+{
+  out.Clear();
   std::vector<Planning::PathSegment> reversedPath;
   
   const f32 lin_speed = fabsf(motionProfile.speed_mmps);
@@ -251,8 +316,7 @@ Planning::Path IPathPlanner::ApplyMotionProfile(const Planning::Path &in, const 
       }
       default:
         LOG_WARNING("IPathPlanner.ApplyMotionProfile.UnknownSegment", "Path has invalid segment");
-        out.Clear();
-        return out;
+        return false;
     }
     
     reversedPath.push_back(seg);
@@ -398,7 +462,7 @@ Planning::Path IPathPlanner::ApplyMotionProfile(const Planning::Path &in, const 
   
   out.PrintPath();
   
-  return out;
+  return true;
 }
 
 

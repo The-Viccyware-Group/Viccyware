@@ -142,7 +142,7 @@ void Analog::init(void) {
   NVIC_SetPriority(ADC1_IRQn, PRIORITY_ADC);
 
   // Configure all our GPIO to what it needs to be
-  nCHG_PWR::type(TYPE_OPENDRAIN);
+  nCHG_PWR::type(TYPE_PUSHPULL);
   nCHG_PWR::mode(MODE_OUTPUT);
   nCHG_PWR::reset();
 

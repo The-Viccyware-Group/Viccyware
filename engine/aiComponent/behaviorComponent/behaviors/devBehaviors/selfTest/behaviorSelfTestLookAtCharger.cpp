@@ -243,9 +243,6 @@ void BehaviorSelfTestLookAtCharger::TransitionToRefineTurn()
   verify->SetUseCyclingExposure();
   action->AddAction(verify);
   
-  WaitForImagesAction* wait = new WaitForImagesAction(5, VisionMode::Markers);
-  action->AddAction(wait);
-
   // Once we are perpendicular to the marker, start recording distance sensor readings
   DelegateIfInControl(action, [this]() { TransitionToRecordSensor(); });
 }
@@ -351,3 +348,6 @@ bool BehaviorSelfTestLookAtCharger::GetExpectedObjectMarkerPoseWrtRobot(Pose3d& 
 
 }
 }
+
+
+

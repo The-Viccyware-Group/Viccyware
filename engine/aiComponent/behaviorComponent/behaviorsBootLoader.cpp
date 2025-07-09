@@ -53,6 +53,7 @@ namespace {
 BehaviorsBootLoader::BehaviorsBootLoader(const Json::Value& config)
   : IDependencyManagedComponent( this, BCComponentID::BehaviorsBootLoader )
 {
+  _behaviors.factoryBehavior = BEHAVIOR_ID(PlaypenTest);
   _behaviors.prDemoBehavior = BEHAVIOR_ID(InitPRDemo);
   _behaviors.selfTestBehavior = BEHAVIOR_ID(SelfTest);
   _behaviors.acousticTestBehavior = BEHAVIOR_ID(AcousticTestMode);
@@ -113,7 +114,7 @@ void BehaviorsBootLoader::InitDependent( Robot* robot, const BCCompMap& dependen
   bool startInPlaypen = false;
 # if FACTORY_TEST
   {
-    startInPlaypen = false;
+    startInPlaypen = !Factory::GetEMR()->fields.PACKED_OUT_FLAG && !OSState::getInstance()->IsInRecoveryMode();
   }
 # endif
   if(startInPlaypen) {

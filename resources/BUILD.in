@@ -6,8 +6,9 @@ asset_project(
                 ('assets', 'RewardedActions/RewardedActions.json'),
                 ('assets', 'cubeFirmware/cube.dfu'),
                 ('assets', 'LocalizedStrings/**/*.json'),
-		('assets', 'faceOverlays/*.jpg'),
-                ('3rd/pryon_lite', 'pryonSpeechRecModels/**/*.bin'),
+                ('externals/anki-thirdparty/sensory', 'sensorySpeechRecModels/hey_vector/**/*.raw'),
+                ('externals/anki-thirdparty/sensory', 'sensorySpeechRecModels/alexa/**/*.raw'),
+                ('externals/anki-thirdparty/pryon_lite', 'pryonSpeechRecModels/**/*.bin'),
                 ('externals/animation-assets', 'animations/**/*.bin'),
                 ('externals/animation-assets', 'animationGroups/**/*.json'),
                 ('externals/animation-assets', 'sprites/**/*.png'),
@@ -15,8 +16,6 @@ asset_project(
                 ('externals/animation-assets', 'anim_manifest.json'),
                 ('externals/animation-assets', 'compositeImageResources/imageLayouts/**/*.json'),
                 ('externals/animation-assets', 'compositeImageResources/imageMaps/**/*.json'),
-		('speech-recognition', 'picovoice/**/*.pv'),
-		('speech-recognition', 'picovoice/**/*.ppn')
                 ],
                 prefix = 'assets'
             ),
@@ -88,12 +87,6 @@ asset_project(
            ]),
 )
 
-asset_project(
-    name = 'cozmo_resources_escapepod',
-    srcs = subdir_glob([
-                ('escapepod', '**/*'),
-           ]),
-)
 
 asset_project(
     name = 'cozmo_resources_test',
@@ -102,6 +95,7 @@ asset_project(
                 ],
            ),
 )
+
 
 asset_project(
     name = 'cozmo_resources_webserver',
@@ -116,12 +110,12 @@ asset_project(
     srcs = [],
     platform_srcs = [
         ('mac', subdir_glob([
-            ('3rd/acapela/AcapelaTTS_for_Mac_V9.450','**/*'),
+            ('externals/anki-thirdparty/acapela/AcapelaTTS_for_Mac_V9.450','**/*'),
             ],
             prefix = 'tts')
         ),
         ('vicos', subdir_glob([
-            ('3rd/acapela/Voices_for_Android_iOS_LinuxEmbedded','**/*'),
+            ('externals/anki-thirdparty/acapela/Voices_for_Android_iOS_LinuxEmbedded','**/*'),
             ],
             prefix = 'tts')
         ),

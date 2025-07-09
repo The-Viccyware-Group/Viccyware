@@ -48,7 +48,6 @@ protected:
 
 private:
 
-  void CheckIfTooHotToCharge();
   void MoveHeadUp();
   void RunLoopAction();
   void HandleGameToEngineEvent(const GameToEngineEvent& event);
@@ -60,8 +59,7 @@ private:
   struct DynamicVariables {
     DynamicVariables();
     bool hasRun;
-    bool allowTooHotToChargeCheck;
-    bool displayingTooHotToCharge;
+    bool receivedMessage;
   };
 
   InstanceConfig _iConfig;

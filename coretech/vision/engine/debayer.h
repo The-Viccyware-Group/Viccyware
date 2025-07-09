@@ -30,8 +30,6 @@
 #include <map>
 #include <vector>
 
-#include <mutex>
-
 namespace Anki {
 namespace Vision {
 
@@ -41,9 +39,8 @@ namespace Vision {
 class Debayer
 {
 public:
-  static Debayer& Instance();
-  Debayer(const Debayer&) = delete;
-  void operator=(const Debayer&) = delete;
+  //! Gamma correction factor
+  static constexpr float GAMMA = 1.0f/2.2f;
 
   /**
    * @brief The method of debayering. This is akin to the level of quality of the image.
@@ -161,20 +158,25 @@ public:
    * @return true - If scale is a known value and sampleRate has been set
    * @return false - If scale is an unknown value and sampleRate has not been set
    */
-  static bool SampleRateFromScale(Scale scale, u8& sampleRate);
-
-  void SetGamma(f32 gamma);
+  static inline bool SampleRateFromScale(Scale scale, u8& sampleRate)
+  {
+    switch (scale)
+    {
+    case Debayer::Scale::FULL: { sampleRate = 1; break; }
+    case Debayer::Scale::HALF: { sampleRate = 2; break; }
+    case Debayer::Scale::QUARTER: { sampleRate = 4; break; }
+    case Debayer::Scale::EIGHTH: { sampleRate = 8; break; }
+    default:
+      return false;
+    }
+    return true;
+  }
 
 private:
   /**
    * @brief Convenience typedef for the tuples of options.
    */
   using Key = std::tuple<Layout,Pattern,Method,Scale,OutputFormat>;
-
-  /**
-   * @brief Convienence typedef for map of Ops
-   */
-  using OpMap = std::map<Key,std::shared_ptr<Op>>;
   
   /**
    * @brief Convenience function for making tuples of options
@@ -182,9 +184,6 @@ private:
   static inline Key MakeKey(Layout layout, Pattern pattern, Method method, Scale scale, OutputFormat format) {
     return std::make_tuple(layout, pattern, method, scale, format);
   }
-
-  //! Default ops
-  static OpMap GetDefaultOpMap(f32 gamma);
 
   /**
    * @brief Get the Op corresponding to the Key
@@ -243,11 +242,8 @@ private:
   /**
    * @brief Map of the different options (Debayer::Key) to an instance of a Debayer::Op that supports those options.
    */
-  OpMap _ops;
+  std::map<Key,std::shared_ptr<Op>> _ops;
 
-  mutable std::mutex _mutex;
-
-  f32 _gamma;
 };
 
 

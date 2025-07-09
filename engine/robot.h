@@ -107,7 +107,6 @@ class BatteryComponent;
 class BeatDetectorComponent;
 class HabitatDetectorComponent;
 class TextToSpeechCoordinator;
-class SocialPresenceEstimator;
 class SDKComponent;
 enum class ShutdownReason : uint8_t;
 
@@ -248,7 +247,6 @@ public:
   INLINE_GETTERS(VariableSnapshotComponent)
   INLINE_GETTERS(VisionComponent)
   INLINE_GETTERS(VisionScheduleMediator)
-  INLINE_GETTERS(SocialPresenceEstimator)
 
   #undef INLINE_GETTERS
 

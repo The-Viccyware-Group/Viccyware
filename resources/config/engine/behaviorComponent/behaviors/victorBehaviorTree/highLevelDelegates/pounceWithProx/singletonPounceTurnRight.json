@@ -4,7 +4,6 @@
   "shouldTurnClockwise": true,
   "turnDegrees" : 20,
 
-  "associatedActiveFeature": "PounceOnMotion",
   "wantsToBeActivatedCondition": {
     "conditionType" : "MotionDetected",
     "motionArea"    : "Right",

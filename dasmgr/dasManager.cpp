@@ -29,7 +29,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
-#include <cassert>
 
 // Imported types
 using LogLevel = Anki::Util::LogLevel;

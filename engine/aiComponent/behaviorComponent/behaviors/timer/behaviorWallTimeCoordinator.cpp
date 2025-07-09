@@ -14,12 +14,11 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/timer/behaviorWallTimeCoordinator.h"
 
 #include "clad/audio/audioSwitchTypes.h"
-
+#include "components/textToSpeech/textToSpeechCoordinator.h"
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/timer/behaviorDisplayWallTime.h"
 #include "engine/actions/animActions.h"
 #include "engine/components/settingsManager.h"
-#include "engine/components/textToSpeech/textToSpeechCoordinator.h"
 #include "engine/faceWorld.h"
 #include "osState/wallTime.h"
 
@@ -27,7 +26,7 @@
 
 namespace Anki {
 namespace Vector {
-
+  
 
 namespace{
 }
@@ -75,7 +74,7 @@ void BehaviorWallTimeCoordinator::GetBehaviorOperationModifiers(BehaviorOperatio
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorWallTimeCoordinator::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const
+void BehaviorWallTimeCoordinator::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) const 
 {
 }
 
@@ -95,7 +94,7 @@ void BehaviorWallTimeCoordinator::InitBehavior()
   _iConfig.iCantDoThatBehavior = behaviorContainer.FindBehaviorByID(BEHAVIOR_ID(SingletonICantDoThat));
   _iConfig.lookAtFaceInFront   = behaviorContainer.FindBehaviorByID(BEHAVIOR_ID(SingletonFindFaceInFrontWallTime));
 
-  behaviorContainer.FindBehaviorByIDAndDowncast(BEHAVIOR_ID(ShowWallTime),
+  behaviorContainer.FindBehaviorByIDAndDowncast(BEHAVIOR_ID(ShowWallTime), 
                                                 BEHAVIOR_CLASS(DisplayWallTime),
                                                 _iConfig.showWallTime);
 }
@@ -155,7 +154,7 @@ void BehaviorWallTimeCoordinator::OnBehaviorDeactivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorWallTimeCoordinator::TransitionToICantDoThat()
 {
-  ANKI_VERIFY(_iConfig.iCantDoThatBehavior->WantsToBeActivated(),
+  ANKI_VERIFY(_iConfig.iCantDoThatBehavior->WantsToBeActivated(), 
               "BehaviorWallTimeCoordinator.TransitionToICantDoThat.BehaviorDoesntWantToBeActivated", "");
   DelegateIfInControl(_iConfig.iCantDoThatBehavior.get());
   // annnnnd we're done (behaviorAlwaysDelegates = false)
@@ -213,8 +212,8 @@ void BehaviorWallTimeCoordinator::StartTTSGeneration()
     _dVars.utteranceState = utteranceState;
   };
 
-  auto & ttsCoordinator = GetBEI().GetTextToSpeechCoordinator();
-  _dVars.utteranceID = ttsCoordinator.CreateUtterance(textOfTime, triggerType, style, callback);
+  _dVars.utteranceID = GetBEI().GetTextToSpeechCoordinator().CreateUtterance(textOfTime, triggerType, style,
+                                                                             1.0f, callback);
 
   // if we failed to create the tts, we need to let our behavior know since the callback is NOT called in this case
   if (kInvalidUtteranceID == _dVars.utteranceID){

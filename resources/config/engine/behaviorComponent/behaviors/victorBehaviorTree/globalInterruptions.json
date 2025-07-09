@@ -6,26 +6,27 @@
 
   "behaviors": [
     "MandatoryPhysicalReactions",
+    "TriggerWordDetected",
     "SDKDefault",
     "SDKLock",
-    "TriggerWordDetected",
     "SingletonWallTimeCoordinator",
     "TimerUtilityCoordinator",
     "WeatherResponses",
     "TakeAPhotoCoordinator",
     "ReactToRobotShaken",
     "ReactToTouchPetting",
-    "SimpleVoiceResponses", // these are simple voice commands that we want to ignore obstacles
+    "BasicVoiceCommands", // these are simple voice commands that we want to ignore obstacles
     "ReactToObstacle",
-    "SingletonPounceDispatcher",
-    "VoiceFeatures",
+    "InterruptingVoiceReactions",
     "ChangeEyeColor",
     "ReactToUnclaimedIntent",
     "HeldInPalmDispatcher",
     "WhileInAirDispatcher",
-    "PetDetection",
     "ReactToPutDown",
-    "OptionalReactions",
+    "ReactToDarkness",
+    "GreetAfterLongTime", // autonomous - I think this should be higher priority than StayOnCharger--the magic moment is worth it (?)
+    "ReactToUncalibratedHeadAndLift",
+    "DanceToTheBeatCoordinator", // does the right thing internally wrt charging
     "StayOnChargerUntilCharged", // delegate includes ReactToSoundAwake
     "ReactToSoundAwake",
     "ConfirmHabitat",

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
 
-  <title>Cozmo Web Viz</title>
+  <title>Victor Veb Viz</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -39,8 +39,7 @@
       Sleeping: 'webVizModules/sleeping.js',
       BeatDetector: 'webVizModules/beatDetector.js',
       IMU: 'webVizModules/imu.js',
-      Features: 'webVizModules/features.js',
-      SocialPresence: 'webVizModules/socialPresence.js'
+      Features: 'webVizModules/features.js'
     }
     var modules8889 = {
       MicData : 'webVizModules/micData.js',
@@ -59,141 +58,182 @@
     *, *:before, *:after {
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      box-sizing:border-box;
+      -moz-box-sizing:border-box;
     }
-  
+
     body {
-      font: 14px 'Open Sans', sans-serif;
-      background-color: #004a8f;
-      color: #ffffff;
+      font: 12px sans-serif;
     }
-  
+
     #container,
     #popouts {
       width: 800px;
       margin: 20px auto;
+
     }
-  
+
     ul.tabs {
+      -ms-box-orient: horizontal;
+      display: -webkit-box;
+      display: -moz-box;
+      display: -ms-flexbox;
+      display: -moz-flex;
+      display: -webkit-flex;
       display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      width: 100%;
+      -webkit-flex-wrap: wrap-reverse;
+      flex-wrap: wrap-reverse;
+      align-items: stretch;
+      width:100%;
+      position: relative;
+      text-align: center;
       list-style: none;
       margin: 0;
-      padding: 0 6px;
-      border-bottom: 1px solid #49004d;
+      padding: 0px 6px;
+      line-height: 24px;
+      overflow: hidden;
     }
-  
-    ul.tabs li {
-      padding: 10px 15px;
-      font-size: 14px;
-      cursor: pointer;
-      margin: 0 4px;
-      background-color: #49004d;
-      color: #ffffff;
-      border-top-left-radius: 4px;
-      border-top-right-radius: 4px;
-      border: 1px solid #333;
-      border-bottom: none;
-      transition: background-color 0.3s;
+    ul.tabs:after {
+      position: absolute;
+      content: "";
+      width: 100%;
+      bottom: 0;
+      left: 0;
+      border-bottom: 1px solid #AAA;
       z-index: 1;
     }
-  
-    ul.tabs li:hover {
-      background-color: #356bac;
+    ul.tabs li {
+      padding: 10px 15px;
+      font-size: 12px; 
+      text-align: center;
+      background: #aaa;
+      cursor: pointer;    
+      flex: 0 1 auto;
+
+      position: relative;
+      margin: 0 8px -1px 8px;
+      padding: 0 13px;
+      border: 1px solid #AAA;
+      border-width: 1px 0px 1px 0px;
+      background-color: #d9d9d9;
+      background-image: linear-gradient(to bottom, #d9d9d9 50%, #bcbcbc 100%);
+      box-shadow: inset 0 1px 0 #FFF;
+      text-shadow: 0 1px #FFF;
+      z-index: 0;
     }
-  
+    ul.tabs li:before,
+    ul.tabs li:after {
+      position: absolute;
+      bottom: -1px;
+      width: 15px;
+      height: 26px;
+      content: " ";
+      border: 1px solid #AAA;
+      background: linear-gradient(to bottom, #d9d9d9 50%, #bcbcbc 100%);
+      z-index: 3;
+    }
+    ul.tabs li:before {
+      left: -10px;
+      border-right: none;
+      border-top-left-radius: 6px;
+      transform: skew(-20deg);
+      box-shadow: -2px 0px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+    ul.tabs li:after {
+      right: -10px;
+      border-left: none;
+      border-top-right-radius: 6px;
+      transform: skew(20deg);
+      box-shadow: 2px 0px 3px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+
     ul.tabs li.current {
-      background-color: #121212;
-      border-bottom: 1px solid #121212;
+      background: #ededed;
+      color: #000;
       z-index: 2;
+      border-bottom-color: #ededed;
     }
-  
+
+    ul.tabs li.current:before,
+    ul.tabs li.current:after {
+      background: #ededed;
+      border-bottom-color: #ededed;
+    }
+
     .tab-content {
-      background-color: #356bac;
+      background: #ededed;
       padding: 15px;
-      border: 1px solid #333;
-      border-top: none;
-      color: #ffffff;
-      border-radius: 0 4px 4px 4px;
+      border: 1px solid #AAA;
+      border-top:none;
+      position:relative;
     }
-  
     .tab-content:not(.poppedOut),
     .tab-content.tab-placeholder {
       display: none;
     }
-  
+
     .tab-content.current {
-      display: block;
+      display: inherit;
     }
-  
     .tab-placeholder {
-      height: 10px;
+      height:10px;
     }
-  
+
     #tab-overview p {
-      padding: 10px;
+      padding:10px;
     }
-  
     #tab-overview h3 {
-      padding: 10px;
+      padding:10px;
     }
-  
+
     #status {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      font-size: 14px;
-      color: #f44336;
+      position:fixed;
+      bottom:10px;
+      right:10px;
+      font-size:20px;
+      color:red;
     }
-  
+
     #linkToHome {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      font-size: 14px;
-      color: #ffffff;
+      position:fixed;
+      bottom:10px;
+      left:10px;
+      font-size:20px;
     }
-  
+
     .popoutIcon,
     .nowItsAPinIcon {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      background-image: url(images/webVizPins.png);
-      cursor: pointer;
-      filter: invert(100%);
+      position:absolute;
+      top:0px;
+      right:0px;
+      width:16px;
+      height:16px;
+      background-image:url(images/webVizPins.png);
+      cursor:pointer;
     }
-  
     .nowItsAPinIcon {
-      background-position: -16px 0;
+      background-position: -16px 0px;
     }
-  
+
     #popouts {
       margin-top: 50px;
     }
-  
     #popouts .tab-content {
-      border-top: 1px solid #9d0080;
-      margin-bottom: 20px;
+      border-top: 1px solid #AAA;
+      margin-bottom:20px;
     }
-  
+
     #devDataDump {
       overflow-x: scroll;
       overflow-y: scroll;
-      border: 1px solid #333;
-      padding: 10px;
-      margin: 10px;
-      font-family: monospace;
-      background-color: #1e1e1e;
-      color: #ffffff;
+      border:1px solid black;
+      padding:10px;
+      margin:10px;
+      font-family:monospace;
     }
+
+    
   </style>
-  
-  
 
   <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
@@ -207,28 +247,11 @@
   <div id="container">
 
     <ul class="tabs">
-      <style>
-        .tabs .tab-link {
-    background-color: #356bac !important; /* Purple */
-    color: white !important; /* White text for contrast */
-    border: 1px solid #003d66; /* Darker purple border */
-    padding: 10px 15px;
-    border-radius: 5px;
-    text-align: center;
-    cursor: pointer;
-    display: inline-block;
-}
-
-.tabs .tab-link.current {
-    background-color: #0085cc !important; 
-}
-
-      </style>
       <li class="tab-link current" data-tab="tab-overview">Overview</li>
     </ul>
 
     <div id="tab-overview" class="tab-content current">
-      <p>This page will display data "pushed" from Viccy engine to multiple drawing modules.</p>
+      <p>This page will display data "pushed" from Victor engine to multiple drawing modules.</p>
       <p>Each tab contains its own module. Open the tab to subscribe to the data source for that module.</p>
       <p>To add new modules, start with the template file module.js.template.</p>
       <p><b>Are you always disconnected from the robot? Not seeing new tabs or new functionality? In Chrome, hit Command + Shift + R to re-download all the assets for this site.</b></p>

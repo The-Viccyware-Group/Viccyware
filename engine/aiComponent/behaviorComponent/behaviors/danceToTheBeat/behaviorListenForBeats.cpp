@@ -79,7 +79,6 @@ bool BehaviorListenForBeats::WantsToBeActivatedBehavior() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorListenForBeats::GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const
 {
-  modifiers.visionModesForActiveScope->insert({ VisionMode::Pets, EVisionUpdateFrequency::Standard});
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -14,10 +14,8 @@ enum uint_8 PostBehaviorSuggestions {
   Socialize,
   PlayWithCube,
   Nothing,
-  ReactToPutDownFromPalm,
   Sleep,
   SleepOnCharger,
-  SleepOnPalm,
 }
 
 } // namespace Vector

@@ -11,7 +11,7 @@
  **/
 
 #include "coretech/common/engine/math/convexPolygon2d.h"
-#include "coretech/common/engine/math/polygon.h"
+#include "coretech/common/engine/math/polygon_impl.h"
 #include "util/global/globalDefinitions.h"
 
 #include <cmath>

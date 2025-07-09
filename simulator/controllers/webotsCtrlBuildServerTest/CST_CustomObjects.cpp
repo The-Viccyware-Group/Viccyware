@@ -10,7 +10,9 @@
 *              4. Wall should be unique and only seen once.
 *              5. Cube is not unique so there should now be two.
 *              6. Delocalize robot and see two custom cubes.
-*              7. Undefine objects and make sure they are removed.
+*              7. Rejigger to a charger to verify custom (passive) objects get updated correctly
+*                 - One cube from (6) should match to existing based on pose
+*                 - The other cube from (6) should get rejiggered
 *
 *
 * Copyright: Anki, inc. 2017
@@ -35,6 +37,8 @@ enum class TestState {
   NotifyKidnap,
   Kidnap,
   SeeCubeInNewOrigin,
+  Rejigger,
+  Redefine,
   Undefine
 };
 
@@ -168,7 +172,7 @@ s32 CST_CustomObjects::UpdateSimInternal()
       // Define the custom objects
       DefineObjects();
       
-      // Request a cube connection
+      // Request a cube connection so that we will localize to the cube
       SendForgetPreferredCube();
       SendConnectToCube();
       
@@ -282,6 +286,51 @@ s32 CST_CustomObjects::UpdateSimInternal()
       IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
                                             GetNumObjects() == 2)
       {
+        // Turn to see light cube to relocalize
+        SendTurnInPlace(DEG_TO_RAD(kReLocRotAngle_deg));
+        
+        SET_TEST_STATE(Rejigger);
+      }
+      break;
+    }
+      
+    case TestState::Rejigger:
+    {
+      // Wait for robot to stop turning and re-localizaiton to occur
+      IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
+                                            !IsRobotStatus(RobotStatusFlag::IS_MOVING),
+                                            IsLocalizedToObject(),
+                                            GetNumObjects() == 5) // 1 custom cube should match based on pose during rejigger
+      {
+        // Make sure poses are still correct after re-localizing to the light cube
+        CheckPoses();
+        
+        // Redefine CustomObject00 (the cube) differently. That should delete all existing objects of that type.
+        using namespace ExternalInterface;
+        
+        DefineCustomCube defineCube(ObjectType::CustomType00,
+                                    CustomObjectMarker::Hexagons4,
+                                    2.f*_cubeSize_mm,
+                                    .5f*_cubeMarkerSize_mm, .5f*_cubeMarkerSize_mm,
+                                    false);
+        
+        SendMessage(MessageGameToEngine(std::move(defineCube)));
+        
+        // Also look down, just so we stop seeing the Circles2 markers on the old redefined cubes, which will produce
+        // warnings in the log that might look suspicious but are in fact red herrings (they are expected after we
+        // redefine the marker). We may still see a few while the head goes down, but at least they won't spam.
+        SendMoveHeadToAngle(MIN_HEAD_ANGLE, 100.f, 100.f);
+        
+        SET_TEST_STATE(Redefine);
+      }
+      break;
+    }
+      
+    case TestState::Redefine:
+    {
+      // Wait for the three cubes to be deleted thanks to the redefinition of their type
+      IF_CONDITION_WITH_TIMEOUT_ASSERT(GetNumObjects()==2, kDefaultTimeout_sec)
+      {
         SendMoveHeadToAngle(0.f, 100.f, 100.f);
         
         using namespace ExternalInterface;
@@ -294,8 +343,10 @@ s32 CST_CustomObjects::UpdateSimInternal()
       
     case TestState::Undefine:
     {
+      // Wait for the only object left to exist to be the Charger, since all custom objects
+      // have been undefined
       IF_ALL_CONDITIONS_WITH_TIMEOUT_ASSERT(kDefaultTimeout_sec,
-                                            GetNumObjects()==0,
+                                            GetNumObjects()==1,
                                             _numDefinesReceived==0)
       {
         // TODO: Add test state where we look at a custom object but no longer instantiate it?
@@ -420,6 +471,7 @@ void CST_CustomObjects::CheckPoses()
         break;
     
       case TestState::LookBackUp:
+      case TestState::Rejigger:
         whichWallPose = &_wallPose2;
         break;
         
@@ -459,7 +511,12 @@ void CST_CustomObjects::CheckPoses()
     {
       posesAndIDs.emplace_back(PoseAndID{ .cubePose = &_cubePose2, .objectID = customCubeIDs[1] });
     }
-
+    
+    if(_testState >= TestState::Rejigger)
+    {
+      posesAndIDs.emplace_back(PoseAndID{ .cubePose = &_cubePose3, .objectID = customCubeIDs[2] });
+    }
+   
     for(auto & poseAndID : posesAndIDs)
     {
       CustomObject* customCube = CustomObject::CreateCube(ObjectType::CustomType00,

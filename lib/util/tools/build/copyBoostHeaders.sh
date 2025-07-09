@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #  copyHeaders.sh
 #
 #  Created by damjan stulic on 4/4/14.

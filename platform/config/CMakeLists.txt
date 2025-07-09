@@ -5,8 +5,6 @@
 #
 # Build options
 #
-# hi 
-#
 # Configure with -DANKI_RESOURCE_SHIPPING=1 to deploy shipping config files.
 # Configure with -DANKI_RESOURCE_SHIPPING=0 to deploy development config files.
 # Default is ANKI_RESOURCE_SHIPPING=0.
@@ -72,37 +70,21 @@ if (ANKI_AMAZON_ENDPOINTS_ENABLED)
 
 else()
 
-  if(ANKI_RESOURCE_SHIPPING AND OSKR_ENDPOINTS)
-    set(BASE_URL "https://ota.global.anki-services.com/vic/oskr/")
-    set(ANKIDEV_BASE_URL "https://ota.global.anki-dev-services.com/vic/oskr/")
-    configure_file(oskr/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
-    set(platform_config_etc_extra platform_config_etc_oskr)
-  elseif(ANKI_RESOURCE_SHIPPING AND ANKI_RESOURCE_ESCAPEPOD)
-    set(BASE_URL "https://ota.global.anki-services.com/vic/ep/")
-    set(ANKIDEV_BASE_URL "https://ota.global.anki-dev-services.com/vic/ep/")
-    configure_file(oskr/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
-    set(platform_config_etc_extra platform_config_etc_ep)  
-  elseif(ANKI_RESOURCE_SHIPPING AND NOT OSKR_ENDPOINTS AND NOT ANKI_RESOURCE_ESCAPEPOD)
-    set(BASE_URL "https://ota-cdn.ddl.io/vector/ota/prod/")
-    set(ANKIDEV_BASE_URL "https://ota.global.anki-dev-services.com/vic/master/lo8awreh23498sf/")
+  if(ANKI_RESOURCE_SHIPPING)
+    set(BASE_URL "https://ota.global.anki-services.com/vic/prod/")
+    set(ANKIDEV_BASE_URL "https://ota.global.anki-dev-services.com/vic/rc/lo8awreh23498sf/")
     configure_file(shipping/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
     set(platform_config_etc_extra platform_config_etc_shipping)
-  elseif(ANKI_RESOURCE_ESCAPEPOD AND NOT ANKI_RESOURCE_SHIPPING)
-    set(BASE_URL "https://ota.global.anki-dev-services.com/vic/master-ep/lo8awreh23498sf/")
-    set(BASE_URL_LATEST "https://ota.global.anki-dev-services.com/vic/master-ep-latest/lo8awreh23498sf/")
-    configure_file(development/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
-    set(platform_config_etc_extra platform_config_etc_epdev)
-    set(platform_config_bin_extra platform_config_bin_epdev)
   else()
-    set(BASE_URL "https://ota-cdn.vicw.xyz/vic/")
-    set(BASE_URL_LATEST "https://ota-cdn.vicw.xyz/vic/")
+    set(BASE_URL "https://ota.global.anki-dev-services.com/vic/rc-dev/lo8awreh23498sf/")
+    set(BASE_URL_LATEST "https://ota.global.anki-dev-services.com/vic/rc-dev-latest/lo8awreh23498sf/")
     configure_file(development/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
     set(platform_config_etc_extra platform_config_etc_development)
     set(platform_config_bin_extra platform_config_bin_development)
   endif()
 
   if (ANKI_USER_DEV)
-    set(BASE_URL "https://ota.global.anki-dev-services.com/vic/master-userdev/lo8awreh23498sf/")
+    set(BASE_URL "https://ota.global.anki-dev-services.com/vic/rc-userdev/lo8awreh23498sf/")
     configure_file(userdev/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
     set(platform_config_etc_extra platform_config_etc_userdev)
   endif()

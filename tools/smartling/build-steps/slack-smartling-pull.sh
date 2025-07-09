@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Download strings files from smartling using buildbot and open Pull Request
 #

@@ -104,7 +104,6 @@ ActionResult SayTextAction::Init()
                                             triggerType,
                                             _style,
                                             _durationScalar,
-                                            _pitchScalar,
                                             ttsCallback);
 
   _actionState = SayTextActionState::Waiting;

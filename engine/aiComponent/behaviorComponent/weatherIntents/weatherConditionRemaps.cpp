@@ -36,12 +36,6 @@ const char* kLocalTimeAfterKey  = "LocalTimeAfter";
 const char* kTemperatureCondition = "temperature";
 const char* kTempBelowFarKey = "TemperatureBelowFarenheit";
 const char* kTempAboveFarKey = "TemperatureAboveFarenheit";
-
-const char* kDayOrNightCondition = "isNight";
-const char* kValueKey = "value";
-
-const char* kWeatherStringForDaytime = "D";
-const char* kWeatherStringForNighttime = "N";
 }
 
 
@@ -70,10 +64,6 @@ WeatherConditionRemaps::WeatherConditionRemaps(const Json::Value& conditionRemap
         if(conditionSpec.isMember(kTempAboveFarKey)){
           entry.temperatureAboveF = JsonTools::ParseFloat(conditionSpec, kTempAboveFarKey, debugName);
         }
-      }
-      else if(conditionSpec[kConditionTypeKey] == kDayOrNightCondition){
-        const bool isNight = JsonTools::ParseBool(conditionSpec, kValueKey, debugName);
-        entry.dayOrNightSpecifier = isNight ? kWeatherStringForNighttime : kWeatherStringForDaytime;
       }
 
       // If there's more than one condition specified we need to know what operator to apply to their results (and/or)
@@ -118,10 +108,6 @@ WeatherConditionType WeatherConditionRemaps::GetRemappedCondition(const WeatherI
     parser.GetTemperatureF(weatherIntent, trueTemperatureF);
 
     for(const auto& entry : iter->second){
-
-      ////////////////////////////////////////////////////////////////////////////////
-      // Temperature
-      ////////////////////////////////////////////////////////////////////////////////
       const bool shouldConsiderTemperature = (entry.temperatureBelowF != kInvalidTemp) ||
                                              (entry.temperatureAboveF != kInvalidTemp);
 
@@ -134,10 +120,6 @@ WeatherConditionType WeatherConditionRemaps::GetRemappedCondition(const WeatherI
                                         isBelowConfigTemp && isAboveConfigTemp : 
                                         isBelowConfigTemp || isAboveConfigTemp;
 
-      ////////////////////////////////////////////////////////////////////////////////
-      // Local Time
-      ////////////////////////////////////////////////////////////////////////////////
-
       const bool shouldConsiderTime = (entry.localTimeBefore != nullptr) || (entry.localTimeAfter != nullptr);
       const bool inTimeBefore = (entry.localTimeBefore != nullptr) &&
                                   (entry.localTimeBefore->tm_hour >= localDatetime.tm_hour) &&
@@ -148,30 +130,14 @@ WeatherConditionType WeatherConditionRemaps::GetRemappedCondition(const WeatherI
                                    ((entry.localTimeAfter->tm_hour < localDatetime.tm_hour) ||
                                     (entry.localTimeAfter->tm_min < localDatetime.tm_min));
 
+      
       const bool inTimeRange = entry.allSpecifiedConditionsMustBeMet ? 
                                  inTimeBefore && inTimeAfter : 
-                                 inTimeBefore || inTimeAfter;
-
-      ////////////////////////////////////////////////////////////////////////////////
-      // Day or night
-      ////////////////////////////////////////////////////////////////////////////////
-
-      const bool shouldConsiderDayOrNight = !entry.dayOrNightSpecifier.empty();
-      const bool dayOrNightConditionMet = (entry.dayOrNightSpecifier == weatherIntent.dayOrNight);
-
-      ANKI_VERIFY( weatherIntent.dayOrNight.empty() ||
-                       weatherIntent.dayOrNight == kWeatherStringForDaytime ||
-                       weatherIntent.dayOrNight == kWeatherStringForNighttime,
-                       "WeatherConditionRemaps.DayOrNot.InvalidUserIntent",
-                       "User intent day or night response must be '%s' or '%s' if specified, got '%s'",
-                       kWeatherStringForDaytime,
-                       kWeatherStringForNighttime,
-                       weatherIntent.dayOrNight.c_str() );
+                                 inTimeBefore || inTimeAfter;     
 
 
       if((!shouldConsiderTemperature || inTemperatureRange) &&
-         (!shouldConsiderTime || inTimeRange) &&
-         (!shouldConsiderDayOrNight || dayOrNightConditionMet)){
+         (!shouldConsiderTime || inTimeRange)){
         return entry.remappedType;
       }
     }
@@ -190,7 +156,6 @@ WeatherConditionRemaps::RemapEntry::RemapEntry(const RemapEntry& other)
   temperatureAboveF = other.temperatureAboveF;
   localTimeBefore   = (other.localTimeBefore == nullptr) ? nullptr : std::make_unique<tm>(*other.localTimeBefore.get());
   localTimeAfter    = (other.localTimeAfter == nullptr)  ? nullptr : std::make_unique<tm>(*other.localTimeAfter.get());
-  dayOrNightSpecifier = other.dayOrNightSpecifier;
 }
 
 

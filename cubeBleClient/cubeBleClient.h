@@ -42,7 +42,7 @@ class CubeBleClient
 {
 public:
   CubeBleClient();
-  virtual ~CubeBleClient();
+  ~CubeBleClient();
   
   bool Init();
   

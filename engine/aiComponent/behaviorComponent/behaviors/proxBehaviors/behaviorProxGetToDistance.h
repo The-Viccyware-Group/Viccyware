@@ -59,7 +59,7 @@ private:
     Util::GraphEvaluator2d distMMToSpeedMMGraph;
   } _params;
 
-  Pose2d _previousProxObjectPose;
+  Pose3d _previousProxObjectPose;
 
   
 }; // class BehaviorAcknowledgeCubeMoved

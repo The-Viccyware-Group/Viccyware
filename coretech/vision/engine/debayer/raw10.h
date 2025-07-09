@@ -4,8 +4,10 @@
  * Author: Patrick Doran
  * Date: 03/25/2019
  *
- * Description: Debayering for RAW10 on Vector. This contains Debayer::Op instances that run on CPU
+ * Description: Debayering for RAW10 on Vector. This contains Debayer::Op instances that run on CPU without 
+ *              acceleration.
  * 
+ *
  * Copyright: Anki, Inc. 2019
  */
 
@@ -18,34 +20,25 @@
 namespace Anki {
 namespace Vision {
 
-/**
- * @brief Convert RAW10 RGGB bayer input to RGB24 or Y8 and QUARTER_or_EIGHTH (if requested).
- */
-class HandleRAW10: public Debayer::Op
+class RAW10toRGB24: public Debayer::Op
 {
 public:
-  HandleRAW10(f32 gamma);
-  virtual ~HandleRAW10() = default;
+  RAW10toRGB24();
+  virtual ~RAW10toRGB24() = default;
   Result operator()(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const override;
   
 private:
-  using Key = std::tuple<Debayer::Scale, Debayer::OutputFormat>;
+  std::array<u8, 1024> _gammaLUT;
+};
+
+class RAW10toY8: public Debayer::Op
+{
+public:
+  RAW10toY8();
+  virtual ~RAW10toY8() = default;
+  Result operator()(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const override;
   
-  using Function = std::function<Result(const Debayer::InArgs&, Debayer::OutArgs&)>;
-
-  static Key MakeKey(Debayer::Scale scale, Debayer::OutputFormat format)
-  {
-    return std::make_tuple(scale, format);
-  }
-
-  Result RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-  Result RAW10_to_RGB24_HALF(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-  Result RAW10_to_RGB24_QUARTER_or_EIGHTH(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-  Result RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-  Result RAW10_to_Y8_HALF(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-  Result RAW10_to_Y8_QUARTER_or_EIGHTH(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const;
-
-  std::map<Key,Function> _functions;
+private:
   std::array<u8, 1024> _gammaLUT;
 };
 

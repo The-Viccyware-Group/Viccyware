@@ -538,7 +538,7 @@ void RobotToEngineImplMessaging::HandleSyncRobotAck(const AnkiEvent<RobotInterfa
   robot->SetSyncRobotAcked();
 
   // Move the head up when we sync time so that the customer can see the face easily
-  if(FACTORY_TEST)
+  if(FACTORY_TEST && Factory::GetEMR()->fields.PACKED_OUT_FLAG)
   {
     // Move head up
     const f32 kLookUpSpeed_radps = 2;
@@ -593,7 +593,6 @@ void RobotToEngineImplMessaging::HandleDisplayedFaceImage(const AnkiEvent<RobotI
   // Not user why copy_n wasn't working here, but just going ahead and doing an extra copy to fix the issue
   auto unnecessaryCopy = msg.faceData;
   std::copy_n(unnecessaryCopy.begin(), numPixels, _faceImageRGB565.GetRawDataPointer() + (msg.chunkIndex * kMaxNumPixelsPerChunk));
-  u32 kAllFaceImageRGBChunksReceivedMask = IsXray() ? kAllFaceImageRGBChunksReceivedMaskFor22Chunks : kAllFaceImageRGBChunksReceivedMaskFor30Chunks;
 
   if (_faceImageRGBChunksReceivedBitMask == kAllFaceImageRGBChunksReceivedMask) {
     Vision::ImageRGB fullImage;

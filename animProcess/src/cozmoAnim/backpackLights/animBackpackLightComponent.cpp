@@ -113,10 +113,6 @@ void BackpackLightComponent::UpdateCriticalBackpackLightConfig(bool isCloudStrea
     // N        | N            | Y (no charging taking place)
     trigger = BackpackAnimationTrigger::LowBattery;
   }
-  else if(_selfTestRunning)
-  {
-    trigger = BackpackAnimationTrigger::Off;
-  }
   // If we have been offline for long enough
   else if(_offlineAtTime_ms > 0 &&
           ((TimeStamp_t)curTime_ms - _offlineAtTime_ms > kOfflineTimeBeforeLights_ms))
@@ -238,7 +234,6 @@ bool BackpackLightComponent::IsBehaviorBackpackLightActive() const
   // _mostRecentTrigger tracks the last trigger that was requested from the engine
   switch ( _mostRecentTrigger )
   {
-    case BackpackAnimationTrigger::Petting:
     case BackpackAnimationTrigger::WorkingOnIt:
     case BackpackAnimationTrigger::SpinnerBlueCelebration:
     case BackpackAnimationTrigger::SpinnerBlueHoldTarget:

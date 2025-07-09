@@ -17,9 +17,7 @@
 #include "micDataTypes.h"
 #include "coretech/common/shared/types.h"
 #include "cozmoAnim/speechRecognizer/speechRecognizerSystem.h"
-#include "util/console/consoleFunction.h"
 #include "util/global/globalDefinitions.h"
-#include "util/helpers/noncopyable.h"
 #include "util/environment/locale.h"
 #include "util/signals/signalHolder.h"
 
@@ -29,7 +27,6 @@
 
 #include <cstdint>
 #include <deque>
-#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -72,7 +69,7 @@ namespace Anki {
 namespace Vector {
 namespace MicData {
 
-class MicDataSystem : private Util::SignalHolder, private Anki::Util::noncopyable {
+class MicDataSystem : private Util::SignalHolder {
 public:
   MicDataSystem(Util::Data::DataPlatform* dataPlatform,
                 const Anim::AnimContext* context);
@@ -95,7 +92,6 @@ public:
 #if ANKI_DEV_CHEATS
   void SetForceRecordClip(bool newValue) { _forceRecordClip = newValue; }
   void SetLocaleDevOnly(const Util::Locale& locale) { _locale = locale; }
-  void EnableTriggerHistory(bool enable);
 #endif
 
   void ResetMicListenDirection();
@@ -216,12 +212,9 @@ private:
   std::atomic<bool> _abortAlexaScreenDueToHeyVector;
   
 #if ANKI_DEV_CHEATS
-  std::list<Anki::Util::IConsoleFunction> _devConsoleFuncs;
-  bool _devEnableTriggerHistory = true;
-  std::list<Json::Value> _devTriggerResults;
+  std::vector<Json::Value> _devTriggerResults;
 #endif
 
-  void SetupConsoleFuncs();
   void RecordAudioInternal(uint32_t duration_ms, const std::string& path, MicDataType type, bool runFFT);
   void ClearCurrentStreamingJob();
   float GetIncomingMicDataPercentUsed();

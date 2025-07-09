@@ -22,6 +22,7 @@
 #include "wheelController.h"
 #include "pathFollower.h"
 #include "pickAndPlaceController.h"
+#include "powerModeManager.h"
 #include "proxSensors.h"
 #include "messages.h"
 
@@ -591,10 +592,12 @@ namespace Anki {
               BraceForImpact();
             } else {
               // only clear the flag if aMag rises above the higher threshold.
-              fallStarted_ = (accelMagnitudeSqrd_ < FALLING_THRESH_HIGH_MMPS2_SQRD) && ProxSensors::IsAnyCliffDetected();
+              fallStarted_ = (accelMagnitudeSqrd_ < FALLING_THRESH_HIGH_MMPS2_SQRD) &&
+                             (ProxSensors::IsAnyCliffDetected() || !PowerModeManager::IsActiveModeEnabled());
             }
           } else { // not fallStarted
-            if ((accelMagnitudeSqrd_ < FALLING_THRESH_LOW_MMPS2_SQRD) && ProxSensors::IsAnyCliffDetected()) {
+            if ((accelMagnitudeSqrd_ < FALLING_THRESH_LOW_MMPS2_SQRD) &&
+                (ProxSensors::IsAnyCliffDetected() || !PowerModeManager::IsActiveModeEnabled())) {
               fallStarted_ = true;
               fallStartedTime_ = now;
             }

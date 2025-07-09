@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Brad's command to search for TEMP in code and output a warning. This
 # must be run from the root directory. if the -fail argument is

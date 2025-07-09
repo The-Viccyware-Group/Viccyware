@@ -139,7 +139,7 @@
               },
               {
                 "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3", "Block_LIGHTCUBE4"],
+                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
                 "maxAge_ms" : 1000
               },
               {
@@ -240,7 +240,7 @@
               },
               {
                 "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3", "Block_LIGHTCUBE4"],
+                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
                 "maxAge_ms" : 1000
               },
               {
@@ -454,7 +454,7 @@
               },
               {
                 "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3", "Block_LIGHTCUBE4"],
+                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
                 "maxAge_ms" : 1000
               },
               {
@@ -486,7 +486,7 @@
               },
               {
                 "conditionType": "ObjectKnown",
-                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3", "Block_LIGHTCUBE4"],
+                "objectTypes": ["Block_LIGHTCUBE1","Block_LIGHTCUBE2","Block_LIGHTCUBE3"],
                 "maxAge_ms" : 1000
               },
               {
@@ -576,7 +576,18 @@
 
     // explore voice command
     {
-      "from": "*",
+      "from": [
+        "DriveOffChargerIntoSocializing",
+        "ObservingDriveOffCharger",
+        "Observing",
+        "ObservingOnCharger",
+        "ObservingOnChargerRecentlyPlaced",
+        "Socializing",
+        "PlayingWithCube",
+        "Exploring",
+        "ExploringVoiceCommand",
+        "InvestigateHeldCube"
+      ],
       "interruptingTransitions": [
         {
           "to": "ExploringVoiceCommand",

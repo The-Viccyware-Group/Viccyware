@@ -21,7 +21,6 @@
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
-#include "engine/aiComponent/behaviorComponent/heldInPalmTracker.h"
 #include "engine/aiComponent/behaviorComponent/sleepTracker.h"
 #include "engine/aiComponent/behaviorComponent/userIntentComponent.h"
 #include "engine/aiComponent/beiConditions/beiConditionFactory.h"
@@ -110,6 +109,7 @@ BehaviorSleepCycle::BehaviorSleepCycle(const Json::Value& config)
 
   _iConfig.emergencyCondition = BEIConditionFactory::CreateBEICondition(config[kEmergencyConditionKey], GetDebugLabel());
 }
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorSleepCycle::~BehaviorSleepCycle()
 {
@@ -123,7 +123,7 @@ void BehaviorSleepCycle::ParseWakeReasonConditions(const Json::Value& config)
     JsonTools::GetCladEnumFromJSON(group, "reason", reason, "BehaviorSleepCycle.ParseWakeReasonConditions");
     auto condition = BEIConditionFactory::CreateBEICondition(group["condition"], GetDebugLabel());
     if( ANKI_VERIFY(condition != nullptr,
-                    "BehaviorSleepCycle.ParseWakeReasonConditions.FailedToCreateCondition",
+                    "BehaviorSleepCycle.ParseWakeReasonConditions.FailedToCrateCondition",
                     "Failed to get a valid condition for reason '%s'",
                     EnumToString(reason)) ) {
       _iConfig.wakeConditions.emplace( reason, condition );
@@ -166,18 +166,12 @@ void BehaviorSleepCycle::CreateCustomWakeReasonConditions()
       return isIntentPending && !isListening;
     },
     GetDebugLabel() ) );
-  
-  auto addSleepReactionWakeCondition = [this](WakeReason reason, SleepReactionType type) {
-    _iConfig.wakeConditions.emplace( reason, new ConditionLambda( [this, type](BehaviorExternalInterface& bei) {
-        const bool isDoneReacting = (_dVars.reactionState == type && !IsControlDelegated());
-        return isDoneReacting;
-      },
-      GetDebugLabel() ) );
-  };
-  
-  addSleepReactionWakeCondition(WakeReason::Sound, SleepReactionType::Sound);
-  addSleepReactionWakeCondition(WakeReason::Jolted, SleepReactionType::Jolted);
-  addSleepReactionWakeCondition(WakeReason::PickedUpFromPalm, SleepReactionType::PickedUpFromPalm);
+
+  _iConfig.wakeConditions.emplace( WakeReason::Sound, new ConditionLambda( [this](BehaviorExternalInterface& bei) {
+      const bool isDoneReacting = (_dVars.reactionState == SleepReactionType::Sound && !IsControlDelegated());
+      return isDoneReacting;
+    },
+    GetDebugLabel() ) );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -255,14 +249,13 @@ void BehaviorSleepCycle::GetBehaviorOperationModifiers(BehaviorOperationModifier
 void BehaviorSleepCycle::GetAllDelegates(std::set<IBehavior*>& delegates) const
 {
   delegates.insert(_iConfig.awakeDelegate.get());
+  delegates.insert(_iConfig.awakeDelegate.get());
   delegates.insert(_iConfig.goToSleepBehavior.get());
   delegates.insert(_iConfig.asleepBehavior.get());
   delegates.insert(_iConfig.wakeUpBehavior.get());
   delegates.insert(_iConfig.personCheckBehavior.get());
   delegates.insert(_iConfig.findChargerBehavior.get());
   delegates.insert(_iConfig.sleepingSoundReactionBehavior.get());
-  delegates.insert(_iConfig.pickupFromPalmReaction.get());
-  delegates.insert(_iConfig.joltInPalmBehavior.get());
   delegates.insert(_iConfig.sleepingWakeWordBehavior.get());
   delegates.insert(_iConfig.wiggleBackOntoChargerBehavior.get());
   delegates.insert(_iConfig.emergencyModeAnimBehavior.get());
@@ -307,8 +300,6 @@ void BehaviorSleepCycle::InitBehavior()
   _iConfig.wiggleBackOntoChargerBehavior = BC.FindBehaviorByID( BEHAVIOR_ID( WiggleBackOntoChargerFromPlatform ) );
   _iConfig.emergencyModeAnimBehavior     = BC.FindBehaviorByID( BEHAVIOR_ID( EmergencyModeAnimDispatcher ) );
   _iConfig.personCheckBehavior           = BC.FindBehaviorByID( BEHAVIOR_ID( SleepingPersonCheck ) );
-  _iConfig.joltInPalmBehavior            = BC.FindBehaviorByID( BEHAVIOR_ID( ReactToJoltInPalm) );
-  _iConfig.pickupFromPalmReaction        = BC.FindBehaviorByID( BEHAVIOR_ID( ReactToPickupFromPalm ) );
 
   for( const auto& conditionPair : _iConfig.wakeConditions ) {
     conditionPair.second->Init( GetBEI() );
@@ -335,7 +326,6 @@ void BehaviorSleepCycle::InitBehavior()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSleepCycle::OnBehaviorActivated()
 {
-
   // reset dynamic variables
   _dVars = DynamicVariables();
 
@@ -390,7 +380,6 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
 
     case SleepStateID::Comatose:
     case SleepStateID::EmergencySleep:
-    case SleepStateID::HeldInPalmSleep:
     case SleepStateID::DeepSleep:
     case SleepStateID::LightSleep: {
 
@@ -408,8 +397,6 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
           PlayEmergencyGetOut(AnimationTrigger::WakeupGetout);
           break;
 
-        case SleepReactionType::Jolted:
-        case SleepReactionType::PickedUpFromPalm:
         case SleepReactionType::Sound:
         case SleepReactionType::TriggerWord:
           // no wake up anim here
@@ -439,7 +426,6 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
   SetConditionsActiveForState( _dVars.currState, false);
 
   _iConfig.emergencyCondition->SetActive( GetBEI(), false );
-
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -565,21 +551,6 @@ void BehaviorSleepCycle::BehaviorUpdate()
         return;
       }
     }
-    
-    if ( _dVars.reactionState == SleepReactionType::NotReacting &&
-        _dVars.currState == SleepStateID::HeldInPalmSleep ) {
-      if ( _iConfig.joltInPalmBehavior->WantsToBeActivated() ) {
-        CancelDelegates(false);
-        SetReactionState(SleepReactionType::Jolted);
-        DelegateIfInControl(_iConfig.joltInPalmBehavior.get());
-        return;
-      } else if ( _iConfig.pickupFromPalmReaction->WantsToBeActivated() ) {
-        CancelDelegates(false);
-        SetReactionState(SleepReactionType::PickedUpFromPalm);
-        DelegateIfInControl(_iConfig.pickupFromPalmReaction.get());
-        return;
-      }
-    }
 
     if( _dVars.currState == SleepStateID::LightSleep ||
         _dVars.currState == SleepStateID::DeepSleep ) {
@@ -671,7 +642,8 @@ bool BehaviorSleepCycle::WasNightlyReboot() const
   const float currTime_s = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   const bool engineStartedRecently = currTime_s < kSecondsThatMeanRecentBoot;
   const bool wasReboot = OSState::getInstance()->RebootedForMaintenance();
-  const bool wasNightlyReboot = engineStartedRecently && wasReboot;
+  const bool isNight = GetBEI().GetSleepTracker().IsNightTime();
+  const bool wasNightlyReboot = engineStartedRecently && wasReboot && isNight;
 
   return wasNightlyReboot;
 }
@@ -722,12 +694,6 @@ bool BehaviorSleepCycle::GoToSleepIfNeeded()
     }
     return false;
   };
-  
-  if ( checkSuggestion(PostBehaviorSuggestions::SleepOnPalm) ) {
-    TransitionToHeldInPalmSleep();
-    SendGoToSleepDasEvent(SleepReason::HeldInPalmSleep);
-    return true;
-  }
 
   if( !wokeRecently && checkSuggestion(PostBehaviorSuggestions::SleepOnCharger) ) {
     TransitionToCharger();
@@ -985,12 +951,6 @@ void BehaviorSleepCycle::TransitionToEmergencySleep()
 {
   SleepTransitionHelper(SleepStateID::EmergencySleep, true, _iConfig.emergencyModeAnimBehavior);
 }
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorSleepCycle::TransitionToHeldInPalmSleep()
-{
-  SleepTransitionHelper(SleepStateID::HeldInPalmSleep);
-}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSleepCycle::TransitionToDeepSleep()
@@ -1192,7 +1152,6 @@ bool BehaviorSleepCycle::ShouldReactToSoundInState(const SleepStateID& state)
     case SleepStateID::GoingToCharger:
     case SleepStateID::Comatose:
     case SleepStateID::EmergencySleep:
-    case SleepStateID::HeldInPalmSleep:
     case SleepStateID::DeepSleep:
     case SleepStateID::CheckingForPerson:
       return false;
@@ -1216,7 +1175,6 @@ bool BehaviorSleepCycle::IsPreSleepState(const SleepStateID& state)
 
     case SleepStateID::Comatose:
     case SleepStateID::EmergencySleep:
-    case SleepStateID::HeldInPalmSleep:
     case SleepStateID::DeepSleep:
     case SleepStateID::CheckingForPerson:
     case SleepStateID::LightSleep:

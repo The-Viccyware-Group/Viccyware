@@ -10,9 +10,6 @@ import requests
 import time
 
 def processLine(line):
-  if not line or not isinstance(line, bytes):
-    raise ValueError(f"Invalid line: {line}")
-  line = line.decode('utf-8').strip()
   segments = line.split(' ')
   if len(segments)<2 or 'onboardingstatus' not in line.lower():
     return False,'','',''
@@ -94,7 +91,7 @@ def display(stdscr):
     print('Robot IP must be set!     export ANKI_ROBOT_HOST="x.x.x.x"')
     sys.exit(1)
 
-  path = subprocess.check_output(['git','rev-parse','--show-toplevel']).strip().decode('utf-8')
+  path = subprocess.check_output(['git','rev-parse','--show-toplevel']).strip()
   command = path + '/project/victor/scripts/victor_log.sh'
   readProcess = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid)
 

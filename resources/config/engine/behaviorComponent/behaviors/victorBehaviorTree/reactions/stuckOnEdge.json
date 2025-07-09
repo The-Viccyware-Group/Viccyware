@@ -12,9 +12,20 @@
     "or": [
       {
         "conditionType": "Compound",
-        "not": {
-          "conditionType": "StuckOnEdge"
-        }
+        "and": [
+          {
+            "conditionType": "Compound",
+            "not": {
+              "conditionType": "InCalmMode"
+            }
+          },
+          {
+            "conditionType": "Compound",
+            "not": {
+              "conditionType": "StuckOnEdge"
+            }
+          }
+        ]
       },
       {
         "conditionType": "Compound",

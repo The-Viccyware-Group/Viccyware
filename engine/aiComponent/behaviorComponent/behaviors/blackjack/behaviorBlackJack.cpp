@@ -148,6 +148,8 @@ void BehaviorBlackJack::InitBehavior()
   BC.FindBehaviorByIDAndDowncast( BEHAVIOR_ID(BlackJackLookAtFaceInFront),
                                   BEHAVIOR_CLASS(LookAtFaceInFront),
                                   _iConfig.lookAtFaceInFrontBehavior );
+
+  _visualizer.VerifySpriteAssets(GetBEI());
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -569,7 +571,7 @@ void BehaviorBlackJack::TransitionToPlayAgain()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorBlackJack::TransitionToGetOut()
 {
-  _visualizer.ResetHands();
+  _visualizer.ClearCards(GetBEI());
   DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::BlackJack_Quit), [this]()
     {
       CancelSelf();

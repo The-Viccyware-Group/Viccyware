@@ -32,7 +32,7 @@
         }
       ],
       "resolveMethod" : "PULL_FROM_CLOUD",
-      "jdocFormatVersion" : 2,
+      "jdocFormatVersion" : 1,
       "bodyOwnedByJdocManager" : false
     },
     "ROBOT_LIFETIME_STATS" : {

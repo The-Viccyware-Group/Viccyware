@@ -41,10 +41,7 @@
 #include "coretech/vision/engine/compressedImage.h"
 
 #include "coretech/common/engine/opencvThreading.h"
-#include "coretech/common/engine/math/polygon.h"
-
-// Include debayer.h because ConsoleVars for gamma must be here; they didn't work in debayer.cpp 
-#include "coretech/vision/engine/debayer.h" 
+#include "coretech/common/engine/math/polygon_impl.h"
 
 #include "util/cpuProfiler/cpuProfiler.h"
 #include "util/helpers/templateHelpers.h"
@@ -54,7 +51,6 @@
 #include "util/threading/threadPriority.h"
 
 #include "anki/cozmo/shared/factory/faultCodes.h"
-#include "anki/cozmo/shared/factory/emrHelper.h" // For the IsXray flag
 
 #include "proto/external_interface/shared.pb.h"
 
@@ -126,14 +122,6 @@ namespace Vector {
     enable = !enable;
   }
   CONSOLE_FUNC(DebugToggleCameraEnabled, "Vision.General");
-
-  CONSOLE_VAR_RANGED(f32, kDebayerGamma, "Vision.Debayer", IsXray() ? 1.9f : 1.7f, 0.1f, 4.f);
-  bool s_debayerResetGamma(false);
-  void ResetGamma(ConsoleFunctionContextRef context)
-  {
-    Anki::Vision::Debayer::Instance().SetGamma(kDebayerGamma);
-  }
-  CONSOLE_FUNC(ResetGamma, "Vision.Debayer");
 
   namespace JsonKey
   {
@@ -232,15 +220,9 @@ namespace Vector {
         }
       });
 
-    Anki::Vision::Debayer::Instance().SetGamma(kDebayerGamma);
-
     SetLiftCrossBar();
 
     SetupVisionModeConsoleVars();
-
-    // Turn on auto exposure and white balance
-    EnableAutoExposure(true);
-    EnableWhiteBalance(true);
   }
 
   void VisionComponent::ReadVisionConfig(const Json::Value& config)
@@ -545,7 +527,7 @@ namespace Vector {
         LOG_INFO("VisionComponent.Update.WaitingForState",
                  "CapturedImageTime:%u NewestStateInHistory:%u",
                  buffer.GetTimestamp(), (TimeStamp_t)_robot->GetStateHistory()->GetNewestTimeStamp());
-
+  
         ReleaseImage(buffer);
         return;
       }
@@ -652,7 +634,7 @@ namespace Vector {
       _visionSystemInput.locked = true;
     }
     _imageReadyCondition.notify_all();
-
+  
     if(_isSynchronous)
     {
       // Process image now
@@ -918,7 +900,7 @@ namespace Vector {
           if (RESULT_OK != (this->*handler)(result))
           {
             std::string modeStr = modes.ToString();
-
+            
             LOG_ERROR("VisionComponent.UpdateAllResults.LocalHandlerFailed",
                       "For mode(s):%s", modeStr.c_str());
             anyFailures = true;
@@ -1219,10 +1201,6 @@ namespace Vector {
       for(auto const& salientPoint : procResult.salientPoints)
       {
         _salientPointsToDraw.emplace_back(currentTime_ms, salientPoint);
-        // broadcast message
-        ExternalInterface::RobotObservedSalientPoint msg;
-        msg.salientPoint = salientPoint;
-        _robot->Broadcast(ExternalInterface::MessageEngineToGame(std::move(msg)));
       }
     }
 
@@ -1261,10 +1239,7 @@ namespace Vector {
           break;
         }
       }
-      if(poly.size() > 0)
-      {
-        _vizManager->DrawCameraPoly(poly, color);
-      }
+      _vizManager->DrawCameraPoly(poly, color);
       _vizManager->DrawCameraText(Point2f(object.x_img, object.y_img), caption, color);
     }
 
@@ -1328,7 +1303,7 @@ namespace Vector {
 
     const Vision::CameraParams& params = procResult.cameraParams;
 
-    // Note that we set all parameters together. If WB or AE isn't enabled according to current VisionModes,
+    // Note that we set all parameters together. If WB or AE isn't enabled accoding to current VisionModes,
     // their corresponding values should not actually be different in the params.
     const Result result = _visionSystem->SetNextCameraParams(params);
 
@@ -1338,7 +1313,7 @@ namespace Vector {
                 "ExpTime:%dms ExpGain:%f GainR:%f GainG:%f GainB:%f",
                 params.exposureTime_ms, params.gain,
                 params.whiteBalanceGainR, params.whiteBalanceGainG, params.whiteBalanceGainB);
-
+      
       auto cameraService = CameraService::getInstance();
 
       const bool isWhiteBalanceEnabled = procResult.modesProcessed.Contains(VisionMode::WhiteBalance);
@@ -1359,7 +1334,7 @@ namespace Vector {
       _vizManager->SendCameraParams(params);
 
       {
-        // Used by SDK
+        // Still needed?
         // TODO: Add WB params to message?
         using namespace ExternalInterface;
         const u16 exposure_ms_u16 = Util::numeric_cast<u16>(params.exposureTime_ms);
@@ -1478,7 +1453,7 @@ namespace Vector {
 
     // Send as face display animation
     auto & animComponent = _robot->GetAnimationComponent();
-    if(isMirrorModeEnabled)
+    if(isMirrorModeEnabled && animComponent.GetAnimState_NumProcAnimFaceKeyframes() < 5) // Don't get too far ahead
     {
       // NOTE: This creates a non-const image "header" around the same data as is in procResult.mirrorModeImg.
       // Due to a bug / design flaw in OpenCV, this actually allows us to draw on that image, even though
@@ -2413,7 +2388,7 @@ namespace Vector {
     LOG_INFO("VisionComponent.SetCameraCaptureFormat.RequestingSwitch",
              "From %s to %s",
              ImageEncodingToString(currentFormat), ImageEncodingToString(_desiredImageFormat));
-
+    
     return true;
   }
 
@@ -2444,7 +2419,7 @@ namespace Vector {
 
           LOG_INFO("VisionComponent.UpdateCaptureFormatChange.SwitchToWaitForFrame",
                    "Now in %s", ImageEncodingToString(_desiredImageFormat));
-
+          
           _captureFormatState = CaptureFormatState::WaitingForFrame;
         }
 
@@ -2456,7 +2431,7 @@ namespace Vector {
       case CaptureFormatState::WaitingForFrame:
       {
         LOG_INFO("VisionComponent.UpdateCaptureFormatChange.WaitingForFrameWithNewFormat", "");
-
+        
         s32 expectedNumRows = 0;
         switch(_desiredImageFormat)
         {
@@ -2484,7 +2459,7 @@ namespace Vector {
 
           LOG_INFO("VisionComponent.UpdateCaptureFormatChange.FormatChangeComplete",
                    "New format: %s, NumRows=%d", ImageEncodingToString(_desiredImageFormat), gotNumRows);
-
+          
           _captureFormatState = CaptureFormatState::None;
           _desiredImageFormat = Vision::ImageEncoding::NoneImageEncoding;
           Pause(false); // now that state/format are updated, un-pause the vision system
@@ -2596,12 +2571,12 @@ namespace Vector {
                                   currentParams.whiteBalanceGainR,
                                   currentParams.whiteBalanceGainG,
                                   currentParams.whiteBalanceGainB);
-
+      
       LOG_INFO("VisionComponent.HandleSetCameraSettings.Manual",
                "Setting camera params to: Exp:%dms / %.3f, WB:%.3f,%.3f,%.3f",
                params.exposureTime_ms, params.gain,
                params.whiteBalanceGainR, params.whiteBalanceGainG, params.whiteBalanceGainB);
-
+      
       SetAndDisableCameraControl(params);
     }
   }
@@ -2697,6 +2672,37 @@ namespace Vector {
             if (_robot->SendMessage(RobotInterface::EngineToRobot(std::move(msg))) != RESULT_OK) {
               LOG_WARNING("VisionComponent.ReadCameraCalibration.SendCameraFOVFailed", "");
             }
+          }
+        }
+        // If this is the factory test and we failed to read calibration then use a dummy one
+        // since we should be getting a real one during playpen
+        else if(FACTORY_TEST)
+        {
+          LOG_WARNING("VisionComponent.ReadCameraCalibration.Failed", "");
+
+          // TEMP HACK: Use dummy calibration for now since final camera not available yet
+          LOG_WARNING("VisionComponent.ReadCameraCalibration.UsingDummyV2Calibration", "");
+
+          // Calibration computed from Inverted Box target using one of the proto robots
+          // Should be close enough for other robots without calibration to use
+          const std::array<f32, 8> distortionCoeffs = {{-0.03822904514363595, -0.2964213946476391, -0.00181089972406104, 0.001866070303033584, 0.1803429725181202,
+            0, 0, 0}};
+
+          auto calib = std::make_shared<Vision::CameraCalibration>(360,
+                                          640,
+                                          364.7223064012286,
+                                          366.1693698832141,
+                                          310.6264440545544,
+                                          196.6729350209868,
+                                          0,
+                                          distortionCoeffs);
+
+          SetCameraCalibration(calib);
+
+          // Compute FOV from focal length and send
+          CameraFOVInfo msg(calib->ComputeHorizontalFOV().ToFloat(), calib->ComputeVerticalFOV().ToFloat());
+          if (_robot->SendMessage(RobotInterface::EngineToRobot(std::move(msg))) != RESULT_OK) {
+            LOG_WARNING("VisionComponent.ReadCameraCalibration.SendCameraFOVFailed", "");
           }
         }
         else
@@ -2854,7 +2860,7 @@ namespace Vector {
       pair.first = new Util::ConsoleVar<bool>(pair.second,
                                               EnumToString(m),
                                               "Vision.General.VisionModes",
-                                              true);
+                                              false);
     }
     #endif
   }
@@ -2947,7 +2953,7 @@ namespace Vector {
           cameraService->DeleteCamera();
         }
         // Some time after stopping the camera, try to start it back up
-        // Stopping/Starting are asynchronous so we need to wait a bit between the calls
+        // Stopping/Starting are asynchonous so we need to wait a bit between the calls
         else if(_restartingCameraTime_ms != 0 &&
                 curTime_ms - _restartingCameraTime_ms > kRestartCameraDelay_ms)
         {
@@ -2965,19 +2971,6 @@ namespace Vector {
     {
       sTimeSinceValidImg_ms = 0;
       _restartingCameraTime_ms = 0;
-    }
-  }
-
-  void VisionComponent::EnableSendingSDKImageChunks(bool enableImageStreaming, bool enableHighResolutionImages)
-  {
-    _sendProtoImageChunks = enableImageStreaming;
-    if(enableHighResolutionImages)
-    {
-      _visionSystemInput.vizImageBroadcastSize = Vision::ImageCacheSize::Full;
-    }
-    else
-    {
-      _visionSystemInput.vizImageBroadcastSize = Vision::ImageCacheSize::Half;
     }
   }
 

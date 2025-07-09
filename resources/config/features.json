@@ -41,7 +41,7 @@
   },
   {
     "feature": "KnowledgeGraph",
-    "enabled": false
+    "enabled": true
   },
   {
     "feature": "Dancing",
@@ -69,15 +69,15 @@
   },
   {
     "feature": "Alexa",
-    "enabled": false
+    "enabled": true
   },
   {
     "feature": "Alexa_UK",
-    "enabled": false // this must match kAlexaEnabledInUK
+    "enabled": true // this must match kAlexaEnabledInUK
   },
   {
     "feature": "Alexa_AU",
-    "enabled": false // this must match kAlexaEnabledInAU
+    "enabled": true // this must match kAlexaEnabledInAU
   },
   {
     "feature": "HeldInPalm",
@@ -113,18 +113,10 @@
   },
   {
     "feature": "StayOnChargerUntilCharged",
-    "enabled": false
-  },
-  {
-    "feature": "EyeColorVC",
     "enabled": true
   },
   {
-    "feature": "PounceOnMotion",
-    "enabled": false
-  },
-  {
-    "feature": "Singing",
+    "feature": "EyeColorVC",
     "enabled": true
   }
 ]

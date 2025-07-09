@@ -71,15 +71,12 @@ private:
     std::vector<std::string>       behaviorStrs;
     std::vector<ICozmoBehaviorPtr> behaviors;
 
-    bool shouldInterruptActiveBehavior = false;
-    bool requireGentleInterruption = false;
+    bool shouldInterruptActiveBehavior;
   };
 
   struct DynamicVariables {
     DynamicVariables();
   };
-
-  bool ShouldInterruptBehavior() const;
 
   InstanceConfig   _iConfig;
   DynamicVariables _dVars;

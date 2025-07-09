@@ -4,10 +4,6 @@
 
   "respondToUserIntents" : [
     {
-      "type" : "play_specific",
-      "entity_behavior" : "blackjack"
-    },
-    {
       "type" : "play_blackjack"
     }
   ],
@@ -15,6 +11,7 @@
   "autoShutOffIntentFeedback": true,
 
   "behaviors": [
+    "DriveOffChargerFace",
     "BlackJack"
   ],
 

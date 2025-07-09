@@ -1,8 +1,8 @@
 {
-	"jdocs": "api.vicw.xyz:8081",
-	"tms": "api.vicw.xyz:8081",
-	"chipper": "api.vicw.xyz:8081",
-	"check": "api.vicw.xyz:7070/ok",
-	"logfiles": "s3://anki-device-logs-prod/victor",
-	"appkey": "oDoa0quieSeir6goowai7f"
+	"jdocs": "jdocs-beta.api.anki.com:443",
+	"tms": "token-beta.api.anki.com:443",
+	"chipper": "chipper-beta.api.anki.com:443",
+	"check": "conncheck.global.anki-beta-services.com/ok",
+	"logfiles": "s3://anki-device-logs-beta/victor",
+	"appkey": "dah2aichePheix2ajeenga"
 }

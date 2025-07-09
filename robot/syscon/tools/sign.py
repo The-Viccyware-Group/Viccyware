@@ -151,9 +151,7 @@ if __name__ == '__main__':
 
     certificate = sign(axf_data[HEADER_LENGTH+CERT_LENGTH:], cert)
 
-    dfu_file = args.binary.replace("syscon.dfu", "syscon-" + BUILD_TIMESTAMP + ".dfu")
-    
-    with open(dfu_file, "wb") as fo:
+    with open(args.binary, "wb") as fo:
         fo.write(axf_data)
         fo.seek(0)
         fo.write(version)

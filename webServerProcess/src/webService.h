@@ -144,8 +144,7 @@ public:
 
 private:
 
-  void GenerateConsoleVarsUI(std::string& page, const std::string& category,
-                             const bool standalone);
+  void GenerateConsoleVarsUI(std::string& page, const std::string& category);
 
   struct WebSocketConnectionData {
     struct mg_connection* conn = nullptr;

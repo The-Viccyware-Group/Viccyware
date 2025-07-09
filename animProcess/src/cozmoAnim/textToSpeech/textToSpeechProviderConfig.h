@@ -67,7 +67,6 @@ private:
   int _tts_speed;
   int _tts_shaping;
   int _tts_pitch;
-  int _tts_pausepunctuation;
 
   // Configurable traits
   struct ConfigTrait {

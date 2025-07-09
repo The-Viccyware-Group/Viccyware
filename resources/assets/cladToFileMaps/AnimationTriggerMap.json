@@ -441,51 +441,51 @@
   },
   {
     "CladEvent": "ReactToShake_Lvl1Loop",
-    "AnimName": "ag_dizzy_shake_loop"
+    "AnimName": "ag_rtshake_lv1loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl1Waiting",
-    "AnimName": "ag_dizzy_shake_stop"
+    "AnimName": "ag_rtshake_lv1pregetout"
   },
   {
     "CladEvent": "ReactToShake_Lvl1InHand",
-    "AnimName": "ag_dizzy_reaction_soft"
+    "AnimName": "ag_rtshake_lv1rtonhand"
   },
   {
     "CladEvent": "ReactToShake_Lvl1OnGround",
-    "AnimName": "ag_dizzy_reaction_soft"
+    "AnimName": "ag_rtshake_lv1rtonground"
   },
   {
     "CladEvent": "ReactToShake_Lvl2Loop",
-    "AnimName": "ag_dizzy_shake_loop"
+    "AnimName": "ag_rtshake_lv2loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl2Waiting",
-    "AnimName": "ag_dizzy_shake_stop"
+    "AnimName": "ag_rtshake_lv2pregetout"
   },
   {
     "CladEvent": "ReactToShake_Lvl2InHand",
-    "AnimName": "ag_dizzy_reaction_medium"
+    "AnimName": "ag_rtshake_lv2rtonhand"
   },
   {
     "CladEvent": "ReactToShake_Lvl2OnGround",
-    "AnimName": "ag_dizzy_reaction_medium"
+    "AnimName": "ag_rtshake_lv2rtonground"
   },
   {
     "CladEvent": "ReactToShake_Lvl3Loop",
-    "AnimName": "ag_dizzy_shake_loop"
+    "AnimName": "ag_rtshake_lv3loop"
   },
   {
     "CladEvent": "ReactToShake_Lvl3Waiting",
-    "AnimName": "ag_dizzy_shake_stop_3"
+    "AnimName": "ag_rtshake_lv3pregetout"
   },
   {
     "CladEvent": "ReactToShake_Lvl3InHand",
-    "AnimName": "ag_dizzy_reaction_hard"
+    "AnimName": "ag_rtshake_lv3rtonhand"
   },
   {
     "CladEvent": "ReactToShake_Lvl3OnGround",
-    "AnimName": "ag_dizzy_reaction_hard"
+    "AnimName": "ag_rtshake_lv3rtonground"
   },
   {
     "CladEvent": "ReactToShakeSnowGlobe_GetIn",
@@ -1050,14 +1050,6 @@
   {
     "CladEvent":"PickupCubeSuccess",
     "AnimName": "ag_pickupcube_success"
-  },
-  {
-    "CladEvent":"PetDetectionDog",
-    "AnimName": "ag_petdetection_reaction_dog"
-  },
-  {
-    "CladEvent":"PetDetectionCat",
-    "AnimName": "ag_petdetection_reaction_cat"
   },
   {
     "CladEvent":"PlaceCubeByChargerFail",
@@ -1999,6 +1991,10 @@
     "AnimName": "ag_movement_backward_01"
   },
   {
+    "CladEvent": "MovementDriveForward",
+    "AnimName": "ag_movement_forward_01"
+  },
+  {
     "CladEvent": "MovementTurnLeft",
     "AnimName": "ag_movement_left_01"
   },
@@ -2081,33 +2077,5 @@
   {
     "CladEvent": "LowlightChargerSearchGetout",
     "AnimName": "ag_lowlightcharger_search_getout"
-  },
-  {
-    "CladEvent": "UnintentionalPerformance",
-    "AnimName": "ag_uperformance"
-  },
-  {
-    "CladEvent": "IntentionalPerformance",
-    "AnimName": "ag_iperformance"
-  },
-  {
-    "CladEvent": "DEPRECATED_Singing_80bpm",
-    "AnimName": "ag_cozmosings_80bpm"
-  },
-  {
-    "CladEvent": "DEPRECATED_Singing_100bpm",
-    "AnimName": "ag_cozmosings_100bpm"
-  },
-  {
-    "CladEvent": "DEPRECATED_Singing_120bpm",
-    "AnimName": "ag_cozmosings_120bpm"
-  },
-  {
-    "CladEvent": "DEPRECATED_Singing_GetIn",
-    "AnimName": "ag_cozmosings_getin"
-  },
-  {
-    "CladEvent": "DEPRECATED_Singing_GetOut",
-    "AnimName": "ag_cozmosings_getout"
   }
 ]

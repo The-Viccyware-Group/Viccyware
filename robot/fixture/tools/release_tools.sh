@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 cd "$(dirname ${BASH_SOURCE[0]})/release"
 
 #get recursive list of git tracked files in tools/release

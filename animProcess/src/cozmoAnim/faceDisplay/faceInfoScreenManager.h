@@ -120,9 +120,6 @@ public:
   void OnEngineLoaded() {_engineLoaded = true;}
 
   void SetSysconVersion(const std::string& version) { _sysconVersion = version; }
-  
-  // Forcibly exit any screen
-  void ExitCCScreen(Anim::AnimationStreamer* animStreamer);
 
 private:
   const Anim::AnimContext* _context = nullptr;
@@ -184,14 +181,12 @@ private:
   void DrawMain();
   void DrawNetwork();
   void DrawSensorInfo(const RobotState& state);
-  void DrawBuildInfo();
   void DrawIMUInfo(const RobotState& state);
   void DrawMotorInfo(const RobotState& state);
   void DrawCustomText();
   void DrawAlexaFace();
   void DrawMuteAnimation();
   void DrawAlexaNotification();
-  void DrawRebootScreen();
   
   // Draw the _scratchDrawingImg to the face
   void DrawScratch();

@@ -106,33 +106,22 @@ namespace BackpackLightController {
   {
     memset(&_ledParams[(int)BackpackLightLayer::BPL_USER], 0, sizeof(_ledParams[(int)BackpackLightLayer::BPL_USER]));
 
-    const u16 kTimeDiff_ms = 1000;
+    // Climbing white lights on init (will be stopped by engine once connected)
+    const u16 kTimeDiff_ms = 600;
     for(u8 i = 0; i < (u8)LEDId::NUM_BACKPACK_LEDS; i++)
     {
-      u32 color; // Purple lights
-      if(i == 0) {
-        color = 0xff07b5f5;
-      } else if(i == 1) {
-        color = 0xff07b5f5;
-      } else if(i == 2) {
-        color = 0xff07b5f5;
-      } else {
-        color = 0x80808000; // fallback color
-      }
-    
       _ledParams[(int)BackpackLightLayer::BPL_USER].lights[i] = {
-        .onColor = color,
+        .onColor = 0x80808000,
         .offColor = 0,
         .onPeriod_ms = static_cast<u16>(kTimeDiff_ms * (i+1)),
-        .offPeriod_ms = static_cast<u16>(kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i)),
+        .offPeriod_ms = static_cast<u16>((kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i))),
         .transitionOnPeriod_ms = 300,
         .transitionOffPeriod_ms = 300,
-        .offset_ms = static_cast<s16>(kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i))
+        .offset_ms = static_cast<s16>((kTimeDiff_ms * ((u8)LEDId::NUM_BACKPACK_LEDS - 1 - i)))
       };
     }
-    
+
     EnableLayer(BackpackLightLayer::BPL_USER, true);
-    
     
     return RESULT_OK;
   }

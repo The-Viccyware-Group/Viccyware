@@ -19,12 +19,12 @@
 #include <stddef.h>
 
 
-//#ifdef __cplusplus
-//extern "C" {
-//#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-//extern size_t strlcpy(char *, const char *, size_t);
+size_t strlcpy(char *, const char *, size_t);
 
-//#ifdef __cplusplus
-//}
-//#endif
+#ifdef __cplusplus
+}
+#endif

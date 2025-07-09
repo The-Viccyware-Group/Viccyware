@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 GIT=`which git`
 if [ -z $GIT ]

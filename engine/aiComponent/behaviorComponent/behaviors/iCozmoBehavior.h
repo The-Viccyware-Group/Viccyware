@@ -31,7 +31,6 @@
 #include <set>
 
 #include "clad/types/actionResults.h"
-#include "clad/types/behaviorComponent/behaviorObjectives.h"
 #include "clad/types/behaviorComponent/postBehaviorSuggestions.h"
 #include "clad/types/behaviorComponent/streamAndLightEffect.h"
 #include "clad/types/robotCompletedAction.h"
@@ -69,11 +68,6 @@ enum class CubeAnimationTrigger : int32_t;
 
 struct PathMotionProfile;
 struct TriggerWordResponseData;
-
-namespace ExternalInterface {
-struct BehaviorObjectiveAchieved;
-}
-
 
 // This struct defines some of the operation modes iCozmoBehavior
 // provides to derived classes. They have the opportunity to override
@@ -466,10 +460,6 @@ protected:
   // convenience wrapper for calling CancelSelf on the delegation component. It returns true if the behavior
   // was successfully canceled, false otherwise (e.g. the behavior wasn't active to begin with)
   bool CancelSelf();
-
-  // Behaviors should call this function when they reach their completion state
-  // in order to log das events and notify activity strategies if they listen for the message
-  void BehaviorObjectiveAchieved(BehaviorObjective objectiveAchieved) const;
   
   /////////////
   /// "Smart" helpers - Behaviors can call these functions to set properties that
@@ -533,14 +523,6 @@ protected:
   // disable the procedural "keep face alive" in the animation system
   void SmartDisableKeepFaceAlive();
   void SmartReEnableKeepFaceAlive();
-
-  // From code, a behavior can use this function to override the active feature for a _single_ activation of
-  // this behavior. This function must be called before the end of OnBehaviorActivated for it to work, and can
-  // not be combined with a json-set active feature.
-  // NOTE: in most cases, you probably don't want this and instead should set a fixed active feature in the
-  // json instance of the behavior (most behavior instances correspond to a single feature)
-  // NOTE: if you get too fancy here you might break the CheckActiveFeatures unit test in testBehaviorSystemDelegationTree.cpp
-  void SmartSetActiveFeatureOnActivated(const ActiveFeature& feature);
 
   // Helper function to play an emergency get out through the continuity component
   void PlayEmergencyGetOut(AnimationTrigger anim);
@@ -626,7 +608,6 @@ private:
   // A behavior can specify an associated ActiveFeature. If it does, the ActiveFeatureComponent can check this
   // while the behavior is active on the stack
   std::unique_ptr<ActiveFeature> _associatedActiveFeature;
-  bool _resetActiveFeature = false;
 
   // if set, increment this behavior stat when this behavior activates
   std::unique_ptr<BehaviorStat> _behaviorStatToIncrement;

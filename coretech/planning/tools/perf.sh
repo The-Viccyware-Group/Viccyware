@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # This is a script which runs through a set of environments in the standalone planner to look at the
 # performance

@@ -12,7 +12,6 @@
 #include "codeGen/codeCreator.h"
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <memory>
-#include <string>
 
 using namespace google::protobuf;
 
@@ -23,7 +22,7 @@ CodeCreator::CodeCreator( const std::string& protoFile )
 { 
 }
 
-bool CodeCreator::Write( const std::string& filename, compiler::GeneratorContext* context )
+bool CodeCreator::Write( const string& filename, compiler::GeneratorContext* context )
 {
   std::unique_ptr<io::ZeroCopyOutputStream> output( context->Open(filename) );
   io::Printer printer( output.get(), '$' );

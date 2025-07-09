@@ -5,10 +5,14 @@
   "associatedActiveFeature": "HeldInPalm",
 
   "interruptActiveBehavior": true,
-
+  
   "behaviors": [
     {
       "behavior": "ReactToJoltInPalm",
+      "cooldown_s": 0.0
+    },
+    {
+      "behavior": "SleepWhileHeldInPalm",
       "cooldown_s": 0.0
     },
     {
@@ -16,7 +20,7 @@
       "cooldown_s": 0.0
     },
     {
-      "behavior": "NestlingAndSleepingInPalmDispatcher",
+      "behavior": "NestleWhileHeldInPalmAnim",
       "cooldown_s": 10.0
     },
     {

@@ -36,7 +36,6 @@ public:
 protected:
   virtual void GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const override {
     modifiers.visionModesForActiveScope->insert({ VisionMode::Faces, EVisionUpdateFrequency::Standard });
-    modifiers.visionModesForActiveScope->insert({ VisionMode::Pets, EVisionUpdateFrequency::Standard });
     modifiers.visionModesForActiveScope->insert({ VisionMode::Faces_Crop, EVisionUpdateFrequency::Standard });
     modifiers.wantsToBeActivatedWhenOffTreads = true;
   }

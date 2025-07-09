@@ -23,6 +23,9 @@
 #include "engine/components/visionScheduleMediator/iVisionModeSubscriber.h"
 #include "engine/vision/visionModeSchedule.h"
 #include "engine/cozmoContext.h"
+#include "engine/robot.h"
+#include "engine/robotComponents_fwd.h"
+#include "util/entityComponent/dependencyManagedEntity.h"
 
 using namespace Anki;
 using namespace Anki::Vector;
@@ -107,10 +110,17 @@ TEST(VisionScheduleMediator, Interleaving)
   })json";
   Json::Value config;
   CreateVSMConfig(configString, config);
+  VisionComponent visionComponent;
   VisionScheduleMediator vsm;
   vsm.Init(config);
   std::set<VisionMode> enabledModes;
   
+  // vision component needs access to vision system to not complain, so needs Initing
+  Robot robot(0, cozmoContext);
+  DependencyManagedEntity<RobotComponentID> dependencies;
+  dependencies.AddDependentComponent(RobotComponentID::CozmoContextWrapper, robot.GetComponentPtr<ContextWrapper>(), false);
+  visionComponent.InitDependent( &robot, dependencies);
+
   TestSubscriber lowMarkerSubscriber(&vsm, { { VisionMode::Markers, EVisionUpdateFrequency::Low } });
   TestSubscriber medMarkerSubscriber(&vsm, { { VisionMode::Markers, EVisionUpdateFrequency::Med } });
   TestSubscriber highMarkerSubscriber(&vsm, { { VisionMode::Markers, EVisionUpdateFrequency::High } });
@@ -132,8 +142,8 @@ TEST(VisionScheduleMediator, Interleaving)
   lowMarkerSubscriber.Subscribe();
   lowPetSubscriber.Subscribe();
   lowMotionSubscriber.Subscribe();
-  vsm.UpdateVisionSchedule(nullptr);
-  AllVisionModesSchedule::ModeScheduleList scheduleList = vsm.GenerateBalancedSchedule();
+  vsm.UpdateVisionSchedule(visionComponent, nullptr);
+  AllVisionModesSchedule::ModeScheduleList scheduleList = vsm.GenerateBalancedSchedule(visionComponent);
 
   for(auto& modeSchedule : scheduleList){
     switch(modeSchedule.first){
@@ -162,8 +172,8 @@ TEST(VisionScheduleMediator, Interleaving)
   medMarkerSubscriber.Subscribe();
   medPetSubscriber.Subscribe();
   medMotionSubscriber.Subscribe();
-  vsm.UpdateVisionSchedule(nullptr);
-  scheduleList = vsm.GenerateBalancedSchedule();
+  vsm.UpdateVisionSchedule(visionComponent, nullptr);
+  scheduleList = vsm.GenerateBalancedSchedule(visionComponent);
 
   for(auto& modeSchedule : scheduleList){
     switch(modeSchedule.first){
@@ -191,8 +201,8 @@ TEST(VisionScheduleMediator, Interleaving)
   medMarkerSubscriber.Unsubscribe();
   medPetSubscriber.Unsubscribe();
   medMotionSubscriber.Unsubscribe();
-  vsm.UpdateVisionSchedule(nullptr);
-  scheduleList = vsm.GenerateBalancedSchedule();
+  vsm.UpdateVisionSchedule(visionComponent, nullptr);
+  scheduleList = vsm.GenerateBalancedSchedule(visionComponent);
 
   for(auto& modeSchedule : scheduleList){
     switch(modeSchedule.first){
@@ -221,6 +231,6 @@ TEST(VisionScheduleMediator, Interleaving)
   lowMarkerSubscriber.Unsubscribe();
   lowPetSubscriber.Unsubscribe();
   lowMotionSubscriber.Unsubscribe();
-  vsm.UpdateVisionSchedule(nullptr);
-  scheduleList = vsm.GenerateBalancedSchedule();
+  vsm.UpdateVisionSchedule(visionComponent, nullptr);
+  scheduleList = vsm.GenerateBalancedSchedule(visionComponent);
 }

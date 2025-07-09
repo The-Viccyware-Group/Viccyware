@@ -9,8 +9,6 @@
 // System Includes
 #include <chrono>
 #include <assert.h>
-#include <cstdio>
-#include <cstring>
 
 // Our Includes
 #include "anki/cozmo/robot/DAS.h"
@@ -49,9 +47,6 @@ namespace { // "Private members"
   // Assume we do until we get a PAYLOAD_BOOT_FRAME
   bool haveValidSyscon_ = true;
 
-  // whether we should parse data values with dvt2-best.dfu in mind
-  bool isDVT2Robot_ = false;
-
 #ifdef HAL_DUMMY_BODY
   BodyToHead dummyBodyData_ = {
     .cliffSense = {800, 800, 800, 800}
@@ -74,7 +69,7 @@ namespace { // "Private members"
 
   HAL::PowerState desiredPowerMode_;
 
-  // Flag to prevent spamming of unexpected power mode warning
+  // Flag to prevent spamming of unexepected power mode warning
   bool reportUnexpectedPowerMode_ = false;
 
   // Time since the desired power mode was last set
@@ -114,7 +109,7 @@ namespace { // "Private members"
   bool maxNumSelectTimeoutsReached_ = false;
 
   VersionInfo _sysconVersionInfo;
-
+  
   const u32 SELECT_TIMEOUT_SEC = 1;
   const u32 SELECT_TIMEOUT_ATTEMPTS = 5;
   const u32 SPINE_GET_FRAME_TIMEOUT_MS = 1000 * SELECT_TIMEOUT_SEC * (SELECT_TIMEOUT_ATTEMPTS + 1);
@@ -151,35 +146,30 @@ extern "C" {
 // If it times out too many times then
 // syscon must be hosed or there is no spine
 // connection
-bool check_spine_readable(spine_ctx_t spine)
+bool check_select_timeout(spine_ctx_t spine)
 {
+  int fd = spine_get_fd(spine);
+
   static u8 selectTimeoutCount = 0;
-  if (selectTimeoutCount >= SELECT_TIMEOUT_ATTEMPTS) {
-    AnkiError("HAL.check_spine_readable.timeoutCountReached","");
+  if(selectTimeoutCount >= SELECT_TIMEOUT_ATTEMPTS)
+  {
+    AnkiError("spine.check_select_timeout.timeoutCountReached","");
     FaultCode::DisplayFaultCode(FaultCode::SPINE_SELECT_TIMEOUT);
     maxNumSelectTimeoutsReached_ = true;
-    return false;
+    return true;
   }
-
-  const int fd = spine_get_fd(spine);
 
   static fd_set fdSet;
   FD_ZERO(&fdSet);
   FD_SET(fd, &fdSet);
-
   static timeval timeout;
   timeout.tv_sec = SELECT_TIMEOUT_SEC;
   timeout.tv_usec = 0;
-
-  const ssize_t nfds = select(FD_SETSIZE, &fdSet, NULL, NULL, &timeout);
-  if (nfds < 0) {
-    AnkiWarn("HAL.check_spine_readable.error", "select error %s", strerror(errno));
-    return false;
-  }
-
-  if (nfds == 0) {
+  ssize_t s = select(FD_SETSIZE, &fdSet, NULL, NULL, &timeout);
+  if(s == 0)
+  {
     selectTimeoutCount++;
-    AnkiWarn("HAL.check_spine_readable.timeout", "select timeout %u", selectTimeoutCount);
+    AnkiWarn("spine.check_select_timeout.selectTimedout", "%u", selectTimeoutCount);
 
     // Let anim know that robot is still alive since we haven't
     // been sending RobotState messages for the last second.
@@ -187,23 +177,21 @@ bool check_spine_readable(spine_ctx_t spine)
     RobotInterface::StillAlive msg;
     RobotInterface::SendMessage(msg);
 
-    return false;
+    return true;
   }
-
-  return true;
+  return false;
 }
 
 ssize_t robot_io(spine_ctx_t spine)
 {
+  int fd = spine_get_fd(spine);
 
   EventStart(EventType::ROBOT_IO_READ);
 
-  if (!check_spine_readable(spine)) {
-    // Spine is not readable at this time
+  if(check_select_timeout(spine))
+  {
     return -1;
   }
-
-  const int fd = spine_get_fd(spine);
 
   ssize_t r = read(fd, readBuffer_, sizeof(readBuffer_));
 
@@ -272,13 +260,6 @@ void handle_syscon_version(const VersionInfo* versionInfo)
     _sysconVersionInfo = *versionInfo;
     record_body_version(versionInfo);
     das_log_version_info(versionInfo);
-    char versionTxt[sizeof(versionInfo->app_version) + 1] = {};
-    memcpy(versionTxt, versionInfo->app_version, sizeof(versionInfo->app_version));
-
-    if (strstr(versionTxt, "DevBuild") != nullptr) {
-      AnkiInfo("HAL.Init.DetectGeneration", "DVT2/3 robot detected (via DevBuild in version)")
-      isDVT2Robot_ = true;
-    }
   }
 }
 
@@ -376,19 +357,6 @@ Result HAL::Init(const int * shutdownSignal)
   if (InitRadio() != RESULT_OK) {
     AnkiError("HAL.Init.InitRadioFailed", "");
     return RESULT_FAIL;
-  }
-
-  // check ro.build.target
-  FILE* f = popen("/usr/bin/getprop ro.build.target", "r");
-  if(f != nullptr) {
-    char buf[16];
-    if(fgets(buf, sizeof(buf), f) != nullptr) {
-      if(strncmp(buf, "5", 1) == 0) {
-        AnkiInfo("HAL.Init.DetectGeneration", "DVT2 robot detected")
-        isDVT2Robot_ = true;
-      }
-    }
-    pclose(f);
   }
 
 #ifndef HAL_DUMMY_BODY
@@ -582,10 +550,10 @@ Result HAL::Step(void)
       // Repeatedly request syscon version until we get it
       // Sometimes the initial request in HAL::Init is lost due to
       // an "RX Buffer Overrun Detected" or an invalid crc error
-      // This may end up sending some unnecessary requests (2 or 3 of them) as
+      // This may end up sending some unneccessary requests (2 or 3 of them) as
       // the response is not immediate
       request_version();
-
+      
       if (desiredPowerMode_ == POWER_MODE_CALM && !commander_is_active) {
         if (++calmModeSkipFrameCount_ > NUM_CALM_MODE_SKIP_FRAMES) {
           spine_set_lights(&spine_, &(h2bp->lightState));
@@ -637,7 +605,7 @@ Result HAL::Step(void)
     result = spine_get_frame();
 
     // It's taking too long to get a frame!
-    // Timeout is tuned to accommodate worst case back-to-back spine select timeouts
+    // Timeout is tuned to accomodate worst case back-to-back spine select timeouts
     const u32 timeSinceStartOfGetFrame_ms = GetTimeStamp() - startSpineGetFrameTime_ms;
     if (timeSinceStartOfGetFrame_ms > SPINE_GET_FRAME_TIMEOUT_MS) {
       AnkiError("HAL.Step.SpineLoopTimeout", "");
@@ -727,19 +695,10 @@ void HAL::Stop()
   ReportRecentInvalidProxDataReadings();
 }
 
-// run as default
 void ProcessTouchLevel(void)
 {
-  if (isDVT2Robot_) {
-    // touchLevel is 600-650 or so, touchhires is a much higher range.
-    // account for this by raising to a power rather than multiplying
-    if(bodyData_->touchLevel[0] != 0xFFFF) {
-      lastValidTouchIntensity_ = (uint16_t)pow((double)bodyData_->touchLevel[HAL::BUTTON_CAPACITIVE], 1.2);
-    }
-  } else {
-    if(bodyData_->touchHires[HAL::BUTTON_CAPACITIVE] != 0xFFFF) {
-      lastValidTouchIntensity_ = bodyData_->touchHires[HAL::BUTTON_CAPACITIVE];
-    }
+  if(bodyData_->touchHires[HAL::BUTTON_CAPACITIVE] != 0xFFFF) {
+    lastValidTouchIntensity_ = bodyData_->touchHires[HAL::BUTTON_CAPACITIVE];
   }
 }
 
@@ -929,7 +888,7 @@ void ProcessProxData()
   {
     return;
   }
-
+  
   if (HAL::PowerGetMode() == POWER_MODE_CALM) {
     proxData_.distance_mm      = PROX_CALM_MODE_DIST_MM;
     proxData_.signalIntensity  = 0.f;
@@ -937,8 +896,7 @@ void ProcessProxData()
     proxData_.spadCount        = 200.f;
     proxData_.timestamp_ms     = HAL::GetTimeStamp();
     proxData_.rangeStatus      = RangeStatus::RANGE_VALID;
-    // other isDVT2Robot_ spot
-  } else if (isDVT2Robot_ || bodyData_->proximity.sampleCount != lastProxDataSampleCount_) {
+  } else if (bodyData_->proximity.sampleCount != lastProxDataSampleCount_) {
     proxData_.rangeStatus = ConvertToApiRangeStatus(bodyData_->proximity.rangeStatus);
     // Track the occurrences of invalid prox sensor readings, reported on a periodic basis
     switch(proxData_.rangeStatus) {
@@ -959,7 +917,7 @@ void ProcessProxData()
         AnkiWarn("HAL.ProcessProxData.UnhandledStatus", "%s", EnumToString(proxData_.rangeStatus));
         break;
     }
-
+  
     proxData_.distance_mm      = FlipBytes(bodyData_->proximity.rangeMM);
     // Signal/Ambient Rate are fixed point 9.7, so convert to float:
     proxData_.signalIntensity  = static_cast<float>(FlipBytes(bodyData_->proximity.signalRate)) / 128.f;
@@ -967,7 +925,7 @@ void ProcessProxData()
     // SPAD count is fixed point 8.8, so convert to float:
     proxData_.spadCount        = static_cast<float>(FlipBytes(bodyData_->proximity.spadCount)) / 256.f;
     proxData_.timestamp_ms     = HAL::GetTimeStamp();
-
+    
     lastProxDataSampleCount_ = bodyData_->proximity.sampleCount;
   }
 }
@@ -1050,7 +1008,7 @@ f32 HAL::ChargerGetVoltage()
 u8 HAL::BatteryGetTemperature_C()
 {
   if (bodyData_->battery.temperature > 0xff) {
-    //AnkiWarn("HAL.BatteryGetTemperature_C.InvalidTemp", "%u", bodyData_->battery.temperature);
+    AnkiWarn("HAL.BatteryGetTemperature_C.InvalidTemp", "%u", bodyData_->battery.temperature);
     return 0;
   }
   return static_cast<u8>(bodyData_->battery.temperature);
@@ -1058,7 +1016,7 @@ u8 HAL::BatteryGetTemperature_C()
 
 bool HAL::IsShutdownImminent()
 {
-  return (bodyData_->battery.flags & POWER_BATTERY_SHUTDOWN);
+  return (bodyData_->battery.flags & POWER_BATTERY_SHUTDOWN); 
 }
 
 u8 HAL::GetWatchdogResetCounter()
@@ -1086,13 +1044,13 @@ void PrintBodyDataUpdate()
         const MotorState& lift = bodyData_->motor[MOTOR_LIFT];
         const MotorState& left = bodyData_->motor[MOTOR_LEFT];
         const MotorState& right = bodyData_->motor[MOTOR_RIGHT];
-        AnkiInfo("HAL.BodyData.Motors",
+        AnkiInfo("HAL.BodyData.Motors", 
                  "Status 0x%02x, "
                  "H: (pos %d, dlt %d, tm %u), "
                  "L: (pos %d, dlt %d, tm %u), "
                  "WL: (pos %d, dlt %d, tm %u), "
                  "WR: (pos %d, dlt %d, tm %u)",
-                 bodyData_->flags,
+                 bodyData_->flags, 
                  head.position, head.delta, head.time,
                  lift.position, lift.delta, lift.time,
                  left.position, left.delta, left.time,
@@ -1105,13 +1063,13 @@ void PrintBodyDataUpdate()
                  "Status 0x%02x, "
                  "Cliff: %4u %4u %4u %4u, "
                  "Prox: range %u, sig %u, amb %u, spadCnt %u, sampCnt %u, calibRes %u",
-                 bodyData_->flags,
+                 bodyData_->flags, 
                  cliff[0], cliff[1], cliff[2], cliff[3],
                  prox.rangeMM, prox.signalRate, prox.ambientRate, prox.spadCount, prox.sampleCount, prox.calibrationResult);
       }
       if (_bodyDataPrintBattery) {
-        const BatteryState& batt = bodyData_->battery;
-        AnkiInfo("HAL.BodyData.Battery",
+        const BatteryState& batt = bodyData_->battery;               
+        AnkiInfo("HAL.BodyData.Battery", 
                  "Status 0x%02x, battV %d, chgr %d, temp %d, battFlags 0x%4x",
                  bodyData_->flags, batt.main_voltage, batt.charger, batt.temperature, batt.flags);
       }

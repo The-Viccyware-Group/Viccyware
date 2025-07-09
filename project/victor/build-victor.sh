@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 
@@ -28,7 +28,6 @@ function usage() {
     echo "  -e                      export compile commands"
     echo "  -I                      ignore external dependencies"
     echo "  -S                      build static libraries"
-    echo "  -m			    don't extract animations from SVN"
 }
 
 #
@@ -44,7 +43,6 @@ CMAKE_TARGET=""
 EXPORT_COMPILE_COMMANDS=0
 IGNORE_EXTERNAL_DEPENDENCIES=0
 BUILD_SHARED_LIBS=1
-DONT_ANIM=0
 
 CONFIGURATION=Debug
 PLATFORM=vicos
@@ -53,7 +51,7 @@ FEATURES=""
 DEFINES=""
 ADDITIONAL_PLATFORM_ARGS=()
 
-while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
+while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISX" opt; do
     case $opt in
         h)
             usage
@@ -119,9 +117,6 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
         X)
             RM_BUILD_ASSETS=1
             ;;
-	m)
-	    DONT_ANIM=1
-	    ;;
         :)
             echo "Option -${OPTARG} required an argument." >&2
             usage
@@ -155,9 +150,9 @@ function usage_fix_lfs() {
     exit 1
 }
 
-#for f in `git ls-files *.tflite`; do
-#    egrep -q TFL3 $f || usage_fix_lfs $f
-#done
+for f in `git ls-files *.tflite`; do
+    egrep -q TFL3 $f || usage_fix_lfs $f
+done
 
 
 #
@@ -166,14 +161,13 @@ function usage_fix_lfs() {
 
 if [ -z "${CMAKE_EXE+x}" ]; then
     echo "Attempting to install cmake"
-    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 3.20.6
-    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 3.20.6`
-    echo ${CMAKE_EXE}
+    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 3.9.6
+    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 3.9.6`
 fi
 
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
   echo "Attempting to run fetch-build-deps.sh"
-  DONT_ANIM=$DONT_ANIM ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
+  ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
 else
   echo "Ignore external dependencies"
 fi
@@ -290,12 +284,28 @@ fi
 
 : ${CMAKE_MODULE_DIR:="${TOPLEVEL}/cmake"}
 
-if [[ ! -f ${CMAKE_EXE} ]]; then
+if [ ! -f ${CMAKE_EXE} ]; then
   echo "Missing CMake executable: ${CMAKE_EXE}"
   echo "Fetch the required CMake version by running ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py"
   echo "Alternatively, specify a CMake executable using the -x flag."
   exit 1
 fi
+
+if [ -z "${GOROOT+x}" ]; then
+    GO_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/go.py`
+    export GOROOT=$(dirname $(dirname $GO_EXE))
+else
+    GO_EXE=$GOROOT/bin/go
+fi
+export GOPATH=${TOPLEVEL}/cloud/go:${TOPLEVEL}/generated/cladgo:${TOPLEVEL}/generated/go:${TOPLEVEL}/tools/message-buffers/support/go
+
+if [ ! -f ${GO_EXE} ]; then
+  echo "Missing Go executable: ${GO_EXE}"
+  echo "Fetch the required Go version by running ${TOPLEVEL}/tools/build/tools/ankibuild/go.py"
+  exit 1
+fi
+
+${TOPLEVEL}/tools/build/tools/ankibuild/go.py --check-version $GO_EXE
 
 #
 # Remove assets in build directory if requested. This will force the
@@ -325,19 +335,26 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     # Scan for BUILD.in files
     METABUILD_INPUTS=`find . -name BUILD.in`
 
-    # # Process BUILD.in files (creates list of Go projects to fetch)
-    # PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
-    #   -o ${GEN_SRC_DIR} \
-    #   ${METABUILD_INPUTS}
+    # Process BUILD.in files (creates list of Go projects to fetch)
+    PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
+      -o ${GEN_SRC_DIR} \
+      ${METABUILD_INPUTS}
+fi
+
+if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
+  echo "Getting Go dependencies"
+  # Check out specified revisions of repositories we've versioned
+  # Append a dummy dir to the GOPATH so that `go get` doesn't barf
+  # on nonexistent clad files
+  GODUMMY=${TOPLEVEL}/cloud/dummy
+  (cd ${TOPLEVEL}; PATH="$(dirname $GO_EXE):$PATH" GOPATH="$GOPATH:$GODUMMY" ./godeps.js execute ${GEN_SRC_DIR})
+else
+  echo "Ignore Go dependencies"
 fi
 
 # Set protobuf location
 HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
-if [[ `uname -a` == *"aarch64"* && $HOST == "linux" ]]; then
-	HOST+="-arm64"
-fi
-echo $HOST
-PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
+PROTOBUF_HOME=${TOPLEVEL}/EXTERNALS/protobuf/${HOST}
 
 # Build protocCppPlugin if needed
 if [[ ! -x ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin ]]; then
@@ -354,18 +371,17 @@ if [[ $BUILD_PROTOC_PLUGIN -eq 1 ]]; then
     ${TOPLEVEL}/tools/protobuf/plugin/make.sh
 fi
 
-
 # Build/Install the protoc generators for go
-# GOBIN="${TOPLEVEL}/cloud/go/bin"
-# if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
-#     echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
-#     GOBIN=$GOBIN \
-#     CC=/usr/bin/cc \
-#     CXX=/usr/bin/c++ \
-#     "${GOROOT}/bin/go" install \
-#     github.com/golang/protobuf/protoc-gen-go \
-#     github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-# fi
+GOBIN="${TOPLEVEL}/cloud/go/bin"
+if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
+    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
+    GOBIN=$GOBIN \
+    CC=/usr/bin/cc \
+    CXX=/usr/bin/c++ \
+    "${GOROOT}/bin/go" install \
+    github.com/golang/protobuf/protoc-gen-go \
+    github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+fi
 
 #
 # generate source file lists
@@ -381,7 +397,7 @@ if [ $CONFIGURE -eq 1 ]; then
     fi
 
     # Process BUILD.in files
-    ${BUILD_TOOLS}/metabuild/metabuild.py $METABUILD_VERBOSE \
+    PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py $METABUILD_VERBOSE \
         -o ${GEN_SRC_DIR} \
         ${METABUILD_INPUTS}
 
@@ -413,7 +429,7 @@ if [ $CONFIGURE -eq 1 ]; then
         # If VICOS_SDK is set, use it, else provide default location
         #
         if [ -z "${VICOS_SDK+x}" ]; then
-            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06 | tail -1)
+            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 1.1.0-r04 | tail -1)
         fi
 
         PLATFORM_ARGS=(
@@ -432,12 +448,13 @@ if [ $CONFIGURE -eq 1 ]; then
 
     # Append additional platrom args
     PLATFORM_ARGS+=(${ADDITIONAL_PLATFORM_ARGS[@]})
-    echo "PLATFORM ARGS $PLATFORM_ARGS"
     $CMAKE_EXE ${TOPLEVEL} \
         ${VERBOSE_ARG} \
         -G"${GENERATOR}" \
         -DCMAKE_BUILD_TYPE=${CONFIGURATION} \
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
+        -DGOPATH=${GOPATH} \
+        -DGOROOT=${GOROOT} \
         -DPROTOBUF_HOME=${PROTOBUF_HOME} \
         -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \
         ${EXPORT_FLAGS} \

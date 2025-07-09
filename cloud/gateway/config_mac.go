@@ -2,8 +2,6 @@
 
 package main
 
-/*
-
 import (
 	"net/http"
 )
@@ -17,4 +15,3 @@ const (
 func checkAuth(_ http.ResponseWriter, r *http.Request) (string, error) {
 	return "Local Bypass", nil
 }
-*/

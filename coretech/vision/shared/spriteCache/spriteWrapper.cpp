@@ -14,15 +14,15 @@
 
 #include "coretech/vision/shared/spriteCache/spriteWrapper.h"
 
+#include "coretech/vision/engine/image_impl.h"
 #include "coretech/vision/engine/image.h"
 #include "util/cladHelpers/cladEnumToStringMap.h"
 #include "util/helpers/templateHelpers.h"
-#include "anki/cozmo/shared/cozmoConfig.h"
 
 namespace Anki {
 namespace Vision {
 
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SpriteWrapper::SpriteWrapper(const std::string& fullSpritePath)
 : _fullSpritePath(fullSpritePath)
@@ -36,7 +36,7 @@ SpriteWrapper::SpriteWrapper(ImageRGBA* sprite)
   _spriteRGBA.reset(sprite);
 }
 
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SpriteWrapper::SpriteWrapper(Image* sprite)
 {
@@ -47,7 +47,7 @@ SpriteWrapper::SpriteWrapper(Image* sprite)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SpriteWrapper::~SpriteWrapper()
 {
-
+  
 }
 
 
@@ -96,7 +96,7 @@ ImageRGBA SpriteWrapper::GetSpriteContentsRGBA(const HSImageHandle& hsImage)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Image SpriteWrapper::GetSpriteContentsGrayscale()
-{
+{ 
   // Try returning cached memory
   if(_spriteGrayscale != nullptr){
     return *_spriteGrayscale;
@@ -120,7 +120,7 @@ const ImageRGBA& SpriteWrapper::GetCachedSpriteContentsRGBA(const HSImageHandle&
     PRINT_NAMED_ERROR("SpriteWrapper.GetCachedGetCachedSpriteContents.InvalidContentAccess",
                       "Access to %s was requested as a reference, but sprite is not cached",
                       _fullSpritePath.c_str());
-
+                      
     ISpriteWrapper::ImgTypeCacheSpec typesToCache = {false, true};
     CacheSprite(typesToCache, hsImage);
   }
@@ -147,7 +147,7 @@ bool SpriteWrapper::GetFullSpritePath(std::string& fullSpritePath)
 {
   fullSpritePath = _fullSpritePath;
   if(ANKI_DEV_CHEATS && _fullSpritePath.empty()){
-    PRINT_NAMED_ERROR("SpriteWrapper.GetFullSpritePath.PathIsEmpty",
+    PRINT_NAMED_ERROR("SpriteWrapper.GetFullSpritePath.PathIsEmpty", 
                       "The image stored in this wrapper does not reference a sprite saved on disk");
   }
   return !_fullSpritePath.empty();
@@ -193,14 +193,14 @@ void SpriteWrapper::CacheSprite(const ImgTypeCacheSpec& typesToCache, const HSIm
       _spriteRGBA = std::unique_ptr<ImageRGBA>(new ImageRGBA());
       LoadSprite(_spriteRGBA.get(), hsImage);
     }
-  }
+  } 
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpriteWrapper::ClearCachedSprite()
 {
-  if((_spriteRGBA == nullptr) &&
+  if((_spriteRGBA == nullptr) && 
      (_spriteGrayscale == nullptr)){
     PRINT_NAMED_WARNING("SpriteWrapper.ClearCachedSprite.NoSpritesCached",
                         "ClearCachedSprite called on %s which is not cached",
@@ -217,7 +217,7 @@ void SpriteWrapper::ClearCachedSprite()
   _spriteGrayscale.reset();
 }
 
-
+  
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool SpriteWrapper::ImageMatchesStoredID(const HSImageHandle& hsImage) const
 {
@@ -233,15 +233,12 @@ void SpriteWrapper::LoadSprite(Image* outImage) const
     PRINT_NAMED_ERROR("SpriteWrapper.LoadSprite.OutImageIsNull", "");
     return;
   }
-
+  
   auto res = outImage->Load(_fullSpritePath.c_str());
   ANKI_VERIFY(RESULT_OK == res,
               "CompositeImage.SpriteBoxImpl.Constructor.GrayLoadFailed",
               "Failed to load sprite %s",
               _fullSpritePath.c_str());
-  if(Vector::IsXray()) {
-    outImage->Resize(Vector::FACE_DISPLAY_HEIGHT, Vector::FACE_DISPLAY_WIDTH);
-  }
 }
 
 
@@ -252,12 +249,11 @@ void SpriteWrapper::LoadSprite(ImageRGBA* outImage, const HSImageHandle& hsImage
     PRINT_NAMED_ERROR("SpriteWrapper.LoadSprite.NoPathToLoadFrom", "");
     return;
   }
-
+  
   if(outImage == nullptr){
     PRINT_NAMED_ERROR("SpriteWrapper.LoadSprite.OutImageIsNull", "");
-    return;
   }
-
+  
   if((hsImage != nullptr) &&
      hsImage->GetHSID() != 0){
     // Load the image as a grayscale image and merge it with a hue image
@@ -266,15 +262,12 @@ void SpriteWrapper::LoadSprite(ImageRGBA* outImage, const HSImageHandle& hsImage
     outImage->Allocate(grayImg.GetNumRows(), grayImg.GetNumCols());
     ApplyHS(grayImg, hsImage, outImage);
   }else{
-    // Load the image in as an RGB directly
+    // Load the image in as an RGB directly 
     auto res = outImage->Load(_fullSpritePath.c_str());
     ANKI_VERIFY(RESULT_OK == res,
                 "CompositeImage.SpriteBoxImpl.Constructor.ColorLoadFailed",
                 "Failed to load sprite %s",
                 _fullSpritePath.c_str());
-  }
-  if(Vector::IsXray()) {
-    outImage->Resize(outImage->GetNumRows() * 80 / 96, outImage->GetNumCols() * 160 / 184);
   }
 }
 
@@ -287,7 +280,7 @@ void SpriteWrapper::ApplyHS(const Image& grayImg, const HSImageHandle& hsImage, 
                         "Cannot pass in nullptr");
     return;
   }
-
+  
   const bool dimensionsMatch = (outImg->GetNumRows() == grayImg.GetNumRows()) &&
                                (outImg->GetNumCols() == grayImg.GetNumCols());
   if(!dimensionsMatch){
@@ -295,9 +288,9 @@ void SpriteWrapper::ApplyHS(const Image& grayImg, const HSImageHandle& hsImage, 
                         "Existing dimensions (%d,%d) did not match grayscale dimensions (%d,%d)",
                         outImg->GetNumCols(), outImg->GetNumRows(),
                         grayImg.GetNumCols(),  grayImg.GetNumRows());
-    return;
+    return; 
   }
-
+  
   Vision::HueSatWrapper::ImageSize imageSize(static_cast<uint32_t>(grayImg.GetNumRows()),
                                              static_cast<uint32_t>(grayImg.GetNumCols()));
   Vision::Image* hueImage = nullptr;
@@ -317,7 +310,7 @@ void SpriteWrapper::ApplyHS(const Image& grayImg, const HSImageHandle& hsImage, 
     memoryAllocated = true;
   }
 
-  // Create an HSV image from the gray image, replacing the 'hue' channel
+  // Create an HSV image from the gray image, replacing the 'hue' channel 
   // with the specified value
   const std::vector<cv::Mat> channels {
     hueImage->get_CvMat_(),

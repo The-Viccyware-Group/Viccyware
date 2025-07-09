@@ -42,8 +42,8 @@ static int PerfMetricWebServerImpl(WebService::WebService::Request* request)
 {
   auto* perfMetric = static_cast<PerfMetric*>(request->_cbdata);
 
-  const bool success = perfMetric->ParseCommands(request->_param1);
-  if (success)
+  int returnCode = perfMetric->ParseCommands(request->_param1);
+  if (returnCode != 0)
   {
     // If there were no errors, attempt to execute the commands
     // (may be blocked by wait mode), output string messages/results
@@ -51,7 +51,7 @@ static int PerfMetricWebServerImpl(WebService::WebService::Request* request)
     perfMetric->ExecuteQueuedCommands(&request->_result);
   }
 
-  return (success ? 1 : 0);
+  return returnCode;
 }
 
 // Note that this can be called at any arbitrary time, from a webservice thread
@@ -122,9 +122,10 @@ void PerfMetric::InitInternal(Util::Data::DataPlatform* dataPlatform, WebService
 #if ANKI_PERF_METRIC_ENABLED
   _dumpBuffer = new char[kSizeDumpBuffer];
   
-  _fileDir = dataPlatform->pathToResource(Anki::Util::Data::Scope::Cache, "perfMetricLogs");
+  _fileDir = dataPlatform->pathToResource(Anki::Util::Data::Scope::Cache, "")
+             + "/perfMetricLogs";
   Util::FileUtils::CreateDirectory(_fileDir);
-
+  
   _webService = webService;
   _webService->RegisterRequestHandler("/perfmetric", PerfMetricWebServerHandler, this);
 #endif
@@ -156,12 +157,9 @@ void PerfMetric::UpdateWaitMode()
 
 void PerfMetric::Status(std::string* resultStr) const
 {
-  if (resultStr != nullptr)
-  {
-    *resultStr += _isRecording ? "Recording" : "Stopped";
-    const int numFrames = _bufferFilled ? kNumFramesInBuffer : _nextFrameIndex;
-    *resultStr += ("," + std::to_string(numFrames) + "," + std::to_string(kNumFramesInBuffer) + "\n");
-  }
+  *resultStr += _isRecording ? "Recording" : "Stopped";
+  const int numFrames = _bufferFilled ? kNumFramesInBuffer : _nextFrameIndex;
+  *resultStr += ("," + std::to_string(numFrames) + "," + std::to_string(kNumFramesInBuffer) + "\n");
 }
 
 void PerfMetric::Start()
@@ -228,7 +226,7 @@ void PerfMetric::Dump(const DumpType dumpType, const bool dumpAll,
 
   if (dumpAll)
   {
-    if ((dumpType == DT_RESPONSE_STRING) && (resultStr != nullptr))
+    if (dumpType == DT_RESPONSE_STRING)
     {
       // When dumping all to HTTP response string, also send back the current frame buffer index:
       // First, return the new frame buffer index (what we are catching up to)
@@ -365,11 +363,6 @@ void PerfMetric::Dump(const DumpType dumpType, const bool dumpAll,
 void PerfMetric::DumpFramesSince(const int firstFrameBufferIndex, std::string* resultStr)
 {
   ANKI_CPU_PROFILE("PerfMetric::DumpFramesSince");
-
-  if (resultStr == nullptr)
-  {
-    return;
-  }
 
   int frameBufferIndex = firstFrameBufferIndex;
   int numFrames = 0;
@@ -578,13 +571,13 @@ void PerfMetric::WaitTicks(const int ticks)
 
 // Parse commands out of the query string, and only if there are no errors,
 // add them to the queue
-bool PerfMetric::ParseCommands(const std::string& queryStr, const bool queueForExecution)
+int PerfMetric::ParseCommands(std::string& queryString)
 {
-  auto queryString = Util::StringToLower(queryStr);
-
+  queryString = Util::StringToLower(queryString);
+  
   std::vector<PerfMetricCommand> cmds;
   std::string current;
-
+  
   while (!queryString.empty())
   {
     size_t amp = queryString.find('&');
@@ -670,7 +663,7 @@ bool PerfMetric::ParseCommands(const std::string& queryStr, const bool queueForE
         } catch (std::exception)
         {
           LOG_INFO("PerfMetric.ParseCommands", "Error parsing int argument in perfmetric command: %s", current.c_str());
-          return false;
+          return 0;
         }
         cmds.push_back(cmd);
       }
@@ -684,28 +677,24 @@ bool PerfMetric::ParseCommands(const std::string& queryStr, const bool queueForE
         } catch (std::exception)
         {
           LOG_INFO("PerfMetric.ParseCommands", "Error parsing int argument in perfmetric command: %s", current.c_str());
-          return false;
+          return 0;
         }
         cmds.push_back(cmd);
       }
       else
       {
         LOG_INFO("PerfMetric.ParseCommands", "Error parsing perfmetric command: %s", current.c_str());
-        return false;
+        return 0;
       }
     }
   }
 
-  if (queueForExecution)
+  // Now that there are no errors, add all parse commands to queue
+  for (auto& cmd : cmds)
   {
-    // Now that there are no errors, add all parsed commands to queue
-    for (auto& cmd : cmds)
-    {
-      _queuedCommands.push(cmd);
-    }
+    _queuedCommands.push(cmd);
   }
-
-  return true;
+  return 1;
 }
 
 

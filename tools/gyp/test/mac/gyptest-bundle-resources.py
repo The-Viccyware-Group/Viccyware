@@ -43,7 +43,7 @@ if sys.platform == 'darwin':
 
   test.built_file_must_match(
       'resource.app/Contents/Resources/executable-file.sh',
-      '#!/usr/bin/env bash\n'
+      '#!/bin/bash\n'
       '\n'
       'echo echo echo echo cho ho o o\n', chdir=CHDIR)
 

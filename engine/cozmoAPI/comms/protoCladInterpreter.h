@@ -61,14 +61,6 @@ private:
       const external_interface::GatewayWrapper& proto_message,
       ExternalInterface::MessageGameToEngine& clad_message);
 
-  static void ProtoSetFaceToEnrollRequestToClad(
-      const external_interface::GatewayWrapper& proto_message,
-      ExternalInterface::MessageGameToEngine& clad_message);
-
-  static void ProtoCameraConfigRequestToClad(
-      const external_interface::GatewayWrapper& proto_message,
-      ExternalInterface::MessageGameToEngine& clad_message);
-
   //
   // Clad-to-Proto interpreters
   //
@@ -92,19 +84,7 @@ private:
       const ExternalInterface::MessageGameToEngine& clad_message, 
       external_interface::GatewayWrapper& proto_message);
 
-  static void CladSetFaceToEnrollToProto(
-      const ExternalInterface::MessageGameToEngine& clad_message,
-      external_interface::GatewayWrapper& proto_message);
-
   static void CladEndOfMessageToProto(
-      const ExternalInterface::MessageEngineToGame& clad_message, 
-      external_interface::GatewayWrapper& proto_message);
-
-  static void CladPerRobotSettingsToProto(
-      const ExternalInterface::MessageEngineToGame& clad_message, 
-      external_interface::GatewayWrapper& proto_message);
-
-  static void CladCurrentCameraParamsToProto(
       const ExternalInterface::MessageEngineToGame& clad_message, 
       external_interface::GatewayWrapper& proto_message);
 };

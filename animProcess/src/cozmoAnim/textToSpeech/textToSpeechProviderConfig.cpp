@@ -55,7 +55,6 @@
 #define TTS_TEXTLENGTHMAX_KEY "textLengthMax"
 #define TTS_RANGEMIN_KEY      "rangeMin"
 #define TTS_RANGEMAX_KEY      "rangeMax"
-#define TTS_PAUSEPUNCTUATION_KEY "pausePunctuation_ms"
 
 // Console variables
 #define CONSOLE_GROUP "TextToSpeech"
@@ -91,7 +90,6 @@ TextToSpeechProviderConfig::TextToSpeechProviderConfig(const std::string & langu
   _tts_speed = TTS_DEFAULT_SPEED;
   _tts_shaping = TTS_DEFAULT_SHAPING;
   _tts_pitch = TTS_DEFAULT_PITCH;
-  _tts_pausepunctuation = TTS_PAUSEPUNCTUATION_MS;
 
   // Allow language configuration to override programmatic defaults
   const auto & language_config = platform_config[language];
@@ -101,7 +99,6 @@ TextToSpeechProviderConfig::TextToSpeechProviderConfig(const std::string & langu
     JsonTools::GetValueOptional(language_config, TTS_SPEED_KEY, _tts_speed);
     JsonTools::GetValueOptional(language_config, TTS_SHAPING_KEY, _tts_shaping);
     JsonTools::GetValueOptional(language_config, TTS_PITCH_KEY, _tts_pitch);
-    JsonTools::GetValueOptional(language_config, TTS_PAUSEPUNCTUATION_KEY, _tts_pausepunctuation);
   }
 
   // Allow config traits to override language configuration
@@ -117,7 +114,6 @@ TextToSpeechProviderConfig::TextToSpeechProviderConfig(const std::string & langu
   kVoiceSpeed = _tts_speed;
   kVoiceShaping = _tts_shaping;
   kVoicePitch = _tts_pitch;
-  kPausePunctuation_ms = _tts_pausepunctuation;
   #endif
 
 }
@@ -172,7 +168,7 @@ int TextToSpeechProviderConfig::GetPausePunctuation_ms() const
 #if REMOTE_CONSOLE_ENABLED
   return kPausePunctuation_ms;
 #else
-  return _tts_pausepunctuation;
+  return TTS_PAUSEPUNCTUATION_MS;
 #endif
 }
 

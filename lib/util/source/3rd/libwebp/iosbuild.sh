@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # This script generates 'WebP.framework' and 'WebPDecoder.framework'. An iOS
 # app can decode WebP images by including 'WebPDecoder.framework' and both

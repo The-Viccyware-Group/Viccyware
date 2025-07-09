@@ -73,11 +73,8 @@ namespace Vector {
     // Although the type of the input image is ImageRGB, it should be an HSV image, i.e.
     // the 'red' channel is hue, 'green' channel is saturation, and 'blue' channel is value
 
-    static bool ApplyScanlines(Vision::ImageRGBA& imageHsv, const float opacity, bool dirty = true);
+    static bool ApplyScanlines(Vision::ImageRGB& imageHsv, const float opacity, bool dirty = true);
     static bool ApplyScanlines(Vision::Image& image8, const float opacity, bool dirty = true);
-
-    // needs to be accessed by console vars
-    static void LoadCustomEyePNG();
 
   private:
 
@@ -125,16 +122,12 @@ namespace Vector {
     static s32 _faceColMax;
     static s32 _faceRowMin;
     static s32 _faceRowMax;
-    static Vision::ImageRGB565 _customEyeOverlay;
-    static bool _hasCustomEyes;
-    static Vision::Image _customEyeAlpha;
 
     static void ApplyAntiAliasing(Vision::Image& shape, float minX, float minY, float maxX, float maxY);
     static bool DrawEyes(const ProceduralFace& faceData, bool dirty);
     static bool DistortScanlines(const ProceduralFace& faceData, bool dirty);
     static bool ApplyNoise(const Util::RandomGenerator& rng, bool dirty);
     static bool ConvertColorspace(const ProceduralFace& faceData, Vision::ImageRGB565& output, bool dirty);
-    static bool ApplyCustomOverlay(const ProceduralFace& faceData, Vision::ImageRGB565& output, bool dirty);
 
 #if PROCEDURALFACE_NOISE_FEATURE
     static const Array2d<u8>& GetNoiseImage(const Util::RandomGenerator& rng);

@@ -8,9 +8,20 @@
     "or": [
       {
         "conditionType": "Compound",
-        "not": {
-          "conditionType": "CliffDetected"
-        }
+        "and": [
+          {
+            "conditionType": "Compound",
+            "not": {
+              "conditionType": "InCalmMode"
+            }
+          },
+          {
+            "conditionType": "Compound",
+            "not": {
+              "conditionType": "CliffDetected"
+            }
+          }
+        ]
       },
       {
         "conditionType": "Compound",

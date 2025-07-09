@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # this should be invoked by build scripts with the usage:
 # aarUnityRemoval.sh IN-AARFILE OUT-AARFILE

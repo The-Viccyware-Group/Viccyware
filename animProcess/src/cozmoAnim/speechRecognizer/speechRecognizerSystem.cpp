@@ -18,7 +18,7 @@
 #include "cozmoAnim/animContext.h"
 #include "cozmoAnim/micData/micDataSystem.h"
 #include "cozmoAnim/robotDataLoader.h"
-#include "speechRecognizerPicovoice.h"                        // swapped in Picovoice
+#include "cozmoAnim/speechRecognizer/speechRecognizerTHFSimple.h"
 #include "cozmoAnim/speechRecognizer/speechRecognizerPryonLite.h"
 #include "cozmoAnim/micData/notchDetector.h"
 #include "util/console/consoleInterface.h"
@@ -43,9 +43,9 @@ CONSOLE_VAR_EXTERN(bool, kAlexaEnabledInAU);
 namespace {
 #define LOG_CHANNEL "SpeechRecognizer"
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Console Vars
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #if ANKI_DEV_CHEATS
 #define CONSOLE_GROUP_VECTOR "SpeechRecognizer.Vector"
 #define CONSOLE_GROUP_ALEXA "SpeechRecognizer.Alexa"
@@ -58,7 +58,7 @@ struct TriggerModelTypeData
   int                   searchFileIndex;
 };
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Sendory Truly Hands Free recognizer models
 // NOTE: This enum needs to EXACTLY match the number and ordering of the kThfTriggerModelDataList array below
 enum class SupportedThfLocales
@@ -107,7 +107,7 @@ const char* kThfRecognizerModelStr = "enUS_1mb, enUS_500kb, enUS_250kb, \
                                       enUK_1mb, enUK_500kb, enAU_1mb, enAU_500kb, frFR, deDE";
 const char* kThfRecognizerModelSensitivityStr = "default,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20";
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Pryon recognizer models
 // NOTE: This enum needs to EXACTLY match the number and ordering of the kPryonTriggerModelDataList array below
 enum class SupportedPryonLocales
@@ -134,6 +134,7 @@ constexpr size_t kPryonTriggerDataListLen = sizeof(kPryonTriggerModelDataList) /
 static_assert(kPryonTriggerDataListLen == (size_t) SupportedPryonLocales::Count, "Need trigger data for each supported locale");
 const char* kPryonRecognizerModelStr = "enUS, enUK, enAU, frFR, deDE";
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 size_t _vectorRecognizerModelTypeIndex = (size_t) SupportedThfLocales::enUS_500kb;
 CONSOLE_VAR_ENUM(size_t, kVectorRecognizerModel, CONSOLE_GROUP_VECTOR, _vectorRecognizerModelTypeIndex, kThfRecognizerModelStr);
 
@@ -152,7 +153,6 @@ CONSOLE_VAR_ENUM(size_t, kAlexaPlaybackRecognizerModel, CONSOLE_GROUP_ALEXA_PLAY
 std::list<Anki::Util::IConsoleFunction> sConsoleFuncs;
 
 #endif // ANKI_DEV_CHEATS
-
 CONSOLE_VAR(bool, kSaveRawMicInput, CONSOLE_GROUP_ALEXA, false);
 // 0: don't run; 1: compute power as if _notchDetectorActive; 2: analyze power every tick
 CONSOLE_VAR_RANGED(unsigned int, kForceRunNotchDetector, CONSOLE_GROUP_ALEXA, 0, 0, 2);
@@ -239,6 +239,7 @@ void SpeechRecognizerSystem::SetupConsoleFuncs()
                               CONSOLE_GROUP_ALEXA, "");
   sConsoleFuncs.emplace_front("Update Alexa Playback Recognizer", std::move(updateAlexaPlaybackRecognizerModel),
                               CONSOLE_GROUP_ALEXA_PLAYBACK, "");
+  
 #endif
   _micDataSystem->GetSpeakerLatency_ms(); // Fix compiler error when ANKI_DEV_CHEATS is not enabled
 }
@@ -249,7 +250,7 @@ std::string SpeechRecognizerSystem::UpdateRecognizerHelper(size_t& inOut_modelId
                                                            const TriggerModelTypeData modelTypeDataList[],
                                                            TriggerContext<SpeechRecognizerType>& trigger)
 {
-  std::string result;
+std::string result;
 #if ANKI_DEV_CHEATS
   if ((inOut_modelIdx != new_modelIdx) ||
       (inOut_searchIdx != new_searchIdx))
@@ -276,6 +277,12 @@ std::string SpeechRecognizerSystem::UpdateRecognizerHelper(size_t& inOut_modelId
   return result;
 }
 
+# undef CONSOLE_GROUP
+  
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// SpeechRecognizerSystem
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SpeechRecognizerSystem::SpeechRecognizerSystem(const Anim::AnimContext* context,
                                                MicData::MicDataSystem* micDataSystem,
                                                const std::string& triggerWordDataDir)
@@ -287,11 +294,10 @@ SpeechRecognizerSystem::SpeechRecognizerSystem(const Anim::AnimContext* context,
   SetupConsoleFuncs();
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SpeechRecognizerSystem::~SpeechRecognizerSystem()
 {
-  if (_victorTrigger) {
-    _victorTrigger->recognizer->Stop();
-  }
+  _victorTrigger->recognizer->Stop();
   if (_alexaTrigger) {
     _alexaTrigger->recognizer->Stop();
   }
@@ -300,6 +306,7 @@ SpeechRecognizerSystem::~SpeechRecognizerSystem()
   DisableAlexa();
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::InitVector(const Anim::RobotDataLoader& dataLoader,
                                         const Util::Locale& locale,
                                         TriggerWordDetectedCallback callback)
@@ -310,12 +317,13 @@ void SpeechRecognizerSystem::InitVector(const Anim::RobotDataLoader& dataLoader,
   }
   
   const bool useVad = true;
-  _victorTrigger = std::make_unique<TriggerContext<SpeechRecognizerPicovoice>>("Vector", useVad);
-  _victorTrigger->recognizer->Init();  
+  _victorTrigger = std::make_unique<TriggerContextThf>("Vector", useVad);
+  _victorTrigger->recognizer->Init("");
   _victorTrigger->recognizer->SetCallback(callback);
-  //_victorTrigger->recognizer->Start();
+  _victorTrigger->recognizer->Start();
   _victorTrigger->micTriggerConfig->Init("hey_vector_thf", dataLoader.GetMicTriggerConfig());
   
+  // On Debug builds, check that all the files listed in the trigger config actually exist
 #if ANKI_DEVELOPER_CODE
   const auto& triggerDataList = _victorTrigger->micTriggerConfig->GetAllTriggerModelFiles();
   for (const auto& filePath : triggerDataList) {
@@ -324,23 +332,32 @@ void SpeechRecognizerSystem::InitVector(const Anim::RobotDataLoader& dataLoader,
       LOG_WARNING("SpeechRecognizerSystem.InitVector.MicTriggerConfigFileMissing","%s",fullFilePath.c_str());
     }
   }
-#endif
+#endif // ANKI_DEVELOPER_CODE
   
   UpdateTriggerForLocale(locale, RecognizerTypeFlag::VectorMic);
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::ToggleNotchDetector(bool active)
 {
   _notchDetectorActive = active;
+  // todo: if !active, reset _notchDetector, otherwise it will contain old PSDs in its circular buffer. they get
+  // refreshed pretty quickly, so not crucial
 }
-
+  
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::UpdateNotch(const AudioUtil::AudioSample* audioChunk, unsigned int audioDataLen)
 {
   {
     std::lock_guard<std::mutex> lg{_notchMutex};
+    // don't run any ffts if not needed. when _notchDetectorActive is enabled, the notch detector will start computing DFTs
+    // and their power and saving that in a circular buffer. when the wake word is used, it averages the recent PSDs and
+    // computes some statistics on the average PSD. This means there won't be any data for when the user speaks the first
+    // wake word, but that's fine since that won't have a notch anyway
     const bool analyzeSamples = _notchDetectorActive || (kForceRunNotchDetector != 0);
     _notchDetector->AddSamples(audioChunk, audioDataLen/MicData::kNumInputChannels, analyzeSamples);
-    if ( kForceRunNotchDetector == 2 ) {
+    if( kForceRunNotchDetector == 2 ) {
+      // run without result. useful for debugging with built-in sine waves
       _notchDetector->HasNotch();
     }
   }
@@ -355,7 +372,7 @@ void SpeechRecognizerSystem::UpdateNotch(const AudioUtil::AudioSample* audioChun
     if( pcmfd >= 0 ) {
       std::vector<short> toSave;
       toSave.resize(audioDataLen/MicData::kNumInputChannels);
-      for( unsigned int i=0, idx=0; i<audioDataLen; i+=MicData::kNumInputChannels, ++idx ) {
+      for( int i=0, idx=0; i<audioDataLen; i+=MicData::kNumInputChannels, ++idx ) {
         toSave[idx] = audioChunk[i];
       }
       (void) write( pcmfd, toSave.data(), toSave.size() * sizeof(short) );
@@ -367,22 +384,31 @@ void SpeechRecognizerSystem::UpdateNotch(const AudioUtil::AudioSample* audioChun
   }
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::Update(const AudioUtil::AudioSample * audioData, unsigned int audioDataLen, bool vadActive)
 {
+  // TODO: Add profiling for each recognizer
   if (_isPendingLocaleUpdate) {
     ApplyLocaleUpdate();
   }
   // Update recognizer
-  if (_victorTrigger && (vadActive || !_victorTrigger->useVad)) {
+  if (vadActive || !_victorTrigger->useVad) {
     _victorTrigger->recognizer->Update(audioData, audioDataLen);
   }
   
   if (_isAlexaActive) {
     if (!_isDisableAlexaPending) {
+      // Update both the alexa SDK and the trigger word at the same time with the same data. This is critical so
+      // that their internal sample counters line up
       _alexaComponent->AddMicrophoneSamples(audioData, audioDataLen);
       _alexaTrigger->recognizer->Update(audioData, audioDataLen);
+      
+      // NOTE: for the listed reason above, I'm not running the VAD in front of the alexa trigger. If we want to
+      // turn that back on, it should be possible, we'd just need to count how many samples were skipped so we
+      // could reconcile the sample counters
     }
     else {
+      // Disable Alexa flag has been set, destroy recognizer
       if (_alexaTrigger) {
         _alexaTrigger->recognizer->Stop();
         _alexaTrigger.reset();
@@ -395,16 +421,19 @@ void SpeechRecognizerSystem::Update(const AudioUtil::AudioSample * audioData, un
   }
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool SpeechRecognizerSystem::UpdateTriggerForLocale(const Util::Locale& newLocale, RecognizerTypeFlag recognizerFlags)
 {
   // Set local using defualt locale settings
   bool success = false;
-  // if (_victorTrigger &&
-  //     (RecognizerTypeFlag::VectorMic & recognizerFlags) == RecognizerTypeFlag::VectorMic) {
-  //   success = UpdateTriggerForLocale(*_victorTrigger.get(), newLocale, MicData::MicTriggerConfig::ModelType::Count, -1);
-  // }
+  // We always expect to have victorTrigger
+  if (_victorTrigger &&
+      (RecognizerTypeFlag::VectorMic & recognizerFlags) == RecognizerTypeFlag::VectorMic) {
+    success = UpdateTriggerForLocale(*_victorTrigger.get(), newLocale, MicData::MicTriggerConfig::ModelType::Count, -1);
+  }
   
   if (AlexaLocaleEnabled(newLocale)) {
+    
     if (_alexaTrigger &&
         ((RecognizerTypeFlag::AlexaMic & recognizerFlags) == RecognizerTypeFlag::AlexaMic)) {
       _alexaTrigger->useVad = AlexaLocaleUsesVad(newLocale);
@@ -413,8 +442,10 @@ bool SpeechRecognizerSystem::UpdateTriggerForLocale(const Util::Locale& newLocal
     
     if (_alexaPlaybackTrigger &&
         ((RecognizerTypeFlag::AlexaPlayback & recognizerFlags) == RecognizerTypeFlag::AlexaPlayback)) {
-      success &= UpdateTriggerForLocale(*_alexaPlaybackTrigger.get(), newLocale, MicData::MicTriggerConfig::ModelType::Count, -1);
+      success &= UpdateTriggerForLocale(*_alexaPlaybackTrigger.get(), newLocale,
+                                        MicData::MicTriggerConfig::ModelType::Count, -1);
       if (_alexaPlaybackRecognizerComponent) {
+        // Notify Component to update locale on it's thread
         _alexaPlaybackRecognizerComponent->PendingLocaleUpdate();
       }
       else {
@@ -426,6 +457,7 @@ bool SpeechRecognizerSystem::UpdateTriggerForLocale(const Util::Locale& newLocal
   return success;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::ActivateAlexa(const Util::Locale& locale, AlexaTriggerWordDetectedCallback callback)
 {
   if (_isAlexaActive) {
@@ -436,17 +468,24 @@ void SpeechRecognizerSystem::ActivateAlexa(const Util::Locale& locale, AlexaTrig
   
   _alexaComponent = _context->GetAlexa();
   
+  // Setup Alexa mic recognizer
   InitAlexa(locale, callback);
   
-  _alexaPlaybackRecognizerComponent.reset(new AlexaPlaybackRecognizerComponent(_context, *this));
+  // Setup Playback Recognzier and operating component
+  // First, create the component so it's ready for recognizer states
+  _alexaPlaybackRecognizerComponent.reset( new AlexaPlaybackRecognizerComponent(_context, *this) );
   
+  // Second, create the recognizer
   const auto playbackRecognizerCallback = [this](const AudioUtil::SpeechRecognizerCallbackInfo& info)
   {
+    // LOG_WARNING("SpeechRecognizerSystem.SetAlexaActive.playbackRecCallback","Info %s", info.Description().c_str());
     _playbackTrigerSampleIdx = _alexaComponent->GetMicrophoneSampleIndex();
   };
   InitAlexaPlayback(locale, playbackRecognizerCallback);
 
-  if (!_alexaPlaybackRecognizerComponent->Init()) {
+  // Finally, init() the component now that the recognizer exist
+  if ( !_alexaPlaybackRecognizerComponent->Init() ) {
+    // Clear recognizer component if it was not Init correctly
     _alexaPlaybackRecognizerComponent.reset();
     LOG_ERROR("SpeechRecognizerSystem.ActivateAlexa._alexaPlaybackRecognizerComponent.Init.Failed", "");
   }
@@ -454,10 +493,13 @@ void SpeechRecognizerSystem::ActivateAlexa(const Util::Locale& locale, AlexaTrig
   UpdateAlexaActiveState();
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::DisableAlexa()
 {
+  // Set flag to disable Alexa's recognizer in Update()
   _isDisableAlexaPending = true;
   
+  // Destroy component before recognizer so the treads are stopped
   if (_alexaPlaybackRecognizerComponent) {
     _alexaPlaybackRecognizerComponent.reset();
   }
@@ -468,6 +510,7 @@ void SpeechRecognizerSystem::DisableAlexa()
   }
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::SetAlexaSpeakingState(bool isSpeaking)
 {
   if (_alexaPlaybackRecognizerComponent) {
@@ -475,14 +518,19 @@ void SpeechRecognizerSystem::SetAlexaSpeakingState(bool isSpeaking)
   }
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Private Methods
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::InitAlexa(const Util::Locale& locale,
                                        const AlexaTriggerWordDetectedCallback callback)
 {
+  // This called when Alexa is authorized
   if (_alexaTrigger) {
     LOG_WARNING("SpeechRecognizerSystem.InitAlexa", "Alexa Recognizer is already running");
     return;
   }
   
+  // wrap callback with another check for whether the input signal contains a notch
   const auto wrappedCallback = [callback=std::move(callback), this](const AudioUtil::SpeechRecognizerCallbackInfo& info)
   {
     AudioUtil::SpeechRecognizerIgnoreReason ignoreReason;
@@ -507,36 +555,53 @@ void SpeechRecognizerSystem::InitAlexa(const Util::Locale& locale,
   ASSERT_NAMED(_alexaComponent != nullptr, "SpeechRecognizerSystem.InitAlexa._context.GetAlexa.IsNull");
   
   const bool useVad = AlexaLocaleUsesVad(locale);
-  _alexaTrigger = std::make_unique<TriggerContext<SpeechRecognizerPryonLite>>("Alexa", useVad);
+  _alexaTrigger = std::make_unique<TriggerContextPryon>("Alexa", useVad);
   _alexaTrigger->recognizer->SetCallback(wrappedCallback);
   _alexaTrigger->micTriggerConfig->Init("alexa_pryon", dataLoader->GetMicTriggerConfig());
   _alexaTrigger->recognizer->Start();
   
+  // On Debug builds, check that all the files listed in the trigger config actually exist
+#if ANKI_DEVELOPER_CODE
+  const auto& triggerDataList = _alexaTrigger->micTriggerConfig->GetAllTriggerModelFiles();
+  for (const auto& filePath : triggerDataList) {
+    const auto& fullFilePath = Util::FileUtils::FullFilePath( {_triggerWordDataDir, filePath} );
+    if (Util::FileUtils::FileDoesNotExist(fullFilePath)) {
+      LOG_WARNING("SpeechRecognizerSystem.InitAlexa.MicTriggerConfigFileMissing","%s",fullFilePath.c_str());
+    }
+  }
+#endif // ANKI_DEVELOPER_CODE
+  
   UpdateTriggerForLocale(locale, RecognizerTypeFlag::AlexaMic);
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::InitAlexaPlayback(const Util::Locale& locale,
                                                TriggerWordDetectedCallback callback)
 {
+  // This called when Alexa is authorized
   if (_alexaPlaybackTrigger) {
     LOG_WARNING("SpeechRecognizerSystem.InitAlexaPlayback", "Alexa Playback Recognizer is already running");
     return;
   }
   
+  // Save some CPU by using the VAD on the playback recognizer. This may be something to consider disabling if self-loops
+  // are occurring.
   const bool useVad = true;
   
   const auto dataLoader = _context->GetDataLoader();
-  _alexaPlaybackTrigger = std::make_unique<TriggerContext<SpeechRecognizerPryonLite>>("AlexaPlayback", useVad);
+  _alexaPlaybackTrigger = std::make_unique<TriggerContextPryon>("AlexaPlayback", useVad);
   _alexaPlaybackTrigger->recognizer->SetCallback(callback);
-  _alexaPlaybackTrigger->recognizer->SetDetectionThreshold(1);
+  _alexaPlaybackTrigger->recognizer->SetDetectionThreshold(1); // playback recognizer should be extremely permissive
   _alexaPlaybackTrigger->micTriggerConfig->Init("alexa_pryon", dataLoader->GetMicTriggerConfig());
   
   UpdateTriggerForLocale(locale, RecognizerTypeFlag::AlexaPlayback);
   
-  ApplySpeechRecognizerLocaleUpdate(*_alexaPlaybackTrigger.get());
+  // Need to manually tell recognizer to update since it doesn't run in the normal recognizer Update() loop
+  ApplySpeechRecognizerLoacleUpdate(*_alexaPlaybackTrigger.get());
   _alexaPlaybackTrigger->recognizer->Start();
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void SpeechRecognizerSystem::UpdateAlexaActiveState()
 {
   _isAlexaActive = (_alexaComponent != nullptr &&
@@ -544,6 +609,7 @@ void SpeechRecognizerSystem::UpdateAlexaActiveState()
                     _alexaTrigger->recognizer->IsReady());
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 template <class SpeechRecognizerType>
 bool SpeechRecognizerSystem::UpdateTriggerForLocale(TriggerContext<SpeechRecognizerType>& trigger,
                                                     const Util::Locale newLocale,
@@ -567,29 +633,35 @@ bool SpeechRecognizerSystem::UpdateTriggerForLocale(TriggerContext<SpeechRecogni
   return success;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Note: This is called from Update(), it blocks the thread while updating recognizer models
 void SpeechRecognizerSystem::ApplyLocaleUpdate()
 {
   std::lock_guard<std::mutex> lock(_triggerModelMutex);
   
   if (_victorTrigger) {
-    ApplySpeechRecognizerLocaleUpdate(*_victorTrigger.get());
+    ApplySpeechRecognizerLoacleUpdate(*_victorTrigger.get());
   }
   
   if (_alexaTrigger) {
-    ApplySpeechRecognizerLocaleUpdate(*_alexaTrigger.get());
+    ApplySpeechRecognizerLoacleUpdate(*_alexaTrigger.get());
   }
+  
+  // NOTE: Don't update playback recognizer it runs independently of the user recognizers
   
   UpdateAlexaActiveState();
   _isPendingLocaleUpdate = false;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 template <class SpeechRecognizerType>
-void SpeechRecognizerSystem::ApplySpeechRecognizerLocaleUpdate(TriggerContext<SpeechRecognizerType>& aTrigger)
+void SpeechRecognizerSystem::ApplySpeechRecognizerLoacleUpdate(TriggerContext<SpeechRecognizerType>& aTrigger)
 {
   MicData::MicTriggerConfig::TriggerDataPaths &currentTrigPathRef = aTrigger.currentTriggerPaths;
   MicData::MicTriggerConfig::TriggerDataPaths &nextTrigPathRef    = aTrigger.nextTriggerPaths;
   
   if ( currentTrigPathRef != nextTrigPathRef ) {
+    //  ANKI_CPU_PROFILE("SwitchTriggerWordSearch");  // TODO: Add Profiling
     currentTrigPathRef = nextTrigPathRef;
     const bool success = UpdateRecognizerModel( aTrigger );
     const std::string netFilePath = currentTrigPathRef.GenerateNetFilePath( _triggerWordDataDir );
@@ -615,31 +687,32 @@ void SpeechRecognizerSystem::ApplySpeechRecognizerLocaleUpdate(TriggerContext<Sp
   }
 }
 
-bool SpeechRecognizerSystem::UpdateRecognizerModel(TriggerContext<SpeechRecognizerPicovoice>& aTrigger)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool SpeechRecognizerSystem::UpdateRecognizerModel(TriggerContext<SpeechRecognizerTHF>& aTrigger)
 {
-  // bool success = false;
-  // SpeechRecognizerPicovoice* recognizer = static_cast<SpeechRecognizerPicovoice*>(aTrigger.recognizer.get());
-  // MicData::MicTriggerConfig::TriggerDataPaths& currentTrigPathRef = aTrigger.currentTriggerPaths;
-  // recognizer->SetRecognizerIndex( AudioUtil::SpeechRecognizer::InvalidIndex );
-  // const AudioUtil::SpeechRecognizer::IndexType singleSlotIndex = 0;
-  // recognizer->RemoveRecognitionData( singleSlotIndex );
+  bool success = false;
+  SpeechRecognizerTHF* recognizer = aTrigger.recognizer.get();
+  MicData::MicTriggerConfig::TriggerDataPaths& currentTrigPathRef = aTrigger.currentTriggerPaths;
+  recognizer->SetRecognizerIndex( AudioUtil::SpeechRecognizer::InvalidIndex );
+  const AudioUtil::SpeechRecognizer::IndexType singleSlotIndex = 0;
+  recognizer->RemoveRecognitionData( singleSlotIndex );
   
-  // if (currentTrigPathRef.IsValid()) {
-  //   const std::string netFilePath = currentTrigPathRef.GenerateNetFilePath( _triggerWordDataDir );
-  //   const std::string searchFilePath = currentTrigPathRef.GenerateSearchFilePath( _triggerWordDataDir );
-  //   const bool isPhraseSpotted = true;
-  //   const bool allowsFollowUpRecog = false;
-  //   success = recognizer->AddRecognitionDataFromFile( singleSlotIndex, netFilePath, searchFilePath,
-  //                                                     isPhraseSpotted, allowsFollowUpRecog );
-  //   if ( success ) {
-  //     recognizer->SetRecognizerIndex( singleSlotIndex );
-  //   }
-  // }
+  if (currentTrigPathRef.IsValid()) {
+    const std::string netFilePath = currentTrigPathRef.GenerateNetFilePath( _triggerWordDataDir );
+    const std::string searchFilePath = currentTrigPathRef.GenerateSearchFilePath( _triggerWordDataDir );
+    const bool isPhraseSpotted = true;
+    const bool allowsFollowUpRecog = false;
+    success = recognizer->AddRecognitionDataFromFile( singleSlotIndex, netFilePath, searchFilePath,
+                                                      isPhraseSpotted, allowsFollowUpRecog );
+    if ( success ) {
+      recognizer->SetRecognizerIndex( singleSlotIndex );
+    }
+  }
 
-  // return success;
-  return true;
+  return success;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool SpeechRecognizerSystem::UpdateRecognizerModel(TriggerContext<SpeechRecognizerPryonLite>& aTrigger)
 {
   bool success = false;
@@ -648,6 +721,7 @@ bool SpeechRecognizerSystem::UpdateRecognizerModel(TriggerContext<SpeechRecogniz
   recognizer->Stop();
   
   if ( currentTrigPathRef.IsValid() ) {
+    // Unload & Load
     const std::string netFilePath = currentTrigPathRef.GenerateNetFilePath( _triggerWordDataDir );
     success = recognizer->InitRecognizer( netFilePath, aTrigger.useVad );
     if ( success && (_alexaComponent != nullptr) ) {
@@ -658,6 +732,7 @@ bool SpeechRecognizerSystem::UpdateRecognizerModel(TriggerContext<SpeechRecogniz
   
   return success;
 }
+
 
 } // end namespace Vector
 } // end namespace Anki

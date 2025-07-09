@@ -4,7 +4,6 @@ namespace Vector {
 enum uint_8 FeatureType {
   Invalid,
   Laser,
-  Singing,
   Exploring,
   FetchCube,
   FindCube,
@@ -21,7 +20,6 @@ enum uint_8 FeatureType {
   AttentionTransfer,
   UserDefinedBehaviorTree,
   PopAWheelie,
-  PounceOnMotion,
   ActiveIntentFeedback,
   Alexa,
   Alexa_UK,

@@ -15,7 +15,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "coretech/vision/shared/spritePathMap.h"
 #include "coretech/vision/shared/spriteSequence/spriteSequence.h"
 #include "util/helpers/noncopyable.h"
 
@@ -23,15 +22,16 @@ namespace Anki {
 
 // forward decleration
 namespace Vision{
+class SpriteSequence;
 
 class SpriteSequenceContainer : private Util::noncopyable
 {
 public:
-  using SpriteSequenceMap = std::unordered_map<Vision::SpritePathMap::AssetID, const Vision::SpriteSequence>;
+  using SpriteSequenceMap = std::unordered_map<std::string, const Vision::SpriteSequence>;
   SpriteSequenceContainer(SpriteSequenceMap&& spriteSequences);
   
-  bool IsValidSpriteSequenceID(const Vision::SpritePathMap::AssetID spriteSeqID) const;
-  const Vision::SpriteSequence* const GetSpriteSequence(const Vision::SpritePathMap::AssetID spriteSeqID) const;
+  bool IsValidSpriteSequenceName(const std::string& spriteSeqName) const;
+  const Vision::SpriteSequence* const GetSpriteSequence(const std::string& spriteSeqName) const;
 
 protected:  
   SpriteSequenceMap _spriteSequenceMap;

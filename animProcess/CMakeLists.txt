@@ -6,9 +6,9 @@ include(anki_build_cxx)
 include(aubio)
 include(flatbuffers)
 include(opencv)
-include(picovoice)
 include(text2speech)
 include(pryon_lite)
+include(sensory)
 include(robot_core)
 
 anki_build_cxx_library(victor_anim ${ANKI_SRCLIST_DIR} STATIC)
@@ -55,12 +55,12 @@ target_link_libraries(victor_anim
   micdata
   libev
   # vendor
-  pv_porcupine
   ${OPENCV_LIBS}
   ${FLATBUFFERS_LIBS}
   signal_essence
   ${TEXT2SPEECH_LIBS}
   ${PRYON_LITE_LIBS}
+  ${SENSORY_LIBS}
   ${SPEEXDSP_LIBS}
   # platform
   ${PLATFORM_LIBS}
@@ -133,9 +133,6 @@ if (VICOS)
     PRIVATE
     robot_core
     ${ASAN_EXE_LINKER_FLAGS}
-    util
-    PUBLIC
-    robot_interface  # Needs to be public for cozmoConfig.h
   )
 
   anki_build_strip(TARGET vic-bootAnim)

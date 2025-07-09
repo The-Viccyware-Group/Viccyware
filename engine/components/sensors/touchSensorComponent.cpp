@@ -118,9 +118,18 @@ namespace {
   
 } // end anonymous namespace
 
-void TouchBaselineCalibrator::UpdateBaseline(float reading, bool isPressed)
+void TouchBaselineCalibrator::UpdateBaseline(float reading, bool isPickedUp, bool isPressed)
 {
   static float lastBaseline = 0.0f;
+  
+  if( isPickedUp ) {
+    _numConsecNoTouch = 0;
+    if(!IsCalibrated()) {
+      _numStableBaselineReadings = 0;
+      lastBaseline = 0.0f;
+    }
+    return;
+  }
   
   // check if the incoming readings have settled within an acceptable
   // range from the baseline in order to be considered "calibrated"
@@ -449,6 +458,7 @@ void TouchSensorComponent::NotifyOfRobotStateInternal(const RobotState& msg)
   const auto now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   _lastRawTouchValue = msg.backpackTouchSensorRaw;
   float boxFiltVal = _boxFilterTouch.ApplyFilter(msg.backpackTouchSensorRaw);
+  const bool isPickedUp = (msg.status & (uint32_t)RobotStatusFlag::IS_PICKED_UP) != 0;
   bool wasOnCharger = _isOnCharger;
   _isOnCharger = (msg.status & (uint32_t)RobotStatusFlag::IS_ON_CHARGER) != 0;
   bool lastPressed = _isPressed; // after this tick, state may change
@@ -481,7 +491,7 @@ void TouchSensorComponent::NotifyOfRobotStateInternal(const RobotState& msg)
   
   if( !_baselineCalibrator.IsCalibrated() ) {
     // note: treat isPressed as false, because we cannot detect touch while uncalibrated
-    _baselineCalibrator.UpdateBaseline(boxFiltVal, false);
+    _baselineCalibrator.UpdateBaseline(boxFiltVal, isPickedUp, false);
   } else {
     bool lastPressed = _isPressed;
     if(!_baselineCalibrator.IsChargerModeCheckRunning()) {
@@ -535,7 +545,7 @@ void TouchSensorComponent::NotifyOfRobotStateInternal(const RobotState& msg)
     DEV_ASSERT( _baselineCalibrator.IsCalibrated(), "TouchSensorComponent.ClassifyingBeforeCalibration");
     // note: the baseline calibrator uses the raw touch detection, instead of the confirmed
     //  one instead, because we prefer it to be consevative in the values that it will accumulate
-    _baselineCalibrator.UpdateBaseline(boxFiltVal, _isPressed);
+    _baselineCalibrator.UpdateBaseline(boxFiltVal, isPickedUp, _isPressed);
   }
   
   // dev-only logging code for touch sensor debugging

@@ -22,9 +22,9 @@
     }
   },
 
-  "earConAudioEventBegin"   : "Play__Robot_Vo__Shared_Curious_Short",
-  "earConAudioEventSuccess" : "Play__Robot_Vic_Sfx__Wake_Word_On",
-  "earConAudioEventNeutral" : "Play__Robot_Vic_Sfx__Wake_Word_Off",
+  "earConAudioEventBegin"   : "Play__Robot_Vic_Sfx__Wake_Word_On",
+  "earConAudioEventSuccess" : "Play__Robot_Vic_Sfx__Wake_Word_Success",
+  "earConAudioEventNeutral" : "Play__Robot_Vic_Sfx__Wake_Word_Fail",
   "backpackLights"          : false,
 
   "behaviorOnIntent"        : "ReactToTriggerDirectionAwake",

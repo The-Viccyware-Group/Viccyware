@@ -23,10 +23,6 @@ namespace Anim {
 namespace
 {
   const auto kProceduralGameObject = AudioMetaData::GameObjectType::Procedural;
-  #define CONSOLE_PATH "Audio.KeepAlive"
-  CONSOLE_VAR(bool, kEnableKeepAliveEyeBlinkAudioEvents, CONSOLE_PATH, true);
-  CONSOLE_VAR(bool, kEnableKeepAliveEyeDartAudioEvents, CONSOLE_PATH, true);
-  CONSOLE_VAR(bool, kEnableKeepAliveEyeSquintAudioEvents, CONSOLE_PATH, true);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -40,7 +36,7 @@ AudioLayerManager::AudioLayerManager(const Util::RandomGenerator& rng)
                                                     const BlinkEventList& eventList,
                                                     const TimeStamp_t timeSinceAnimStart_ms)
 {
-  if (!_enabled || !kEnableKeepAliveEyeBlinkAudioEvents) {
+  if (!_enabled) {
     return RESULT_OK;
   }
   
@@ -54,7 +50,7 @@ AudioLayerManager::AudioLayerManager(const Util::RandomGenerator& rng)
     // Add Event Group
     RobotAudioKeyFrame frame;
     AudioEventGroupRef eventGroup(kProceduralGameObject);
-    eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Blink, 1.0f, 1.0f);
+    eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Scrn_Procedural_Blink, 1.0f, 1.0f);
     frame.AddAudioRef(std::move(eventGroup));
     frame.SetTriggerTime_ms(eventIt->time_ms);
     audioTrack.AddKeyFrameToBack(frame);
@@ -73,7 +69,7 @@ Result AudioLayerManager::AddEyeDartToAudioTrack(const std::string& layerName,
                                                  const TimeStamp_t interpolationTime_ms,
                                                  const TimeStamp_t timeSinceAnimStart_ms)
 {
-  if (!_enabled || !kEnableKeepAliveEyeDartAudioEvents) {
+  if (!_enabled) {
     return RESULT_OK;
   }
   
@@ -90,7 +86,7 @@ Result AudioLayerManager::AddEyeDartToAudioTrack(const std::string& layerName,
   frame.AddAudioRef(std::move(paramRef));
   // Add Event Group
   AudioEventGroupRef eventGroup(kProceduralGameObject);
-  eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Scrn_Happy_Short, 1.0f, 1.0f);
+  eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Scrn_Procedural_Shift, 1.0f, 1.0f);
   frame.AddAudioRef(std::move(eventGroup));
   frame.SetTriggerTime_ms(interpolationTime_ms);   // Always start with begining of movement
   audioTrack.AddKeyFrameToBack(frame);
@@ -102,7 +98,7 @@ Result AudioLayerManager::AddEyeDartToAudioTrack(const std::string& layerName,
 Result AudioLayerManager::AddEyeSquintToAudioTrack(const std::string& layerName,
                                                    const TimeStamp_t timeSinceAnimStart_ms)
 {
-  if (!_enabled || !kEnableKeepAliveEyeSquintAudioEvents) {
+  if (!_enabled) {
     return RESULT_OK;
   }
   
@@ -112,7 +108,7 @@ Result AudioLayerManager::AddEyeSquintToAudioTrack(const std::string& layerName,
   RobotAudioKeyFrame frame;
   // Add Event Group
   AudioEventGroupRef eventGroup(kProceduralGameObject);
-  eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Scrn_Surprised, 1.0f, 1.0f);
+  eventGroup.AddEvent(GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Scrn_Procedural_Squint, 1.0f, 1.0f);
   frame.AddAudioRef(std::move(eventGroup));
   frame.SetTriggerTime_ms(timeSinceAnimStart_ms);  // Always start with begining of movement
   audioTrack.AddKeyFrameToBack(frame);

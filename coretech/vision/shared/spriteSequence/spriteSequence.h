@@ -29,13 +29,8 @@ class SpriteSequence
 public:
   using ImgTypeCacheSpec = ISpriteWrapper::ImgTypeCacheSpec;
 
-  // TODO(str): VIC-13523 Remove LoopConfig from SpriteSequence
-  // This parameter was meant to be populated from a definition.json file included in
-  // the folder for the spriteSequence. Since those files do not currenlty make it to 
-  // the robot due to a build system oversight, this parameter always defaults to "Hold".
-  // As such, this functionality can be removed and handed off to the SpriteBoxKeyFrame
-  // infrastructure which allows for more dynamic usage of SpriteSequence assets from
-  // animation to animation instead of hardcoding it into the SpriteSequence itself.
+  // Define what should be returned if there are attempts to access frames beyond
+  // the final frame index
   enum class LoopConfig{
     Loop,
     Hold,

@@ -14,7 +14,7 @@
 #define ANKI_VISION_PERSPECTIVEPOSEESTIMATION_H
 
 #include "coretech/common/engine/math/pose.h"
-#include "coretech/common/engine/math/quad_fwd.h"
+#include "coretech/common/engine/math/quad.h"
 
 namespace Anki {
   namespace Vision {

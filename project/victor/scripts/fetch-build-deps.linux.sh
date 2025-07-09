@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
-#set -u
+set -u
 
 GIT=`which git`
 if [ -z $GIT ]; then
@@ -40,31 +40,29 @@ pushd "${TOPLEVEL}" > /dev/null 2>&1
 check_dep which python2
 check_dep which python3
 check_dep which ninja
-#check_dep which git-lfs
+check_dep which git-lfs
 
 
 echo `pwd`
 
 vlog "vicos-sdk"
-./tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06
+./tools/build/tools/ankibuild/vicos.py --install 1.1.0-r04
 
 vlog "CMake"
 ./tools/build/tools/ankibuild/cmake.py
 
-#vlog "git lfs"
-#$GIT lfs install
-#$GIT lfs pull
+vlog "Go"
+./tools/build/tools/ankibuild/go.py
+
+vlog "git lfs"
+$GIT lfs install
 
 vlog "Build output dirs"
 mkdir -p generated
 mkdir -p _build
 
 vlog "Fetch & extract external dependencies. This may take 1-5 min."
-if [[ ${DONT_ANIM} != "1" ]]; then
-	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
-else
-	echo "Not extracing animation assets"
-fi
+./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
 
 vlog "Configure audio library"
 ./lib/audio/configure.py

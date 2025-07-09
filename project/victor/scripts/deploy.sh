@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -e
 set -u
@@ -235,9 +235,7 @@ set -e
 # deployment, exe and shared library files can't be replaced.
 #
 logv "stop victor services"
-robot_sh "/bin/systemctl stop victor.target mm-anki-camera"
-sleep 1
-robot_sh "/bin/systemctl stop mm-qcamera-daemon"
+robot_sh "/bin/systemctl stop victor.target"
 
 logv "create target dirs"
 robot_sh mkdir -p "${INSTALL_ROOT}"
@@ -249,11 +247,11 @@ robot_sh mkdir -p "${DEVICE_RSYNC_BIN_DIR}"
 # install rsync binary and config if needed
 logv "install rsync if necessary"
 set +e
-#robot_sh [ -f "$DEVICE_RSYNC_BIN_DIR/rsync.bin" ]
-#if [ $? -ne 0 ] || [ $FORCE_RSYNC_BIN -eq 1 ]; then
-#  echo "loading rsync to device"
-#  robot_cp ${RSYNC_BIN_DIR}/rsync.bin ${DEVICE_RSYNC_BIN_DIR}/rsync.bin
-#fi
+robot_sh [ -f "$DEVICE_RSYNC_BIN_DIR/rsync.bin" ]
+if [ $? -ne 0 ] || [ $FORCE_RSYNC_BIN -eq 1 ]; then
+  echo "loading rsync to device"
+  robot_cp ${RSYNC_BIN_DIR}/rsync.bin ${DEVICE_RSYNC_BIN_DIR}/rsync.bin
+fi
 
 robot_sh [ -f "$DEVICE_RSYNC_CONF_DIR/rsyncd.conf" ]
 if [ $? -ne 0 ] || [ $FORCE_RSYNC_BIN -eq 1 ]; then

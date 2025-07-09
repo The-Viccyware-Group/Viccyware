@@ -1,8 +1,0 @@
-{
-	"jdocs": "escapepod.local:8084",
-	"tms": "escapepod.local:8084",
-	"chipper": "escapepod.local:8084",
-	"check": "escapepod.local/ok",
-	"logfiles": "s3://anki-device-logs-prod/victor",
-	"appkey": "oDoa0quieSeir6goowai7f"
-}

@@ -4,7 +4,7 @@
 * Author: Kevin M. Karol
 * Created: 1/23/18
 *
-* Description: Condition which is true when motion is detected with the vision system
+* Description: Condition which is true when motion is detected
 *
 * Copyright: Anki, Inc. 2018
 *

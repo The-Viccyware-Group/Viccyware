@@ -18,7 +18,6 @@
 #define __Cozmo_Basestation_Behaviors_BehaviorReactToTouchPetting_H__
 
 #include "engine/aiComponent/behaviorComponent/behaviors/iCozmoBehavior.h"
-#include "engine/components/backpackLights/engineBackpackLightComponent.h"
 #include <vector>
 
 namespace Anki {
@@ -127,14 +126,6 @@ private:
   
   // press state for the previous tick
   bool _isPressedPrevTick;
-
-  // iConfig for lights
-  struct InstanceConfig {
-    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Petting;
-  };
-
-  InstanceConfig   _iConfig;
-
 };
 
 }

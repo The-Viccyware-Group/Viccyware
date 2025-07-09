@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # change this value to your "Project Id" found on the Project Settings -> API page in dashboard
 

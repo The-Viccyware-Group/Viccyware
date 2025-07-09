@@ -18,7 +18,6 @@
 #include "steeringController.h"
 #include "wheelController.h"
 #include "pathFollower.h"
-#include <sys/stat.h>
 
 
 #define DEBUG_PAP_CONTROLLER 0
@@ -64,9 +63,6 @@ namespace Anki {
         // Whether or not to check for load on lift after docking.
         // Only relevant for pickup actions.
         bool doLiftLoadCheck_;
-
-        // Wire: is black on white charger?
-        bool blackOnWhite = false;
 
         Embedded::Point2f ptStamp_;
         Radians angleStamp_;
@@ -194,11 +190,6 @@ namespace Anki {
       }
 
       Result Init() {
-        struct stat buffer;
-        int rc = stat("/data/blackOnWhite", &buffer);
-        if(rc == 0) {
-          blackOnWhite = true;
-        }
         Reset();
         return RESULT_OK;
       }
@@ -845,21 +836,11 @@ namespace Anki {
               // This is to ensure that the robot does not veer away from the charger on initial approach with
               // light-colored tables or tables with funky textures like the dreaded dark wood grain.
               if (robotHasStartedPitching_) {
-                if (blackOnWhite) {
-                  if (cliffHasSeenBlackBL_ && isBlackBL) {
-                    leftSpeed = kChargerDockingSpeedLow;
-                  }
-                  if (cliffHasSeenBlackBR_ && isBlackBR) {
-                    rightSpeed = kChargerDockingSpeedLow;
-                  }
-                } else {
-                  // default behavior
-                  if (cliffHasSeenBlackBL_ && !isBlackBL) {
-                    leftSpeed = kChargerDockingSpeedLow;
-                  }
-                  if (cliffHasSeenBlackBR_ && !isBlackBR) {
-                    rightSpeed = kChargerDockingSpeedLow;
-                  }
+                if (cliffHasSeenBlackBL_ && !isBlackBL) {
+                  leftSpeed = kChargerDockingSpeedLow;
+                }
+                if (cliffHasSeenBlackBR_ && !isBlackBR) {
+                  rightSpeed = kChargerDockingSpeedLow;
                 }
               }
 

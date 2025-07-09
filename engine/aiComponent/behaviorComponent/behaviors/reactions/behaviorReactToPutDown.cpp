@@ -83,10 +83,10 @@ void BehaviorReactToPutDown::TransitionToPlayingPutDownAnimation()
     
   // Get the appropriate action/animation to play
   auto action = new TriggerLiftSafeAnimationAction(AnimationTrigger::ReactToPutDown);
-  DelegateIfInControl(action, &BehaviorReactToPutDown::TransitionToMotorCalibration);
+  DelegateIfInControl(action, &BehaviorReactToPutDown::TransitionToHeadCalibration);
 }
   
-void BehaviorReactToPutDown::TransitionToMotorCalibration()
+void BehaviorReactToPutDown::TransitionToHeadCalibration()
 {
   DEBUG_SET_STATE(CalibratingHead);
 

@@ -28,7 +28,7 @@
 #include "util/helpers/ankiDefines.h"
 #include "util/logging/logging.h"
 
-#include "coretech/common/engine/math/polygon.h"
+#include "coretech/common/engine/math/polygon_impl.h"
 #include "coretech/common/engine/utils/timer.h"
 
 #define LOG_CHANNEL "CliffSensor"
@@ -40,27 +40,27 @@ namespace {
   const std::string kLogDirectory = "cliffSensors";
   
   // IIR filter coefficient used for filtering raw cliff sensor data
-  const f32 kCliffFiltCoef = 0.70f;
+  const f32 kCliffFiltCoef = 0.75f;
   
   // The maximum rate at which cliff sensor threshold updates will be sent to the robot.
   const int kCliffThresholdMaxUpdateRate_ms = 1000;
   
   // The default allowed delta above the minimum-ever-seen cliff sensor value before cliff
   // detection is triggered.
-  const u16 kCliffDetectAllowedDeltaDefault = 25;
+  const u16 kCliffDetectAllowedDeltaDefault = 35;
   
   // This value is used whenever it seems like we may be driving on a dark surface, to reduce
   // the chance of false cliff detections.
-  const u16 kCliffDetectAllowedDeltaLow = 15;
+  const u16 kCliffDetectAllowedDeltaLow = 20;
   
   // If all cliff sensors are reporting below this value, then we reduce the AllowedDelta to prevent
   // cliff detection false positives. Likewise if all cliff sensors are _above_ this value, the AllowedDelta
   // is restored to the default.
-  const u16 kCliffValDarkSurface = 280;
+  const u16 kCliffValDarkSurface = 250;
   
   // Also reduce the AllowedDelta if the robot could be driving over something (i.e. its pitch angle
   // is sufficiently far from zero)
-  const Radians kRobotPitchThresholdPossibleCliff_rad = DEG_TO_RAD(6.f);
+  const Radians kRobotPitchThresholdPossibleCliff_rad = DEG_TO_RAD(7.f);
 }
 
 

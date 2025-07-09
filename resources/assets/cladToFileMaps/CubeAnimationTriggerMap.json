@@ -8,10 +8,6 @@
         "AnimName": "connected"
     },
     {
-        "CladEvent": "CubeDrive",
-        "AnimName": "cubeDrive"
-    },
-    {
         "CladEvent": "CubePouncePlayerLose",
         "AnimName": "cubePouncePlayerLose"
     },

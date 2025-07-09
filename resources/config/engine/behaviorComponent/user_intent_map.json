@@ -1,24 +1,4 @@
 {
-  "simple_voice_responses": [
-    {
-      "cloud_intent": "intent_greeting_hello",
-      "response": {
-        "anim_group": "ag_greeting_hello",
-        "emotion_event": "RespondToShortVoiceCommand",
-        "active_feature": "ReactToHello"
-      }
-    },
-    {
-      "cloud_intent": "intent_imperative_forward",
-      "response": {
-        "anim_group": "ag_movement_forward_01",
-        "emotion_event": "RespondToShortVoiceCommand",
-        "active_feature": "MovementForward",
-        "disable_wakeword_turn": true
-      }
-    }
-  ],
-
   "user_intent_map": [
     {
       "cloud_intent": "intent_amazon_signin",
@@ -35,11 +15,6 @@
     {
       "cloud_intent": "intent_play_anygame",
       "user_intent": "play_anygame"
-    },
-    {
-      "cloud_intent": "intent_play_specific_extend",
-      "app_intent": "intent_play_specific",
-      "user_intent": "play_specific"
     },
     {
       "cloud_intent": "intent_play_blackjack",
@@ -136,6 +111,10 @@
       "user_intent": "greeting_goodnight"
     },
     {
+      "cloud_intent": "intent_greeting_hello",
+      "user_intent": "greeting_hello"
+    },
+    {
       "cloud_intent": "intent_status_feeling",
       "user_intent": "status_feeling",
       "test_parsing": false
@@ -164,8 +143,7 @@
         "speakable_location_string": "speakableLocationString",
         "is_forecast": "isForecast",
         "temperature_unit": "temperatureUnit",
-        "local_datetime": "localDateTime",
-        "day_or_night": "dayOrNight"
+        "local_datetime": "localDateTime"
       }
     },
     {
@@ -200,11 +178,6 @@
       "feature_gate": "Messaging"
     },
     {
-      "user_intent": "test_wire",
-      "cloud_intent": "intent_test_wire",
-      "app_intent": "intent_test_wire"
-    },
-    {
       "user_intent": "message_playback",
       "cloud_intent": "intent_message_playmessage_extend",
       "app_intent": "intent_message_playmessage",
@@ -229,13 +202,6 @@
       "test_parsing": false,
       "feature_gate": "KnowledgeGraph"
     },
-    {
-      "user_intent": "knowledge_response_bypass",
-      "cloud_intent": "intent_knowledge_response_extend_bypass",
-      "app_intent": "knowledge_response_bypass",
-      "test_parsing": false,
-      "feature_gate": "KnowledgeGraph"
-    },    
     {
       "user_intent": "knowledge_unknown",
       "cloud_intent": "intent_knowledge_no_response",
@@ -302,6 +268,10 @@
       "user_intent": "imperative_volumedown",
       "cloud_intent": "intent_imperative_volumedown",
       "feature_gate": "Volume"
+    },
+    {
+      "user_intent": "movement_forward",
+      "cloud_intent": "intent_imperative_forward"
     },
     {
       "user_intent": "movement_backward",

@@ -7,8 +7,10 @@
     "InitialCladTypes" : ["Sunny", "Cold"],
     "RemapConditions" : [
       {
-        "conditionType" : "isNight",
-        "value" : true
+        "conditionType"   : "time",
+        "operator"        : "or",
+        "LocalTimeBefore" : "07:00",
+        "LocalTimeAfter"  : "17:00"
       }
     ],
 

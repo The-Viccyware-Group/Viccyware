@@ -13,6 +13,7 @@
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "anki/cozmo/shared/factory/faultCodes.h"
 #include "core/lcd.h"
+#include "coretech/common/shared/array2d_impl.h"
 #include "coretech/vision/engine/image.h"
 #include "rescue/pairing_icon_key.h"
 #include "opencv2/highgui.hpp"
@@ -25,11 +26,11 @@ namespace Anki {
 namespace Vector {
 
 namespace {
-  constexpr const char * kSupportURL = "error.viccyware.com";
-  constexpr const char * kVectorWillRestart = "Cozmo will restart";
+  constexpr const char * kSupportURL = "support.anki.com";
+  constexpr const char * kVectorWillRestart = "Vector will restart";
 
   const f32 kRobotNameScale = 0.6f;
-  const std::string kAppURL = "v.pvic.xyz";
+  const std::string kAppURL = "anki.com/v";
   const ColorRGBA kWhiteColor(0.9f, 0.9f, 0.9f, 1.f);
   const int kTextThickness = 1;
   const int kNormalFont = CV_FONT_NORMAL;

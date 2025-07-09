@@ -1,6 +1,6 @@
 # Path planning
 
-* Checks for obstacles in the [map component](map.md)
+* Loads obstacles from the [map component](map.md)
 * Automatic replanning around new obstacles
 * Grid-based A* planner, runs in thread
 * Simpler planners can run in special cases
@@ -29,9 +29,7 @@ The following things happen, roughly in order, and skipping a bunch of details:
 
 ## A* on a uniform grid
 
-XYPlanner uses a [canonical A* search](https://en.wikipedia.org/wiki/A*_search_algorithm) on a 2D grid. XYPlanner interfaces with the map component to determine if successor states are in collision with obstacles.
-
-To help navigation in tight spaces, we use a hierarchical resolution on the 4-connected grid that uses smaller step sizes near obstacles to fine-tune the search space.
+XYPlanner uses a [canonical A* search](https://en.wikipedia.org/wiki/A*_search_algorithm) on a uniform 2D grid. XYPlanner interfaces with the map component to determine if successor states are in collision with obstacles.
 
 One drawback to this planner is that it is 2D, meaning the robot must always execute a point turn at the beginning and end of the path, since the path planner does not take the starting or ending heading into account.
 
@@ -55,4 +53,4 @@ Tools associated with the creation and visualization of the motion primitives ca
 
 ### Soft obstacles
 
-To prevent the planner from getting stuck when the robot is immediately next to a known obstacle, it treats any collisions with the start point as "soft obstacles", and first plans the shortest path out of collision (see [`EscapeObstaclePlanner`](/engine/xyPlannerConfig.h)). It then prepends this trajectory onto the output of the Bidirectional planner, which treats all collisions as fatal.
+Most obstacles (all, at the moment) are "soft" obstacles, which means that the planner _is allowed_ to collide with them, it's just heavily penalized. This prevents the robot from "Getting stuck", e.g. if it is already in collision with an object, or if it has no way to move without a collision.

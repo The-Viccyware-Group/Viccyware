@@ -28,9 +28,10 @@
 #include "clad/types/salientPointTypes.h"
 #include "coretech/common/engine/scopedTicToc.h"
 #include "coretech/neuralnets/iNeuralNetMain.h"
+#include "coretech/neuralnets/neuralNetFilenames.h"
 #include "coretech/neuralnets/neuralNetJsonKeys.h"
 #include "coretech/neuralnets/neuralNetModel_offboard.h"
-#include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/image_impl.h"
 #include "json/json.h"
 #include "util/fileUtils/fileUtils.h"
 #include "util/logging/logging.h"
@@ -113,7 +114,7 @@ Result INeuralNetMain::Init(const std::string& configFilename,
     if(!success)
     {
       LOG_ERROR("INeuralNetMain.Init.ReadConfigFailed",
-                "Could not read config file: %s", configFilename.c_str());
+                        "Could not read config file: %s", configFilename.c_str());
       CleanupAndExit(RESULT_FAIL);
     }
     
@@ -240,7 +241,7 @@ Result INeuralNetMain::Run()
       // Is there an image file available in the cache?
       const std::string fullImagePath = (imageFileProvided ?
                                          _imageFilename :
-                                         Util::FileUtils::FullFilePath({_cachePath, networkName, OffboardModel::Filenames::Image}));
+                                         Util::FileUtils::FullFilePath({_cachePath, networkName, Filenames::Image}));
       
       const bool isImageAvailable = Util::FileUtils::FileExists(fullImagePath);
       
@@ -256,7 +257,7 @@ Result INeuralNetMain::Run()
         {
           ScopedTicToc ticToc("GetImage", LOG_CHANNEL);
           
-          const std::string timestampFilename = Util::FileUtils::FullFilePath({_cachePath, networkName, OffboardModel::Filenames::Timestamp});
+          const std::string timestampFilename = Util::FileUtils::FullFilePath({_cachePath, networkName, Filenames::Timestamp});
           
           GetImage(fullImagePath, timestampFilename, img);
           
@@ -325,7 +326,7 @@ Result INeuralNetMain::Run()
             break;
           }
           
-          const std::string jsonFilename = Util::FileUtils::FullFilePath({_cachePath, networkName, OffboardModel::Filenames::Result});
+          const std::string jsonFilename = Util::FileUtils::FullFilePath({_cachePath, networkName, Filenames::Result});
           if(neuralNet->IsVerbose())
           {
             LOG_INFO("INeuralNetMain.Run.MovingToFinalResults", "%s", jsonFilename.c_str());

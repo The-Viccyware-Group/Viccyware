@@ -8,7 +8,7 @@
   "earConAudioEventSuccess"             : "Play__Robot_Vic_Sfx__Wake_Word_Success",
   "earConAudioEventNeutral"             : "Play__Robot_Vic_Sfx__Wake_Word_Off",
   "textToSpeechBehaviorID"              : "BlackJackTextToSpeech",
-  "vocalPromptKey"                      : "BlackJack.DrawQuestion",
+  "vocalPromptString"                   : "Another card?",
   "maxNumberOfReprompts"                : 2,
   "stopListeningOnIntents"              : true,
   "playListeningGetIn"                  : false,

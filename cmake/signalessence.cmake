@@ -11,18 +11,11 @@ elseif (MACOSX)
 endif()
 
 # Signal Essence Lib Version
-if (SE_V009)
-  set(SIGNALESSENCE_VERSION_PATH "v009") # Updated prototype version with Echo Cancelation
-  if (SE_HIGHRES)
-    set(SIGNALESSENCE_PLATFORM_DIR "${SIGNALESSENCE_PLATFORM_DIR}-highres")
-  endif(SE_HIGHRES)
-else()
-  set(SIGNALESSENCE_VERSION_PATH "v008") # Libs used in <= R 1.5
-endif(SE_V009)
+set(SIGNALESSENCE_VERSION_PATH "v008") # Updated prototype version with Echo Cancelation
 
-message(STATUS "Signal Essence lib ${SIGNALESSENCE_VERSION_PATH} type ${SIGNALESSENCE_PLATFORM_DIR}")
+message(STATUS "Signal Essence lib ${SIGNALESSENCE_VERSION_PATH}")
 
-set(SIGNALESSENCE_HOME "${ANKI_THIRD_PARTY_DIR}/signalEssence/${SIGNALESSENCE_VERSION_PATH}")
+set(SIGNALESSENCE_HOME "${ANKI_EXTERNAL_DIR}/anki-thirdparty/signalEssence/${SIGNALESSENCE_VERSION_PATH}")
 
 set(SIGNALESSENCE_LIB_PATH "${SIGNALESSENCE_HOME}/${SIGNALESSENCE_PLATFORM_DIR}/platform/anki_victor_example/build")
 
@@ -47,8 +40,7 @@ if (VICOS)
           IMPORTED_LOCATION
           "${SIGNALESSENCE_LIB_PATH}/lib${LIB}.a"
           INTERFACE_INCLUDE_DIRECTORIES
-          "${SIGNALESSENCE_INCLUDE_PATHS}"
-          )
+          "${SIGNALESSENCE_INCLUDE_PATHS}")
 
       anki_build_target_license(${LIB} "Commercial")
   endforeach()
@@ -59,8 +51,7 @@ elseif (MACOSX)
           IMPORTED_LOCATION
           "${SIGNALESSENCE_LIB_PATH}/lib${LIB}.dylib"
           INTERFACE_INCLUDE_DIRECTORIES
-          "${SIGNALESSENCE_INCLUDE_PATHS}"
-          )
+          "${SIGNALESSENCE_INCLUDE_PATHS}")
 
       anki_build_target_license(${LIB} "Commercial")
   endforeach()

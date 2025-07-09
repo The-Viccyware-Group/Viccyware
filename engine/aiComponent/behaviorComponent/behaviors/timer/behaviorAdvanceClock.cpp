@@ -23,6 +23,17 @@ namespace Vector {
 namespace{
 const char* kStartTimeSecKey         = "startTime_sec";
 const char* kEndTimeSecKey           = "endTime_sec";
+// max number of composite image update messages sent per Engine tick. There should be no more than three anim
+// updates per Engine tick, so 10 updates worth of data should be sufficient to cover some long ticks on one side
+// or the other
+const int   kUpdateMsgBatchSize      = 10;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+BehaviorAdvanceClock::DynamicVariables::DynamicVariables()
+: sendingCompositeImageUpdates(false)
+, compositeImageUpdatesSent(0)
+{
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -61,12 +72,24 @@ void BehaviorAdvanceClock::SetAdvanceClockParams(int startTime_sec, int endTime_
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorAdvanceClock::OnProceduralClockActivatedInternal()
+{
+  _dVars = DynamicVariables();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorAdvanceClock::UpdateProceduralClockInternal(){
+  if(_dVars.sendingCompositeImageUpdates){
+    SendCompositeImageUpdateBatch();
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorAdvanceClock::TransitionToShowClockInternal()
 {
-  for(int i = 0; i < GetTotalNumberOfUpdates(); ++i){
-    AddKeyFramesForOffset(i, i*ANIM_TIME_STEP_MS);
-  }
-  DisplayClock();
+  _dVars.compositeImageUpdatesSent = 0;
+  _dVars.sendingCompositeImageUpdates = true;
+  SendCompositeImageUpdateBatch();
 
   {
     AudioEngine::Multiplexer::PostAudioEvent audioMessage;
@@ -82,8 +105,15 @@ void BehaviorAdvanceClock::TransitionToShowClockInternal()
     audioMessage.audioEvent = AudioMetaData::GameEvent::GenericEvent::Stop__Robot_Vic_Sfx__Timer_Run_Down_Loop_Stop;
 
     RobotInterface::EngineToRobot wrapper(std::move(audioMessage));
-    GetBEI().GetAnimationComponent().AlterStreamingAnimationAtTime(std::move(wrapper), 
-                                                                   Util::SecToMilliSec(GetTimeDisplayClock_sec()));
+    GetBEI().GetAnimationComponent().AlterStreamingAnimationAtTime(std::move(wrapper), Util::SecToMilliSec(GetTimeDisplayClock_sec()));
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorAdvanceClock::SendCompositeImageUpdateBatch(){
+  for(int i = 0; (i < kUpdateMsgBatchSize) && _dVars.sendingCompositeImageUpdates; i++){
+    BuildAndDisplayProceduralClock(_dVars.compositeImageUpdatesSent, _dVars.compositeImageUpdatesSent*ANIM_TIME_STEP_MS);   
+    _dVars.sendingCompositeImageUpdates = ++_dVars.compositeImageUpdatesSent < GetTotalNumberOfUpdates();
   }
 }
 
@@ -113,7 +143,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorAdvanceClock::BuildTimerFunct
       }else{
         tensDigit = minsRemaining/10;
       }
-      outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_1, tensDigit));
+      outMap.emplace(std::make_pair(Vision::SpriteBoxName::TensLeftOfColon, tensDigit));
     }
     
     // Ones Digit (left of colon)
@@ -124,7 +154,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorAdvanceClock::BuildTimerFunct
       }else{
         onesDigit = minsRemaining % 10;
       }
-      outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_2, onesDigit));
+      outMap.emplace(std::make_pair(Vision::SpriteBoxName::OnesLeftOfColon, onesDigit));
     }
 
     // Tens Digit (right of colon)
@@ -135,7 +165,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorAdvanceClock::BuildTimerFunct
       }else{
         tensDigit = secsRemaining/10;
       }
-      outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_4, tensDigit));
+      outMap.emplace(std::make_pair(Vision::SpriteBoxName::TensRightOfColon, tensDigit));
     }
 
     // Ones Digit (right of colon)
@@ -146,7 +176,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorAdvanceClock::BuildTimerFunct
       }else{
         onesDigit = secsRemaining % 10;
       }
-      outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_5, onesDigit));
+      outMap.emplace(std::make_pair(Vision::SpriteBoxName::OnesRightOfColon, onesDigit));
     }
 
     return outMap;

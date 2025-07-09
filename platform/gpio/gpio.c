@@ -84,7 +84,7 @@ static int open_patiently(const char *pathname, int flags)
   int retries = 10;
   while (retries > 0) {
     retries--;
-    fd = open(pathname, flags, 0644);
+    fd = open(pathname, flags);
     if (fd < 0 && errno == EACCES) {
       // Sleep 100 milliseconds and try again
       (void) usleep((useconds_t) 100000);

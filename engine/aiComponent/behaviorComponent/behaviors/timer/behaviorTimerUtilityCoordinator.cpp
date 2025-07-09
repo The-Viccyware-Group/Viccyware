@@ -715,7 +715,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         }else{
           tensDigit = minsRemaining/10;
         }
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_1, tensDigit));
+        outMap.emplace(std::make_pair(Vision::SpriteBoxName::TensLeftOfColon, tensDigit));
       }
       
       // Ones Digit (left of colon)
@@ -727,7 +727,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         }else{
           onesDigit = minsRemaining % 10;
         }
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_2, onesDigit));
+        outMap.emplace(std::make_pair(Vision::SpriteBoxName::OnesLeftOfColon, onesDigit));
       }
 
       // Tens Digit (right of colon)
@@ -738,7 +738,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         }else{
           tensDigit = secsRemaining/10;
         }
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_4, tensDigit));
+        outMap.emplace(std::make_pair(Vision::SpriteBoxName::TensRightOfColon, tensDigit));
       }
 
       // Ones Digit (right of colon)
@@ -749,7 +749,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         }else{
           onesDigit = secsRemaining % 10;
         }
-        outMap.emplace(std::make_pair(Vision::SpriteBoxName::SpriteBox_5, onesDigit));
+        outMap.emplace(std::make_pair(Vision::SpriteBoxName::OnesRightOfColon, onesDigit));
       }
 
       return outMap;

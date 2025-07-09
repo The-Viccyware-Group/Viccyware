@@ -5,29 +5,23 @@
   "associatedActiveFeature": "Observing",
 
   "interruptActiveBehavior": true,
-  "requireGentleInterruption": true,
 
   "behaviors": [
     // typically the drive off is handled via HLAI ObservingDriveOffCharger, but we can't consolidate states because
     // there are transitions from ObservingDriveOffCharger into Socializing if faces are seen when leaving the charger
     "DriveOffChargerRandomly",
-
-    // contains internal cooldowns and requirements
-    "PossibleUnintentionalPerformance",
-
-    "ObservingInternal",
-
-    "Singing_EntryOfTheGladiators"
+    
+    "ObservingInternal"
   ],
 
   "anonymousBehaviors" : [
     {
       "behaviorName" : "ObservingInternal",
       "behaviorClass" : "DispatcherStrictPriorityWithCooldown",
-
+    
       "interruptActiveBehavior": true,
-
-      "behaviors": [
+    
+      "behaviors": [    
         {
           "behavior": "TrackingEyeContact",
           "cooldown_s": 15.0
@@ -54,6 +48,7 @@
         }
       ]
     }
+    
   ]
 }
 

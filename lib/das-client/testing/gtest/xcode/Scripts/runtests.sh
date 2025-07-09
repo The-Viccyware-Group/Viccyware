@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Copyright 2008, Google Inc.
 # All rights reserved.

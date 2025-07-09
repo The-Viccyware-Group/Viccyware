@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Set the project folder/project file you want below (e.g., robot/robot.uvproj)
 export PRJ=robot
 cd "${0%/*}"

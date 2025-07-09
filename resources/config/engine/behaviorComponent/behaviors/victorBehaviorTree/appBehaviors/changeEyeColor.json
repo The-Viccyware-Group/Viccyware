@@ -3,5 +3,5 @@
   "behaviorID"    : "ChangeEyeColor",
 
   "associatedActiveFeature": "EyeColor",
-  "postBehaviorSuggestion"  : "Socialize"
+  "postBehaviorSuggestion"  : "Nothing"
 }

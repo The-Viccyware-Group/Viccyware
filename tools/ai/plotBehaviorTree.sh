@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 GIT_PROJ_ROOT=`git rev-parse --show-toplevel`
 

@@ -1,7 +1,11 @@
 # Determines what CMake APIs we can rely on
-cmake_minimum_required (VERSION 3.9.6)
-if (${CMAKE_VERSION} VERSION_GREATER 3.9.6)
-  cmake_policy(VERSION 3.9.6)
+cmake_minimum_required (VERSION 2.8.11)
+if (${CMAKE_VERSION} VERSION_GREATER 3.2.2)
+  cmake_policy(VERSION 3.2.2)
+endif()
+if (${CMAKE_VERSION} VERSION_GREATER 3.1 OR
+    ${CMAKE_VERSION} VERSION_EQUAL 3.1)
+  cmake_policy(SET CMP0054 NEW)
 endif()
 
 # Do not allow in source builds

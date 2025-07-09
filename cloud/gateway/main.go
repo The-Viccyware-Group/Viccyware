@@ -15,12 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	extint "github.com/digital-dream-labs/vector-cloud/internal/proto/external_interface"
+	"anki/log"
+	"anki/robot"
+	extint "proto/external_interface"
 
-	"github.com/digital-dream-labs/vector-cloud/internal/log"
-	"github.com/digital-dream-labs/vector-cloud/internal/robot"
-
-	grpcRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	grpcRuntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
@@ -254,12 +253,8 @@ func main() {
 	bleProxy.initialize(grpcServer.GetServiceInfo())
 	dcreds := credentials.NewTLS(tlsConf)
 	dopts := []grpc.DialOption{grpc.WithTransportCredentials(dcreds)}
-	var jsonOpts grpcRuntime.JSONPb
-	jsonOpts.EmitDefaultValues = true
-	jsonOpts.UseEnumNumbers = true
-	jsonOpts.UseProtoNames = true
-	jsonOpts.DiscardUnknown = true
-	gwmux := grpcRuntime.NewServeMux(grpcRuntime.WithMarshalerOption(grpcRuntime.MIMEWildcard, &jsonOpts))
+
+	gwmux := grpcRuntime.NewServeMux(grpcRuntime.WithMarshalerOption(grpcRuntime.MIMEWildcard, &grpcRuntime.JSONPb{EmitDefaults: true, OrigName: true, EnumsAsInts: true}))
 	err = extint.RegisterExternalInterfaceHandlerFromEndpoint(ctx, gwmux, addr, dopts)
 	if err != nil {
 		log.Println("Error during RegisterExternalInterfaceHandlerFromEndpoint:", err)

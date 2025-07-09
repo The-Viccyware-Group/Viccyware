@@ -31,11 +31,6 @@ BehaviorSelfTestScreenAndBackpack::BehaviorSelfTestScreenAndBackpack(const Json:
 
 Result BehaviorSelfTestScreenAndBackpack::OnBehaviorActivatedInternal()
 {
-  if(!DidReceiveFFTResult())
-  {
-    SELFTEST_SET_RESULT_WITH_RETURN_VAL(SelfTestResultCode::NO_FFT_RESULT, RESULT_FAIL);
-  }
-
   // Have to drive forwards off the charger (runs after PutOnCharger) so
   // we can set the backpack lights
   DriveStraightAction* action = new DriveStraightAction(SelfTestConfig::kDistToDriveOffCharger_mm,
@@ -158,3 +153,5 @@ void BehaviorSelfTestScreenAndBackpack::OnBehaviorDeactivated()
 
 }
 }
+
+

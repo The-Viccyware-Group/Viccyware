@@ -33,7 +33,6 @@ protected:
   virtual bool AreConditionsMetInternal(BehaviorExternalInterface& behaviorExternalInterface) const override;
   
 private:
-  bool enabledWhileHeldOnPalm = false;
   mutable float _onEdgeStartTime_s;
 };
 

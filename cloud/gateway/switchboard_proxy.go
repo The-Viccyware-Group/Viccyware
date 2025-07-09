@@ -1,6 +1,7 @@
 package main
 
 import (
+	"anki/log"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,9 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/digital-dream-labs/vector-cloud/internal/log"
-
-	gw_clad "github.com/digital-dream-labs/vector-cloud/internal/clad/gateway"
+	gw_clad "clad/gateway"
 
 	"google.golang.org/grpc"
 )

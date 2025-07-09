@@ -25,19 +25,19 @@
     "translation": "I am {0}"
   },
   "BehaviorDisplayWeather.Cloudy": {
-    "translation": "{0} degrees with cloudy skies"
+    "translation": "{0} degrees and cloudy"
   },
   "BehaviorDisplayWeather.Cold": {
-    "translation": "{0} degrees and chilly"
+    "translation": "{0} degrees and cold"
   },
   "BehaviorDisplayWeather.Rain": {
-    "translation": "{0} degrees with rain"
+    "translation": "{0} degrees and raining"
   },
   "BehaviorDisplayWeather.Snow": {
-    "translation": "{0} degrees with snowfall"
+    "translation": "{0} degrees and snowing"
   },
   "BehaviorDisplayWeather.Stars": {
-    "translation": "{0} degrees with a starry night"
+    "translation": "{0} degrees and clear"
   },
   "BehaviorDisplayWeather.Sunny": {
     "translation": "{0} degrees and sunny"
@@ -64,16 +64,16 @@
     "translation": "You're {0}, not {1}"
   },
   "BehaviorHowOldAreYou.OneDay": {
-    "translation": "One day old"
+    "translation": "One day"
   },
   "BehaviorHowOldAreYou.SomeDays": {
-    "translation": "{0} days old"
+    "translation": "{0} days"
   },
   "BehaviorHowOldAreYou.OneMonth": {
-    "translation": "One month old"
+    "translation": "One month"
   },
   "BehaviorHowOldAreYou.SomeMonths": {
-    "translation": "{0} months old"
+    "translation": "{0} months"
   },
   "BehaviorKnowledgeGraphQuestion.Ready": {
     "translation": "Ready"
@@ -101,20 +101,5 @@
   },
   "BehaviorSayName.DontKnow": {
     "translation": "I don't know"
-  },
-  "DevTestPromptUser.VocalPrompt": {
-    "translation": "Test Prompt: say a command"
-  },
-  "DevTestPromptUser.VocalResponseToIntent": {
-    "translation": "Got an intent"
-  },
-  "DevTestPromptUser.VocalResponseToBadIntent": {
-    "translation": "Didn't get an intent"
-  },
-  "DevTestPromptUser.VocalReprompt" : {
-    "translation": "Try again"
-  },
-  "UserDefinedBehaviorTree.ConfirmNewBehavior": {
-    "translation": "Do you like this reaction?"
   }
 }

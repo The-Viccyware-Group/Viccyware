@@ -61,7 +61,7 @@ protected:
   , _tokenClient(tokenClient)
   , _hasOwner(hasOwner) {}
 
-  inline bool HasState(RtsCommsType state) {
+  inline bool AssertState(RtsCommsType state) {
     return state == _type;
   } 
 

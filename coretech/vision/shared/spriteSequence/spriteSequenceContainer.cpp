@@ -22,20 +22,19 @@ SpriteSequenceContainer::SpriteSequenceContainer(SpriteSequenceMap&& spriteSeque
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool SpriteSequenceContainer::IsValidSpriteSequenceID(const Vision::SpritePathMap::AssetID spriteSeqID) const
+bool SpriteSequenceContainer::IsValidSpriteSequenceName(const std::string& spriteSeqName) const
 {
-  const auto& seqIter = _spriteSequenceMap.find(spriteSeqID);
+  const auto& seqIter = _spriteSequenceMap.find(spriteSeqName);
   return seqIter != _spriteSequenceMap.end();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-const Vision::SpriteSequence* const SpriteSequenceContainer::GetSpriteSequence(
-  const Vision::SpritePathMap::AssetID spriteSeqID) const
+const Vision::SpriteSequence* const SpriteSequenceContainer::GetSpriteSequence(const std::string& spriteSeqName) const
 {
-  const auto& seqIter = _spriteSequenceMap.find(spriteSeqID);
+  const auto& seqIter = _spriteSequenceMap.find(spriteSeqName);
   if(seqIter == _spriteSequenceMap.end()) {
-    PRINT_NAMED_ERROR("SpriteSequenceContainer.UnknownSpriteSequenceID",
-                      "Unknown sequence id requested: %d", spriteSeqID);
+    PRINT_NAMED_ERROR("SpriteSequenceContainer.UnknownSpriteSequenceName",
+                      "Unknown sequence requested: %s", spriteSeqName.c_str());
     return nullptr;
   } else {
     return &seqIter->second;

@@ -25,7 +25,6 @@ namespace Vector {
 
 namespace {
 static const char* kInterruptBehaviorKey = "interruptActiveBehavior";
-static const char* kRequireGentleInterruptionKey = "requireGentleInterruption";
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -48,14 +47,6 @@ IBehaviorDispatcher::IBehaviorDispatcher(const Json::Value& config)
   _iConfig.shouldInterruptActiveBehavior = JsonTools::ParseBool(config,
                                                         kInterruptBehaviorKey,
                                                         "IBehaviorDispatcher.ShouldInterrupt.ConfigError");
-
-  _iConfig.requireGentleInterruption = config.get(kRequireGentleInterruptionKey, false).asBool();
-
-  if( !_iConfig.shouldInterruptActiveBehavior && _iConfig.requireGentleInterruption ) {
-    PRINT_NAMED_ERROR("IBehaviorDispatcher.ConfigInvalid",
-                      "%s: specified not to interrupt active behavior, but that a gentle interruption was required",
-                      GetDebugLabel().c_str());
-  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -194,7 +185,7 @@ void IBehaviorDispatcher::BehaviorUpdate()
 
   // only choose a new behavior if we should interrupt the active behavior, or if no behavior is active
   if( ! IsControlDelegated() ||
-      ShouldInterruptBehavior() ) {
+      _iConfig.shouldInterruptActiveBehavior ) {
   
     auto& delegationComponent = GetBEI().GetDelegationComponent();
   
@@ -210,22 +201,6 @@ void IBehaviorDispatcher::BehaviorUpdate()
                      "Failed to delegate to behavior '%s'",
                      desiredBehavior->GetDebugLabel().c_str());
     }
-  }
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool IBehaviorDispatcher::ShouldInterruptBehavior() const
-{
-  if( ! _iConfig.shouldInterruptActiveBehavior ) {
-    return false;
-  }
-
-  if( _iConfig.requireGentleInterruption ) {
-    return CanBeGentlyInterruptedNow();
-  }
-  else {
-    // gentle or not, doesn't matter
-    return true;
   }
 }
 

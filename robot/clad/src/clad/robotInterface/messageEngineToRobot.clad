@@ -439,7 +439,7 @@ message StartPlaybackAudio
 message StartWakeWordlessStreaming
 {
   uint_8 streamType,
-  bool   playGetInFromAnimProcess
+  bool   playGetInFromAnimProcess 
 }
 
 message SetTriggerWordResponse
@@ -495,10 +495,6 @@ message ShowUrlFace
   bool show
 }
 
-message ExitCCScreen
-{
-}
-
 // Switch to the debug screen used for the vision system's "MirrorMode"
 message EnableMirrorModeScreen
 {
@@ -530,35 +526,31 @@ message SetButtonWakeWord
     bool isAlexa,
 }
 
-structure SpriteBoxRemap
+// Play animation as part of a composite image
+// Image chunks are sent separately
+message PlayCompositeAnimation
 {
-  Vision::SpriteBoxName spriteBoxName,
-  uint_8                padding,
-  uint_16               remappedAssetID
+  uint_32 compositeImageID, // Link to composite image chunks
+  uint_8  tag,
+  string  animName
 }
 
-message PlayAnimWithSpriteBoxRemaps
+message DisplayCompositeImageChunk
 {
-  uint_8         tag,
-  uint_8         numRemaps,
-  SpriteBoxRemap spriteBoxRemaps[150],
-  bool           lockFaceAtEndOfAnim,
-  string         animName
+  uint_32 compositeImageID, // Ensures chunks are for the same image
+  uint_32 get_frame_interval_ms, // Interval at which to call Composite Image's GetFrame
+  uint_32 duration_ms,      // Use uint_32 max value to keep the image on the screen
+  Vision::CompositeImageChunk compositeImageChunk
 }
 
-message PlayAnimWithSpriteBoxKeyFrames
+message UpdateCompositeImage
 {
-  Vision::SpriteBoxKeyFrame spriteBoxKeyFrames[40],
-  uint_8                    tag,
-  uint_8                    numKeyFrames,
-  string                    animName
+  Vision::SerializedSpriteBox serializedSpriteBox, // SpriteBox named count indicates clear the whole layer
+  uint_32                     applyAt_ms, // specify the time in ms from the start of the animation that the update should be applied
+  uint_16                     assetID,
+  Vision::LayerName           layerName,
 }
 
-message AddSpriteBoxKeyFrames
-{
-  Vision::SpriteBoxKeyFrame spriteBoxKeyFrames[50],
-  uint_8                    numKeyFrames,
-}
 
 // TODO: Move to messageGameToEngine.clad or shared file
 // DisplayFaceImageBinaryChunk
@@ -615,8 +607,7 @@ message RunDebugConsoleFuncMessage {
 //
 message TextToSpeechPrepare {
   AudioMetaData::SwitchState::Robot_Vic_External_Processing style, // Audio processing style
-  float_32 durationScalar,             // Duration adjustment (0.5 = slow, 5.0 = fast)
-  float_32 pitchScalar,                // Pitch adjustment (-1.0 = low, +1.0 = high)
+  float_32 durationScalar,             // Duration adjustment
   TextToSpeechTriggerMode triggerMode, // Trigger mode
   uint_8 ttsID,                        // ID of utterance
   int_8 text[1024]                     // Text to be pronounced
@@ -857,9 +848,9 @@ union EngineToRobot
   RemoveSquint                  removeSquint                = 0x61,
 
   DisplayFaceImageGrayscaleChunk   displayFaceImageGrayscaleChunk      = 0x62,
-  PlayAnimWithSpriteBoxRemaps      playAnimWithSpriteBoxRemaps         = 0x63,
-  PlayAnimWithSpriteBoxKeyFrames   playAnimWithSpriteBoxKeyFrames      = 0x64, 
-  AddSpriteBoxKeyFrames            addSpriteBoxKeyFrames               = 0x65,
+  DisplayCompositeImageChunk       displayCompositeImageChunk          = 0x63,
+  UpdateCompositeImage             updateCompositeImage                = 0x64,
+  PlayCompositeAnimation           playCompositeAnimation              = 0x65,
   EnableMirrorModeScreen           enableMirrorModeScreen              = 0x66,
 
   SetButtonWakeWord                setButtonWakeWord                   = 0x67,
@@ -869,7 +860,7 @@ union EngineToRobot
   AudioEngine::Multiplexer::PostAudioGameState    postAudioGameState   = 0x72,
   AudioEngine::Multiplexer::PostAudioSwitchState  postAudioSwitchState = 0x73,
   AudioEngine::Multiplexer::PostAudioParameter    postAudioParameter   = 0x74,
-
+  
   ExternalAudioPrepare          externalAudioPrepare        = 0x75,
   ExternalAudioChunk            externalAudioChunk          = 0x76,
   ExternalAudioComplete         externalAudioComplete       = 0x77,
@@ -877,7 +868,6 @@ union EngineToRobot
 
   FakeWakeWordFromExternalInterface fakeWakeWordFromExternalInterface = 0x80,
   ShowUrlFace                   showUrlFace                 = 0x81,
-  ExitCCScreen                  exitCCScreen                = 0x82,
 
   SetDebugConsoleVarMessage     setDebugConsoleVarMessage   = 0x90,
   RunDebugConsoleFuncMessage    runDebugConsoleFuncMessage  = 0x91,

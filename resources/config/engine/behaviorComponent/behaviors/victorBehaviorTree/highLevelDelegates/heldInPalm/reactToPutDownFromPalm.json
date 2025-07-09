@@ -2,7 +2,6 @@
   "behaviorID": "ReactToPutDownFromPalm",
   "behaviorClass": "FindFaceAndThen",
   "behavior": "ReactToPutDownFromPalmAnimSelector",
-  "callSetFaceOnBehavior": false,
   
   "associatedActiveFeature": "HeldInPalm",
 
@@ -17,21 +16,7 @@
   "additionalSearchTimeIfSawBody_s": 3.0,
   
   "wantsToBeActivatedCondition": {
-    "conditionType": "Compound",
-    "and": [
-      {
-        "conditionType": "OffTreadsState",
-        "targetState": "OnTreads"
-      },
-      {
-        "conditionType": "BehaviorSuggested",
-        "postBehaviorSuggestion": "ReactToPutDownFromPalm",
-        "maxTicksForSuggestion": 1
-      }
-    ]
-  },
-  
-  "wantsToCancelSelfCondition": {
-    "conditionType": "RobotPickedUp"
+    "conditionType": "OffTreadsState",
+    "targetState": "OnTreads"
   }
 }

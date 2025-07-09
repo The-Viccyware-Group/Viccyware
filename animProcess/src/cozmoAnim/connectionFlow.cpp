@@ -19,10 +19,11 @@
 #include "cozmoAnim/faceDisplay/faceInfoScreenManager.h"
 #include "cozmoAnim/robotDataLoader.h"
 
-#include "coretech/common/shared/array2d.h"
+#include "coretech/common/shared/array2d_impl.h"
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "coretech/common/engine/utils/data/dataScope.h"
 #include "coretech/vision/engine/image.h"
+#include "coretech/vision/engine/image_impl.h"
 
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "clad/robotInterface/messageEngineToRobot_sendAnimToRobot_helper.h"
@@ -43,9 +44,9 @@ namespace Vector {
 namespace {
 u32 _pin = 123456;
 
-const f32 kRobotNameScale = 0.7f;
-const std::string kURL = "v.vicw.xyz";
-const ColorRGBA   kColor(0.f, 0.804f, 1.f, 1.f);
+const f32 kRobotNameScale = 0.6f;
+const std::string kURL = "anki.com/v";
+const ColorRGBA   kColor(0.9f, 0.9f, 0.9f, 1.f);
 
 const char* kShowPinScreenSpriteName = "pairing_icon_key";
 
@@ -62,12 +63,6 @@ bool DrawStartPairingScreen(Anim::AnimationStreamer* animStreamer)
     return false;
   }
   
-  // Replace "Vector" with "Cozmo" if it exists in the robot name
-  size_t pos = robotName.find("Vector");
-  if(pos != std::string::npos) {
-    robotName.replace(pos, 6, "Cozmo");
-  }
-  
   s_enteredAnyScreen = true;  
 
   auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
@@ -81,8 +76,8 @@ bool DrawStartPairingScreen(Anim::AnimationStreamer* animStreamer)
   img->DrawTextCenteredHorizontally(kURL, CV_FONT_NORMAL, scale, 1, kColor, (FACE_DISPLAY_HEIGHT + textSize.height)/2, true);
 
   auto handle = std::make_shared<Vision::SpriteWrapper>(img);
-  const bool overrideAllSpritesToEyeHue = false;
-  animStreamer->SetFaceImage(handle, overrideAllSpritesToEyeHue, 0);
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetFaceImage(handle, shouldRenderInEyeHue, 0);
 
   return true;
 }
@@ -94,9 +89,6 @@ void DrawShowPinScreen(Anim::AnimationStreamer* animStreamer, const Anim::AnimCo
   
   Vision::ImageRGB key;
   key.Load(context->GetDataLoader()->GetSpritePaths()->GetAssetPath(kShowPinScreenSpriteName));
-  if(IsXray()) {
-    key.Resize(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
-  }
 
   auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
   img->FillWith(Vision::PixelRGBA(0, 0));
@@ -105,19 +97,13 @@ void DrawShowPinScreen(Anim::AnimationStreamer* animStreamer, const Anim::AnimCo
             (FACE_DISPLAY_HEIGHT - key.GetNumRows())/2);
   img->DrawSubImage(key, p);
 
-  std::string robotName = OSState::getInstance()->GetRobotName();
-  // Replace "Vector" with "Cozmo" if it exists in the robot name
-  size_t pos = robotName.find("Vector");
-  if(pos != std::string::npos) {
-    robotName.replace(pos, 6, "Cozmo");
-  }
-  img->DrawTextCenteredHorizontally(robotName, CV_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
+  img->DrawTextCenteredHorizontally(OSState::getInstance()->GetRobotName(), CV_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
 
   img->DrawTextCenteredHorizontally(pin, CV_FONT_NORMAL, 0.8f, 1, kColor, FACE_DISPLAY_HEIGHT-5, false);
 
   auto handle = std::make_shared<Vision::SpriteWrapper>(img);
-  const bool overrideAllSpritesToEyeHue = false;
-  animStreamer->SetFaceImage(handle, overrideAllSpritesToEyeHue, 0);
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetFaceImage(handle, shouldRenderInEyeHue, 0);
 }
 
 // Uses a png sequence animation to draw wifi icon to screen
@@ -126,7 +112,10 @@ void DrawWifiScreen(Anim::AnimationStreamer* animStreamer)
   s_enteredAnyScreen = true;
   
   const bool shouldInterrupt = true;
-  animStreamer->SetStreamingAnimation("anim_pairing_icon_wifi", 0, 0, 0, shouldInterrupt);
+  const bool shouldOverrideEyeHue = true;
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetStreamingAnimation("anim_pairing_icon_wifi", 0, 0, 0, shouldInterrupt,
+                                      shouldOverrideEyeHue, shouldRenderInEyeHue);
 }
 
 // Uses a png sequence animation to draw os updating icon to screen
@@ -135,7 +124,10 @@ void DrawUpdatingOSScreen(Anim::AnimationStreamer* animStreamer)
   s_enteredAnyScreen = true;
   
   const bool shouldInterrupt = true;
-  animStreamer->SetStreamingAnimation("anim_pairing_icon_update", 0, 0, 0, shouldInterrupt);
+  const bool shouldOverrideEyeHue = true;
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetStreamingAnimation("anim_pairing_icon_update", 0, 0, 0, shouldInterrupt,
+                                      shouldOverrideEyeHue, shouldRenderInEyeHue);
 }
 
 // Uses a png sequence animation to draw os updating error icon to screen
@@ -144,7 +136,10 @@ void DrawUpdatingOSErrorScreen(Anim::AnimationStreamer* animStreamer)
   s_enteredAnyScreen = true;
   
   const bool shouldInterrupt = true;
-  animStreamer->SetStreamingAnimation("anim_pairing_icon_update_error", 0, 0, 0, shouldInterrupt);
+  const bool shouldOverrideEyeHue = true;
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetStreamingAnimation("anim_pairing_icon_update_error", 0, 0, 0, shouldInterrupt,
+                                      shouldOverrideEyeHue, shouldRenderInEyeHue);
 }
 
 // Uses a png sequence animation to draw waiting for app icon to screen
@@ -153,7 +148,10 @@ void DrawWaitingForAppScreen(Anim::AnimationStreamer* animStreamer)
   s_enteredAnyScreen = true;
   
   const bool shouldInterrupt = true;
-  animStreamer->SetStreamingAnimation("anim_pairing_icon_awaitingapp", 0, 0, 0, shouldInterrupt);
+  const bool shouldOverrideEyeHue = true;
+  const bool shouldRenderInEyeHue = false;
+  animStreamer->SetStreamingAnimation("anim_pairing_icon_awaitingapp", 0, 0, 0, shouldInterrupt,
+                                      shouldOverrideEyeHue, shouldRenderInEyeHue);
 }
 
 void SetBLEPin(uint32_t pin)

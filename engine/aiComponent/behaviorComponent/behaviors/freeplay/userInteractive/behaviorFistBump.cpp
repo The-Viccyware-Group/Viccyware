@@ -141,7 +141,7 @@ void BehaviorFistBump::BehaviorUpdate()
     return;
   }
 
-  const f32 now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
+  f32 now = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
   
   // Check if should exit because of pickup
   if (GetBEI().GetOffTreadsState() != OffTreadsState::OnTreads) {
@@ -244,13 +244,14 @@ void BehaviorFistBump::BehaviorUpdate()
     }
     case State::RequestingFistBump:
     {
-      // Play idle anim
-      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpIdle,
-                                                     1,
-                                                     true,
-                                                     (u8)AnimTrackFlag::HEAD_TRACK | (u8)AnimTrackFlag::LIFT_TRACK));
-
+      auto& robotInfo = GetBEI().GetRobotInfo();
       _dVars.waitStartTime_s = now;
+      robotInfo.GetMoveComponent().EnableLiftPower(false);
+      robotInfo.GetMoveComponent().EnableHeadPower(false);
+      
+      // Play idle anim
+      DelegateIfInControl(new TriggerAnimationAction(AnimationTrigger::FistBumpIdle));
+      
       _dVars.state = State::WaitingForMotorsToSettle;
       break;
     }
@@ -259,13 +260,11 @@ void BehaviorFistBump::BehaviorUpdate()
       auto& robotInfo = GetBEI().GetRobotInfo();
       if (!robotInfo.GetMoveComponent().IsLiftMoving() &&
           !robotInfo.GetMoveComponent().IsHeadMoving()) {
-        robotInfo.GetMoveComponent().EnableLiftPower(false);
-        robotInfo.GetMoveComponent().EnableHeadPower(false);
         _dVars.liftWaitingAngle_rad = robotInfo.GetLiftAngle();
         _dVars.waitingAccelX_mmps2 = robotInfo.GetHeadAccelData().x;
         _dVars.state = State::WaitingForBump;
         if (now - _dVars.waitStartTime_s > kMaxTimeForMotorSettling_s) {
-          PRINT_NAMED_WARNING("BehaviorFistBump.Update.MotorSettleTimeTooLong", "%f", now - _dVars.waitStartTime_s);
+          PRINT_NAMED_WARNING("BehaviorFistBump.UpdateInternal_Legacy.MotorSettleTimeTooLong", "%f", now - _dVars.waitStartTime_s);
         }
       }
       break;

@@ -39,6 +39,7 @@ protected:
   // and are constructed, init'd, and checked by the base `ICozmoBehavior` class.
   virtual bool WantsToBeActivatedBehavior() const override { return true; }
   virtual void OnBehaviorActivated() override;
+  virtual void BehaviorUpdate() override;
 
 private:
   void SetAnimTriggers();
@@ -55,6 +56,8 @@ private:
   struct DynamicVariables {
     DynamicVariables();
     
+    float startOfMotionDetectedTime_s;
+    float enablePowerSaveModeTime_s;
     AnimationTrigger getInTrigger;
     AnimationTrigger idleTrigger;
   };

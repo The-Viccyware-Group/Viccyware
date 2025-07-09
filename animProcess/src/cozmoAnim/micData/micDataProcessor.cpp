@@ -51,7 +51,7 @@ namespace {
 #define CONSOLE_GROUP "MicData"
 
   CONSOLE_VAR(bool, kMicData_CollectRawTriggers, CONSOLE_GROUP, false);
-  CONSOLE_VAR(bool, kMicData_SpeakerNoiseDisablesMics, CONSOLE_GROUP, false);
+  CONSOLE_VAR(bool, kMicData_SpeakerNoiseDisablesMics, CONSOLE_GROUP, true);
 
   // Time necessary for the VAD logic to wait when there's no activity, before we begin skipping processing for
   // performance. Note that this probably needs to at least be as long as the trigger, which is ~ 500-750ms.
@@ -62,10 +62,10 @@ namespace {
   CONSOLE_VAR(bool, kMicData_SaveRawFullIntent, CONSOLE_GROUP, false);
   CONSOLE_VAR(bool, kMicData_SaveRawFullIntent_WakeWordless, CONSOLE_GROUP, false);
   
-  CONSOLE_VAR(bool, kMicData_ForceEnableMicDataProc, CONSOLE_GROUP, true);
+  CONSOLE_VAR(bool, kMicData_ForceEnableMicDataProc, CONSOLE_GROUP, false);
   CONSOLE_VAR(bool, kMicData_ForceDisableMicDataProc, CONSOLE_GROUP, false);
   
-  uint8_t _currentDevForcedProcesState = 4;
+  uint8_t _currentDevForcedProcesState = 0;
   CONSOLE_VAR_ENUM(uint8_t, kDevForceProcessState, CONSOLE_GROUP, _currentDevForcedProcesState,
                    "NormalOperation,None,NoProcessingSingleMic,SigEsBeamformingOff,SigEsBeamformingOn");
   
@@ -866,15 +866,6 @@ float MicDataProcessor::GetIncomingMicDataPercentUsed()
 
 void MicDataProcessor::SetActiveMicDataProcessingState(MicDataProcessor::ProcessingState state)
 {
-  // Set the correct flag for Signal Essence lib version
-#if SE_V009
-  // v009
-  static const FallbackFlag_t kEcho_Cancel_Flag = FBF_FORCE_ECHO_CANCEL_WITH_NR;
-#else
-  // v008
-  static const FallbackFlag_t kEcho_Cancel_Flag = FBF_FORCE_ECHO_CANCEL;
-#endif
-  
   if (state != _activeProcState) {
     if (ENABLE_MIC_PROCESSING_STATE_UPDATE_LOG) {
       LOG_INFO("MicDataProcessor.SetActiveMicDataProcessingState", "Current state '%s' new state '%s'",
@@ -889,8 +880,9 @@ void MicDataProcessor::SetActiveMicDataProcessingState(MicDataProcessor::Process
       case ProcessingState::SigEsBeamformingOff:
       case ProcessingState::SigEsBeamformingOn:
       {
+        // Setting policy for SE v008
         const bool shouldUseFallbackPolicy = (state == ProcessingState::SigEsBeamformingOff);
-        const FallbackFlag_t policySetting = shouldUseFallbackPolicy ? kEcho_Cancel_Flag : FBF_AUTO_SELECT;
+        const FallbackFlag_t policySetting = shouldUseFallbackPolicy ? FBF_FORCE_ECHO_CANCEL : FBF_AUTO_SELECT;
         SEDiagSetEnumAsInt(_policyFallbackFlag, policySetting);
         break;
       }

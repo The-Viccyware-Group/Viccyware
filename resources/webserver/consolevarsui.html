@@ -7,7 +7,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Console Vars and Functions</title>
-/* -- generated stylesheet includes -- */
+    <link rel="stylesheet" href="jquery-ui.css">
+    <link rel="stylesheet" href="style.css">
+
     <style>
     div {
         display: inline-block;
@@ -17,7 +19,8 @@
 /* -- generated style -- */
     </style>
 
-/* -- generated jquery includes -- */
+    <script src="jquery-1.12.4.js"></script>
+    <script src="jquery-ui.js"></script>
 
     <script>
     $(function() {
@@ -41,11 +44,6 @@
             console.log($(this));
         });
     });
-
-    function newlineToBr(str) {
-        var breakTag = '<br>';
-        return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1'+ breakTag +'$2');
-    }
 
     function onCheckboxClickHandler(element){
         $.post("consolevarset", {key: element.id, value: element.checked}, function(result){});

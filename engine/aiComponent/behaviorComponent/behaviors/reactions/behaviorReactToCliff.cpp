@@ -435,21 +435,21 @@ void BehaviorReactToCliff::TransitionToRecoveryBackup()
                  cliffComponent.GetCliffDetectedFlags());
         TransitionToStuckOnEdge();
       } else if (_dVars.persistent.putDownOnCliff) {
-        TransitionToMotorCalibration();
+        TransitionToHeadCalibration();
       } else {
         TransitionToVisualExtendCliffs();
       }
     };
     DelegateIfInControl(backupAction, callback);
   } else if (_dVars.persistent.putDownOnCliff) {
-    TransitionToMotorCalibration();
+    TransitionToHeadCalibration();
   } else {
     TransitionToVisualExtendCliffs();
   }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorReactToCliff::TransitionToMotorCalibration()
+void BehaviorReactToCliff::TransitionToHeadCalibration()
 {
   DEBUG_SET_STATE(CalibratingHead);
   // The `putDownOnCliff` flag is what triggers the calling of this method.

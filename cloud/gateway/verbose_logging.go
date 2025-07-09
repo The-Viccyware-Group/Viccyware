@@ -1,9 +1,8 @@
 package main
 
 import (
+	"anki/log"
 	"net/http"
-
-	"github.com/digital-dream-labs/vector-cloud/internal/log"
 )
 
 type WrappedResponseWriter struct {

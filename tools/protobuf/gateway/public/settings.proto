@@ -18,24 +18,22 @@ syntax = "proto3";
 
 package Anki.Vector.external_interface;
 
-option go_package = "Anki.Vector.external_interface";
-
 import "response_status.proto"; // App only
 
 // *** App only proto below ***
 
 enum ApiVersion {
   INVALID = 0;
-  LATEST = 1;
+  LATEST  = 1;
 }
 
 enum Volume {
-  MUTE = 0;
-  LOW = 1;
-  MEDIUM_LOW = 2;
-  MEDIUM = 3;
+  MUTE        = 0;
+  LOW         = 1;
+  MEDIUM_LOW  = 2;
+  MEDIUM      = 3;
   MEDIUM_HIGH = 4;
-  HIGH = 5;
+  HIGH        = 5;
 }
 
 enum JdocType {
@@ -54,52 +52,42 @@ enum JdocResolveMethod {
 // Changing that now would involve a format migration because we're now
 // saving robot settings jdocs in the cloud.
 enum RobotSetting {
-  clock_24_hour = 0;
-  eye_color = 1;
-  custom_eye_color = 2;
-  default_location = 3;
-  dist_is_metric = 4;
-  locale = 5;
-  master_volume = 6;
-  temp_is_fahrenheit = 7;
-  time_zone = 8;
-  button_wakeword = 9;
+  clock_24_hour      = 0;
+  eye_color          = 1;
+  default_location   = 2;
+  dist_is_metric     = 3;
+  locale             = 4;
+  master_volume      = 5;
+  temp_is_fahrenheit = 6;
+  time_zone          = 7;
+  button_wakeword    = 8;
 }
 
 enum EyeColor {
-  TIP_OVER_TEAL = 0;
-  OVERFIT_ORANGE = 1;
-  UNCANNY_YELLOW = 2;
-  NON_LINEAR_LIME = 3;
-  SINGULARITY_SAPPHIRE = 4;
-  FALSE_POSITIVE_PURPLE = 5;
+  TIP_OVER_TEAL          = 0;
+  OVERFIT_ORANGE         = 1;
+  UNCANNY_YELLOW         = 2;
+  NON_LINEAR_LIME        = 3;
+  SINGULARITY_SAPPHIRE   = 4;
+  FALSE_POSITIVE_PURPLE  = 5;
   CONFUSION_MATRIX_GREEN = 6;
-  RAINBOW_EYES = 7;
-  ROBOT_RED = 8;
-}
-
-message CustomEyeColor {
-  float hue = 1;
-  float saturation = 2;
-  bool enabled = 3;
 }
 
 enum ButtonWakeWord {
-  BUTTON_WAKEWORD_HEY_VECTOR = 0;
-  BUTTON_WAKEWORD_ALEXA = 1;
+  BUTTON_WAKEWORD_HEY_VECTOR    = 0;
+  BUTTON_WAKEWORD_ALEXA         = 1;
 }
 
 message RobotSettingsConfig {
   oneof oneof_clock_24_hour { bool clock_24_hour = 1; }
   oneof oneof_eye_color { EyeColor eye_color = 2; }
-  oneof oneof_custom_eye_color { CustomEyeColor custom_eye_color = 3; }
-  oneof oneof_default_location { string default_location = 4; }
-  oneof oneof_dist_is_metric { bool dist_is_metric = 5; }
-  oneof oneof_locale { string locale = 6; }
-  oneof oneof_master_volume { Volume master_volume = 7; }
-  oneof oneof_temp_is_fahrenheit { bool temp_is_fahrenheit = 8; }
-  oneof oneof_time_zone { string time_zone = 9; }
-  oneof oneof_button_wakeword { ButtonWakeWord button_wakeword = 10; }
+  oneof oneof_default_location { string default_location = 3; }
+  oneof oneof_dist_is_metric { bool dist_is_metric = 4; }
+  oneof oneof_locale { string locale = 5; }
+  oneof oneof_master_volume { Volume master_volume = 6; }
+  oneof oneof_temp_is_fahrenheit { bool temp_is_fahrenheit = 7; }
+  oneof oneof_time_zone { string time_zone = 8; }
+  oneof oneof_button_wakeword { ButtonWakeWord button_wakeword = 9; }
 }
 
 enum AccountSetting {
@@ -121,7 +109,7 @@ message UserEntitlementsConfig {
 }
 
 enum ResultCode {
-  SETTINGS_ACCEPTED = 0;
+  SETTINGS_ACCEPTED        = 0;
   ERROR_UPDATE_IN_PROGRESS = 1;
 }
 
@@ -137,14 +125,18 @@ message NamedJdoc {
   Jdoc doc = 2;
 }
 
-message PullJdocsRequest { repeated JdocType jdoc_types = 1; }
+message PullJdocsRequest {
+  repeated JdocType jdoc_types = 1;
+}
 
 message PullJdocsResponse {
   ResponseStatus status = 1;
   repeated NamedJdoc named_jdocs = 2;
 }
 
-message UpdateSettingsRequest { RobotSettingsConfig settings = 1; }
+message UpdateSettingsRequest {
+  RobotSettingsConfig settings = 1;
+}
 
 message UpdateSettingsResponse {
   ResponseStatus status = 1;
@@ -172,4 +164,6 @@ message UpdateUserEntitlementsResponse {
   Jdoc doc = 3;
 }
 
-message JdocsChanged { repeated JdocType jdoc_types = 1; }
+message JdocsChanged {
+  repeated JdocType jdoc_types = 1;
+}

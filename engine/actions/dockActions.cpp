@@ -934,7 +934,8 @@ namespace Anki {
           if(VerifyCarryingComponentValid() && _carryingComponentPtr->IsCarryingObject()) {
             PRINT_NAMED_WARNING("PopAWheelieAction.EmitCompletionSignal.ExpectedNotCarryingObject", "");
           } else {
-            info.objectID = _dockObjectID;
+            info.objectIDs[0] = _dockObjectID;
+            info.numObjects = 1;
           }
           break;
         }
@@ -1041,7 +1042,8 @@ namespace Anki {
           if(VerifyCarryingComponentValid() && _carryingComponentPtr->IsCarryingObject()) {
             PRINT_NAMED_WARNING("FacePlantAction.EmitCompletionSignal.ExpectedNotCarryingObject", "");
           } else {
-            info.objectID = _dockObjectID;
+            info.objectIDs[0] = _dockObjectID;
+            info.numObjects = 1;
           }
           break;
         }
@@ -1196,7 +1198,8 @@ namespace Anki {
     void AlignWithObjectAction::GetCompletionUnion(ActionCompletedUnion& completionUnion) const
     {
       ObjectInteractionCompleted info;
-      info.objectID = _dockObjectID;
+      info.objectIDs[0] = _dockObjectID;
+      info.numObjects = 1;
       completionUnion.Set_objectInteractionCompleted(std::move( info ));
 
       IDockAction::GetCompletionUnion(completionUnion);
@@ -1296,7 +1299,8 @@ namespace Anki {
           if(VerifyCarryingComponentValid() && !_carryingComponentPtr->IsCarryingObject()) {
             LOG_INFO("PickupObjectAction.GetCompletionUnion.ExpectedCarryingObject", "");
           } else if(VerifyCarryingComponentValid()) {
-            info.objectID = _dockObjectID;
+            info.objectIDs[0] = _dockObjectID;
+            info.numObjects = 1;
           }
           break;
         }
@@ -1648,7 +1652,8 @@ namespace Anki {
     void  PlaceObjectOnGroundAction::GetCompletionUnion(ActionCompletedUnion& completionUnion) const
     {
       ObjectInteractionCompleted info;
-      info.objectID = _carryingObjectID;
+      info.objectIDs[0] = _carryingObjectID;
+      info.numObjects = 1;
       completionUnion.Set_objectInteractionCompleted(std::move(info));
     }
 
@@ -1734,7 +1739,8 @@ namespace Anki {
                                 "Docking object %d not found in world after placing.",
                                 _dockObjectID.GetValue());
           } else {
-            info.objectID = _dockObjectID;
+            info.objectIDs[0] = _dockObjectID;
+            info.numObjects = 1;
           }
           break;
         }
@@ -2292,7 +2298,8 @@ namespace Anki {
             PRINT_NAMED_WARNING("RollObjectAction.EmitCompletionSignal.ExpectedNotCarryingObject", "");
           }
           else {
-            info.objectID = _dockObjectID;
+            info.objectIDs[0] = _dockObjectID;
+            info.numObjects = 1;
           }
           break;
         }

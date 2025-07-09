@@ -22,10 +22,10 @@ namespace Anki {
 namespace Vector {
   
 namespace {
-const BehaviorID kJoltBehaviorID = BEHAVIOR_ID(ReactToJoltInPalm);
-
 const char* const kAnimSelectorBehaviorName = "InitialHeldInPalmReactionInternal";
-const char* const kBehaviorsThatInterruptInitialReaction = "interruptingBehaviors";
+const BehaviorID kJoltBehaviorID = BEHAVIOR_ID(ReactToJoltInPalm);
+const BehaviorID kPalmTiltBehaviorID = BEHAVIOR_ID(LookingNervousInPalmAnim);
+
 const char* const kEmotionEventOnSuccessfulAnim = "InitialHeldInPalmReaction";
 }
   
@@ -34,18 +34,8 @@ const char* const kEmotionEventOnSuccessfulAnim = "InitialHeldInPalmReaction";
 BehaviorInitialHeldInPalmReaction::InstanceConfig::InstanceConfig()
 {
   joltInPalmReaction = nullptr;
+  palmTiltReaction = nullptr;
   animSelectorBehavior = nullptr;
-}
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-BehaviorInitialHeldInPalmReaction::InstanceConfig::InstanceConfig(const Json::Value& config)
-{
-  std::vector<std::string> tmpNames;
-  if (JsonTools::GetVectorOptional(config, kBehaviorsThatInterruptInitialReaction, tmpNames)) {
-    for(const auto& name : tmpNames) {
-      interruptingBehaviorNames.insert(name);
-    }
-  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -56,47 +46,38 @@ BehaviorInitialHeldInPalmReaction::DynamicVariables::DynamicVariables()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorInitialHeldInPalmReaction::BehaviorInitialHeldInPalmReaction(const Json::Value& config)
- : ICozmoBehavior(config),
-   _iConfig(config)
+ : ICozmoBehavior(config)
 {
 }
   
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorInitialHeldInPalmReaction::InitBehavior()
 {
+  const auto& BC = GetBEI().GetBehaviorContainer();
   const std::string debugStr = "BehaviorInitialHeldInPalmReaction.Constructor.BehaviorNotFound";
+  auto loadBehavior = [&BC, &debugStr](ICozmoBehaviorPtr& behavior, const BehaviorID& id){
+    behavior = BC.FindBehaviorByID(id);
+    ANKI_VERIFY( behavior != nullptr, debugStr.c_str(),
+                 "Behavior %s could not be found",
+                 BehaviorTypesWrapper::BehaviorIDToString(id));
+  };
   
-  // Find and cache the jolt-in-palm reaction behavior
-  _iConfig.joltInPalmReaction = GetBEI().GetBehaviorContainer().FindBehaviorByID(kJoltBehaviorID);
-  ANKI_VERIFY( _iConfig.joltInPalmReaction != nullptr, debugStr.c_str(),
-               "Behavior %s could not be found",
-               BehaviorTypesWrapper::BehaviorIDToString(kJoltBehaviorID));
+  loadBehavior(_iConfig.joltInPalmReaction, kJoltBehaviorID);
+  loadBehavior(_iConfig.palmTiltReaction, kPalmTiltBehaviorID);
   
-  // Cache behaviors that can interrupt this initial reaction
-  for(const auto& name : _iConfig.interruptingBehaviorNames){
-    const ICozmoBehaviorPtr behavior = FindBehavior(name);
-    if (ANKI_VERIFY(behavior != nullptr, debugStr.c_str(),
-                    "Interrupting behavior %s could not be found", name.c_str() ) ) {
-      _iConfig.interruptingBehaviors.insert(behavior);
-    }
-  }
+  auto loadAnonymousBehavior = [this, &debugStr](ICozmoBehaviorPtr& behavior, const std::string& behaviorName){
+    behavior = FindBehavior(behaviorName);
+    ANKI_VERIFY( behavior != nullptr, debugStr.c_str(),
+                "Anonymous behavior %s could not be found",
+                behaviorName.c_str());
+  };
   
-  // Cache the animation selector behavior that is always delegated to upon activation
-  _iConfig.animSelectorBehavior = FindBehavior(kAnimSelectorBehaviorName);
-  ANKI_VERIFY(_iConfig.animSelectorBehavior != nullptr, debugStr.c_str(),
-              "Animation selector behavior %s could not be found",
-              kAnimSelectorBehaviorName);
+  loadAnonymousBehavior(_iConfig.animSelectorBehavior, kAnimSelectorBehaviorName);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorInitialHeldInPalmReaction::~BehaviorInitialHeldInPalmReaction()
 {
-}
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorInitialHeldInPalmReaction::GetBehaviorJsonKeys(std::set<const char *> &expectedKeys) const
-{
-  expectedKeys.insert( kBehaviorsThatInterruptInitialReaction );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -115,6 +96,7 @@ void BehaviorInitialHeldInPalmReaction::GetBehaviorOperationModifiers(BehaviorOp
 void BehaviorInitialHeldInPalmReaction::GetAllDelegates(std::set<IBehavior*>& delegates) const
 {
   delegates.insert( _iConfig.joltInPalmReaction.get() );
+  delegates.insert( _iConfig.palmTiltReaction.get() );
   delegates.insert( _iConfig.animSelectorBehavior.get() );
 }
 
@@ -142,20 +124,17 @@ void BehaviorInitialHeldInPalmReaction::OnBehaviorActivated()
            "The robot has reacted to being initially held in a user's palm");
     DASMSG_SET(i1, _dVars.animWasInterrupted, "Was initial get-in animation interrupted?");
     DASMSG_SEND();
+    
+    LOG_DEBUG("BehaviorInitialHeldInPalmReaction.OnBehaviorActivated",
+              "Initial get-in animation was %s this activation",
+              _dVars.animWasInterrupted ? "interrupted" : "NOT interrupted");
   };
   DelegateIfInControl(_iConfig.animSelectorBehavior.get(), callback);
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorInitialHeldInPalmReaction::OnBehaviorDeactivated()
-{
-  LOG_DEBUG("BehaviorInitialHeldInPalmReaction.OnBehaviorDeactivated",
-           "Initial get-in animation was%s interrupted during this activation",
-           _dVars.animWasInterrupted ? "" : " NOT");
-}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void BehaviorInitialHeldInPalmReaction::BehaviorUpdate()
+void BehaviorInitialHeldInPalmReaction::BehaviorUpdate() 
 {
   if( IsActivated() ) {
     // Interrupt the initial animation if either the jolt reaction or palm-tilt reaction want to
@@ -170,25 +149,15 @@ void BehaviorInitialHeldInPalmReaction::BehaviorUpdate()
         // cancel the current delegate here now and switch to the jolt reaction right away.
         CancelDelegates();
         DelegateIfInControl(_iConfig.joltInPalmReaction.get());
-      } else if ( BehaviorShouldBeInterrupted() ) {
+      } else if ( !_iConfig.palmTiltReaction->IsActivated() &&
+                  _iConfig.palmTiltReaction->WantsToBeActivated() ) {
         _dVars.animWasInterrupted = true;
-        // Just let the HeldInPalm dispatcher handle the disruption, it isn't super-likely that
-        // the behavior that wants to interrupt and deactivate this initial reaction will not want
-        // to activate on the next engine tick.
+        // Just let the HeldInPalmResponses dispatcher handle the disruption, it isn't super-likely
+        // that the user will just stop tilting or rolling Vector too much by the next engine tick.
         CancelSelf();
       }
     }
   }
-}
-  
-bool BehaviorInitialHeldInPalmReaction::BehaviorShouldBeInterrupted() const
-{
-  for(const auto& behavior: _iConfig.interruptingBehaviors){
-    if(behavior->WantsToBeActivated()){
-      return true;
-    }
-  }
-  return false;
 }
 
 }

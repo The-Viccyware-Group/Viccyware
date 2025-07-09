@@ -210,9 +210,6 @@ public:
   // True if this is a disclaimer bot for internal Anki Dev use
   bool IsAnkiDevRobot();
 
-  // Reads CPU times data
-  void UpdateCPUTimeStats() const;
-  
 protected:
    // Return true if robot has a valid EMR.
    // This function is "off limits" to normal robot services
@@ -240,6 +237,9 @@ private:
 
   // Reads memory info data
   void UpdateMemoryInfo() const;
+
+  // Reads CPU times data
+  void UpdateCPUTimeStats() const;
 
   uint32_t kNominalCPUFreq_kHz = 800000;
 

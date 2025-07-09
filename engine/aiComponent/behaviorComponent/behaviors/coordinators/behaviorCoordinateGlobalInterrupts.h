@@ -59,22 +59,10 @@ private:
 
     ICozmoBehaviorPtr meetVictorBehavior;
     std::vector<ICozmoBehaviorPtr> toSuppressWhenMeetVictor;
-
+    
     ICozmoBehaviorPtr danceToTheBeatBehavior;
     std::vector<ICozmoBehaviorPtr> toSuppressWhenDancingToTheBeat;
-
-    ICozmoBehaviorPtr intentionalPerformanceBehavior;
-    ICozmoBehaviorPtr unintentionalPerformanceBehavior;
-    std::vector<ICozmoBehaviorPtr> toSuppressWhenInAnPerformance;
-
-    ICozmoBehaviorPtr singing80Behavior;
-    ICozmoBehaviorPtr singing100Behavior;
-    ICozmoBehaviorPtr singing120Behavior;
-    std::vector<ICozmoBehaviorPtr> toSuppressWhenSinging;
-
-    ICozmoBehaviorPtr petDetectionBehavior;
-    std::vector<ICozmoBehaviorPtr> toSuppressWhileDetectingPets;
-
+    
     AreBehaviorsActivatedHelper behaviorsThatShouldntReactToUnexpectedMovement;
     ICozmoBehaviorPtr reactToUnexpectedMovementBehavior;
 
