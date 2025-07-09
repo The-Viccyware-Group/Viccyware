@@ -14,17 +14,17 @@ include(webots)
 # Gateway Protbuf and GRPC configuration
 #
 
-#if(VICOS)
+if(VICOS)
   set(__opus_build_dir ${ANKI_THIRD_PARTY_DIR}/opus/vicos)
   add_library(opus SHARED IMPORTED)
   anki_build_target_license(opus "BSD-3,${CMAKE_SOURCE_DIR}/licenses/opus.license")
   set_target_properties(opus PROPERTIES IMPORTED_LOCATION ${__opus_build_dir}/lib/libopus.so.0)
-#elseif(MACOSX)
-#  set(__opus_build_dir ${ANKI_THIRD_PARTY_DIR}/opus/mac)
-#  add_library(opus STATIC IMPORTED)
-#  anki_build_target_license(opus "BSD-3,${CMAKE_SOURCE_DIR}/licenses/opus.license")
-#  set_target_properties(opus PROPERTIES IMPORTED_LOCATION ${__opus_build_dir}/lib/libopus.a)
-#endif()
+elseif(MACOSX)
+  set(__opus_build_dir ${ANKI_THIRD_PARTY_DIR}/opus/mac)
+  add_library(opus STATIC IMPORTED)
+  anki_build_target_license(opus "BSD-3,${CMAKE_SOURCE_DIR}/licenses/opus.license")
+  set_target_properties(opus PROPERTIES IMPORTED_LOCATION ${__opus_build_dir}/lib/libopus.a)
+endif()
 
 # Grab the gateway files
 file(STRINGS "${ANKI_SRCLIST_DIR}/gateway_grpc.srcs.lst" GATEWAY_GRPC_SRCS)
