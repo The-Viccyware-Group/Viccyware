@@ -175,14 +175,14 @@ namespace Vector {
   const u16 DEFAULT_CAMERA_RESOLUTION_WIDTH  =  IsXray() ? 800 : 640;
   const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT =  IsXray() ? 600 : 360;
 
-  const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsXray() ? 1600: 1280;
-  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsXray() ?1200: 720;
+  const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsXray() ? 1600 : 1280;
+  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsXray() ? 1200 : 720;
   
   const f32 MIN_CAMERA_EXPOSURE_TIME_MS = 1;
   const f32 MAX_CAMERA_EXPOSURE_TIME_MS = 66;
   
   // Range for exposure and white balance gains
-  const f32 MIN_CAMERA_GAIN = 0.25f; // Real min should be 0.1, but using 0.25 as a bandaid for VIC-6653
+  const f32 MIN_CAMERA_GAIN = IsXray() ? 0.35 : 0.25f; // Real min should be 0.1, but using 0.25 as a bandaid for VIC-6653
   const f32 MAX_CAMERA_GAIN = 3.8f;
   
   /***************************************************************************
