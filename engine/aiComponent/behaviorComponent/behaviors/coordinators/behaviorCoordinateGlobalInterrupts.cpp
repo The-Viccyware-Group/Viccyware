@@ -74,7 +74,7 @@ namespace{
                                                                             BEHAVIOR_CLASS(PossiblePerformance),
                                                                             BEHAVIOR_CLASS(Singing)}};
 
-  static const std::set<BehaviorClass> kBehaviorClassesToSuppressCliff = {{ BEHAVIOR_CLASS(BlackJack)}};
+  static const std::set<BehaviorClass> kBehaviorClassesToSuppressCliff = { BEHAVIOR_CLASS(BlackJack)};
 
   static const std::set<BehaviorClass> kBehaviorClassesToSuppressTimerAntics = {{ BEHAVIOR_CLASS(BlackJack),
                                                                                   BEHAVIOR_CLASS(CoordinateWeather),
