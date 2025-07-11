@@ -123,7 +123,6 @@ void Vocoder::processBlock(vector<float>& buffer, vector<float>& externalCarrier
             m_oscillatorFIFO.write(externalCarrier[i]);
         }
     }
-	int count = 0;
     while (m_analysisFIFO.getNumberOfAvailableSamples() >= m_analysisWindowSize)
     {
         m_analysisFIFO.read(m_internalBuffer, m_analysisWindowSize, m_analysisHopSize);
@@ -154,7 +153,6 @@ void Vocoder::processBlock(vector<float>& buffer, vector<float>& externalCarrier
 		applyWindow(m_oscillatorBuffer, m_synthesisWindow, m_synthesisWindowSize);
 
         m_synthesisFIFO.add(m_oscillatorBuffer, m_synthesisWindowSize, m_synthesisHopSize);
-		count++;
     }
 
     if (m_synthesisFIFO.getNumberOfAvailableSamples() >= numberOfSamples)

@@ -122,12 +122,12 @@ WeatherConditionType WeatherConditionRemaps::GetRemappedCondition(const WeatherI
       ////////////////////////////////////////////////////////////////////////////////
       // Temperature
       ////////////////////////////////////////////////////////////////////////////////
-      const bool shouldConsiderTemperature = (entry.temperatureBelowF != kInvalidTemp) ||
-                                             (entry.temperatureAboveF != kInvalidTemp);
+      const bool shouldConsiderTemperature = (entry.temperatureBelowF != static_cast<float>(kInvalidTemp)) ||
+                                             (entry.temperatureAboveF != static_cast<float>(kInvalidTemp));
 
-      const bool isBelowConfigTemp = ((entry.temperatureBelowF != kInvalidTemp) &&
+      const bool isBelowConfigTemp = ((entry.temperatureBelowF != static_cast<float>(kInvalidTemp)) &&
                                       (entry.temperatureBelowF > trueTemperatureF));
-      const bool isAboveConfigTemp = ((entry.temperatureAboveF != kInvalidTemp) &&
+      const bool isAboveConfigTemp = ((entry.temperatureAboveF != static_cast<float>(kInvalidTemp)) &&
                                       (entry.temperatureAboveF < trueTemperatureF));
 
       const bool inTemperatureRange = entry.allSpecifiedConditionsMustBeMet ? 

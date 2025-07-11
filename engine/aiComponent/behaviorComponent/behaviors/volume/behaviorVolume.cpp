@@ -159,7 +159,7 @@ void BehaviorVolume::OnBehaviorActivated()
     newVolumeLevel = static_cast<EVolumeLevel>(newVol);
     if (newVolumeLevel != desiredVolume) {
       LOG_WARNING("BehaviorVolume.OnBehavrioActivated.setFailed",
-                  "New volume level %u does not match desired volume level %u", newVolumeLevel, desiredVolume);
+                  "New volume level %u does not match desired volume level %u", static_cast<uint32_t>(newVolumeLevel), static_cast<uint32_t>(desiredVolume));
     }
     // issue DAS event
     DASMSG(robot_settings_volume, "robot.settings.volume", "The robot's volume setting was changed");
@@ -176,7 +176,7 @@ void BehaviorVolume::OnBehaviorActivated()
   if(it == kVolumeLevelAnimMap.end()){
     // we don't have an anim designated for this volume level (probably because it's MUTE)
     LOG_WARNING("BehaviorVolume.OnBehaviorActivated.NoAnimForLevel",
-                "No animation mapped for volume level %u", newVolumeLevel);
+                "No animation mapped for volume level %u", static_cast<uint32_t>(newVolumeLevel));
     return;
   }
   const AnimationTrigger animTrigger = it->second;
@@ -233,7 +233,7 @@ bool BehaviorVolume::SetVolume(EVolumeLevel desiredVolumeEnum)
   // should really be unnecessary now that we're using the enum, but let's be safe
   if ( (desiredVolumeEnum < EVolumeLevel::MIN) || (desiredVolumeEnum > EVolumeLevel::MAX) ) {
     LOG_WARNING("BehaviorVolume.SetVolume.OutsidePermittedRange",
-                "Requested volume %u outside permitted range of [%u,%u].", desiredVolumeEnum, EVolumeLevel::MIN, EVolumeLevel::MAX);
+                "Requested volume %u outside permitted range of [%u,%u].", static_cast<uint32_t>(desiredVolumeEnum), static_cast<uint32_t>(EVolumeLevel::MIN), static_cast<uint32_t>(EVolumeLevel::MAX));
     return false;
   }
 

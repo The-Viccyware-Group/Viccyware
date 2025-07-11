@@ -318,7 +318,7 @@ void BehaviorReactToGazeDirection::FoundNewFace(ActionResult result)
     }
     default: {
       LOG_ERROR("BehaviorReactToGazeDirection.FoundNewFace.UnexpectedResultFromTurnTowardsFace",
-                "Result: %d", result);
+                "Result: %u", static_cast<uint32_t>(result));
       break;
     }
   }

@@ -2626,7 +2626,7 @@ bool Robot::UpdateToFStartupChecks(Result& res)
 
 #define HANDLE_RESULT(res, nextState) {                                 \
     if(res != ToFSensor::CommandResult::Success) {                      \
-      PRINT_NAMED_ERROR("Robot.UpdateToFStartupChecks.Fail", "State: %u", state); \
+      PRINT_NAMED_ERROR("Robot.UpdateToFStartupChecks.Fail", "State: %u", static_cast<unsigned int>(state)); \
       FaultCode::DisplayFaultCode(FaultCode::TOF_FAILURE);              \
       state = State::Failure;                                           \
     } else {                                                            \

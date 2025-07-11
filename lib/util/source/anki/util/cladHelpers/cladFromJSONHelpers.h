@@ -27,7 +27,8 @@ bool ParseCladEnumFromJSON(const Json::Value& json, CladEnum& value,
                            const std::string& debugName, bool shouldAssertIfMissing = true)
 {
   if(!json.isString()){
-    const char* debugMsg = (debugName + ".GetCladEnumFromJSON.ParseString.ValueNotString").c_str();
+    std::string debugMsgStr = debugName + ".GetCladEnumFromJSON.ParseString.ValueNotString";
+    const char* debugMsg = debugMsgStr.c_str();
     DEV_ASSERT(!shouldAssertIfMissing, debugMsg);
     return false;
   }
@@ -35,7 +36,8 @@ bool ParseCladEnumFromJSON(const Json::Value& json, CladEnum& value,
   // Note - this functionality can only be used in engine until VIC-2545 is imlemented
   const bool foundValue = Vector::EnumFromString(str.c_str(), value);
   if(!foundValue){
-    const char* debugMsg = (debugName + "GetCladEnumFromJSON.ParseString.InvalidValue").c_str();
+    std::string debugMsgStr = debugName + "GetCladEnumFromJSON.ParseString.InvalidValue";
+    const char* debugMsg = debugMsgStr.c_str();
     DEV_ASSERT(!shouldAssertIfMissing, debugMsg);
   }
 
@@ -48,7 +50,8 @@ bool GetCladEnumFromJSON(const Json::Value& config, const std::string& key,  Cla
 {
   const Json::Value& child = config[key];
   if(child.isNull()){
-    const char* debugMsg = (debugName + ".GetCladEnumFromJSON.ParseString.KeyMissing").c_str();
+    std::string debugMsgStr = debugName + ".GetCladEnumFromJSON.ParseString.KeyMissing";
+    const char* debugMsg = debugMsgStr.c_str();
     DEV_ASSERT_MSG(!shouldAssertIfMissing, debugMsg, "%s", key.c_str());
     return false;
   }

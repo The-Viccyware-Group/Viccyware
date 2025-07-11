@@ -755,8 +755,8 @@ void TextToSpeechComponent::Update()
         // We don't expect any other events from the worker thread.  Transition to Delivering/Delivered are
         // handled by the main thread.
         //
-        LOG_ERROR("TextToSpeechComponent.Update.UnexpectedState", "Event ttsID %d unexpected state %hhu",
-                  ttsID, ttsState);
+        LOG_ERROR("TextToSpeechComponent.Update.UnexpectedState", "Event ttsID %d unexpected state %u",
+                  ttsID, static_cast<uint8_t>(ttsState));
         break;
     }
   }

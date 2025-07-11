@@ -204,7 +204,7 @@ void BehaviorDevCubeSpinnerConsole::HandleWhileActivated(const EngineToGameEvent
       
     default:
       PRINT_NAMED_ERROR("BehaviorDevCubeSpinnerConsole.HandleWhileActivated.InvalidTag",
-                        "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+                        "Received unexpected event with tag %u.", static_cast<uint8_t>(event.GetData().GetTag()));
       break;
   }
 }

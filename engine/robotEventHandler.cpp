@@ -1403,7 +1403,7 @@ void RobotEventHandler::HandleActionEvents(const GameToEngineEvent& event)
     // This should really never happen because we are supposed to be guaranteed at
     // compile time that all action tags are inserted.
     PRINT_NAMED_ERROR("RobotEventHandler.HandleActionEvents.MissingTag",
-                      "%s (%hhu)", MessageGameToEngineTagToString(msg.GetTag()), msg.GetTag());
+                      "%s (%hhu)", MessageGameToEngineTagToString(msg.GetTag()), static_cast<uint8_t>(msg.GetTag()));
     return;
   }
 
@@ -1439,7 +1439,7 @@ void RobotEventHandler::HandleMessage(const ExternalInterface::QueueSingleAction
     // This should really never happen because we are supposed to be guaranteed at
     // compile time that all action tags are inserted.
     PRINT_NAMED_ERROR("RobotEventHandler.HandleQueueSingleAction.MissingActionTag",
-                      "%s (%hhu)", RobotActionUnionTagToString(msg.action.GetTag()), msg.action.GetTag());
+                      "%s (%hhu)", RobotActionUnionTagToString(msg.action.GetTag()), static_cast<uint8_t>(msg.action.GetTag()));
     return;
   }
 
@@ -1501,7 +1501,7 @@ void RobotEventHandler::HandleMessage(const ExternalInterface::QueueCompoundActi
       // compile time that all action tags are inserted.
       PRINT_NAMED_ERROR("RobotEventHandler.HandleQueueCompoundAction.MissingActionTag",
                         "Action %zu: %s (%hhu)", iAction,
-                        RobotActionUnionTagToString(actionUnion.GetTag()), actionUnion.GetTag());
+                        RobotActionUnionTagToString(actionUnion.GetTag()), static_cast<uint8_t>(actionUnion.GetTag()));
       delete compoundAction;
       return;
     }

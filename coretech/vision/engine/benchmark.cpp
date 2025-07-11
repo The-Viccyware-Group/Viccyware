@@ -71,8 +71,8 @@ Result Benchmark::Update(ImageCache& imageCache)
   {
     Mode whichMode = static_cast<Mode>(kVisionBenchmark_ToggleMode);
     const bool enable = (_enabledModes.IsBitFlagSet(whichMode) ? false : true);
-    PRINT_CH_INFO(kLogChannelName, "Benchmark.Update.TogglingMode", "%s mode %hhu",
-                  (enable ? "Enabling" : "Disabling"), whichMode);
+    //PRINT_CH_INFO(kLogChannelName, "Benchmark.Update.TogglingMode", "%s mode %hhu",
+    //              (enable ? "Enabling" : "Disabling"), whichMode);
     EnableMode(whichMode, enable);
     kVisionBenchmark_ToggleMode = 0;
   }

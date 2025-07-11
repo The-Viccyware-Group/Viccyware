@@ -2,7 +2,7 @@
 # lib/signalEssence/CMakeLists.txt
 #
 
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.10)
 
 project(signal_essence_proj)
 

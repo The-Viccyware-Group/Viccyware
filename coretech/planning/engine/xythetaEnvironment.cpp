@@ -385,8 +385,6 @@ bool xythetaEnvironment::PlanIsSafe(const xythetaPlan& plan,
   lastSafeState = State2State_c(curr);
   validPlan.start_ = curr;
 
-  float totalPenalty = 0.0;
-
   // now go through the rest of the plan, checking for collisions at each step
   for(size_t i = currentPathIndex; i < numActions; ++i) {
 
@@ -403,8 +401,6 @@ bool xythetaEnvironment::PlanIsSafe(const xythetaPlan& plan,
       // there was a collision trying to follow action i, so we are done
       return false;
     }
-
-    totalPenalty += actionPenalty;
 
     // no collision. If we are still within
     // maxDistancetoFollowOldPlan_mm, update the valid old plan

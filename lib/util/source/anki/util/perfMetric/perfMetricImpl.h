@@ -63,10 +63,10 @@ static int PerfMetricWebServerHandler(struct mg_connection *conn, void *cbdata)
   std::string commands;
   if (info->content_length > 0)
   {
-    char buf[info->content_length + 1];
-    mg_read(conn, buf, sizeof(buf));
-    buf[info->content_length] = 0;
-    commands = buf;
+    std::vector<char> buf(static_cast<size_t>(info->content_length) + 1);
+    mg_read(conn, buf.data(), buf.size());
+    buf[static_cast<size_t>(info->content_length)] = 0;
+    commands = buf.data();
   }
   else if (info->query_string)
   {

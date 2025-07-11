@@ -281,7 +281,7 @@ namespace Anki {
       if (currentUpAxis != targetUpAxis) {
         PRINT_NAMED_WARNING("ComputePlacementApproachAngle.MismatchedUpAxes",
                             "Carried up axis: %d , target up axis: %d",
-                            currentUpAxis, targetUpAxis);
+                            static_cast<int>(currentUpAxis), static_cast<int>(targetUpAxis));
         return ActionResult::MISMATCHED_UP_AXIS;
       }
 
@@ -2220,7 +2220,7 @@ namespace Anki {
       {
         PRINT_CH_INFO("Actions",
                       "DriveToPlaceRelObjectAction.PossiblePosesFunc.PossiblePosesResultNotSuccess",
-                      "Received possible poses result:%u", preActionPoseOutput.actionResult);
+                      "Received possible poses result:%u",  static_cast<uint32_t>(preActionPoseOutput.actionResult));
       }
 
       if(possiblePoses.size() > 0)

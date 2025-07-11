@@ -104,7 +104,7 @@ bool dasPostToServer(const std::string& url, const std::string& postInfo, std::s
 
   // Initialize zlib output buffer. How much space do we need?
   const auto dst_bound = deflateBound(&stream, stream.avail_in);
-  std::auto_ptr<unsigned char> dst(new unsigned char[dst_bound]);
+  std::unique_ptr<unsigned char[]> dst(new unsigned char[dst_bound]);
   stream.next_out = dst.get();
   stream.avail_out = dst_bound;
 

@@ -47,14 +47,14 @@ int Test_INetworkStreamV3::SendPlainText(uint8_t* bytes, int length) {
 }
 
 int Test_INetworkStreamV3::SendEncrypted(uint8_t* bytes, int length) {
-  uint8_t outBytes[length + 16];
+  std::vector<uint8_t> outBytes(length + 16);
   uint64_t outLength = 0;
-  Encrypt(bytes, length, outBytes, &outLength);
+  Encrypt(bytes, length, outBytes.data(), &outLength);
 
-  uint8_t decryptedBytes[outLength];
+  std::vector<uint8_t> encryptedBuffer(packedSize + 16);
   uint64_t decryptedLength = 0;
 
-  int status = ClientDecrypt(outBytes, (int)outLength, decryptedBytes, &decryptedLength);
+  int status = ClientDecrypt(outBytes.data(), (int)outLength, decryptedBytes, &decryptedLength);
 
   ASSERT(status==0, "Client could not decrypt message.");
 

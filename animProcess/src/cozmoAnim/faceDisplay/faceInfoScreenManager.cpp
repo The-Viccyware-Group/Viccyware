@@ -592,7 +592,7 @@ void FaceInfoScreenManager::SetScreen(ScreenName screen)
   _scratchDrawingImg->FillWith(0);
   DrawScratch();
 
-  LOG_INFO("FaceInfoScreenManager.SetScreen.EnteringScreen", "%hhu", GetCurrScreenName());
+  LOG_INFO("FaceInfoScreenManager.SetScreen.EnteringScreen", "%u", static_cast<uint8_t>(GetCurrScreenName()));
   _currScreen->EnterScreen();
 
   if(!IsAlexaScreen(GetCurrScreenName())) {

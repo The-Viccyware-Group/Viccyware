@@ -679,7 +679,6 @@ bool RemoveWifiService(std::string ssid) {
     GVariant* child = g_variant_get_child_value(services, i);
     GVariant* attrs = g_variant_get_child_value(child, 1);
 
-    bool hasName = false;
     bool matchedName = false;
     bool matchedInterface = false;
     bool matchedType = false;
@@ -697,7 +696,6 @@ bool RemoveWifiService(std::string ssid) {
         } else {
           matchedName = false;
         }
-        hasName = true;
       }
 
       if(g_str_equal(key, "Type")) {

@@ -20,7 +20,7 @@ project(cti_neuralnets)
 
 include(anki_build_cxx)
 
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.10)
 
 message(STATUS "Building NeuralNets process using ${NEURAL_NET_PLATFORM}")
 
@@ -55,7 +55,7 @@ if(NEURAL_NET_PLATFORM STREQUAL "TensorFlow")
   if (VICOS)
 
     set(PLATFORM_FLAGS
-      --std=c++11 
+      --std=c++17 
       -stdlib=libc++    # NOTE: VicOS uses libc++, so TensorFlow must be built to match
       -fPIE 
       -mfloat-abi=softfp 

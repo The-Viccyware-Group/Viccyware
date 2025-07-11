@@ -407,7 +407,7 @@ void BatteryComponent::SetTemperature(const u8 temp_C)
   const u8 kNoLongerHotTemp_degC = 45; // Still hot, but using hysteresis to prevent spamming
   static bool exceededHotThreshold = false;
 
-  auto dasFunc = [kHotBatteryTemp_degC,kNoLongerHotTemp_degC](const bool exceeded) {
+  auto dasFunc = [](bool exceeded) {
     exceededHotThreshold = exceeded;
     DASMSG(battery_temp_crossed_threshold, "battery.temp_crossed_threshold", "Indicates battery temperature exceeded a specified temperature");
     DASMSG_SET(i1, exceeded, "Higher than threshold (1) or lower (0)");

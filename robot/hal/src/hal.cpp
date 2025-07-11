@@ -97,13 +97,34 @@ namespace { // "Private members"
   struct spine_ctx spine_;
   uint8_t frameBuffer_[SPINE_B2H_FRAME_LEN];
   uint8_t readBuffer_[4096];
-  BodyToHead BootBodyData_ = { //dummy data for boot stub frames
-    .framecounter         = 0,
-    .flags                = RUNNING_FLAGS_SENSORS_VALID,  // emulate active power mode
-    .battery.flags        = POWER_ON_CHARGER,
-    .battery.main_voltage = (int16_t)(5.0/kBatteryScale),
-    .battery.charger      = (int16_t)(5.0/kBatteryScale),
-  };
+  //BodyToHead BootBodyData_ = { //dummy data for boot stub frames
+  //  .framecounter         = 0,
+  //  .flags                = RUNNING_FLAGS_SENSORS_VALID,  // emulate active power mode
+  //  .battery.flags        = POWER_ON_CHARGER,
+  //  .battery.main_voltage = (int16_t)(5.0/kBatteryScale),
+  //  .battery.charger      = (int16_t)(5.0/kBatteryScale),
+  //};
+
+BodyToHead BootBodyData_{
+  0u,
+  RUNNING_FLAGS_SENSORS_VALID,
+  {},
+  0,
+  {{}, {}, {}, {}},
+  {0, 0, 0, 0},
+  {
+    POWER_ON_CHARGER,              
+    static_cast<int16_t>(5.0/kBatteryScale),
+    static_cast<int16_t>(5.0/kBatteryScale)
+  },
+  {},
+  {0, 0},
+  {0, 0},
+  {0, 0},
+  {0},
+  {0}
+};
+
 
   u32 _bodyDataPrintPeriod_tics = 0;
   u32 _bodyDataPrintCounter     = 0;

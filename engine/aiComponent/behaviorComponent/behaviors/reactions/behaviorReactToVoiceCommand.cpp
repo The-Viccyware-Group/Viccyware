@@ -764,7 +764,7 @@ void BehaviorReactToVoiceCommand::StopListening()
 {
   ASSERT_NAMED_EVENT( _dVars.state == EState::ListeningLoop,
                       "BehaviorReactToVoiceCommand.State",
-                      "Transitioning to EState::IntentReceived from invalid state [%hhu]", _dVars.state );
+                      "Transitioning to EState::IntentReceived from invalid state [%hhu]", static_cast<uint8_t>(_dVars.state) );
 
   // force our model of the streaming to close, in the case that we timed out (etc) before the actual stream closed
   OnStreamingEnd();

@@ -392,7 +392,7 @@ void AlexaComponent::SetAlexaUXResponses( const std::unordered_map<AlexaUXState,
   for( const auto& response : responses ) {
     const unsigned int idx = static_cast<unsigned int>(response.first);
     if( !ANKI_VERIFY( (idx < 4), "AlexaComponent.SetAlexaUXResponses.Invalid",
-                      "Invalid state %hhu. Allowed values are Listening, Speaking, Thinking, Error", response.first ) )
+                      "Invalid state %hhu. Allowed values are Listening, Speaking, Thinking, Error", static_cast<uint8_t>(response.first) ) )
     {
       continue;
     }

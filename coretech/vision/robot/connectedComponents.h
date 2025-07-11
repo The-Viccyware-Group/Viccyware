@@ -622,8 +622,6 @@ namespace Anki
 
     template<typename Type> Result ConnectedComponentsTemplate<Type>::CompressConnectedComponentSegmentIds(MemoryStack scratch)
     {
-      s32 numUsedIds = 0;
-
       const ConnectedComponentSegment<Type> * restrict pConstComponents = components.Pointer(0);
 
       // Compute the number of unique components
@@ -640,10 +638,6 @@ namespace Anki
       for(s32 i=0; i<numComponents; i++) {
         const Type id = pConstComponents[i].id;
         usedIds[id] = 1;
-      }
-
-      for(s32 i=0; i<=maximumId; i++) {
-        numUsedIds += usedIds[i];
       }
 
       // Create a mapping table from original id to compressed id

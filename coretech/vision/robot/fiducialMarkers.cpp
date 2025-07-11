@@ -939,8 +939,8 @@ namespace Anki
 
       fixedPointDivider = 1.0f / static_cast<f32>(1 << VisionMarker::NUM_FRACTIONAL_BITS);
 
-      f32 probePointsX_F32[NUM_PROBE_POINTS];
-      f32 probePointsY_F32[NUM_PROBE_POINTS];
+      std::vector<f32> probePointsX_F32(NUM_PROBE_POINTS);
+      std::vector<f32> probePointsY_F32(NUM_PROBE_POINTS);
 
       for(s32 i_pt=0; i_pt<NUM_PROBE_POINTS; i_pt++) {
         probePointsX_F32[i_pt] = static_cast<f32>(ProbePoints_X[i_pt]) * fixedPointDivider;

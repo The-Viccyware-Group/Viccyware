@@ -51,7 +51,7 @@ namespace Vector {
   CONSOLE_VAR_RANGED(f32,   kProcFace_AntiAliasingSigmaFraction,  CONSOLE_GROUP, 0.5f, 0.0f, 1.0f);
   CONSOLE_VAR(bool, kProcFace_CustomEyes, CONSOLE_GROUP, false);
   CONSOLE_VAR_RANGED(f32, kProcFace_CustomEyeOpacity, CONSOLE_GROUP, 0.8f, 0.f, 1.f);
-  CONSOLE_VAR_ENUM(u8, kProcFace_FlavorOfGay, CONSOLE_GROUP, 0, "Lesbian,Gay,Bi,Trans,Pan,Frog,All,Custom");
+  CONSOLE_VAR_ENUM(u8, kProcFace_FlavorOfGay, CONSOLE_GROUP, 0, "Lesbian,Gay,Bi,Trans,Pan,Frog,All,Galaxy,Custom");
   static void LOOK_LoadFaceOverlay(ConsoleFunctionContextRef context)
   {
     ProceduralFaceDrawer::LoadCustomEyePNG();
@@ -253,11 +253,11 @@ namespace Vector {
     }
   }
 
-  void ProceduralFaceDrawer::LoadCustomEyePNG()
+void ProceduralFaceDrawer::LoadCustomEyePNG()
 {
   std::lock_guard<std::mutex> lk(gCustomEyeMtx);
   _hasCustomEyes = false;
-  static const cv::String kFaceOverlays[8] = { 
+  static const cv::String kFaceOverlays[9] = { 
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/lesbian.jpg", 
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/gay.jpg",
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/bi.jpg",
@@ -265,6 +265,7 @@ namespace Vector {
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/pan.jpg",
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/frog.jpg",
     "/anki/data/assets/cozmo_resources/assets/faceOverlays/all.jpg",
+    "/anki/data/assets/cozmo_resources/assets/faceOverlays/galaxy.jpg",
     "/data/data/customFaceOverlay.jpg"
   };
   const cv::String kFaceOverlay = kFaceOverlays[kProcFace_FlavorOfGay];
@@ -273,10 +274,10 @@ namespace Vector {
     return;
   }
 
-  // might want to set a maximum resolution, but we don't need it to match face anymore
-  // if(img.cols != FACE_DISPLAY_WIDTH || img.rows != FACE_DISPLAY_HEIGHT) {
-  //   return;
-  // }
+  // if given a 1920x1080 image, we don't want to scale that upon every face draw
+  if (img.cols != FACE_DISPLAY_WIDTH || img.rows > FACE_DISPLAY_HEIGHT) {
+    cv::resize(img, img, cv::Size(FACE_DISPLAY_WIDTH, FACE_DISPLAY_HEIGHT), 0, 0, cv::INTER_AREA);
+  }
 
   bool hasAlpha = (img.channels() == 4);
   if(!hasAlpha && img.channels() != 3) {
@@ -296,14 +297,13 @@ namespace Vector {
 
     for(int c=0; c<img.cols; ++c)
     {
-
       u8 b,g,r8,a;
       if(hasAlpha) { 
         b=src4[c][0]; 
         g=src4[c][1]; 
         r8=src4[c][2]; 
-         a=src4[c][3]; }
-      else { 
+        a=src4[c][3]; 
+      } else { 
         b=src3[c][0]; 
         g=src3[c][1]; 
         r8=src3[c][2]; 
@@ -313,11 +313,12 @@ namespace Vector {
       dstPix[c] = { 
         static_cast<u16>( ((r8 & 0xF8)<<8) | ((g & 0xFC)<<3) | (b>>3) ) 
       };
-      dstA  [c] = a;
+      dstA[c] = a;
     }
   }
   _hasCustomEyes = true;
 }
+
 
   void ProceduralFaceDrawer::DrawEye(const ProceduralFace& faceData, WhichEye whichEye, const Matrix_3x3f* W_facePtr,
                                      Vision::Image& faceImg, Rectangle<f32>& eyeBoundingBox)
@@ -1030,6 +1031,7 @@ bool ProceduralFaceDrawer::ApplyCustomOverlay(const ProceduralFace& faceData,
   if(kProcFace_CustomEyes && _hasCustomEyes)
   {
     std::lock_guard<std::mutex> lk(gCustomEyeMtx);
+    (void)_didLoadCustom;
 
     const int padX = 5;
     int xMin0 = _faceColMin - padX;

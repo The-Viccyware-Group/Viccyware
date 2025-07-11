@@ -491,7 +491,7 @@ void AIWhiteboard::RemovePossibleObjectsMatching(ObjectType objectType, const Po
                               relPose.GetTranslation().x(),
                               relPose.GetTranslation().y(),
                               relPose.GetTranslation().z(),
-                              objectType);
+                              static_cast<int32_t>(objectType));
           }
 
           // they are close, remove old entry

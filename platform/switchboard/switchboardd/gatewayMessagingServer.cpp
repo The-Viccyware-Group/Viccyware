@@ -286,11 +286,11 @@ void GatewayMessagingServer::sEvGatewayMessageHandler(struct ev_loop* loop, stru
 bool GatewayMessagingServer::SendMessage(const SwitchboardResponse& message) {
   if (_server.HasClient()) {
     uint16_t message_size = message.Size();
-    uint8_t buffer[message_size + kMessageHeaderLength];
-    message.Pack(buffer + kMessageHeaderLength, message_size);
-    memcpy(buffer, &message_size, kMessageHeaderLength);
+    std::vector<uint8_t> buffer(message_size + kMessageHeaderLength);
+    message.Pack(buffer.data() + kMessageHeaderLength, message_size);
+    memcpy(buffer.data(), &message_size, kMessageHeaderLength);
 
-    const ssize_t res = _server.Send((const char*)buffer, sizeof(buffer));
+    const ssize_t res = _server.Send((const char*)buffer.data(), buffer.size());
     if (res < 0) {
       _server.Disconnect();
       return false;

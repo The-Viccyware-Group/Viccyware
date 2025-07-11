@@ -299,7 +299,7 @@ namespace Anki {
           }
           default:
           {
-            AnkiError( "PAP.StartBackingOut.InvalidAction", "%hhu", action_);
+            AnkiError( "PAP.StartBackingOut.InvalidAction", "%u", static_cast<uint8_t>(action_));
           }
         }
 
@@ -382,7 +382,7 @@ namespace Anki {
                 cliffAlignState_ = INIT;
                 break;
               default:
-                AnkiError( "PAP.SET_LIFT_PREDOCK.InvalidAction", "%hhu", action_);
+                AnkiError( "PAP.SET_LIFT_PREDOCK.InvalidAction", "%u", static_cast<uint8_t>(action_));
                 Reset();
                 break;
             }
@@ -504,7 +504,7 @@ namespace Anki {
                     break;
                   }
                   default:
-                    AnkiError( "PAP.DOCKING.InvalidAction", "%hhu", action_);
+                    AnkiError( "PAP.DOCKING.InvalidAction", "%u", static_cast<uint8_t>(action_));
                 } // switch(action_)
 
 
@@ -613,7 +613,7 @@ namespace Anki {
                 mode_ = POPPING_A_WHEELIE;
                 break;
               default:
-                AnkiError( "PAP.SET_LIFT_POSTDOCK.InvalidAction", "%hhu", action_);
+                AnkiError( "PAP.SET_LIFT_POSTDOCK.InvalidAction", "%u", static_cast<uint8_t>(action_));
                 Reset();
                 break;
             }
@@ -716,7 +716,7 @@ namespace Anki {
                   break;
                 } // PLACE
                 default:
-                  AnkiError( "PAP.MOVING_LIFT_POSTDOCK.InvalidAction", "%hhu", action_);
+                  AnkiError( "PAP.MOVING_LIFT_POSTDOCK.InvalidAction", "%u", static_cast<uint8_t>(action_));
               } // switch(action_)
 
               // Switch to BACKOUT
@@ -973,7 +973,7 @@ namespace Anki {
           default:
           {
             Reset();
-            AnkiError( "PAP.Update.InvalidAction", "%hhu", action_);
+            AnkiError( "PAP.Update.InvalidAction", "%u", static_cast<uint8_t>(action_));
             break;
           }
         }

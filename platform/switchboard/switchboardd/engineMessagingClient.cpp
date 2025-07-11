@@ -197,11 +197,11 @@ void EngineMessagingClient::HandleHasBleKeysRequest() {
 
 void EngineMessagingClient::SendMessage(const GMessage& message) {
   uint16_t message_size = message.Size();
-  uint8_t buffer[message_size + kMessageHeaderLength];
-  message.Pack(buffer + kMessageHeaderLength, message_size);
-  memcpy(buffer, &message_size, kMessageHeaderLength);
+  std::vector<uint8_t> buffer(message_size + kMessageHeaderLength);
+  message.Pack(buffer.data() + kMessageHeaderLength, message_size);
+  memcpy(buffer.data(), &message_size, kMessageHeaderLength);
 
-  _client.Send((char*)buffer, sizeof(buffer));
+  _client.Send((char*)buffer.data(), buffer.size());
 }
 
 void EngineMessagingClient::SetPairingPin(std::string pin) {

@@ -722,7 +722,7 @@ namespace Anki {
             break;
           default:
           {
-            AnkiWarn( "TestModeController.LiftTestUpdate", "WARN: Unknown lift test mode %hhu", liftTestMode_);
+            AnkiWarn( "TestModeController.LiftTestUpdate", "WARN: Unknown lift test mode %u", static_cast<uint8_t>(liftTestMode_));
             Reset();
           }
         }
@@ -890,7 +890,7 @@ namespace Anki {
             break;
           }
           default:
-            AnkiWarn( "TestModeController.HeadTestUpdate", "Unknown head test mode %hhu", headTestMode_);
+            AnkiWarn( "TestModeController.HeadTestUpdate", "Unknown head test mode %u", static_cast<uint8_t>(headTestMode_));
             break;
         }
 
@@ -998,7 +998,7 @@ namespace Anki {
 
         // Cycle through all channels
         if (ticCnt_++ > 2000 / ROBOT_TIME_STEP_MS) {
-          AnkiInfo( "TestModeController.LightTestUpdate", "LED channel %hhu, color 0x%x", ledID_, LEDColorList_[ledColorIdx_]);
+          //AnkiInfo( "TestModeController.LightTestUpdate", "LED channel %u, color 0x%x", static_cast<uint32_t>(ledID_), LEDColorList_[ledColorIdx_]);
           //HAL::SetLED(ledID_, LEDColorList_[ledColorIdx_]);
           (void)LEDColorList_; // Prevent compiler error. Don't need this when SetLED call restored.
 
@@ -1165,7 +1165,7 @@ namespace Anki {
             updateFunc = MaxPowerTestUpdate;
             break;
           default:
-            AnkiWarn( "TestModeController.Start", "Undefined test mode %hhu\n", testMode_);
+            AnkiWarn( "TestModeController.Start", "Undefined test mode %u\n", static_cast<uint8_t>(testMode_));
             Reset();
             ret = RESULT_FAIL;
             break;

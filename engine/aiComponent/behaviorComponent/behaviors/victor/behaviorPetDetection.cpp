@@ -35,9 +35,9 @@ BehaviorPetDetection::BehaviorPetDetection(const Json::Value& config)
  , _activationCount(0)
  , _cooldownUntil(Clock::now())
 {
-  SubscribeToTags({{
+  SubscribeToTags({
     ExternalInterface::MessageEngineToGameTag::RobotObservedPet,
-  }});
+  });
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -82,16 +82,11 @@ void BehaviorPetDetection::OnBehaviorActivated()
   if (_activationCount >= 3) {
     _activationCount = 0;
     int randSec = GetRNG().RandIntInRange(150, 200);
-    ("", "");
     _cooldownUntil = Clock::now() + std::chrono::seconds(randSec);
   } else {
     _cooldownUntil = Clock::now() + std::chrono::seconds(15);
   }
 
-  AnimationTrigger trig = _isDog ? AnimationTrigger::PetDetectionDog
-                                 : AnimationTrigger::PetDetectionCat;
-
-  auto* action = new TriggerLiftSafeAnimationAction(trig);
   // kind of a placeholder until sounds are added to animations
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Down_Long_Excited, AMD_GOT::Behavior);
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Single, AMD_GOT::Behavior);

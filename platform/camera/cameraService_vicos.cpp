@@ -133,9 +133,9 @@ namespace Anki {
               _powerState != CameraPowerState::Off)
       {
         LOG_WARNING("CameraService.InitCamera.CameraStillRunning",
-                    "Camera is in state %d, power state %d",
+                    "Camera is in state %d, power state %u",
                     status,
-                    _powerState);
+                    static_cast<uint32_t>(_powerState));
         
         return RESULT_FAIL;
       }

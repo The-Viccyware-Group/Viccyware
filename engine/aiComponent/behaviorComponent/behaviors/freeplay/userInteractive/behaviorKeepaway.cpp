@@ -224,7 +224,7 @@ void BehaviorKeepaway::BehaviorUpdate()
     return;
   }
 
-  if(KeepawayState::GetOut != _dVars.state ||
+  if(KeepawayState::GetOut != _dVars.state &&
      KeepawayState::GetOutSolo != _dVars.state){
     UpdateTargetStatus();
   }

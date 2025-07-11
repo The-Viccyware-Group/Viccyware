@@ -354,8 +354,8 @@ namespace Anki {
 
       void Process_dockWithObject(const DockWithObject& msg)
       {
-        AnkiInfo( "Messages.Process_dockWithObject.Recvd", "action %hhu, dockMethod %hhu, doLiftLoadCheck %d, backUpWhileLiftingCube %d, speed %f, accel %f, decel %f",
-                 msg.action, msg.dockingMethod, msg.doLiftLoadCheck, msg.backUpWhileLiftingCube, msg.speed_mmps, msg.accel_mmps2, msg.decel_mmps2);
+        AnkiInfo( "Messages.Process_dockWithObject.Recvd", "action %u, dockMethod %u, doLiftLoadCheck %d, backUpWhileLiftingCube %d, speed %f, accel %f, decel %f",
+                 static_cast<uint8_t>(msg.action), static_cast<uint8_t>(msg.dockingMethod), msg.doLiftLoadCheck, msg.backUpWhileLiftingCube, msg.speed_mmps, msg.accel_mmps2, msg.decel_mmps2);
 
         PickAndPlaceController::SetBackUpWhileLiftingCube(msg.backUpWhileLiftingCube);
         
@@ -550,7 +550,7 @@ namespace Anki {
           }
           default:
           {
-            AnkiWarn( "Messages.Process_setControllerGains.InvalidController", "controller: %hhu",  msg.controller);
+            AnkiWarn( "Messages.Process_setControllerGains.InvalidController", "controller: %u",  static_cast<uint8_t>(msg.controller));
           }
         }
       }
@@ -593,7 +593,7 @@ namespace Anki {
           }
           default:
           {
-            AnkiWarn( "Messages.enableMotorPower.UnhandledMotorID", "%hhu", msg.motorID);
+            AnkiWarn( "Messages.enableMotorPower.UnhandledMotorID", "%u", static_cast<uint8_t>(msg.motorID));
             break;
           }
         }
@@ -786,14 +786,14 @@ namespace Anki {
       {
         //Stuff msgID up front
         size_t newSize = size + 1;
-        u8 buf[newSize];
+        std::vector<u8> buf(static_cast<size_t>(newSize));
 
-        memcpy(buf, &msgID, 1);
-        memcpy(buf + 1, buffer, size);
+        memcpy(buf.data(), &msgID, 1);
+        memcpy(buf.data() + 1, buffer, size);
 
         //fprintf(stderr, "RadioSendMsg: %02x [%d]", msgID, newSize);
 
-        return HAL::RadioSendPacket(buf, newSize);
+        return HAL::RadioSendPacket(buf.data(), newSize);
       }
 
 

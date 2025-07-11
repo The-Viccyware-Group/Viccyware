@@ -166,8 +166,8 @@ function usage_fix_lfs() {
 
 if [ -z "${CMAKE_EXE+x}" ]; then
     echo "Attempting to install cmake"
-    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 3.20.6
-    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 3.20.6`
+    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 4.0.3
+    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 4.0.3`
     echo ${CMAKE_EXE}
 fi
 
@@ -440,6 +440,7 @@ if [ $CONFIGURE -eq 1 ]; then
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
         -DPROTOBUF_HOME=${PROTOBUF_HOME} \
         -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \
+	-DCMAKE_COLOR_DIAGNOSTICS=ON \
         ${EXPORT_FLAGS} \
         ${FEATURE_FLAGS} \
         ${DEFINES} \
@@ -463,7 +464,8 @@ if [ $USE_SHAKE -eq 0 ]; then
   if [ $VERBOSE -eq 1 ]; then
     VERBOSE_ARG="--verbose"
   fi
-  shake --digest-and-input --report -j $VERBOSE_ARG $*
+  echo "- Using shake to build"
+  shake --digest-and-input -j -V -V -V --color $*
 else
   TARGET_ARG=""
   if [ -n "$CMAKE_TARGET" ]; then

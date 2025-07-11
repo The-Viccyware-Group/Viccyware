@@ -628,7 +628,7 @@ namespace Anki
                       "LucasKanadeTracker_SampledPlanar6dof::LucasKanadeTracker_SampledPlanar6dof",
                       "Out of memory allocating magnitudeImageNLMS. Could not allocate %dx%d points.", numPointsX, numPointsY);
                     magnitudeImageNLMS.SetZero();
-                    s32 nonZeroCount = 0;
+                    //s32 nonZeroCount = 0;
 #if SAMPLE_TOP_HALF_ONLY
                     for(s32 i=1; i<(numPointsY/2)-1; ++i) {
 #else
@@ -658,7 +658,7 @@ namespace Anki
                           (mag > magUpRight && mag > magDownLeft))
                         {
                           magNLMS_i[j] = true; //mag_i[j];
-                          ++nonZeroCount;
+                          //++nonZeroCount;
                         }
                       } // for(s32 j=1; j<numPointsX-1; ++j)
                     } // for(s32 i=1; i<numPointsY-1; ++i)
@@ -1593,8 +1593,6 @@ namespace Anki
           b1 = 0.f;
           b2 = 0.f;
 
-          s32 numInBounds = 0;
-
           // TODO: make the x and y limits from 1 to end-2
 
           for(s32 iSample=0; iSample<numTemplateSamples; iSample++) {
@@ -1635,8 +1633,6 @@ namespace Anki
               AWAt22 -= A2*A2;
               continue;
             }
-
-            numInBounds++;
 
             const f32 alphaX = xTransformed - x0;
             const f32 alphaXinverse = 1 - alphaX;
@@ -1825,8 +1821,6 @@ namespace Anki
             b_raw[i] = 0;
           }
 
-          s32 numInBounds = 0;
-
           // TODO: make the x and y limits from 1 to end-2
 
           // DEBUG!!!
@@ -1895,8 +1889,6 @@ namespace Anki
 
               continue;
             }
-
-            numInBounds++;
 
             const f32 alphaX = xTransformed - x0;
             const f32 alphaXinverse = 1.0f - alphaX;

@@ -604,8 +604,8 @@ void SafeNumericCast(const FromType& fromVal, ToType& toVal, const char* debugNa
           const auto stateId = static_cast<GameState::GenericState>(aState->stateId());
           if ((GameState::StateGroupType::Invalid == groupId) || (GameState::GenericState::Invalid == stateId)) {
             PRINT_NAMED_ERROR("RobotAudioKeyFrame.SetMembersFromFlatBuf.InvalidGameState",
-                              "'%s' @ %i ms : Has an invalid stateGroupId (%i) or stateId (%i)",
-                              animNameDebug.c_str(), _triggerTime_ms, groupId, stateId);
+                              "'%s' @ %u ms : Has an invalid stateGroupId (%u) or stateId (%u)",
+                              animNameDebug.c_str(), _triggerTime_ms, static_cast<uint32_t>(groupId), static_cast<uint32_t>(stateId));
             // Move to next State
             continue;
           }
@@ -624,8 +624,8 @@ void SafeNumericCast(const FromType& fromVal, ToType& toVal, const char* debugNa
           const auto stateId = static_cast<SwitchState::GenericSwitch>(aSwitch->stateId());
           if ((SwitchState::SwitchGroupType::Invalid == groupId) || (SwitchState::GenericSwitch::Invalid == stateId)) {
             PRINT_NAMED_ERROR("RobotAudioKeyFrame.SetMembersFromFlatBuf.InvalidSwitchState",
-                              "'%s' @ %i ms : Has an invalid switchGroupId (%i) or stateId (%i)",
-                              animNameDebug.c_str(), _triggerTime_ms, groupId, stateId);
+                              "'%s' @ %i ms : Has an invalid switchGroupId (%u) or stateId (%u)",
+                              animNameDebug.c_str(), _triggerTime_ms, static_cast<uint32_t>(groupId), static_cast<uint32_t>(stateId));
             // Move to next Switch
             continue;
           }

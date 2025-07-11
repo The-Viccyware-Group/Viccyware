@@ -53,8 +53,9 @@ def install_cmake(version):
         platform_name = 'linux-arm64'
 
     (major, minor, patch) = version.split('.')
-    cmake_short_ver = "{}.{}".format(major, minor)
-    cmake_url_prefix = "https://cmake.org/files/v{}".format(cmake_short_ver)
+    cmake_short_ver = "{}.{}.{}".format(major, minor, patch)
+    #cmake_url_prefix = "https://cmake.org/files/v{}".format(cmake_short_ver)
+    cmake_url_prefix = "https://github.com/Kitware/CMake/releases/download/v{}".format(cmake_short_ver)
 
     cmake_platform = platform_map[platform_name]
     cmake_basename = "cmake-{}-{}".format(version, cmake_platform)
@@ -106,7 +107,7 @@ def setup_cmake(required_ver):
 
 def parseArgs(scriptArgs):
     version = '1.0'
-    default_cmake_version = "3.20.6"
+    default_cmake_version = "4.0.3"
     parser = argparse.ArgumentParser(description='finds or installs cmake', version=version)
     parser.add_argument('--install-cmake',
                         nargs='?',

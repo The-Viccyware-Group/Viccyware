@@ -55,11 +55,11 @@ namespace Switchboard {
     }
     
     void SendRawMessage(uint8_t multipart, uint8_t* buffer, size_t msgSize) {
-      uint8_t msgBuffer[msgSize + 1];
+      std::vector<uint8_t> msgBuffer(msgSize + 1);
       
       msgBuffer[0] = GetHeaderByte(multipart, msgSize);
-      memcpy(msgBuffer + 1, buffer, msgSize);
-      _sendRawBufferSignal.emit(msgBuffer, msgSize + 1);
+      memcpy(msgBuffer.data() + 1, buffer, msgSize);
+      _sendRawBufferSignal.emit(msgBuffer.data(), msgSize + 1);
     }
     
     static inline uint8_t GetMultipartBits(uint8_t msgSize) {

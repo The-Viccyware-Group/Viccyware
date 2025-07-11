@@ -71,8 +71,8 @@ private:
 // Generates number in the whole range of given type
 template <typename T>
 T RandomGenerator::RandT() {
-  double maxVal = std::numeric_limits<T>::max();
-  double minVal = std::numeric_limits<T>::min();
+  double maxVal = static_cast<double>(std::numeric_limits<T>::max());
+  double minVal = static_cast<double>(std::numeric_limits<T>::min());
   double range = (maxVal-minVal+1);
   return (T)((GetNextDbl() * range) + minVal);
 }

@@ -24,12 +24,12 @@ namespace AudioUtil {
 class IAudioInputSource
 {
 public:
-  IAudioInputSource() = default;
+  IAudioInputSource() = delete;
   virtual ~IAudioInputSource() { }
-  IAudioInputSource(const IAudioInputSource&) = default;
-  IAudioInputSource& operator=(const IAudioInputSource&) = default;
-  IAudioInputSource(IAudioInputSource&& other) = default;
-  IAudioInputSource& operator=(IAudioInputSource&& other) = default;
+  IAudioInputSource(const IAudioInputSource&) = delete;
+  IAudioInputSource& operator=(const IAudioInputSource&) = delete;
+  IAudioInputSource(IAudioInputSource&& other) = delete;
+  IAudioInputSource& operator=(IAudioInputSource&& other) = delete;
   
   using DataCallback = std::function<void(const AudioSample* samples, uint32_t size)>;
   void SetCallback(DataCallback newCallback)

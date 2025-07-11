@@ -227,7 +227,7 @@ InternalStatesBehavior::InternalStatesBehavior(const Json::Value& config,
       const std::string& stateStr = transitionDefConfig["from"].asString();
       if( stateStr == "*" ) {
         // special case: all states
-        for( const auto statePair : *_states ) {
+        for( const auto& statePair : *_states ) {
           fromStates.push_back( statePair.first );
         }
       }

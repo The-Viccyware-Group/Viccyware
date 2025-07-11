@@ -75,8 +75,8 @@ void ConditionFacePositionUpdated::HandleEvent(const EngineToGameEvent& event, B
     default:
     {
       PRINT_NAMED_ERROR("ReactionStrategyFacePositionUpdate.HandleMessages.InvalidTag",
-                      "Received event with unhandled tag %hhu.",
-                      event.GetData().GetTag());
+                      "Received event with unhandled tag %u.",
+                      static_cast<uint32_t>(event.GetData().GetTag()));
     }
     break;
   }

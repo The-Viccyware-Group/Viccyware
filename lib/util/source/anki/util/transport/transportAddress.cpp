@@ -230,10 +230,10 @@ bool TransportAddress::operator==(const TransportAddress& rhs) const
     case Type::None:
       return true;
     case Type::IP:
-      return (_address.ip.addr == rhs._address.ip.addr && _address.ip.port == _address.ip.port);
+      return (_address.ip.addr == rhs._address.ip.addr && _address.ip.port == rhs._address.ip.port);
     case Type::IPv6:
       return (IN6_ARE_ADDR_EQUAL(&(_address.ipv6.addr),&(rhs._address.ipv6.addr))
-              && _address.ipv6.port == _address.ipv6.port);
+              && _address.ipv6.port == rhs._address.ipv6.port);
     case Type::Virtual:
       return (_address.virt.id == rhs._address.virt.id);
     case Type::BLE:

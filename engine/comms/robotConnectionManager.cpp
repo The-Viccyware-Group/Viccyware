@@ -210,7 +210,7 @@ void RobotConnectionManager::ProcessArrivedMessages()
     else
     {
       LOG_ERROR("RobotConnectionManager.ProcessArrivedMessages.UnhandledMessageType",
-                "Unhandled message type %d. Ignoring", nextMessage.GetType());
+                "Unhandled message type %d. Ignoring", static_cast<int>(nextMessage.GetType()));
     }
   }
 }

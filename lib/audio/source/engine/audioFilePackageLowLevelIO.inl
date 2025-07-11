@@ -190,10 +190,10 @@ AKRESULT AudioFilePackageLowLevelIO<T_LLIOHOOK_FILELOC,T_PACKAGE>::Close(
     )
 {
 	// Do not close handle if it is that of the file package (closed only in UnloadFilePackage()).
-    if ( !IsInPackage( in_fileDesc ) )
+    if ( !IsInPackage( in_fileDesc ) ) {
         return T_LLIOHOOK_FILELOC::Close( in_fileDesc );
-    
-	return AK_Success;
+    }
+    return AK_Success;
 }
 
 // Override GetBlockSize: Get the block size of the LUT if a file package is loaded.

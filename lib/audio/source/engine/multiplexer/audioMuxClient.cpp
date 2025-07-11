@@ -128,8 +128,6 @@ void AudioMuxClient::PerformCallback( const AudioCallback& callbackData )
 {
   const auto it = _callbackMap.find( callbackData.GetId() );
   if ( it == _callbackMap.end() ) {
-    PRINT_NAMED_WARNING("AudioMuxClient.PerformCalback", "Can't find CallbackId %d for callback type %hhu",
-                        callbackData.GetId(), callbackData.GetType());
     return;
   }
   // Perform callback

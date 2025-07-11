@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6.0)
+cmake_minimum_required(VERSION 3.10)
 
 # CMake invokes the toolchain file twice during the first build, but only once
 # during subsequent rebuilds. This was causing the various flags to be added
@@ -97,26 +97,23 @@ set(VICOS_LINKER_FLAGS_EXE)
 
 # Generic flags.
 list(APPEND VICOS_COMPILER_FLAGS
+    # Remove -Werror if you want to be LAZY
+    -Werror
     -DVICOS
     -Qunused-arguments
-	-w
 	-ffunction-sections
 	-fdata-sections
 	-funwind-tables
 	-fstack-protector-strong
-	-Wno-nonportable-include-path
-	-Wno-delete-non-virtual-dtor
+	# TFLite 2.19 has c++17-written headers - let's just ignore the use of these extensions now
+	-Wno-c++17-extensions
 #  -flto
 #  -fvisibility=hidden
 #  -fsanitize=cfi
 	-no-canonical-prefixes)
 list(APPEND VICOS_COMPILER_FLAGS_CXX
     -Qunused-arguments
-	-w
 	-fno-exceptions
-	-Wno-nonportable-include-path
-	-Wno-delete-non-virtual-dtor
-	-Wgnu-include-next
 	-fno-rtti)
 list(APPEND VICOS_COMPILER_FLAGS_RELEASE
   -D_FORTIFY_SOURCE=2)
@@ -154,7 +151,7 @@ endif()
 list(APPEND VICOS_COMPILER_FLAGS
 	-march=armv7-a
 	-mfloat-abi=softfp
-	-mfpu=vfpv4-neon)
+	-mfpu=neon-vfpv4)
 list(APPEND VICOS_LINKER_FLAGS
 	-Wl,--fix-cortex-a8)
 
@@ -211,8 +208,8 @@ endif()
 # set thumb mode (use -marm for arm mode)
 list(APPEND VICOS_COMPILER_FLAGS -mthumb)
 
-list(APPEND VICOS_COMPILER_FLAGS
-    -mfpu=neon)
+#list(APPEND VICOS_COMPILER_FLAGS
+#    -mfpu=neon)
 #list(APPEND VICOS_COMPILER_FLAGS
 #    -Wa,--noexecstack)
 list(APPEND VICOS_LINKER_FLAGS

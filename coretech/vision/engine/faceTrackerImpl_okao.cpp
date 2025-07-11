@@ -1141,8 +1141,9 @@ namespace Vision {
     // If we know everyone, no need to random shuffle (skip all)
     if(numDetections > 1 && skipRecognition.size() != numDetections)
     {
-      std::random_shuffle(detectionIndices.begin(), detectionIndices.end(),
-                          [this](int i) { return _rng->RandInt(i); });
+      //std::random_shuffle(detectionIndices.begin(), detectionIndices.end(),
+      //                    [this](int i) { return _rng->RandInt(i); });
+      std::shuffle(detectionIndices.begin(), detectionIndices.end(), std::default_random_engine());
     }
     
     for(auto const& detectionIndex : detectionIndices)

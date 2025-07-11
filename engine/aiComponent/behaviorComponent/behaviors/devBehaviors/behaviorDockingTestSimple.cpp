@@ -945,7 +945,7 @@ void BehaviorDockingTestSimple::HandleWhileActivated(const EngineToGameEvent& ev
       
     default:
       PRINT_CH_INFO("Behaviors", "BehaviorDockingTest.HandleWhileRunning.InvalidTag",
-                        "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+                        "Received unexpected event with tag %u.", static_cast<uint32_t>(event.GetData().GetTag()));
       break;
   }
 }
@@ -1060,14 +1060,14 @@ void BehaviorDockingTestSimple::HandleObservedObject(Robot& robot,
     }
     else
     {
-      PRINT_NAMED_WARNING("BehaviorDockingTest.HandleObservedObject.UnexpectedBlock", "ID: %d, Type: %d", objectID.GetValue(), oObject->GetType());
+      PRINT_NAMED_WARNING("BehaviorDockingTest.HandleObservedObject.UnexpectedBlock", "ID: %d, Type: %d", objectID.GetValue(), static_cast<int32_t>(oObject->GetType()));
       _dVars.yellForHelp = true;
       END_TEST_IN_HANDLER(ActionResult::ABORT, "UnexpectedBlock");
     }
   }
   else
   {
-    PRINT_NAMED_WARNING("BehaviorDockingTest.HandleObservedObject.UnexpectedObservedObject", "ID: %d, Type: %d", objectID.GetValue(), oObject->GetType());
+    PRINT_NAMED_WARNING("BehaviorDockingTest.HandleObservedObject.UnexpectedObservedObject", "ID: %d, Type: %d", objectID.GetValue(), static_cast<int32_t>(oObject->GetType()));
     _dVars.yellForHelp = true;
     END_TEST_IN_HANDLER(ActionResult::ABORT, "UnexpectedObject");
   }

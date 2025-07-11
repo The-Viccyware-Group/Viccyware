@@ -587,8 +587,6 @@ namespace Anki {
           b_raw[ia] = 0;
         }
 
-        s32 numInBounds = 0;
-
         EndBenchmark("vme_quadrefine_mainLoop_init");
 
         BeginBenchmark("vme_quadrefine_mainLoop_samples");
@@ -626,8 +624,6 @@ namespace Anki {
           //EndBenchmark("vme_quadrefine_mainLoop_samples1");
 
           //BeginBenchmark("vme_quadrefine_mainLoop_samples2");
-
-          numInBounds++;
 
           const f32 alphaX = xTransformed - x0;
           const f32 alphaXinverse = 1.0f - alphaX;

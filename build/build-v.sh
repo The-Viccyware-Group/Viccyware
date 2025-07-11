@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 TOOLCHAIN_VERSION="5.2.1-r06"
+CURRENT_BUILDER="vic-standalone-builder-7"
 
 set -e
 
@@ -67,28 +68,16 @@ else
 	mkdir -p build/cache
 	mkdir -p build/gocache
 	mkdir -p build/usercache
-	if [[ ! -z $(docker images -q vic-standalone-builder-5) ]]; then
-		echo "Purging old vic-standalone-builder-5 container... this might take a while"
-		docker ps -a --filter "ancestor=vic-standalone-builder-5" -q | xargs -r docker rm -f
-		docker rmi -f $(docker images --filter "reference=vic-standalone-builder-5*" --format '{{.ID}}')
-		#echo
-		#echo -e "\033[5m\033[1m\033[31mOld Docker builder detected on system. If you have built victor or wire-os many times, it is recommended you run:\033[0m"
-		#echo
-		#echo -e "\033[1m\033[36mdocker system prune -a --volumes\033[0m"
-		#echo
-		#echo -e "\033[32mContinuing in 5 seconds... (you will only see this message once)\033[0m"
-		#sleep 5
-	fi
-	if [[ -z $(docker images -q vic-standalone-builder-6) ]]; then
+	if [[ -z $(docker images -q $CURRENT_BUILDER) ]]; then
 		docker build \
 		--build-arg DIR_PATH="$(pwd)" \
 		--build-arg USER_NAME=$USER \
 		--build-arg UID=$(id -u $USER) \
 		--build-arg GID=$(id -u $USER) \
-		-t vic-standalone-builder-6 \
+		-t $CURRENT_BUILDER \
 		build/
 	else
-		echo "Reusing vic-standalone-builder-6"
+		echo "Reusing $CURRENT_BUILDER"
 	fi
 	docker run --rm -it \
 		-v $(pwd)/anki-deps:/home/$USER/.anki \
@@ -96,7 +85,7 @@ else
 		-v $(pwd)/build/cache:/home/$USER/.ccache \
 		-v $(pwd)/build/gocache:/home/$USER/go \
 		-v $(pwd)/build/usercache:/home/$USER/.cache \
-		vic-standalone-builder-6 bash -c \
+		$CURRENT_BUILDER bash -c \
 		"cd $(pwd) && \
 		./project/victor/scripts/victor_build_release.sh $@ && \
 		echo && \

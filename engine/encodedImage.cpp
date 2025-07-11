@@ -85,8 +85,8 @@ namespace Vector {
   {
     if(chunk.data.size() > static_cast<u32>(ImageConstants::IMAGE_CHUNK_SIZE)) {
       PRINT_NAMED_WARNING("EncodedImage.AddChunk.ChunkTooBig",
-                          "Expecting chunks of size no more than %d, got %zu.",
-                          ImageConstants::IMAGE_CHUNK_SIZE, chunk.data.size());
+                          "Expecting chunks of size no more than %d, got %u.",
+                          static_cast<int>(ImageConstants::IMAGE_CHUNK_SIZE), static_cast<uint32_t>(chunk.data.size()));
       return false;
     }
     

@@ -280,7 +280,7 @@ void BehaviorFactoryCentroidExtractor::HandleWhileActivated(const EngineToGameEv
   else
   {
     PRINT_NAMED_WARNING("BehaviorFactoryCentroidExtractor.HandleWhileRunning",
-                        "Received event with tag %hhu not handling", event.GetData().GetTag());
+                        "Received event with tag %u not handling", static_cast<uint8_t>(event.GetData().GetTag()));
   }
 }
 

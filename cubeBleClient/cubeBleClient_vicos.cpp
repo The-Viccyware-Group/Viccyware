@@ -334,9 +334,9 @@ void CubeBleClient::StopScanInternal()
 
 bool CubeBleClient::SendMessageInternal(const MessageEngineToCube& msg)
 {
-  u8 buff[msg.Size()];
-  msg.Pack(buff, msg.Size());
-  const auto& msgVec = std::vector<u8>(buff, buff + msg.Size());
+  std::vector<u8> buff(msg.Size());
+  msg.Pack(buff.data(), msg.Size());
+  const auto& msgVec = std::vector<u8>(buff.data(), buff.data() + msg.Size());
 
   // Sending from this thread for now. May need to queue this and
   // send it on the client thread if ipc client is not thread safe.

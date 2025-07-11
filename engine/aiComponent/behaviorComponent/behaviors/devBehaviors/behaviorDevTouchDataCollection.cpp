@@ -116,7 +116,7 @@ void BehaviorDevTouchDataCollection::HandleWhileActivated(const RobotToEngineEve
     default:
     {
       PRINT_NAMED_WARNING("BehaviorDevTouchDataCollection.HandleWhileRunning.InvalidRobotToEngineTag",
-          "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+          "Received unexpected event with tag %u.", static_cast<uint8_t>(event.GetData().GetTag()));
       break;
     }
   }

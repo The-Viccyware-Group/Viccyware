@@ -24,7 +24,7 @@ namespace Anki
 {
   namespace Embedded
   {
-    typedef struct
+    typedef struct EdgeLists_s
     {
       // These should be allocated by the user, before calling DetectBlurredEdges
       FixedLengthList<Point<s16> > xDecreasing;

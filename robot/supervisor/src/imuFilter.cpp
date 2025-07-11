@@ -116,7 +116,7 @@ namespace Anki {
         f32 abs_accel_robot_frame_filt[3] = {0};  // Absolute value of accelerations
         const f32 ACCEL_FILT_COEFF      = 0.1f;   // IIR low-pass filter coefficient (1 == disable filter)
 
-        f32 accelMagnitudeSqrd_         = 9810 * 9810;
+        f32 accelMagnitudeSqrd_         = 9810.0f * 9810.0f;
 
         const f32 HP_ACCEL_FILT_COEFF   = 0.5f;     // IIR high-pass filter coefficient (0 == no-pass)
         f32 accel_robot_frame_high_pass[3] = {0};

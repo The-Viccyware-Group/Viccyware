@@ -306,7 +306,7 @@ void PowerStateManager::TogglePowerSaveSetting( const RobotCompMap& components,
           {
             PRINT_NAMED_WARNING("PowerStateManager.ToggleOn.CameraServiceAlreadyRunning",
                                 "CameraState:%d not initing",
-                                _cameraState);
+                                static_cast<int>(_cameraState));
           }
         }
       }

@@ -92,7 +92,7 @@ bool NVStorageComponent::Write(NVEntryTag tag,
   
   if (IsFactoryEntryTag(tag) && !_writingFactory) {
     PRINT_NAMED_WARNING("NVStorageComponent.Write.FactoryTagNotAllowed",
-                        "Tag: %s (0x%x)", EnumToString(tag), tag);
+                        "Tag: %s (%u)", EnumToString(tag), static_cast<uint32_t>(tag));
     validArgs = false;
   }
   
@@ -150,7 +150,7 @@ bool NVStorageComponent::Erase(NVEntryTag tag,
   
   if (IsFactoryEntryTag(tag) && !_writingFactory) {
     PRINT_NAMED_WARNING("NVStorageComponent.Write.FactoryTagNotAllowed",
-                        "Tag: %s (0x%x)", EnumToString(tag), tag);
+                        "Tag: %s (%u)", EnumToString(tag), static_cast<uint32_t>(tag));
     validArgs = false;
   }
   

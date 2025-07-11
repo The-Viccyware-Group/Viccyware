@@ -1190,7 +1190,7 @@ void AlexaImpl::OnInternetConnectionChanged( bool connected )
 void AlexaImpl::OnAVSConnectionChanged( const avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status status,
                                         const avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::ChangedReason reason )
 {
-  LOG_INFO("AlexaImpl.OnAVSConnectionChanged", "status=%d, reason=%d", status, reason);
+  LOG_INFO("AlexaImpl.OnAVSConnectionChanged", "status=%d, reason=%d", static_cast<int>(status), static_cast<int>(reason));
   if( status == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::CONNECTED ) {
     _avsEverConnected = true;
   }

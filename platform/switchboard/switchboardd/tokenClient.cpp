@@ -119,10 +119,10 @@ std::shared_ptr<TokenResponseHandle> TokenClient::SendJwtRequest(JwtRequestCallb
 
 void TokenClient::SendMessage(const Anki::Vector::TokenRequest& message) {
   uint16_t message_size = message.Size();
-  uint8_t buffer[message_size];
-  message.Pack(buffer, message_size);
+  std::vector<uint8_t> buffer(message_size);
+  message.Pack(buffer.data(), message_size);
 
-  _client.Send((char*)buffer, sizeof(buffer));
+  _client.Send((char*)buffer.data(), buffer.size());
 }
 
 void TokenClient::HandleTokenResponse(Anki::Vector::TokenResponse response) {

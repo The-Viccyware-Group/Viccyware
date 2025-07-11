@@ -57,7 +57,7 @@ SetupInfo::SetupInfo(const Debayer::InArgs& inArgs, const Debayer::OutArgs& outA
     }
     default:
     {
-      PRINT_NAMED_ERROR("Debayer.RAW10.SetupInfo","Unknown output format %d",outArgs.format);
+      PRINT_NAMED_ERROR("Debayer.RAW10.SetupInfo","Unknown output format");
       return;
     }
   }
@@ -136,7 +136,7 @@ SetupInfo::SetupInfo(const Debayer::InArgs& inArgs, const Debayer::OutArgs& outA
   }
   default:
   {
-      PRINT_NAMED_ERROR("Debayer.RAW10.SetupInfo","Unknown scale %d", outArgs.scale);
+      PRINT_NAMED_ERROR("Debayer.RAW10.SetupInfo","Unknown scale");
       this->valid = false;
       return;
   }

@@ -293,7 +293,7 @@ void BehaviorLiftLoadTest::HandleWhileActivated(const EngineToGameEvent& event)
       
     default:
       PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.HandleWhileRunning.InvalidTag",
-                        "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+                        "Received unexpected event with tag %u.", static_cast<uint8_t>(event.GetData().GetTag()));
       break;
   }
 }
@@ -312,7 +312,7 @@ void BehaviorLiftLoadTest::AlwaysHandleInScope(const GameToEngineEvent& event)
     default:
     {
       PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.AlwaysHandle.InvalidTag",
-                        "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+                        "Received unexpected event with tag %u.", static_cast<uint8_t>(event.GetData().GetTag()));
       break;
     }
   }
@@ -339,7 +339,7 @@ void BehaviorLiftLoadTest::HandleWhileActivated(const RobotToEngineEvent& event)
     default:
     {
       PRINT_CH_INFO("Behaviors", "BehaviorLiftLoadTest.HandleWhileRunning.InvalidRobotToEngineTag",
-                        "Received unexpected event with tag %hhu.", event.GetData().GetTag());
+                        "Received unexpected event with tag %u.", static_cast<uint8_t>(event.GetData().GetTag()));
       break;
     }
   }

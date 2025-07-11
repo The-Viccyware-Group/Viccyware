@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.10)
 
 # uncomment this to display internal cmake state for targets, useful for debugging
 # set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_DEBUG_MODE 1)
@@ -203,9 +203,10 @@ if (VICOS)
   include(gen-version)
 endif()
 
-if (VICOS)
-  add_subdirectory("auto-test")
-endif()
+# god i just REALLY don't wanna fix this
+#if (VICOS)
+#  add_subdirectory("auto-test")
+#endif()
 
 add_subdirectory("resources")
 

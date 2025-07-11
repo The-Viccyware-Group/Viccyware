@@ -31,7 +31,7 @@ namespace Anki {
 static pid_t sChildPid = -1;
 
 static int ExecChild(const std::vector<std::string>& args) {
-  char* argv_child[args.size() + 1];
+  auto argv_child = std::make_unique<char*[]>(args.size() + 1);
 
   for (size_t i = 0 ; i < args.size() ; ++i) {
     argv_child[i] = (char *) malloc(args[i].size() + 1);
@@ -39,7 +39,7 @@ static int ExecChild(const std::vector<std::string>& args) {
   }
   argv_child[args.size()] = NULL;
 
-  int rc = execvp(argv_child[0], argv_child);
+  int rc = execvp(argv_child[0], argv_child.get());
   fprintf(stderr, "%s: %s\n", argv_child[0], strerror(errno));
   for (size_t i = 0 ; i < args.size() + 1 ; ++i) {
     free(argv_child[i]);

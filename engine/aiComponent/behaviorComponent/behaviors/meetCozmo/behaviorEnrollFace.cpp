@@ -1082,8 +1082,8 @@ void BehaviorEnrollFace::OnBehaviorDeactivated()
     }
 
     PRINT_CH_INFO(kLogChannelName, "BehaviorEnrollFace.StopInternal.BroadcastCompletion",
-                  "In state:%hhu, FaceEnrollmentResult=%s",
-                  _dVars->persistent.state, external_interface::FaceEnrollmentResult_Name(info.result()).c_str());
+                  "In state:%u, FaceEnrollmentResult=%s",
+                  static_cast<uint32_t>(_dVars->persistent.state), external_interface::FaceEnrollmentResult_Name(info.result()).c_str());
 
     if( GetBEI().GetRobotInfo().HasGatewayInterface() ) {
       auto* msg = new external_interface::FaceEnrollmentCompleted(info);

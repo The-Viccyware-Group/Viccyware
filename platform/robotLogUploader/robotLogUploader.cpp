@@ -47,10 +47,10 @@ Result RobotLogUploader::Connect()
 Result RobotLogUploader::Send(const LogCollectorRequest & request)
 {
   const size_t size = request.Size();
-  uint8_t buffer[size];
-  request.Pack(buffer, size);
+  std::vector<uint8_t> buffer(request.Size());
+  request.Pack(buffer.data(), size);
 
-  const ssize_t sent = _udpClient.Send((const char *) buffer, size);
+  const ssize_t sent = _udpClient.Send((const char *) buffer.data(), size);
   if (sent <= 0) {
     LOG_ERROR("RobotLogUploader.Send", "Failed to send log collector request (%zd/%zu)", sent, size);
     return RESULT_FAIL;
