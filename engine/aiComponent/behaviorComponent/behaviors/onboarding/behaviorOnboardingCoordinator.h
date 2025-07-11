@@ -161,6 +161,7 @@ private:
 
     bool markCompleteAndExitOnNextUpdate;
     bool skipOnboardingOnNextUpdate;
+    bool shouldExitAfterWakeUp;
 
     bool emulate1p0Onboarding;
     bool started1p0WakeUp;

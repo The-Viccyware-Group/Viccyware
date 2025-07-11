@@ -26,7 +26,7 @@
 #define CONSOLE_GROUP "PerformanceAnims"
 
 CONSOLE_VAR(bool, kOverridePerformanceCooldowns, CONSOLE_GROUP, false);
-CONSOLE_VAR(bool, kOverridePerformanceFaceNeeded, CONSOLE_GROUP, false);
+CONSOLE_VAR(bool, kOverridePerformanceFaceNeeded, CONSOLE_GROUP, true);
 
 namespace Anki {
 namespace Vector {
@@ -121,6 +121,7 @@ RobotTimeStamp_t BehaviorPossiblePerformance::GetRecentFaceTime() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorPossiblePerformance::GetBehaviorOperationModifiers(BehaviorOperationModifiers& modifiers) const
 {
+  modifiers.wantsToBeActivatedWhenOnCharger = true;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

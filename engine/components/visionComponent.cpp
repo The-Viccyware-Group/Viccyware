@@ -54,6 +54,7 @@
 #include "util/threading/threadPriority.h"
 
 #include "anki/cozmo/shared/factory/faultCodes.h"
+#include "anki/cozmo/shared/factory/emrHelper.h" // For the IsXray flag
 
 #include "proto/external_interface/shared.pb.h"
 
@@ -126,7 +127,7 @@ namespace Vector {
   }
   CONSOLE_FUNC(DebugToggleCameraEnabled, "Vision.General");
 
-  CONSOLE_VAR_RANGED(f32, kDebayerGamma, "Vision.Debayer", 1.7f, 0.1f, 4.f);
+  CONSOLE_VAR_RANGED(f32, kDebayerGamma, "Vision.Debayer", IsXray() ? 1.9f : 1.7f, 0.1f, 4.f);
   bool s_debayerResetGamma(false);
   void ResetGamma(ConsoleFunctionContextRef context)
   {
