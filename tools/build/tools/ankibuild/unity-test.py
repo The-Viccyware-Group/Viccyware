@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import argparse
 import os
@@ -9,8 +9,8 @@ import subprocess
 import sys
 
 # anki
-import builder
-import util
+from . import builder
+from . import util
 
 
 class UnityBuildConfig(object):
@@ -44,11 +44,11 @@ class UnityBuildConfig(object):
 
     def set_options(self, options):
         options_dict = vars(options)
-        for k,v in options_dict.iteritems():
+        for k, v in options_dict.items():
             if hasattr(self, k):
                 setattr(self, k, v)
 
-        if not options_dict.has_key('log_file'):
+        if 'log_file' not in options_dict:
             self.log_file = os.path.join(os.path.dirname(self.build_dir), 'UnityTest.log')
 
     def parse_arguments(self, argv):
@@ -101,7 +101,7 @@ class UnityBuild(object):
         reerror = re.compile(r"(error)|(warn)", re.I)
         reCompileStart = re.compile(r"-----CompilerOutput:-stderr----------", re.I)
         reCompileEnd = re.compile(r"-----EndCompilerOutput---------------", re.I)
-        hasCompileOut = filter(lambda x:reCompileStart.search(x), lines)
+        hasCompileOut = [x for x in lines if reCompileStart.search(x)]
         inCompilerOutSection = False
         for line in lines:
             if reCompileEnd.search(line):

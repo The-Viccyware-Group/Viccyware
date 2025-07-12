@@ -1,6 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-if [[ ! -f "${1}" ]]; then
+# usage: ./tools/build/tools/upx-if-packed.sh <path/to/upx> <path/to/file>
+
+if [[ ! -x "${1}" ]]; then
+	echo "provide an executable UPX please"
+fi
+
+if [[ ! -f "${2}" ]]; then
 	echo "must give me a file to pack"
 	exit 1
 fi

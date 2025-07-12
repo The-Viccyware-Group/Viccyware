@@ -13,7 +13,6 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 - The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
 ## Building (x86_64/arm64 Linux)
-
  - Prereqs: Make sure you have `docker` installed.
 
 1. Clone the repo and cd into it:
@@ -47,7 +46,7 @@ cd ~/Viccyware
 # only works on M1-M4 Macs at the moment, not Intel
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
-   -  Then: `brew install pyenv git-lfs ccache wget go upx`
+   -  Then: `brew install ccache wget upx`
 
 1. Clone the repo and cd into it:
 
@@ -57,37 +56,13 @@ git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware 
 cd Viccyware
 ```
 
-2. Set up Python 2:
-
-```
-pyenv install 2.7.18
-pyenv init
-```
-
-- Add the following to both ~/.zshrc and ~/.zprofile. After doing so, run the commands in your terminal session:
-```
-export PYENV_ROOT="$HOME/.pyenv"
-[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-pyenv shell 2.7.18
-```
-
-3. Disable security:
-
-```
-sudo spctl --master-disable
-sudo spctl --global-disable
-```
-- You will have to head to `System Settings -> Security & Privacy -> Allow applications from` and select "Anywhere".
-
-
-4. Run the build script:
+2. Run the build script:
 ```
 cd ~/Viccyware
 ./build/build-v.sh
 ```
 
-5. It should just work! The output will be in `./_build/vicos/Release/`
+3. It should just work! The output will be in `./_build/vicos/Release/`
 
 ## Deploying
 

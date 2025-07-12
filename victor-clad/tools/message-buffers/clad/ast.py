@@ -197,13 +197,13 @@ class NamespaceDecl(Decl):
         return False
 
     def __eq__(self, other):
-        if type(self) is type(other):
+        if isinstance(self, type(other)):
             return self.name == other.name and self.namespace == other.namespace
         else:
             return NotImplemented
 
     def __ne__(self, other):
-        if type(self) is type(other):
+        if isinstance(self, type(other)):
             return not self.__eq__(other)
         else:
             return NotImplemented

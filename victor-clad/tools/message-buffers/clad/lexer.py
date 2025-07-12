@@ -270,12 +270,12 @@ if __name__ == '__main__':
         in_file = sys.argv[1]
 
     test_lexer = AnkiBufferLexer(errorFunc)
-    test_lexer.build(optimize=False,debug=1)
+    test_lexer.build(optimize=False, debug=1)
     with open(in_file, 'r') as f:
         text = f.read()
         print(text)
         test_lexer.input(text)
-        while 1:
+        while True:
             tok = lex.token()
             if not tok: break
             print(tok)

@@ -19,17 +19,8 @@ function check_dep()
     CHECK_CMD="$*"
     eval $CHECK_CMD && return 0
 
-    echo "Depdendency check failed: $CHECK_CMD"
-    echo "If you have apt-get, you should make sure you have the following deps"
-    echo ""
-    echo "sudo apt install git-core gnupg flex bison gperf build-essential zip curl zlib1g-dev \\"
-    echo "                 gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev \\"
-    echo "		   libx11-dev lib32z-dev libxml-simple-perl libc6-dev libgl1-mesa-dev tofrodos \\"
-    echo "                 python-markdown libxml2-utils xsltproc genisoimage"
-    echo ""
-    echo "sudo apt install gawk chrpath texinfo p7zip-full android-tools-fsutils"
-    echo ""
-    echo "sudo apt install ruby ninja-build subversion libssl-dev nodejs"
+    echo "Dependency check failed: $CHECK_CMD"
+    echo "Make sure you have all of the dependencies."
     echo ""
     exit 1
 }
@@ -37,33 +28,20 @@ function check_dep()
 pushd "${TOPLEVEL}" > /dev/null 2>&1
 
 # Check for required programs
-check_dep which python2
+echo -n "Python 3: "
 check_dep which python3
+echo -n "Ninja: "
 check_dep which ninja
-#check_dep which git-lfs
-
-
-echo `pwd`
-
-vlog "vicos-sdk"
-./tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06
-
-vlog "CMake"
-./tools/build/tools/ankibuild/cmake.py
-
-#vlog "git lfs"
-#$GIT lfs install
-#$GIT lfs pull
 
 vlog "Build output dirs"
 mkdir -p generated
 mkdir -p _build
 
-vlog "Fetch & extract external dependencies. This may take 1-5 min."
 if [[ ${DONT_ANIM} != "1" ]]; then
+  vlog "Extract and compile animation and sound assets. This should take about 20 seconds."
 	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
 else
-	echo "Not extracing animation assets"
+	vlog "Not extracting animation assets"
 fi
 
 vlog "Configure audio library"

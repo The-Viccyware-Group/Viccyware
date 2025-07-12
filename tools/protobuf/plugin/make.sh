@@ -17,7 +17,8 @@ if [[ `uname -a` == *"aarch64"* || `uname -a` == *"arm64"* ]]; then
 	HOST+="-arm64"
 fi
 
-echo ${HOST}
+echo "protocCppPlugin platform: ${HOST}"
+echo "Building protocCppPlugin..."
 
 pushd ${SCRIPT_PATH} >> /dev/null
 

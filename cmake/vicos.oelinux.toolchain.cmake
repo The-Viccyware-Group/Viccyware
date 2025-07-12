@@ -107,9 +107,6 @@ list(APPEND VICOS_COMPILER_FLAGS
 	-fstack-protector-strong
 	# TFLite 2.19 has c++17-written headers - let's just ignore the use of these extensions now
 	-Wno-c++17-extensions
-#  -flto
-#  -fvisibility=hidden
-#  -fsanitize=cfi
 	-no-canonical-prefixes)
 list(APPEND VICOS_COMPILER_FLAGS_CXX
     -Qunused-arguments
@@ -123,12 +120,12 @@ list(APPEND VICOS_LINKER_FLAGS
 	-Wl,--warn-shared-textrel
 	-Wl,--gc-sections
 	-Wl,--allow-multiple-definition
-        -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-        -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
+    -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
+    -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
 #	-Wl,--fatal-warnings)
 list(APPEND VICOS_LINKER_FLAGS_EXE
-        -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
-        -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
+    -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
+    -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
 	-Wl,-z,nocopyreloc)
 
 # Debug and release flags.

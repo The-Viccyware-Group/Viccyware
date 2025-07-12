@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import json
@@ -57,7 +57,7 @@ class Builder(object):
     def parse_modules(self, module_config):
         data = json.load(module_config)
 
-        for (key, value) in data.iteritems():
+        for (key, value) in data.items():
             m = Module(key, value)
             self.modules[key] = m
 
@@ -69,7 +69,7 @@ class Builder(object):
         parser.add_argument('-b', '--build-dir', action="store")
         parser.add_argument('-o', '--output-dir', action="store")
         parser.add_argument('--log-file', action="store")
-        parser.add_argument('-p', '--platform', action="store", choices=('ios', 'android', 'mac','linux'))
+        parser.add_argument('-p', '--platform', action="store", choices=('ios', 'android', 'mac', 'linux'))
         parser.add_argument('-c', '--config', action="store", choices=('debug', 'release', 'shipping'))
         parser.add_argument('--with-basestation', action="store",
                             help="path to basestation source repo")

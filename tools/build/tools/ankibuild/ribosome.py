@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 #
 # Copyright (c) 2015 Ali Zaidi  All rights reserved.
@@ -39,7 +39,7 @@ def __line__():
 #################
 
 PROLOGUE_LINE = __line__()
-PROLOGUE = """#!/usr/bin/env python2
+PROLOGUE = """#!/usr/bin/env python3
 
 #
 # The initial part of this file belongs to the ribosome project.
@@ -330,7 +330,7 @@ linemap = []
 
 # DNA helper functions
 def dnaerror(s):
-    print >> sys.stderr, "%s:%s - %s" %(dnastack[-1][1], dnastack[-1][2], s)
+    print("%s:%s - %s" %(dnastack[-1][1], dnastack[-1][2], s), file=sys.stderr)
 
 # Generate new line(s) into the RNA file.
 def rnawrite(s):

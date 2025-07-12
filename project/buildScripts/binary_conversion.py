@@ -110,12 +110,12 @@ def read_anim_file(anim_file):
     fh = open(anim_file, 'r')
     try:
         contents = json.load(fh)
-    except StandardError, e:
-        print("Failed to read %s file because: %s" % (anim_file, e))
+    except Exception as e:
+        print(("Failed to read %s file because: %s" % (anim_file, e)))
         raise
     finally:
         fh.close()
-    anim_clip, keyframes = contents.items()[0]
+    anim_clip, keyframes = list(contents.items())[0]
     #print("The '%s' animation has %s keyframes" % (anim_clip, len(keyframes)))
     return (anim_clip, keyframes)
 
@@ -158,7 +158,7 @@ def prep_json_for_binary_conversion(anim_name, keyframes):
         # All keyframes are required to have a trigger time.
         try:
             trigger_time = keyframe[TRIGGER_TIME_ATTR]
-        except KeyError, e:
+        except KeyError as e:
             error_msg = "At least one '%s' in '%s' is missing '%s'" % (track, anim_name, TRIGGER_TIME_ATTR)
             raise KeyError(error_msg)
 
@@ -194,7 +194,7 @@ def prep_json_for_binary_conversion(anim_name, keyframes):
         # or "STRAIGHT", that attribute is always stored as a string for FlatBuffers. When the
         # engine is then loading that data, it will convert numerical values back to float
         if track == BODY_MOTION_TRACK:
-            if not isinstance(keyframe[BODY_RADIUS_ATTR], basestring):
+            if not isinstance(keyframe[BODY_RADIUS_ATTR], str):
                 keyframe[BODY_RADIUS_ATTR] = str(keyframe[BODY_RADIUS_ATTR])
 
         # Some attributes (including times in ms, speed in mm/s or deg/s, head angle in deg
@@ -351,7 +351,7 @@ def write_json_file(json_file, data):
     try:
         with open(json_file, 'w') as fh:
             json.dump(data, fh, indent=2, separators=(',', ': '))
-    except (OSError, IOError), e:
+    except (OSError, IOError) as e:
         error_msg = "Failed to write '%s' file because: %s" % (json_file, e)
         print(error_msg)
 
@@ -367,7 +367,7 @@ def convert_json_to_binary(file_path, flatc_dir, schema_file, bin_file_ext):
     stdout, stderr = p.communicate()
     exit_status = p.returncode
     if exit_status != 0:
-        print("Error encountered: %s" % stderr)
+        print(("Error encountered: %s" % stderr))
         raise ValueError("Unable to successfully generate binary file (exit status = %s)" % exit_status)
     output_file = os.path.splitext(file_path)[0] + bin_file_ext
     if not os.path.isfile(output_file):

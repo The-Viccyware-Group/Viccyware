@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Anki Inc.
 #
@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import inspect
 import os
@@ -524,7 +524,7 @@ class HStructEmitter(BaseEmitter):
     def emitProperties(self, node, globals):
         def prettifyName(str):
             str = str.lstrip('_')
-            for i,c in enumerate(str):
+            for i, c in enumerate(str):
                 if c.isalpha():
                     return str[:i] + str[i].capitalize() + str[i+1:]
             return str
@@ -611,7 +611,7 @@ class CPPStructEmitter(HStructEmitter):
                 member_dict = member.__dict__['type'].__dict__
                 if 'type_decl' in member_dict:
                     arg_list = self.__init_explicit_members(member_dict['type_decl'])
-                    if explicit_members is '':
+                    if explicit_members == '':
                         explicit_members += ': {member_name}{arg_list}'.format(member_name = member.name,
                                                                                arg_list = arg_list)
                     else:

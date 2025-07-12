@@ -81,7 +81,7 @@ class CLADParser(PLYParser):
         )
         self._input_directories = input_directories
 
-    _include_directive_re = re.compile('^#include\s+\"(.*)\"(?:\s*/.*)*$')
+    _include_directive_re = re.compile(r'^#include\s+\"(.*)\"(?:\s*/.*)*$')
 
     def token_to_coord(self, token):
         return self.lineno_to_coord(token.lineno, self.lexer.find_tok_column(token.lexpos))
@@ -192,11 +192,11 @@ class CLADParser(PLYParser):
                         isHex = True
 
                     # if the enum value is initialized with a string then set str_value and reset value
-                    if type(value) is str:
+                    if isinstance(value, str):
                         str_value = value
                         value = 0
 
-                if type(value) is not str and not (enum.storage_type.min <= value <= enum.storage_type.max):
+                if not isinstance(value, str) and not (enum.storage_type.min <= value <= enum.storage_type.max):
                     raise ParseError(
                         member.coord,
                         "Enum '{0}' has a value '{1}' outside the range of '{2}'".format(
@@ -502,7 +502,7 @@ class CLADParser(PLYParser):
 
     def _check_message_member_initializer(self, member_type_ref, initializer, member_coord):
         # Is this is a string type initializer we can't check it (could also be a use of the verbatim keyword)
-        if initializer.type is "str":
+        if initializer.type == "str":
             return
         if not member_type_ref.type.name in ast.builtin_types:
             self._parse_error("{0} is not a built in data type".format(member_type_ref.type.name),
@@ -522,7 +522,7 @@ class CLADParser(PLYParser):
         if (member_type_ref.type.max is not None) and (member_type_ref.type.max < initializer.value):
             self._parse_error("{0} is larger than the maximum value ({1}) for type {2}".format(initializer.value, member_type_ref.type.max, member_type_ref.type.name),
                               member_coord)
-        if (member_type_ref.type.name is 'bool'):
+        if (member_type_ref.type.name == 'bool'):
             if (((member_type_ref.type.min is not None) and (initializer.value != member_type_ref.type.min)) and 
                 ((member_type_ref.type.max is not None) and (initializer.value != member_type_ref.type.max))):
                 self._parse_error("bool initializer value must be 0 or 1".format(member_type_ref.type.name),
@@ -897,7 +897,7 @@ class CLADParser(PLYParser):
         """
         p[0] = p[1]
 
-    def p_builtin_float_type(self,p):
+    def p_builtin_float_type(self, p):
         """ builtin_float_type : FLOAT_32
                                | FLOAT_64
         """

@@ -9,7 +9,7 @@
 
 from github import Github, GithubException
 import subprocess
-import dependencies
+from . import dependencies
 import sys
 import os
 
@@ -34,7 +34,7 @@ def get_branch_name(auth_token, pull_request_number, repo_name="anki/cozmo-one")
             if pr.number == pull_request_number:
                 return (pr.raw_data['head']['ref'])
     except GithubException as e:
-        print("Exception thrown because of {0}".format(repo))
+        print(("Exception thrown because of {0}".format(repo)))
         sys.exit("GITHUB ERROR: {0}".format(e.data['message']))
 
 
@@ -60,8 +60,8 @@ def get_file_change_list(auth_token, pull_request_number, verbose=False, repo_na
         sys.exit("GITHUB ERROR: {0} {1}".format(e.data['message'], e.status))
 
     if verbose:
-        print("Comparing {0} at {1}".format(pr.base.ref, pr.base.sha))
-        print("against {0} at {1}".format(pr.head.ref, pr.head.sha))
+        print(("Comparing {0} at {1}".format(pr.base.ref, pr.base.sha)))
+        print(("against {0} at {1}".format(pr.head.ref, pr.head.sha)))
 
     git_cmd = ['git', 'diff', '--name-only', '{0}...{1}'.format(pr.base.sha, pr.head.sha), '--submodule']
     p = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -69,10 +69,10 @@ def get_file_change_list(auth_token, pull_request_number, verbose=False, repo_na
     status = p.poll()
 
     if status != 0:
-        print("ERROR: {0}".format(stderr))
+        print(("ERROR: {0}".format(stderr)))
         return None
     if verbose:
-        print(os.linesep + "Files Changed:" + os.linesep)
+        print((os.linesep + "Files Changed:" + os.linesep))
         print(stdout)
         return stdout.splitlines()
 
@@ -103,8 +103,8 @@ def pull_request_merge_info(auth_token, pull_request_number, retries=5, verbose=
             sys.exit("GITHUB ERROR: {0} {1}".format(e.data['message'], e.status))
 
     if verbose:
-        print("Comparing {0} at {1}".format(pr.base.ref, pr.base.sha))
-        print("against {0} at {1}".format(pr.head.ref, pr.head.sha))
+        print(("Comparing {0} at {1}".format(pr.base.ref, pr.base.sha)))
+        print(("against {0} at {1}".format(pr.head.ref, pr.head.sha)))
 
     return results
 
@@ -126,7 +126,7 @@ def post_ci_bot_comment(auth_token, pull_request_number, mrkdwn_comment, repo_na
         return comment
         
     except GithubException as e:
-        print("Exception thrown because of {0}".format(e))
+        print(("Exception thrown because of {0}".format(e)))
         sys.exit("GITHUB ERROR: {0}".format(e.data['message']))
 
 def get_pr_head_commit(auth_token, pull_request_number, repo_name="anki/victor"):
@@ -147,7 +147,7 @@ def get_pr_head_commit(auth_token, pull_request_number, repo_name="anki/victor")
         return head_commit_sha
         
     except GithubException as e:
-        print("Exception thrown because of {0}".format(e))
+        print(("Exception thrown because of {0}".format(e)))
         sys.exit("GITHUB ERROR: {0}".format(e.data['message']))
 
 
@@ -175,6 +175,6 @@ def post_pending_commit_status(auth_token, pull_request_number, build_url,
         return status
         
     except GithubException as e:
-        print("Exception thrown because of {0}".format(e))
+        print(("Exception thrown because of {0}".format(e)))
         sys.exit("GITHUB ERROR: {0}".format(e.data['message']))
     

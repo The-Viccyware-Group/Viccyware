@@ -1,7 +1,7 @@
 import json
 import os
 import re
-import util
+from . import util
 
 
 def default_access_token():
@@ -17,12 +17,12 @@ def get_issue_comments(access_token, repo, issue_num):
   try:
     comments = json.loads(util.File.evaluate(['curl', url]))
     if not isinstance(comments, list):
-      print 'Server return value is not a comment list: ' + str(comments)
+      print('Server return value is not a comment list: ' + str(comments))
       return []
     else:
       return comments
   except Exception as err:
-    print 'Error trying to get comments: ' + str(err)
+    print('Error trying to get comments: ' + str(err))
     return []
 
 
@@ -36,7 +36,7 @@ def post_issue_comment(access_token, repo, issue_num, comment):
   try:
     util.File.execute(curl_args)
   except Exception as err:
-    print 'Error trying to post comment: ' + str(err)
+    print('Error trying to post comment: ' + str(err))
     return
 
 

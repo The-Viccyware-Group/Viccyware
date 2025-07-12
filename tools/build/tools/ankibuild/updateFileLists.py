@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import fnmatch
 import os
@@ -34,7 +34,7 @@ class FileListGenerator(object):
       'files': []
     }
     for fileName in outputFiles:
-      settings['files'].append([fileName,[]])
+      settings['files'].append([fileName, []])
 
     # define fnmatch-style shell glob patterns to exclude.
     fn_exclude_patterns = [

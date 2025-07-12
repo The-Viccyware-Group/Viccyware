@@ -192,6 +192,7 @@ OSState::OSState()
   _cpuTemp_C = 0;
 
   _buildSha = ANKI_BUILD_SHA;
+  _buildBranch = ANKI_BUILD_BRANCH;
 
   _lastWebvizUpdateTime_ms = _currentTime_ms;
 
@@ -536,6 +537,11 @@ const std::string& OSState::GetRobotVersion()
 const std::string& OSState::GetBuildSha()
 {
   return _buildSha;
+}
+
+const std::string& OSState::GetBuildBranch()
+{
+  return _buildBranch;
 }
 
 const std::string& OSState::GetRobotName() const

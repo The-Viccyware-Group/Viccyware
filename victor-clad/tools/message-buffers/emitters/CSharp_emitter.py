@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Anki Inc.
 #
@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import inspect
 import os
@@ -146,7 +146,7 @@ class EnumEmitter(ast.NodeVisitor):
         current = -1
         values = set()
         for member in node.members():
-            if member.initializer and type(member.initializer.value) is str:
+            if member.initializer and isinstance(member.initializer.value, str):
               return False
             current = member.initializer.value if member.initializer else current + 1
             values.add(current)
@@ -158,7 +158,7 @@ class EnumEmitter(ast.NodeVisitor):
         separator = ',' if trailing_comma else ''
         value = member.value
         
-        if type(value) is str and "::" in member.value:
+        if isinstance(value, str) and "::" in member.value:
             value = value.replace("::", ".")
     
         self.output.write('\t' + prefix + member.name + ' = {0}'.format(value) + separator + '\n')
@@ -203,7 +203,7 @@ class StructEmitter(ast.NodeVisitor):
                         member_str = str(member_val) + "f"
                     elif member.type.name == "float_64":
                         member_str = str(member_val) + "d"
-                    elif member.init is not None and type(member.init.value) is str:
+                    elif member.init is not None and isinstance(member.init.value, str):
                         member_str=member.init.value
                         if "::" in member_str:
                             # Replace '::' with '.'
@@ -271,14 +271,14 @@ class StructEmitter(ast.NodeVisitor):
 
             #''')[:-1].format(**globals))
             self.output.write('\t\treturn ');
-            for i,member in enumerate(node.members()):
+            for i, member in enumerate(node.members()):
                 if i > 0:
                     self.output.write('\n\t\t\t&& ')
                 if (isinstance(member.type, ast.FixedArrayType) or
                     isinstance(member.type, ast.VariableArrayType) and not
                     isinstance(member.type, ast.PascalStringType)):
                     self.output.write('ArrayEquals<{0}>(this._{1},p._{1})'.
-                                   format(cast_type(member.type.member_type),member.name))
+                                   format(cast_type(member.type.member_type), member.name))
                 else:
                     self.output.write('this._{0}.Equals(p._{0})'.format(member.name))
             self.output.write(';\n\t}\n\n')
@@ -423,7 +423,7 @@ class StructEmitter(ast.NodeVisitor):
     def isUnion(self, t):
         # I assume there is a better way to determine this. Someone who knows
         # the system better should fix this.
-        return ("Union" in t.name and type(t) is ast.CompoundType);
+        return ("Union" in t.name and isinstance(t, ast.CompoundType));
 
     def emitInitializers(self, node, globals):
         if node.members():
@@ -1264,7 +1264,7 @@ class EnumConceptEmitter(ast.NodeVisitor):
             member_value = member.value.value
 
             # If this is a string and it contains "::" meaning it is likely a verbatim value
-            if type(member_value) is str and "::" in member_value:
+            if isinstance(member_value, str) and "::" in member_value:
                 # Split the value on operators in order to cast all parts of the verbatim statement
                 # C# does not like to implicitly convert between types so we have to cast to the enum concepts return type
                 split = emitterutil._split_string_on_operators(member_value)

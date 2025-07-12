@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import os.path
@@ -126,9 +126,9 @@ def runAllTests(options, tests):
     issuesFound = subprocess.check_output('grep \{ ' + options.targetName + 'Valgrind_out_* | wc -l', 
       shell=True, cwd=buildFolder).rstrip("\r\n").strip()
     # do not covert these to UtilLog. these are needed for TeamCity
-    print '##teamcity[buildStatisticValue key=\'ValgrindIssuesFound\' value=\'%s\']' % (issuesFound)
-    print '##teamcity[buildStatisticValue key=\'ValgrindFailedTestGroups\' value=\'%d\']' % (failedCount)
-    print '##teamcity[buildStatisticValue key=\'ValgrindTotalTestGroups\' value=\'%d\']' % (len(context.results))
+    print('##teamcity[buildStatisticValue key=\'ValgrindIssuesFound\' value=\'%s\']' % (issuesFound))
+    print('##teamcity[buildStatisticValue key=\'ValgrindFailedTestGroups\' value=\'%d\']' % (failedCount))
+    print('##teamcity[buildStatisticValue key=\'ValgrindTotalTestGroups\' value=\'%d\']' % (len(context.results)))
 
   return returnValue
 
@@ -139,7 +139,7 @@ def runAllTests(options, tests):
 def runTest(options, testGroup, runId):
   # prepare the paths
   buildFolder = os.path.join(options.projectRoot, 'generated/mac/DerivedData', options.buildType)
-  workDir = os.path.join(buildFolder , 'testdata' + runId)
+  workDir = os.path.join(buildFolder, 'testdata' + runId)
   mkdir_p(workDir)
   # prepare the environment
   procEnv=os.environ.copy()
@@ -149,7 +149,7 @@ def runTest(options, testGroup, runId):
   procEnv['DYLD_LIBRARY_PATH'] = buildFolder
 
   # prepare the command
-  valgrinLogFile = os.path.join(buildFolder , options.targetName + 'Valgrind_out_' + runId + '.txt')
+  valgrinLogFile = os.path.join(buildFolder, options.targetName + 'Valgrind_out_' + runId + '.txt')
   runCommand1 = [
     'valgrind',
     '--gen-suppressions=all',
@@ -162,7 +162,7 @@ def runTest(options, testGroup, runId):
     '--track-origins=yes',
     '--num-callers=40',
     '--error-exitcode=1',
-    os.path.join(buildFolder , options.targetName + 'UnitTest'),
+    os.path.join(buildFolder, options.targetName + 'UnitTest'),
     '--gtest_filter=' + ':'.join(testGroup),
     '--gtest_repeat=1',
     '-d' + str(options.loggingLevel),
@@ -231,7 +231,7 @@ def parseValgrindOutput(options, logFile, runId):
   # ERROR SUMMARY: 121 errors from 121 contexts
   line = lines[-1]
   numbers = [int(s) for s in line.split() if s.isdigit()]
-  UtilLog.debug("valgrind numbers " + ' '.join(map(str,numbers)))
+  UtilLog.debug("valgrind numbers " + ' '.join(map(str, numbers)))
   # return false if there were errors found
   if (len(numbers) >= 2 and numbers[0] == 0 and numbers[1] == 0 and 'ERROR SUMMARY' in line):
     return True
@@ -282,7 +282,7 @@ def getAllTestList(options):
   procEnv=os.environ.copy()
   procEnv['DYLD_FRAMEWORK_PATH'] = buildFolder
   procEnv['DYLD_LIBRARY_PATH'] = buildFolder
-  runCommand = [os.path.join(buildFolder , options.targetName + 'UnitTest'), '--gtest_list_tests' ]
+  runCommand = [os.path.join(buildFolder, options.targetName + 'UnitTest'), '--gtest_list_tests' ]
 
   testClass = None
   tests = [[]]

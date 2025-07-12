@@ -94,10 +94,12 @@ anki_build_go(
   EXTRA_DEPENDS ${PROTO_GO_GEN_FILES}
 )
 
+# wrapper to add protoc-gen-go stuff to path
 add_custom_command(
   OUTPUT ${PROTO_GO_GEN_FILES}
   COMMAND ${CMAKE_COMMAND} -E make_directory "${GATEWAY_GRPC_GO_OUTPUT_DIR}"
-  COMMAND protoc
+  COMMAND "${CMAKE_SOURCE_DIR}/cloud/protoc-wrapper.sh"
+    ${ANKI_PROTOC}
     --proto_path=${PROTO_SRC_DIR}
     --go_out=${GATEWAY_GRPC_GO_OUTPUT_DIR}
     --go-grpc_out=${GATEWAY_GRPC_GO_OUTPUT_DIR}

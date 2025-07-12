@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys
-from anki_github import post_pending_commit_status
+from .anki_github import post_pending_commit_status
 import argparse
 
 def parse_args(argv=[]):

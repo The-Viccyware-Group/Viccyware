@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys
-from anki_github import post_ci_bot_comment
+from .anki_github import post_ci_bot_comment
 import argparse
 
 def parse_args(argv=[]):

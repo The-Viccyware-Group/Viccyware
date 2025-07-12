@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import argparse
 import os
@@ -11,6 +11,11 @@ import subprocess
 import sys
 
 # ankibuild
+
+if __package__ is None:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, script_dir)
+
 import toolget
 
 CMAKE = 'cmake'
@@ -18,10 +23,11 @@ CMAKE = 'cmake'
 def get_cmake_version_from_command(cmake_exe):
     version = None
     if cmake_exe and os.path.exists(cmake_exe):
-        output = subprocess.check_output([cmake_exe, '--version'])
+        #output = subprocess.check_output([cmake_exe, '--version'])
+        output = subprocess.check_output([cmake_exe, '--version'], text=True)
         if not output:
             return None
-        m = re.match('^cmake version (\d+\.\d+\.\d+)', output)
+        m = re.match(r'^cmake version (\d+\.\d+\.\d+)', output)
         if not m:
             return None
         version = m.group(1)
@@ -77,7 +83,7 @@ def install_cmake(version):
 def find_cmake(required_ver, cmake_exe=None):
     if not cmake_exe:
         try:
-            cmake_exe = subprocess.check_output(['which', 'cmake']).rstrip()
+            cmake_exe = subprocess.check_output(['which', 'cmake'], text=True).rstrip()
         except subprocess.CalledProcessError as e:
             pass
 
@@ -108,7 +114,7 @@ def setup_cmake(required_ver):
 def parseArgs(scriptArgs):
     version = '1.0'
     default_cmake_version = "4.0.3"
-    parser = argparse.ArgumentParser(description='finds or installs cmake', version=version)
+    parser = argparse.ArgumentParser(description='finds or installs cmake')
     parser.add_argument('--install-cmake',
                         nargs='?',
                         const=default_cmake_version,

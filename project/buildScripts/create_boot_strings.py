@@ -77,15 +77,15 @@ def create_boot_strings_code_file(game_root):
                 for k in data:
                     if "translation" in data[k]:
                         locale_strings += "                   { \"" + k + "\", \"" + data[k]["translation"] + "\"},\n"
-                all_locale_strings[localeName[:2]] = unicode(locale_strings)
+                all_locale_strings[localeName[:2]] = str(locale_strings)
 
     if files_updated:
         with codecs.open(localized_bootstrings_code_filepath, 'w+', 'utf-8') as fo:
             #clear previous write
             fo.seek(0)
             fo.truncate()
-            code_template_encoded = unicode(code_template)
-            fo.write(unicode(code_template_encoded.format(**all_locale_strings)))
+            code_template_encoded = str(code_template)
+            fo.write(str(code_template_encoded.format(**all_locale_strings)))
 
 if __name__ == '__main__':
     project_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip("\r\n")

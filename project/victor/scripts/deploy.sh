@@ -22,7 +22,7 @@ source ${SCRIPT_PATH}/victor_env.sh
 : ${FORCE_DEPLOY:=0}
 : ${IGNORE_COMPATIBILITY_MISMATCH:=0}
 : ${IGNORE_VERSION_MISMATCH:=0}
-: ${ANKI_BUILD_TYPE:="Debug"}
+: ${ANKI_BUILD_TYPE:="Release"}
 : ${INSTALL_ROOT:="/anki"}
 : ${DEVTOOLS_INSTALL_ROOT:="/anki-devtools"}
 : ${DEVICE_RSYNC_BIN_DIR:="${DEVTOOLS_INSTALL_ROOT}/bin"}
@@ -203,7 +203,7 @@ DEPLOY_VERSION=$(cat ${STAGING_DIR}/anki/etc/victor-compat-version)
 VER_CMP=$(compare_victor_compat_version $DEPLOY_VERSION $OS_COMPAT_VERSION)
 
 if [[ ${VER_CMP} -gt 0 ]]; then
-    echo -e "Target deploy compatibility version (${DEPLOY_VERSION}) is newer than robot version (${OS_COMPAT_VERSION}).\nYou need to upgrade the OS version on your robot.  Try ./project/victor/scripts/robot_sh.sh update-os"
+    echo -e "Target deploy compatibility version (${DEPLOY_VERSION}) is newer than robot version (${OS_COMPAT_VERSION}).\nYou need to upgrade the OS base version on your robot."
 elif [[ ${VER_CMP} -lt 0 ]]; then
     echo -e "Target deploy compatibility version (${DEPLOY_VERSION}) is older than robot version (${OS_COMPAT_VERSION}).\nYou need to rebase your current branch to pick up required changes for compatibility with the robot."
 fi

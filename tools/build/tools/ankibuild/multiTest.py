@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 # script which runs all tests in the given gtest executable in multiple processes
 
 import subprocess
-from Queue import Queue
+from queue import Queue
 import threading
 # from pprint import pprint
 import multiprocessing
@@ -15,6 +15,7 @@ import time
 import operator
 import glob
 from collections import OrderedDict
+from functools import reduce
 
 startTime = time.time()
 
@@ -144,7 +145,7 @@ else:
         numFound = getTimedTestList(testTimes, pathname)
 
         if numFound < 0.9 * len(testTimes):
-            print "NOTE: Only have times for %d / %d tests, falling back to standard ordering" % (numFound, len(testTimes))
+            print("NOTE: Only have times for %d / %d tests, falling back to standard ordering" % (numFound, len(testTimes)))
             useOldTimingData = False
 
     if useOldTimingData:
@@ -153,7 +154,7 @@ else:
         perProcTime = totalTime / numProcs
 
         if not args.silent:
-            print "each proc should take %f time" % perProcTime
+            print("each proc should take %f time" % perProcTime)
 
         # add wiggle room because we can't split well and we don't want an extra chunk
         perProcTime *= 1.1
@@ -166,7 +167,7 @@ else:
             if t + lastWorkTime > perProcTime:
                 # create new work entry
                 if not args.silent:
-                    print "created chunk %d, should take %f" % (len(work), lastWorkTime)
+                    print("created chunk %d, should take %f" % (len(work), lastWorkTime))
                 lastWorkTime = t
                 work.append(testName)
             else:
@@ -183,16 +184,16 @@ else:
                 filters.append(caseName+'.'+testName)
 
         if args.shuffle:
-            print "shuffling tests"
+            print("shuffling tests")
             from random import shuffle
             shuffle(filters)
 
         # split the cases up into secions
         numTestsPerProc = 10
-        work = [reduce(lambda a,b: a+":"+b, filters[i:i+numTestsPerProc]) for i in range(0, len(filters), numTestsPerProc)]
+        work = [reduce(lambda a, b: a+":"+b, filters[i:i+numTestsPerProc]) for i in range(0, len(filters), numTestsPerProc)]
 
 
-print "running", numTests, "tests in", numProcs, "processes (",len(work),"chunks )"
+print("running", numTests, "tests in", numProcs, "processes (", len(work), "chunks )")
 
 consoleLock = threading.Lock()
 
@@ -282,7 +283,7 @@ def runTestCase(testCase):
         workDone = workDone + 1
         t = time.time() - startTime
         if not args.silent:
-            print "completed",workDone,'/',len(work),"chunks (%6.2f%%) [%d running]" % ((100.0*float(workDone)/len(work)), running), "time =",t
+            print("completed", workDone, '/', len(work), "chunks (%6.2f%%) [%d running]" % ((100.0*float(workDone)/len(work)), running), "time =", t)
         if ret != 0:
             global allPassed
             allPassed = False
@@ -290,10 +291,10 @@ def runTestCase(testCase):
 
     if ret != 0:
         if not args.silent:
-            print "FAILURE on chunk", myChunkID, "return code =",ret
+            print("FAILURE on chunk", myChunkID, "return code =", ret)
         if args.stdout_fail:
             with open(tmpfileName, 'r') as infile:
-                print infile.read()
+                print(infile.read())
             #print "\n\n\n"
 
     try:
@@ -327,9 +328,9 @@ def runTestCase(testCase):
                         case.attrib['name'])
                     fails.append(testname + " details can be found in " + outputStdArg )
                     if not args.silent:
-                        print "FAILED: "+testname
+                        print("FAILED: "+testname)
                         # re-format message so it looks like a compiler error
-                        print failure.attrib['message'].replace('\n', ': failure\n', 1)
+                        print(failure.attrib['message'].replace('\n', ': failure\n', 1))
 
             if removeSuite:
                suitesToRemove.append(suite)
@@ -367,20 +368,20 @@ if not args.dry_run:
 
     if allPassed:
         t = time.time() - startTime
-        print "all good!", numTests, "tests finished in", t, "seconds"
-        print "The slowest 10 tests were:"
+        print("all good!", numTests, "tests finished in", t, "seconds")
+        print("The slowest 10 tests were:")
         for dt, name in sorted(testTimes, key=operator.itemgetter(0), reverse=True)[:10]:
-            print "  %5.2f %s" % (dt, name)
+            print("  %5.2f %s" % (dt, name))
         exit(0)
     else:
-        print "\nerror: the following tests failed:"
+        print("\nerror: the following tests failed:")
         for f in fails:
-            print f
+            print(f)
         exit(1)
 else:
-    print "The following filters would run:"
+    print("The following filters would run:")
     idx = 1
     for testCase in work:
-        print idx, '\n  ' + '\n  '.join(testCase.split(':'))
+        print(idx, '\n  ' + '\n  '.join(testCase.split(':')))
         idx += 1
 

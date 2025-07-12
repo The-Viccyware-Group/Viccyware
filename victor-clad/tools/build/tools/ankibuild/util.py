@@ -418,10 +418,10 @@ class Gyp(object):
     def getDefineString(defines, overrideDefines = None):
         if overrideDefines is not None:
             for entry in overrideDefines:
-                (k,v) = entry.split('=')
+                (k, v) = entry.split('=')
                 key = k.strip()
                 value = v.strip()
                 defines[key] = value
 
-        define_args = ["%s=%s" % (k, v) for k,v in defines.iteritems()]
+        define_args = ["%s=%s" % (k, v) for k, v in defines.iteritems()]
         return "\n".join(define_args)

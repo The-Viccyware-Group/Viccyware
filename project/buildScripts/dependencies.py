@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import os.path
@@ -16,13 +16,18 @@ import glob
 import zipfile
 import shutil
 
+THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+
+sys.path.insert(0, os.path.join(THIS_DIR, '..', '..', 'tools', 'build', 'tools'))
+sys.path.insert(0, os.path.join(THIS_DIR, '..', '..', 'tools', 'build', 'tools', 'ankibuild'))
+
 # These are the Anki modules/packages:
 import binary_conversion
 import validate_anim_data
 
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+#THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
-sys.path.insert(0, os.path.join(THIS_DIR, '..', '..', 'tools', 'build', 'tools'))
+#sys.path.insert(0, os.path.join(THIS_DIR, '..', '..', 'tools', 'build', 'tools'))
 
 import ankibuild.util
 import ankibuild.deptool
@@ -166,20 +171,20 @@ def is_tool(name):
 
 
 def is_up(url_string):
-    import urllib2
+    import urllib.request, urllib.error, urllib.parse
     try:
-        response = urllib2.urlopen(url_string, None, 10)
+        response = urllib.request.urlopen(url_string, None, 10)
         response.read()
         return True
-    except urllib2.HTTPError, e:
+    except urllib.error.HTTPError as e:
         if e.code == 401:
             # Authentication error site is up and requires login.
             return True
-        print(e.code)
+        print((e.code))
         return False
-    except urllib2.URLError, e:
+    except urllib.error.URLError as e:
         return False
-    except ConnectionResetError, e:
+    except ConnectionResetError as e:
         response.close()
         os.exit(e)
 
@@ -221,7 +226,7 @@ def is_valid_checksum(url_string):
     Returns: hex digest of checksum(sha256 in this case)
 
     """
-    import urllib2
+    import urllib.request, urllib.error, urllib.parse
     import contextlib
     import hashlib
 
@@ -229,7 +234,7 @@ def is_valid_checksum(url_string):
 
     hash_url = hashlib.sha256()  # Creates a SHA-256 hash object, stored into hash_url.
     # Return a context manager that closes _thing_ upon completion of the block.
-    with contextlib.closing(urllib2.urlopen(url_string)) as binary_file:
+    with contextlib.closing(urllib.request.urlopen(url_string)) as binary_file:
         # Open requested url and then store it as a binary file
         for chunk in iter(lambda: binary_file.read(4096), ''):
             # iterate through the binary_file's chunks at 4096b intervals
@@ -251,7 +256,7 @@ def extract_files_from_tar(extract_dir, file_types, put_in_subdir=False):
   for (dir_path, dir_names, file_names) in os.walk(extract_dir):
     print("here???")
     # Generate list of all .tar files in/under the directory provided by the caller (extract_dir)
-    all_files = map(lambda x: os.path.join(dir_path, x), file_names)
+    all_files = [os.path.join(dir_path, x) for x in file_names]
     tar_files = [a_file for a_file in all_files if a_file.endswith('.tar')]
 
     if tar_files and not put_in_subdir:
@@ -360,7 +365,7 @@ def convert_json_to_binary(json_files, bin_name, dest_dir, flatc_dir):
         for json_file in tmp_json_files:
             json_dest = os.path.join(dest_dir, os.path.basename(json_file))
             shutil.move(json_file, json_dest)
-            print("Restored %s" % json_dest)
+            print(("Restored %s" % json_dest))
     else:
         bin_dest = os.path.join(dest_dir, bin_name)
         shutil.move(bin_file, bin_dest)
@@ -394,18 +399,22 @@ def unpack_tarball(tar_file, file_types=[], put_in_subdir=False, add_metadata=Fa
 
   try:
     tar = tarfile.open(tar_file)
-  except tarfile.ReadError, e:
+  except tarfile.ReadError as e:
     raise RuntimeError("%s: %s" % (e, tar_file))
 
   if file_types:
     tar_members = _get_specific_members(tar, file_types)
     #print("Unpacking %s (version %s) (%s files)" % (tar_file, tar_file_rev, len(tar_members)))
-    tar.extractall(dest_dir, members=tar_members)
+    if sys.version_info >= (3, 12):
+        # had to get rid of silly deprecation warning
+        tar.extractall(dest_dir, members=tar_members, filter="fully_trusted")
+    else:
+        tar.extractall(dest_dir, members=tar_members)
     tar.close()
     sprite_sequence = os.path.basename(os.path.dirname(tar_file)) in UNPACK_INTO_SUBDIR
     if ".json" in file_types and not sprite_sequence:
       json_files = [tar_info.name for tar_info in tar_members if tar_info.name.endswith(".json")]
-      json_files = map(lambda x: os.path.join(dest_dir, x), json_files)
+      json_files = [os.path.join(dest_dir, x) for x in json_files]
       if json_files:
         for json_file in json_files:
           anim_name_length_mapping.update(validate_anim_data.get_anim_name_and_length(json_file))
@@ -472,7 +481,7 @@ def svn_checkout(url, r_rev, loc, cred, checkout, cleanup, unpack, package, allo
        #print("status = %s" % status)
 
     if err == '' and status == 0:
-        print(successful.strip())
+        print((successful.strip()))
         # Equivalent to a git clean
         pipe = subprocess.Popen(cleanup, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         extract_message, error = pipe.communicate()
@@ -497,7 +506,7 @@ def svn_checkout(url, r_rev, loc, cred, checkout, cleanup, unpack, package, allo
         return err
 
 
-import urllib2  # Python 2, for Python 3 use 'import urllib.request as urllib2'
+import urllib.request, urllib.error, urllib.parse  # Python 2, for Python 3 use 'import urllib.request as urllib2'
 
 def svn_package(svn_dict):
     """
@@ -575,7 +584,7 @@ def svn_package(svn_dict):
 
         #Extract tar files if necessary
         if extract_types:
-            print("Extracting tar files from SVN assets...")
+            print("Encoding animations JSONs into FBS...")
             for sub_dir in sub_dirs:
                 print(sub_dir)
                 put_in_sub_dir = os.path.basename(sub_dir) in UNPACK_INTO_SUBDIR
@@ -583,14 +592,14 @@ def svn_package(svn_dict):
                     anim_name_length_mapping = extract_files_from_tar(os.path.join(loc, sub_dir), extract_types, put_in_sub_dir)
                 except EnvironmentError as e:
                     anim_name_length_mapping = {}
-                    print("Failed to unpack one or more tar files in [%s] because: %s" % (sub_dir, e))
+                    print(("Failed to unpack one or more tar files in [%s] because: %s" % (sub_dir, e)))
                     print(stale_warning)
                 print("possibly..")
                 file_stats = get_file_stats(sub_dir)
                 if anim_name_length_mapping:
                     write_animation_manifest(loc, anim_name_length_mapping, additional_files)
-                print("After unpacking tar files, '%s' contains the following files: %s"
-                      % (os.path.basename(sub_dir), file_stats))
+                #print(("After unpacking tar files, '%s' contains the following files: %s"
+                #      % (os.path.basename(sub_dir), file_stats)))
 
     return checked_out_repos
 
@@ -678,22 +687,22 @@ def svn_package(svn_dict):
 
 def write_animation_manifest(dest_dir, anim_name_length_mapping, additional_files=None, output_json_file=MANIFEST_FILE_NAME):
     if additional_files:
-        additional_files = map(os.path.expandvars, additional_files)
-        additional_files = map(os.path.abspath, additional_files)
+        additional_files = list(map(os.path.expandvars, additional_files))
+        additional_files = list(map(os.path.abspath, additional_files))
         for additional_file in additional_files:
             if os.path.isfile(additional_file) and additional_file.endswith(".json"):
-                print("Using this additional file for the animation manifest: %s" % additional_file)
+                #print(("Using this additional file for the animation manifest: %s" % additional_file))
                 anim_name_length_mapping.update(validate_anim_data.get_anim_name_and_length(additional_file))
             elif os.path.isdir(additional_file):
                 json_files = glob.glob(os.path.join(additional_file, '*.json'))
                 for json_file in json_files:
-                    print("Using this additional file for the animation manifest: %s" % json_file)
+                    #print(("Using this additional file for the animation manifest: %s" % json_file))
                     anim_name_length_mapping.update(validate_anim_data.get_anim_name_and_length(json_file))
             else:
-                print("WARNING %s is an invalid path in 'additional_files'" % additional_file)
+                print(("WARNING %s is an invalid path in 'additional_files'" % additional_file))
 
     all_anims = []
-    for name, length in anim_name_length_mapping.iteritems():
+    for name, length in anim_name_length_mapping.items():
         manifest_entry = {}
         manifest_entry[MANIFEST_NAME_KEY] = name
         manifest_entry[MANIFEST_LENGTH_KEY] = length
@@ -707,7 +716,7 @@ def write_animation_manifest(dest_dir, anim_name_length_mapping, additional_file
         os.makedirs(dest_dir)
     with open(output_file, 'w') as fh:
         fh.write(output_data)
-    print("The animation manifest file (with %s entries) = %s" % (len(all_anims), output_file))
+    print(("The animation manifest file (with %s entries) = %s" % (len(all_anims), output_file)))
 
 
 def git_package(git_dict):
@@ -731,8 +740,8 @@ def files_package(files):
            ankibuild.util.File.cp(outfile, cached_file)
            continue
 
-        import urllib2
-        handle = urllib2.urlopen(url, None, 10)
+        import urllib.request, urllib.error, urllib.parse
+        handle = urllib.request.urlopen(url, None, 10)
         code = handle.getcode()
         if code < 200 or code >= 300:
            raise RuntimeError("Failed to download {0}. Check your network connection.  This URL may require VPN or local LAN access".format(url))
@@ -871,19 +880,19 @@ def teamcity_package(tc_dict):
                  if sha:
                     downloaded_sha = sha256sum(dist)
                     if sha != downloaded_sha:
-                       print("ERROR downloading {0}!!".format(package_name))
-                       print("Expected hash of download: {0}".format(sha))
-                       print("Actual hash of download: {0}".format(downloaded_sha))
+                       print(("ERROR downloading {0}!!".format(package_name)))
+                       print(("Expected hash of download: {0}".format(sha)))
+                       print(("Actual hash of download: {0}".format(downloaded_sha)))
                        os.remove(dist)
                        sys.exit("Assume binary corruption.")
-                 print("{0} Downloaded.  New version {1} ".format(build.title(), required_version))
+                 print(("{0} Downloaded.  New version {1} ".format(build.title(), required_version)))
                  downloaded_builds.append(build.title())
                  break
               else:
                  print(err)
                  if os.path.isfile(dist):
                     os.remove(dist)
-              print("ERROR {0}ing {1}.  {2} of {3} attempts.".format(tool, package, n+1, RETRIES))
+              print(("ERROR {0}ing {1}.  {2} of {3} attempts.".format(tool, package, n+1, RETRIES)))
 
 
         # Unpack package to destination
@@ -894,7 +903,7 @@ def teamcity_package(tc_dict):
         if not os.path.isfile(version_file_path):
            write_int_to_file(version_file_path, required_version)
         if VERBOSE:
-           print err
+           print(err)
 
     return downloaded_builds
 
@@ -913,7 +922,7 @@ def extract_dependencies(version_file, location=EXTERNALS_DIR, validate_assets=T
     DEPENDENCY_LOCATION = location
     ankibuild.util.File.mkdir_p(location)
     updated_deps = json_parser(version_file)
-    updated_deps = map(str, updated_deps)
+    updated_deps = list(map(str, updated_deps))
     if validate_assets and len(set(updated_deps) & set(ASSET_VALIDATION_TRIGGERS)) > 0:
         # At least one of the asset validation triggers was updated, so perform validation...
         validate_anim_data.check_anims_all_anim_groups(location)
@@ -1012,8 +1021,8 @@ def main(argv):
     deps_file = os.path.abspath(options.deps_file)
     externals_dir = os.path.abspath(options.externals_dir)
     if options.verbose:
-        print("    deps-file: {}".format(deps_file))
-        print("externals-dir: {}".format(externals_dir))
+        print(("    deps-file: {}".format(deps_file)))
+        print(("externals-dir: {}".format(externals_dir)))
     extract_dependencies(deps_file, externals_dir)
 
 
