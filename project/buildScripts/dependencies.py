@@ -254,6 +254,7 @@ def extract_files_from_tar(extract_dir, file_types, put_in_subdir=False):
   anim_name_length_mapping = {}
 
   for (dir_path, dir_names, file_names) in os.walk(extract_dir):
+    print("here???")
     # Generate list of all .tar files in/under the directory provided by the caller (extract_dir)
     all_files = [os.path.join(dir_path, x) for x in file_names]
     tar_files = [a_file for a_file in all_files if a_file.endswith('.tar')]
@@ -342,7 +343,7 @@ def get_flatc_dir():
     # default
     flatc_dir = os.path.join(THIRD_PARTY_DIR,
                              'flatbuffers', 'mac', 'Release')
-  #print(flatc_dir)
+  print(flatc_dir)
   return flatc_dir
   
 
@@ -355,9 +356,11 @@ def convert_json_to_binary(json_files, bin_name, dest_dir, flatc_dir):
         tmp_json_files.append(json_dest)
     bin_name = bin_name.lower()
     try:
+        print("i assume")
         bin_file = binary_conversion.main(tmp_json_files, bin_name, flatc_dir)
-    except Exception as e:
-        print(("%s: %s" % (type(e).__name__, e.message)))
+        print("it's here")
+    except StandardError, e:
+        print("%s: %s" % (type(e).__name__, e.message))
         # If binary conversion failed, use the json files...
         for json_file in tmp_json_files:
             json_dest = os.path.join(dest_dir, os.path.basename(json_file))
@@ -528,14 +531,13 @@ def svn_package(svn_dict):
         additional_files = repos[repo].get("additional_files", [])
         extract_types = repos[repo].get("extract_types_from_tar", [])
 
-	# WIRE: UNCOMMENT THIS TO NOT BUILD ANIMATIONS
         #Move on if the directory already exists
-        #if os.path.isdir(loc):
-        #    print(export_dirname + " already exists!")
-        #    continue
+        if os.path.isdir(loc):
+            print(export_dirname + " already exists!")
+            continue
 
         # Download from the local HTTP server
-        #print("Downloading " + export_dirname + "...")
+        print("Downloading " + export_dirname + "...")
         #if version is not None:
         #    remote_loc = os.path.join(root_url, svn_dict.get("main_folder", ""), repo + '-' + version + ".zip")
         #else:
@@ -584,7 +586,7 @@ def svn_package(svn_dict):
         if extract_types:
             print("Encoding animations JSONs into FBS...")
             for sub_dir in sub_dirs:
-                #print(sub_dir)
+                print(sub_dir)
                 put_in_sub_dir = os.path.basename(sub_dir) in UNPACK_INTO_SUBDIR
                 try:
                     anim_name_length_mapping = extract_files_from_tar(os.path.join(loc, sub_dir), extract_types, put_in_sub_dir)
@@ -592,6 +594,7 @@ def svn_package(svn_dict):
                     anim_name_length_mapping = {}
                     print(("Failed to unpack one or more tar files in [%s] because: %s" % (sub_dir, e)))
                     print(stale_warning)
+                print("possibly..")
                 file_stats = get_file_stats(sub_dir)
                 if anim_name_length_mapping:
                     write_animation_manifest(loc, anim_name_length_mapping, additional_files)

@@ -21,7 +21,7 @@
 
 const char* model_path   = "/anki/data/assets/cozmo_resources/assets/picovoice/porcupine_params.pv";
 const char* custom_ppn   = "/data/data/com.anki.victor/persistent/picovoice/custom_1-5-0.ppn";
-const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_vector.ppn";
+const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_cozmo.ppn";
 const char* sensitivity_path = "/data/data/com.anki.victor/persistent/picovoice/sensitivity";
 float default_sensitivity = 0.77f;
 

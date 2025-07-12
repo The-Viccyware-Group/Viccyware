@@ -25,19 +25,19 @@
     "translation": "I am {0}"
   },
   "BehaviorDisplayWeather.Cloudy": {
-    "translation": "{0} degrees and cloudy"
+    "translation": "{0} degrees with cloudy skies"
   },
   "BehaviorDisplayWeather.Cold": {
-    "translation": "{0} degrees and cold"
+    "translation": "{0} degrees and chilly"
   },
   "BehaviorDisplayWeather.Rain": {
-    "translation": "{0} degrees and raining"
+    "translation": "{0} degrees with rain"
   },
   "BehaviorDisplayWeather.Snow": {
-    "translation": "{0} degrees and snowing"
+    "translation": "{0} degrees with snowfall"
   },
   "BehaviorDisplayWeather.Stars": {
-    "translation": "{0} degrees and starry night"
+    "translation": "{0} degrees with a starry night"
   },
   "BehaviorDisplayWeather.Sunny": {
     "translation": "{0} degrees and sunny"
@@ -64,16 +64,16 @@
     "translation": "You're {0}, not {1}"
   },
   "BehaviorHowOldAreYou.OneDay": {
-    "translation": "One day"
+    "translation": "One day old"
   },
   "BehaviorHowOldAreYou.SomeDays": {
-    "translation": "{0} days"
+    "translation": "{0} days old"
   },
   "BehaviorHowOldAreYou.OneMonth": {
-    "translation": "One month"
+    "translation": "One month old"
   },
   "BehaviorHowOldAreYou.SomeMonths": {
-    "translation": "{0} months"
+    "translation": "{0} months old"
   },
   "BehaviorKnowledgeGraphQuestion.Ready": {
     "translation": "Ready"

@@ -110,7 +110,6 @@ BehaviorSleepCycle::BehaviorSleepCycle(const Json::Value& config)
 
   _iConfig.emergencyCondition = BEIConditionFactory::CreateBEICondition(config[kEmergencyConditionKey], GetDebugLabel());
 }
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 BehaviorSleepCycle::~BehaviorSleepCycle()
 {
@@ -336,6 +335,7 @@ void BehaviorSleepCycle::InitBehavior()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSleepCycle::OnBehaviorActivated()
 {
+
   // reset dynamic variables
   _dVars = DynamicVariables();
 
@@ -439,6 +439,7 @@ void BehaviorSleepCycle::OnBehaviorDeactivated()
   SetConditionsActiveForState( _dVars.currState, false);
 
   _iConfig.emergencyCondition->SetActive( GetBEI(), false );
+
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -127,6 +127,14 @@ private:
   
   // press state for the previous tick
   bool _isPressedPrevTick;
+
+  // iConfig for lights
+  struct InstanceConfig {
+    BackpackAnimationTrigger backpackAnim = BackpackAnimationTrigger::Petting;
+  };
+
+  InstanceConfig   _iConfig;
+
 };
 
 }

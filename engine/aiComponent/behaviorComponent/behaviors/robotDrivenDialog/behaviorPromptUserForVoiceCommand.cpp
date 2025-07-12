@@ -221,7 +221,7 @@ void BehaviorPromptUserForVoiceCommand::OnBehaviorActivated()
   // Configure streaming params with defaults in case they're not set due to behaviorStack state
   namespace AECH = AudioEngine::Multiplexer::CladMessageHelper;
   const auto postAudioEvent
-    = AECH::CreatePostAudioEvent( AudioMetaData::GameEvent::GenericEvent::Play__Robot_Vic_Sfx__Wake_Word_On,
+    = AECH::CreatePostAudioEvent( AudioMetaData::GameEvent::GenericEvent::Play__Robot_Vo__Shared_Curious_Short,
                                   AudioMetaData::GameObjectType::Behavior, 0 );
   SmartPushResponseToTriggerWord(AnimationTrigger::VC_ListeningGetIn,
                                  postAudioEvent,

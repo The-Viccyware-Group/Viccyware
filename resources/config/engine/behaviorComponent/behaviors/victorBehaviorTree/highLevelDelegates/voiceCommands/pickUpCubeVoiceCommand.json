@@ -4,6 +4,10 @@
 
   "respondToUserIntents" : [
     {
+      "type" : "play_specific",
+      "entity_behavior": "pick_up_cube"
+    },
+    {
       "type" : "play_pickupcube"
     }
   ],
