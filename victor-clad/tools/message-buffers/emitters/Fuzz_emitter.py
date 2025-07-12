@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Anki Inc.
 #
@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import base64
 import inspect
@@ -263,18 +263,18 @@ class FuzzWriter(ast.NodeVisitor):
         self.visit(node.type_decl)
 
     def visit_FixedArrayType(self, node):
-        for i in xrange(node.length):
+        for i in range(node.length):
             self.visit(node.member_type)
 
     def visit_VariableArrayType(self, node):
         length = self.fuzz(node.length_type, True, maximum=node.max_length - 1)
-        for i in xrange(length):
+        for i in range(length):
             self.visit(node.member_type)
 
     def visit_PascalStringType(self, node):
         # TODO: Unicode fuzzing?
         length = self.fuzz(node.length_type, True, maximum=node.max_length - 1)
-        for i in xrange(length):
+        for i in range(length):
             if self.zero:
                 value = 0
             else:

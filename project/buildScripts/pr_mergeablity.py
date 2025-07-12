@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 
 import sys
-import anki_github
+from . import anki_github
 import argparse
 import subprocess
 
@@ -72,9 +72,9 @@ def main(argv):
         if args.pull_request_branch is not None:
             try:
                 branch_number = int(
-                    filter(str.isdigit, args.pull_request_branch))  # warning filter returns an iterator in p3
+                    list(filter(str.isdigit, args.pull_request_branch)))  # warning filter returns an iterator in p3
             except ValueError as e:
-                print("WARNING: '{0}' has no PR number in it. Assuming building base branch.".format(e))
+                print(("WARNING: '{0}' has no PR number in it. Assuming building base branch.".format(e)))
                 return True
         else:
             branch_number = args.pull_request_number
@@ -116,5 +116,5 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    print(sys.argv)
+    print((sys.argv))
     main(sys.argv)

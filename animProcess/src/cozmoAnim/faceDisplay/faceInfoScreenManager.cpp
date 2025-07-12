@@ -67,7 +67,6 @@
 
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
 const std::string OSProject = "Viccyware";
-const std::string OSBranch = "Viccyware-tester";
 const std::string OSVerName = "Beta 6.1";
 const std::string Creator = "Built by the Viccyware Team";
 const std::string CreatorWebsite = "vicw.xyz";
@@ -1474,7 +1473,7 @@ void FaceInfoScreenManager::DrawSensorInfo(const RobotState& state)
 void FaceInfoScreenManager::DrawBuildInfo() {
   auto *osstate = OSState::getInstance();
   const std::string osProject = "OS: " + OSProject;
-  const std::string branch = "BRANCH: " + OSBranch;
+  const std::string branch = "BRANCH: " + osstate->GetBuildBranch();
   const std::string osVerName = "BUILD: " + OSVerName;
   const std::string osVer = "VER: " + osstate->GetOSBuildVersion();
   const std::string sha = "SHA: " + osstate->GetBuildSha();

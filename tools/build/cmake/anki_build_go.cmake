@@ -9,11 +9,13 @@ function(anki_build_go)
     set(output_name ${ANKI_NAME})
   endif()
 
-  find_program(GO_EXECUTABLE NAMES go REQUIRED)
-  find_program(UPX_EXECUTABLE NAMES upx)
+  find_program(GO_EXECUTABLE NAMES ${ANKI_GO_COMPILER} REQUIRED)
+  message(STATUS "anki_build_go: using Go ${ANKI_GO_COMPILER}")
+  find_program(UPX_EXECUTABLE NAMES ${ANKI_UPX})
   if(UPX_EXECUTABLE)
+    message(STATUS "anki_build_go: using UPX ${ANKI_UPX}")
   else()
-    message(WARNING "anki_build_go: upx not found, skipping")
+    message(WARNING "anki_build_go: UPX not found. It's recommended to have upx installed to reduce Go binary sizes.")
   endif()
 
   get_filename_component(go_project_dir ${ANKI_DIR} ABSOLUTE)
@@ -68,19 +70,19 @@ function(anki_build_go)
     list(APPEND go_env "CGO_LDFLAGS=${link_str}")
   endif()
 
-  set(build_flags "")
+  set(build_flags "-modcacherw")
   if(ANKI_BUILD_TAGS)
     list(APPEND build_flags "-tags" "${ANKI_BUILD_TAGS}")
   endif()
   list(APPEND build_flags "-ldflags" "-s -w")
 
   set(cmds
-    COMMAND ${CMAKE_COMMAND} -E env ${go_env} ${GO_EXECUTABLE} mod download
+    COMMAND ${CMAKE_COMMAND} -E env ${go_env} ${GO_EXECUTABLE} mod download -modcacherw
     COMMAND ${CMAKE_COMMAND} -E env ${go_env} ${GO_EXECUTABLE} build -o ${go_out} ${build_flags} ${go_build_paths}
   )
   if(UPX_EXECUTABLE)
     list(APPEND cmds
-      COMMAND ${CMAKE_SOURCE_DIR}/tools/build/tools/upx-if-packed.sh "${go_out}"
+      COMMAND ${CMAKE_SOURCE_DIR}/tools/build/tools/upx-if-packed.sh "${UPX_EXECUTABLE}" "${go_out}"
     )
   endif()
   list(APPEND cmds COMMAND ${CMAKE_COMMAND} -E touch ${stamp_file})

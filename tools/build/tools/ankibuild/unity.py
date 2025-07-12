@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import argparse
 import errno
@@ -18,11 +18,11 @@ import yaml
 import hashlib
 
 # ankibuild
-import builder
+from . import builder
 import shutil
-import util
-import unity_ios
-import unity_ios_xcode
+from . import util
+from . import unity_ios
+from . import unity_ios_xcode
 
 class UnityApp(object):
     def __init__(self, unity_app_dir):
@@ -202,11 +202,11 @@ class UnityBuildConfig(object):
 
     def set_options(self, options):
         options_dict = vars(options)
-        for k,v in options_dict.iteritems():
+        for k, v in options_dict.items():
             if hasattr(self, k):
                 setattr(self, k, v)
 
-        if not options_dict.has_key('log_file'):
+        if 'log_file' not in options_dict:
             self.log_file = os.path.join(os.path.dirname(self.build_dir), 'UnityBuild.log')
 
     def parse_arguments(self, argv):
@@ -289,10 +289,10 @@ class UnityBuild(object):
         # Also skipping GraphicsSettings.asset, because it gets touched (but not modified)
         # per a Unity bug; waiting to upgrade for fix
         # https://issuetracker.unity3d.com/issues/projectsettings-slash-graphicssettings-dot-asset-changes-everytime-platform-is-changed-polluting-version-control
-        excludes = set(['ProjectSettings.asset',
+        excludes = {'ProjectSettings.asset',
                         'EditorUserBuildSettings.asset',
                         'GraphicsSettings.asset',
-                        '.DS_Store'])
+                        '.DS_Store'}
 
         src_files = []
         for startFolder in ['Assets', 'ProjectSettings']:
@@ -342,7 +342,7 @@ class UnityBuild(object):
         reerror = re.compile(r"(error)|(warn)", re.I)
         reCompileStart = re.compile(r"-----CompilerOutput:-stderr----------", re.I)
         reCompileEnd = re.compile(r"-----EndCompilerOutput---------------", re.I)
-        hasCompileOut = filter(lambda x:reCompileStart.search(x), lines)
+        hasCompileOut = [x for x in lines if reCompileStart.search(x)]
         inCompilerOutSection = False
         for line in lines:
             if reCompileEnd.search(line):
@@ -404,7 +404,7 @@ class UnityBuild(object):
             sock.sendall(message)
 
             # now wait for response
-            while 1:
+            while True:
                 data = sock.recv(4096)
                 if not data: break
 
@@ -416,7 +416,8 @@ class UnityBuild(object):
                 print("received data:", data)
                 buildCompleted = True
                 # no need to exit, as server will close the connection when done
-        except socket.error as (socket_errno, msg):
+        except socket.error as xxx_todo_changeme:
+            (socket_errno, msg) = xxx_todo_changeme.args
             if (socket_errno == errno.ECONNREFUSED):
                 unityOpen = False
                 print("unity not started, running command line")

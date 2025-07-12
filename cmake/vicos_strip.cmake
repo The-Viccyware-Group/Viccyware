@@ -26,8 +26,9 @@ function(vicos_strip)
             ${TARGET_OUT_PATH}
             ${TARGET_OUT_PATH}.full
         COMMAND ${STRIP_CMD} --strip-unneeded ${TARGET_OUT_PATH}
-        COMMAND ${OBJCOPY_CMD} --add-gnu-debuglink
-            ${TARGET_OUT_PATH}.full
+        COMMAND ${OBJCOPY_CMD}
+            --remove-section .gnu_debuglink
+            --add-gnu-debuglink ${TARGET_OUT_PATH}.full
             ${TARGET_OUT_PATH}
         COMMAND ${CMAKE_COMMAND} -E touch_nocreate ${TARGET_OUT_PATH}.full
         COMMENT "strip lib ${TARGET_OUT_PATH} -> ${OUTPUT_TARGET_NAME}"

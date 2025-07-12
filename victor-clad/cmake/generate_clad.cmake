@@ -63,7 +63,7 @@ function(generate_clad)
         #message(STATUS "CLAD_EMITTER_OUTPUTS: ${CLAD_EMITTER_OUTPUTS}")
 
         add_custom_command(
-            COMMAND /usr/bin/env python ${genclad_EMITTER} ${genclad_FLAGS} ${INPUT_DIR} ${INCLUDES} ${OUTPUT_OPTION} ${CLAD_SRC_REL}
+            COMMAND /usr/bin/env python3 ${genclad_EMITTER} ${genclad_FLAGS} ${INPUT_DIR} ${INCLUDES} ${OUTPUT_OPTION} ${CLAD_SRC_REL}
             DEPENDS ${genclad_EMITTER} ${CLAD_SRC}
             OUTPUT ${CLAD_EMITTER_OUTPUTS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

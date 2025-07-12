@@ -18,7 +18,7 @@ source ${SCRIPT_PATH}/victor_env.sh
 
 # Settings can be overridden through environment
 : ${VERBOSE:=0}
-: ${ANKI_BUILD_TYPE:="Debug"}
+: ${ANKI_BUILD_TYPE:="Release"}
 : ${INSTALL_ROOT:="/anki"}
 
 function usage() {

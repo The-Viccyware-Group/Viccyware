@@ -12,8 +12,21 @@ fi
 # http://peter.eisentraut.org/blog/2014/12/01/ccache-and-clang-part-3/
 export CCACHE_CPP2=true
 export CCACHE_MAXSIZE=10G
-export CCACHE_HARDLINK=true
 export CCACHE_BASEDIR="${CMAKE_SOURCE_DIR}"
+export CCACHE_HARDLINK=true
 # caching is conservative by default, for more agressive caching, uncomment the next line           
-# export CCACHE_SLOPPINESS=file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matche
-exec "${CXX_LAUNCHER}" "${CMAKE_CXX_COMPILER}" "$@"
+export CCACHE_SLOPPINESS=include_file_mtime
+#EXTRA_ARGS="$LD_LIBRARY_PATH"
+#if [[ "$(uname -a)" == *"Linux"* ]]; then
+#        if [[ "$(uname -a)" == *"aarch64"* ]]; then
+#                ARCH="arm64"
+#        elif [[ "$(uname -a)" == *"x86_64"* ]]; then
+#                ARCH="amd64"
+#        else
+#                echo "Unknown CPU architecture."
+#                exit 1
+#        fi
+#        EXTRA_ARGS="${CMAKE_SOURCE_DIR}/3rd/libtinfo5/${ARCH}:$LD_LIBRARY_PATH"
+#fi
+
+exec "${C_LAUNCHER}" "${CMAKE_CXX_COMPILER}" "$@"

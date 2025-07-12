@@ -17,7 +17,7 @@ class XcodeProjectParser(object):
     self.index = 0
 
   def printLocalWords(self, index):
-      print " ".join(self.words[max(0,self.index - 5) : min(self.index + 5, len(self.words))])
+      print(" ".join(self.words[max(0, self.index - 5) : min(self.index + 5, len(self.words))]))
 
   def DeserializeProject(self):
     result = None
@@ -41,7 +41,7 @@ class XcodeProjectParser(object):
       result = self.DeserializeXcodeProjectObjectsBody()
     elif t is not None and issubclass(t, IXcodeObject):
       result = self.DeserializeXcodeObject(t)
-    elif t is not None and (issubclass(t,XcodeString) or (t is XcodeString)):
+    elif t is not None and (issubclass(t, XcodeString) or (t is XcodeString)):
       result = self.DeserializeXcodeString(t)
     elif (t is float) or (t is int):
       result = self.DeserializeNumber(t)
@@ -110,7 +110,7 @@ class XcodeProjectParser(object):
 
           currentType = self.typeSwitch(typeName)
 
-          currentList = getattr(body,fieldName)        
+          currentList = getattr(body, fieldName)        
         else:
 
           currentList = None
@@ -293,7 +293,7 @@ class XcodeProjectParser(object):
       fieldName = self.words[self.index]
       self.index+=1
 
-      fieldVal = getattr(obj,fieldName)
+      fieldVal = getattr(obj, fieldName)
 
       fieldType = type(fieldVal)
 
@@ -316,9 +316,9 @@ class XcodeProjectSerializer(object):
     self.stream = stream
 
   def SerializeProject(self, obj):
-    self.stream.write(u'// !$*UTF8*$!\n')
-    self.Serialize(u"", obj)
-    self.stream.write(u'\n')
+    self.stream.write('// !$*UTF8*$!\n')
+    self.Serialize("", obj)
+    self.stream.write('\n')
 
   def Serialize(self, indent, obj, oneLine = False):
     t = type(obj)
@@ -330,47 +330,47 @@ class XcodeProjectSerializer(object):
       self.SerializeXcodeObject(indent, obj, oneLine)
     elif (t is XcodeNamedVariable):
       self.SerializeNamedVariable(indent, obj, oneLine)
-    elif t is not None and (issubclass(t,XcodeString) or (t is XcodeString)): 
-      self.stream.write(unicode(obj.ToString()))
+    elif t is not None and (issubclass(t, XcodeString) or (t is XcodeString)): 
+      self.stream.write(str(obj.ToString()))
     elif (t is list):
       self.SerializeList(indent, obj, oneLine)
     elif (t is OrderedDict):
       self.SerializeDictionary(indent, obj, oneLine)
     elif (t is float) or (t is int):
-      self.stream.write(u'{0}'.format(obj))
+      self.stream.write('{0}'.format(obj))
 
 
   def SerializeXcodeProjectObjectsBody(self, indent, obj):
     fields = obj.getFields()
 
-    self.stream.write(u"{\n")
-    subIndent = u'\t{0}'.format(indent)
+    self.stream.write("{\n")
+    subIndent = '\t{0}'.format(indent)
     for field in fields:
 
       sectionName = field[:-7] #strip off 'Section'
 
-      l = getattr(obj,field)
+      l = getattr(obj, field)
 
       if (l and len(l) > 0):
-        self.stream.write(u'\n')
-        self.stream.write(u'/* Begin {0} section */\n'.format(sectionName))
+        self.stream.write('\n')
+        self.stream.write('/* Begin {0} section */\n'.format(sectionName))
         for item in l:
           self.Serialize(subIndent, item)
-        self.stream.write(u'/* End {0} section */\n'.format(sectionName))
+        self.stream.write('/* End {0} section */\n'.format(sectionName))
 
-    self.stream.write(u'{0}{1}'.format(indent, '}'))
+    self.stream.write('{0}{1}'.format(indent, '}'))
 
   def SerializeXcodeObject(self, indent, obj, oneLine):
     if (hasattr(obj, "isOneLine")):
       oneLine = oneLine or obj.isOneLine()
 
     fields = obj.getFields()
-    subIndent = u'\t{0}'.format(indent)
-    self.stream.write(u'{')
+    subIndent = '\t{0}'.format(indent)
+    self.stream.write('{')
 
-    separator = u"\n"
+    separator = "\n"
     if oneLine:
-      separator = u" "
+      separator = " "
     else:
       self.stream.write(separator)
 
@@ -383,28 +383,28 @@ class XcodeProjectSerializer(object):
       if not oneLine:
         self.stream.write(subIndent)
 
-      self.stream.write(unicode(field))
-      self.stream.write(u" = ")
+      self.stream.write(str(field))
+      self.stream.write(" = ")
       self.Serialize(subIndent, value, oneLine)
-      self.stream.write(u';')
+      self.stream.write(';')
       self.stream.write(separator)
 
     if not oneLine:
       self.stream.write(indent)
-    self.stream.write(u'}')
+    self.stream.write('}')
 
   def SerializeDictionary(self, indent, obj, oneLine):    
 
-    subIndent = u'\t{0}'.format(indent)
-    self.stream.write(u'{')
+    subIndent = '\t{0}'.format(indent)
+    self.stream.write('{')
 
-    separator = u"\n"
+    separator = "\n"
     if oneLine:
-      separator = u" "
+      separator = " "
     else:
       self.stream.write(separator)
 
-    for field, value in obj.items():
+    for field, value in list(obj.items()):
       if value is None:
         continue
 
@@ -412,23 +412,23 @@ class XcodeProjectSerializer(object):
         self.stream.write(subIndent)
 
       self.Serialize(subIndent, field, oneLine)
-      self.stream.write(u" = ")
+      self.stream.write(" = ")
       self.Serialize(subIndent, value, oneLine)
-      self.stream.write(u';')
+      self.stream.write(';')
       self.stream.write(separator)
 
     if not oneLine:
       self.stream.write(indent)
-    self.stream.write(u'}')
+    self.stream.write('}')
 
   def SerializeList(self, indent, obj, oneLine):
 
-    subIndent = u'\t{0}'.format(indent)
-    self.stream.write(u'(')
+    subIndent = '\t{0}'.format(indent)
+    self.stream.write('(')
 
-    separator = u"\n"
+    separator = "\n"
     if oneLine:
-      separator = u" "
+      separator = " "
     else:
       self.stream.write(separator)
 
@@ -436,20 +436,20 @@ class XcodeProjectSerializer(object):
       if not oneLine:
         self.stream.write(subIndent)
       self.Serialize(subIndent, item, oneLine)
-      self.stream.write(u',')
+      self.stream.write(',')
       self.stream.write(separator)
 
     if not oneLine:
       self.stream.write(indent)
 
-    self.stream.write(u')')
+    self.stream.write(')')
 
   def SerializeNamedVariable(self, indent, obj, oneLine):
     self.stream.write(indent)
-    self.stream.write(unicode(obj.Name.ToString()))
-    self.stream.write(u" = ")
+    self.stream.write(str(obj.Name.ToString()))
+    self.stream.write(" = ")
     self.Serialize(indent, obj.Value, oneLine)
-    self.stream.write(u";\n")
+    self.stream.write(";\n")
 
 
 
@@ -461,7 +461,7 @@ class XcodeString(object):
   def __eq__(self, other):
     if(other is None):
       return False;
-    if (type(other) is XcodeString or issubclass(type(other), XcodeString)):
+    if (isinstance(other, XcodeString) or issubclass(type(other), XcodeString)):
       return self.Value == other.Value;
     return False
 
@@ -471,7 +471,7 @@ class XcodeString(object):
   def __lt__(self, other):
     if(other is None):
       return False;
-    if (type(other) is XcodeString or issubclass(type(other), XcodeString)):
+    if (isinstance(other, XcodeString) or issubclass(type(other), XcodeString)):
       return self.Value < other.Value;    
     return False
 
@@ -530,7 +530,7 @@ class FileId(XcodeString):
 class IXcodeObject(object):
   
   def getFields(self):
-    return [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self,a))]
+    return [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self, a))]
 
 
 class XcodeProject(IXcodeObject):
@@ -873,7 +873,7 @@ class XcodeProjectUtility(object):
       comment = None
       name = ''
 
-    return FileId(self.NewGuid('{0}%{1}%{2}'.format(path,name,group)), comment)
+    return FileId(self.NewGuid('{0}%{1}%{2}'.format(path, name, group)), comment)
   def XcodeStringOrNone(self, string):
     if string is None:
       return None
@@ -1013,7 +1013,7 @@ class XcodeProjectUtility(object):
     frs = [x for x in project.objects.PBXFileReferenceSection if os.path.samefile(x.Value.path.Value, relativePath)]
 
     if(len(frs) == 0):
-      print("Could not find file {0} in project".format(path))
+      print(("Could not find file {0} in project".format(path)))
       return
 
     fileReference = frs[0]
@@ -1021,7 +1021,7 @@ class XcodeProjectUtility(object):
     grps = [x for x in project.objects.PBXGroupSection if fileReference.Name in x.Value.children]
 
     if len(grps) > 0:
-      print ("File {0} not in any groups".format(fileReference.ToString()))
+      print(("File {0} not in any groups".format(fileReference.ToString())))
       group = grps[0]
       group.Value.children.remove(fileReference.Name)
 
@@ -1071,7 +1071,7 @@ class XcodeProjectUtility(object):
       if(varGroup is not None):
         project.objects.PBXVariantGroupSection.remove(vgs[0])
       else:
-        print("Could not find any reference to file id {0}".format(fileId.ToString()))
+        print(("Could not find any reference to file id {0}".format(fileId.ToString())))
 
     bfs = [x for x in project.objects.PBXBuildFileSection if x.Value.fileRef == fileRef.Name]
 
@@ -1096,13 +1096,13 @@ class XcodeProjectUtility(object):
     parentFolder = self.GetExistingFolder(project, projectRoot.Value, os.path.dirname(folderPath))
 
     if parentFolder is None:
-      print("Could not find parent folder in project for {0}".format(projectFolderPath))
+      print(("Could not find parent folder in project for {0}".format(projectFolderPath)))
       return
 
     fileId = self.GetFileId(parentFolder.children, folderPath)
 
     if fileId is None:
-      print ("Could not find file id for {0}".format(folderPath))
+      print(("Could not find file id for {0}".format(folderPath)))
 
     self.RemoveFileOrFolder(project, parentFolder, fileId)
 
@@ -1148,13 +1148,13 @@ class XcodeProjectUtility(object):
   def FixupIosUnityProject(self, xcodeProjectPath, unityBuildPath, folderName = None):  
     if xcodeProjectPath is None or unityBuildPath is None:
       return
-    print( "Reading {0}".format(xcodeProjectPath))
+    print(( "Reading {0}".format(xcodeProjectPath)))
     f = open(xcodeProjectPath, 'r')
     initialString = f.read()
     f.close()
 
 
-    print( "Parsing {0}".format(xcodeProjectPath))
+    print(( "Parsing {0}".format(xcodeProjectPath)))
     parser = XcodeProjectParser(initialString)
 
     proj = parser.DeserializeProject()
@@ -1165,7 +1165,7 @@ class XcodeProjectUtility(object):
     if(folderName is None):
       folderName = projectName
 
-    print("Modifying {0} by updating {1} from {2}".format(xcodeProjectPath, folderName, unityBuildPath))
+    print(("Modifying {0} by updating {1} from {2}".format(xcodeProjectPath, folderName, unityBuildPath)))
 
     self.RemoveFolder(proj, folderName)
 
@@ -1179,16 +1179,16 @@ class XcodeProjectUtility(object):
 
     stream = io.StringIO()
 
-    print( "Serializing {0}".format(xcodeProjectPath))
+    print(( "Serializing {0}".format(xcodeProjectPath)))
     serializer = XcodeProjectSerializer(stream)
 
     serializer.SerializeProject(proj)
 
     finalString = stream.getvalue()
 
-    print( "Writing {0}".format(xcodeProjectPath))
+    print(( "Writing {0}".format(xcodeProjectPath)))
     f = open(xcodeProjectPath, 'w')    
-    f.write(unicode(finalString))
+    f.write(str(finalString))
     f.close()
 
 if __name__ == "__main__":

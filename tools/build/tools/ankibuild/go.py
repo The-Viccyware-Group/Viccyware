@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import argparse
 import os
@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 # ankibuild
-import toolget
+from . import toolget
 
 GO = 'go'
 DEFAULT_VERSION = '1.16.4'

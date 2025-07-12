@@ -2,8 +2,6 @@ module github.com/digital-dream-labs/vector-cloud
 
 go 1.23.0
 
-toolchain go1.24.4
-
 require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/cenkalti/backoff v2.2.1+incompatible

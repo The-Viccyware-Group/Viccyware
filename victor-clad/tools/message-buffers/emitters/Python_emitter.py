@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Anki Inc.
 #
@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 
 import inspect
 import os
@@ -214,7 +214,7 @@ class EnumEmitter(BaseEmitter):
             for member in node.members():
                 value = member.value
                 
-                if type(value) is str and "::" in member.value:
+                if isinstance(value, str) and "::" in member.value:
                     value = value.replace("::", ".")
                 
                 start = '\t{member_name}'.format(member_name=member.name)
@@ -310,7 +310,7 @@ class MessageEmitter(BaseEmitter):
                 continue
             
             self.output.write('=')
-            if member.init is not None and type(member.init.value) is str:
+            if member.init is not None and isinstance(member.init.value, str):
                 member_init=member.init.value
                 if "::" in member_init:
                     # Replace '::' with '.'
@@ -762,7 +762,7 @@ class EnumConceptEmitter(BaseEmitter):
             member_value = member.value.value
 
             # If this is a string and it contains "::" meaning it is likely a verbatim value
-            if type(member_value) is str and "::" in member_value:
+            if isinstance(member_value, str) and "::" in member_value:
                 # Replace '::' with '.'
                 member_value = member_value.replace("::", ".")
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import os
 import subprocess
@@ -7,22 +7,22 @@ import md5
 import re
 
 # ankibuild
-import util
-import unity
+from . import util
+from . import unity
 
 def generateMessageBuffersCsharp(basestation_dir, unity_dir, clad_emitter_dir=None, verbose=False):
     message_buffers_src=os.path.join(basestation_dir, 'source', 'anki', 'clad')
     message_buffers_dst=os.path.join(unity_dir, 'Assets', 'Libs', 'Anki', 'Messages')
     message_buffers_dst_rel=os.path.relpath(message_buffers_dst, message_buffers_src)
-    print "[CLAD] Generating C# Sources..."
+    print("[CLAD] Generating C# Sources...")
 
     if not clad_emitter_dir:
         clad_emitter_dir = os.path.join(util.Module.get_path('clad'), 'emitters')
 
     stdout = subprocess.PIPE
     if verbose:
-        print "src -> {0}".format(basestation_dir)
-        print "dst -> {0}".format(unity_dir)
+        print("src -> {0}".format(basestation_dir))
+        print("dst -> {0}".format(unity_dir))
         stdout = None
 
     make_vars = {
@@ -34,8 +34,8 @@ def generateMessageBuffersCsharp(basestation_dir, unity_dir, clad_emitter_dir=No
                    '-j', '6',
                    '-C', message_buffers_src]
 
-    for k,v in make_vars.iteritems():
-        var_def = "%s=%s" % (k,v)
+    for k, v in make_vars.items():
+        var_def = "%s=%s" % (k, v)
         make_params.append(var_def)
 
     make_params.append('csharp')
@@ -49,15 +49,15 @@ def generateMessageBuffersPython(basestation_dir, dest_dir, clad_emitter_dir=Non
     message_buffers_src=os.path.join(basestation_dir, 'source', 'anki', 'clad')
     message_buffers_dst=os.path.join(dest_dir, 'clad')
     message_buffers_dst_rel=os.path.relpath(message_buffers_dst, message_buffers_src)
-    print "[CLAD] Generating Python Sources..."
+    print("[CLAD] Generating Python Sources...")
 
     if not clad_emitter_dir:
         clad_emitter_dir = os.path.join(util.Module.get_path('clad'), 'emitters')
 
     stdout = subprocess.PIPE
     if verbose:
-        print "src -> {0}".format(basestation_dir)
-        print "dst -> {0}".format(dest_dir)
+        print("src -> {0}".format(basestation_dir))
+        print("dst -> {0}".format(dest_dir))
         stdout = None
 
     make_vars = {
@@ -69,8 +69,8 @@ def generateMessageBuffersPython(basestation_dir, dest_dir, clad_emitter_dir=Non
                    '-j', '6',
                    '-C', message_buffers_src]
 
-    for k,v in make_vars.iteritems():
-        var_def = "%s=%s" % (k,v)
+    for k, v in make_vars.items():
+        var_def = "%s=%s" % (k, v)
         make_params.append(var_def)
 
     make_params.append('python')
@@ -119,14 +119,14 @@ DefaultImporter:
             util.File.update_if_changed(meta_file_path, meta_file_path_tmp)
 
 def generateMessageBuffersCPP(src_dir, dest_dir, clad_emitter_dir=None, verbose=False):
-  print '[CLAD] Generating C++ Sources...'
+  print('[CLAD] Generating C++ Sources...')
   stdout = subprocess.PIPE
   make_width = 6
   rel_dest_dir = os.path.relpath(dest_dir, src_dir)
   if verbose:
-    print "src -> {0}".format(src_dir)
-    print "dst -> {0}".format(dest_dir)
-    print "rel -> {0}".format(rel_dest_dir)
+    print("src -> {0}".format(src_dir))
+    print("dst -> {0}".format(dest_dir))
+    print("rel -> {0}".format(rel_dest_dir))
     stdout = None
     make_width = 1
 
@@ -140,8 +140,8 @@ def generateMessageBuffersCPP(src_dir, dest_dir, clad_emitter_dir=None, verbose=
                    '-j', '6',
                    '-C', src_dir]
 
-  for k,v in make_vars.iteritems():
-    var_def = "%s=%s" % (k,v)
+  for k, v in make_vars.items():
+    var_def = "%s=%s" % (k, v)
     make_params.append(var_def)
 
   make_params.append('cpp')
@@ -153,6 +153,6 @@ if __name__ == '__main__':
   projectRoot = subprocess.check_output(['git', 'rev-parse', '--show-toplevel']).rstrip("\r\n")
   result = generateMessageBuffers(os.path.join(projectRoot, 'source', 'anki', 'clad'), os.path.join(projectRoot, 'source', 'generated'))
   if result != 0:
-    print "Failed to generate message-buffer sources"
+    print("Failed to generate message-buffer sources")
     exit(1)
 

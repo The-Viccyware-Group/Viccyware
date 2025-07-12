@@ -2,7 +2,7 @@
 "ios-deploy script running."
 
 import os.path
-import util
+from . import util
 import sys
 import textwrap
 

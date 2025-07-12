@@ -2,6 +2,19 @@
 
 set -e
 
+CMAKE_VERSION="3.30.4"
+VICOS_SDK_VERSION="5.2.1-r06"
+GO_VERSION="1.24.4"
+PROTOC_VERSION="31.1"
+PROTOC_GEN_GO_VERSION="v1.36.6"
+PROTOC_GEN_GO_GRPC_VERSION="v1.5.1"
+PROTOC_GEN_GRPC_GATEWAY_VERSION="v2.27.1"
+UPX_VERSION="5.0.1"
+
+if [[ "$(uname -a)" == *"Darwin"* ]]; then
+    export PATH="/opt/homebrew/bin:$PATH"
+fi
+
 SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || echo $0))
 SCRIPT_NAME=`basename ${0}`
 TOPLEVEL=$(cd "${SCRIPT_PATH}/../.." && pwd)
@@ -28,14 +41,14 @@ function usage() {
     echo "  -e                      export compile commands"
     echo "  -I                      ignore external dependencies"
     echo "  -S                      build static libraries"
-    echo "  -m			    don't extract animations from SVN"
+    echo "  -m			                don't extract animations from SVN"
 }
 
 #
 # defaults
 #
 VERBOSE=0
-CONFIGURE=0
+CONFIGURE=1
 GEN_SRC_ONLY=0
 RM_BUILD_ASSETS=0
 RUN_BUILD=1
@@ -46,7 +59,7 @@ IGNORE_EXTERNAL_DEPENDENCIES=0
 BUILD_SHARED_LIBS=1
 DONT_ANIM=0
 
-CONFIGURATION=Debug
+CONFIGURATION=Release
 PLATFORM=vicos
 GENERATOR=Ninja
 FEATURES=""
@@ -138,37 +151,14 @@ shift $(($OPTIND - 1))
 cd ${TOPLEVEL}
 
 #
-# Verify tflite files were downloaded correctly via git lfs
-#
-
-function usage_fix_lfs() {
-    echo "$1 is not a valid .tflite file!!!"
-    echo "Probably a problem with your git lfs setup.  Try the following to fix it...."
-    echo ""
-    echo "git lfs uninstall  # Remove Git LFS hooks and filters"
-    echo "rm $f              # Delete borked file"
-    echo "git stash          # Save your work in progress"
-    echo "git reset --hard   # This will wipe out your work in progress, hope you stashed"
-    echo "git lfs install    # Install Git LFS configuration"
-    echo "git lfs pull       # Fetch Git LFS changes from remote & checkout required files"
-    echo "git stash apply    # This will grab changes from your stash"
-    exit 1
-}
-
-#for f in `git ls-files *.tflite`; do
-#    egrep -q TFL3 $f || usage_fix_lfs $f
-#done
-
-
-#
 # settings
 #
 
 if [ -z "${CMAKE_EXE+x}" ]; then
     echo "Attempting to install cmake"
-    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake 4.0.3
-    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake 4.0.3`
-    echo ${CMAKE_EXE}
+    echo -n "CMake: "
+    ${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --install-cmake $CMAKE_VERSION
+    CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake $CMAKE_VERSION`
 fi
 
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
@@ -246,6 +236,8 @@ done
 #
 export ANKI_BUILD_SHA=`git rev-parse --short HEAD`
 
+export ANKI_BUILD_BRANCH=`git branch --show-current`
+
 #
 # Enable export flags
 #
@@ -270,7 +262,7 @@ case ${GENERATOR} in
         ;;
     "Makefiles")
         PROJECT_FILE="Makefile"
-        GENERATOR="CodeBlocks - Unix Makefiles"
+        GENERATOR="Unix Makefiles"
       ;;
     "*")
         PROJECT_FILE=""
@@ -313,7 +305,7 @@ if [ $RM_BUILD_ASSETS -eq 1 ]; then
 fi
 
 #
-# grab Go dependencies ahead of generating source lists
+# generate source lists
 #
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     GEN_SRC_DIR="${TOPLEVEL}/generated/cmake"
@@ -324,11 +316,6 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
 
     # Scan for BUILD.in files
     METABUILD_INPUTS=`find . -name BUILD.in`
-
-    # # Process BUILD.in files (creates list of Go projects to fetch)
-    # PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
-    #   -o ${GEN_SRC_DIR} \
-    #   ${METABUILD_INPUTS}
 fi
 
 # Set protobuf location
@@ -336,11 +323,14 @@ HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
 if [[ `uname -a` == *"aarch64"* && $HOST == "linux" ]]; then
 	HOST+="-arm64"
 fi
-echo $HOST
 PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
 
 # Build protocCppPlugin if needed
-if [[ ! -x ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin ]]; then
+if [[ ! -x "${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin" ]]; then
+  BUILD_PROTOC_PLUGIN=1
+# "Unknown" means it's functional
+elif [[ "$(${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin --help 2>&1)" != *"Unknown"* ]]; then
+  echo "Rebuilding protocCppPlugin plugin as it fails to run"
   BUILD_PROTOC_PLUGIN=1
 else 
   BUILD_PROTOC_PLUGIN=0
@@ -354,18 +344,35 @@ if [[ $BUILD_PROTOC_PLUGIN -eq 1 ]]; then
     ${TOPLEVEL}/tools/protobuf/plugin/make.sh
 fi
 
+if [ -z "${GO_EXE+x}" ]; then
+    ${TOPLEVEL}/project/build-scripts/download-go.sh ${GO_VERSION}
+    GO_EXE="${HOME}/.anki/go/dist/${GO_VERSION}/go/bin/go"
+fi
+
+if [ -z "${UPX_EXE+x}" ]; then
+    # no binary release for macOS, rely on brew
+    if [[ "$(uname -a)" == *"Darwin"* ]]; then
+        UPX_EXE="upx"
+    else
+        ${TOPLEVEL}/project/build-scripts/download-upx.sh ${UPX_VERSION}
+        UPX_EXE="${HOME}/.anki/upx/dist/${UPX_VERSION}/upx"
+    fi
+fi
+
+if [ -z "${PROTOC_EXE+x}" ]; then
+    ${TOPLEVEL}/project/build-scripts/download-protoc.sh ${PROTOC_VERSION}
+    PROTOC_EXE="${HOME}/.anki/protoc/dist/${PROTOC_VERSION}/bin/protoc"
+fi
 
 # Build/Install the protoc generators for go
-# GOBIN="${TOPLEVEL}/cloud/go/bin"
-# if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
-#     echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
-#     GOBIN=$GOBIN \
-#     CC=/usr/bin/cc \
-#     CXX=/usr/bin/c++ \
-#     "${GOROOT}/bin/go" install \
-#     github.com/golang/protobuf/protoc-gen-go \
-#     github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-# fi
+GOBIN="${TOPLEVEL}/cloud/go/bin"
+mkdir -p "${GOBIN}"
+if [[ ! -x "$GOBIN/protoc-gen-go" ]] || [[ ! -x "$GOBIN/protoc-gen-grpc-gateway" ]]; then
+    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway..."
+    GOBIN=$GOBIN "${GO_EXE}" install google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION
+    GOBIN=$GOBIN "${GO_EXE}" install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$PROTOC_GEN_GO_GRPC_VERSION
+    GOBIN=$GOBIN "${GO_EXE}" install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$PROTOC_GEN_GRPC_GATEWAY_VERSION
+fi
 
 #
 # generate source file lists
@@ -410,10 +417,11 @@ if [ $CONFIGURE -eq 1 ]; then
         )
     elif [ "$PLATFORM" == "vicos" ] ; then
         #
-        # If VICOS_SDK is set, use it, else provide default location
+        # If VICOS_SDK is set, use it, else download toolchain
         #
         if [ -z "${VICOS_SDK+x}" ]; then
-            VICOS_SDK=$(${TOPLEVEL}/tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06 | tail -1)
+            ${TOPLEVEL}/project/build-scripts/download-vicos-sdk.sh "$VICOS_SDK_VERSION"
+            VICOS_SDK="${HOME}/.anki/vicos-sdk/dist/${VICOS_SDK_VERSION}"
         fi
 
         PLATFORM_ARGS=(
@@ -436,11 +444,16 @@ if [ $CONFIGURE -eq 1 ]; then
     $CMAKE_EXE ${TOPLEVEL} \
         ${VERBOSE_ARG} \
         -G"${GENERATOR}" \
+        -DANKI_GO_COMPILER=${GO_EXE} \
+        -DANKI_UPX=${UPX_EXE} \
+        -DANKI_PROTOC=${PROTOC_EXE} \
+        -DANKI_GO_BIN_PATH=${GOBIN} \
         -DCMAKE_BUILD_TYPE=${CONFIGURATION} \
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
         -DPROTOBUF_HOME=${PROTOBUF_HOME} \
         -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \
-	-DCMAKE_COLOR_DIAGNOSTICS=ON \
+        -DANKI_BUILD_BRANCH=${ANKI_BUILD_BRANCH} \
+        -DCMAKE_COLOR_DIAGNOSTICS=ON \
         ${EXPORT_FLAGS} \
         ${FEATURE_FLAGS} \
         ${DEFINES} \

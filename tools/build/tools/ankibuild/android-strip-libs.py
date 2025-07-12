@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 import os
@@ -62,7 +62,7 @@ def main(argv):
     options = parse_args(argv)
 
     if not options.lib_files:
-        print "No files to strip"
+        print("No files to strip")
         return False 
 
     success = True
@@ -72,9 +72,9 @@ def main(argv):
         basename = os.path.basename(src_lib)
         target_lib = os.path.join(target_dir, basename)
         if not is_file_up_to_date(target_lib, src_lib):
-            print("[android-strip-libs] preserve symbols %s -> %s" % (src_lib, target_lib))
+            print(("[android-strip-libs] preserve symbols %s -> %s" % (src_lib, target_lib)))
             move(src_lib, target_lib)
-            print("[android-strip-libs] strip %s" % src_lib)
+            print(("[android-strip-libs] strip %s" % src_lib))
             success = strip(target_lib, src_lib, options)
             if not success:
                 break

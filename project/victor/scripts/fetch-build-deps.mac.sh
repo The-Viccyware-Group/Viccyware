@@ -16,36 +16,22 @@ function vlog()
 
 pushd "${TOPLEVEL}" > /dev/null 2>&1
 
-#vlog "Check brew installation."
+vlog "Check brew installation."
 is_brew=`which brew`
 set -e
 
 if [ -z "$is_brew" ]; then
-   echo "Brew not found installing now.  You will be prompted."
-   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+   vlog "Brew not found. Please install it."
+   exit 1
 fi
 
 vlog "Check homebrew dependencies"
 ./tools/build/tools/ankibuild/installBuildDeps.py \
-    -d python2 \
-    ninja \
+    -d ninja \
     python3 \
-    git-lfs \
-    libsndfile \
-    node \
     rsync \
-    openssl \
+    wget \
     curl
-
-vlog "vicos sdk"
-./tools/build/tools/ankibuild/vicos.py --install 5.2.1-r06
-
-vlog "CMake"
-./tools/build/tools/ankibuild/cmake.py
-
-vlog "git-lfs"
-$GIT lfs install
-$GIT lfs pull
 
 if [ -d "/Applications/Webots.app" ]; then
   vlog "check webots version"
@@ -62,8 +48,12 @@ vlog "Build output dirs"
 mkdir -p generated
 mkdir -p _build
 
-vlog "Fetch & extract external dependencies. This may take 1-5 min."
-./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+if [[ ${DONT_ANIM} != "1" ]]; then
+  vlog "Extract and compile animation and sound assets. This should take about 20 seconds."
+	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
+else
+	vlog "Not extracting animation assets"
+fi
 
 vlog "Configure audio library"
 ./lib/audio/configure.py

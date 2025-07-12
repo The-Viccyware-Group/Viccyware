@@ -1,9 +1,9 @@
 #!/usr/bin/env python2 -u
 
-from dependencies import update_teamcity_version
+from .dependencies import update_teamcity_version
 import subprocess
 import os
-import anki_github
+from . import anki_github
 
 
 def execute(*kargs):
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     if version is not None and pr_branch is not None and auth_token is not None:
         if pr_branch != 'master':
             # checkout out the original branch instead of the PR read-only
-            branch_number = int(filter(str.isdigit, pr_branch))
+            branch_number = int(list(filter(str.isdigit, pr_branch)))
             branch = anki_github.get_branch_name(auth_token, branch_number)
             print('WARNING: Developers should not check in changes to the PR at during this build.')
             execute('git', 'fetch')

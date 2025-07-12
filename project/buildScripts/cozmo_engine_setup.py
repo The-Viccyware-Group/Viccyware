@@ -72,16 +72,16 @@ os.environ["CXX"] = "clang++"
 
 def get_source_files():
     source_files = []
-    for subdir, files in CORETECH_SOURCE_FILES.items():
+    for subdir, files in list(CORETECH_SOURCE_FILES.items()):
         for source_file in files:
             source_files.append(os.path.join(CORETECH_DIR, subdir, source_file))
-    for subdir, files in UTIL_SOURCE_FILES.items():
+    for subdir, files in list(UTIL_SOURCE_FILES.items()):
         for source_file in files:
             source_files.append(os.path.join(UTIL_DIR, subdir, source_file))
-    for subdir, files in GENERATED_CLAD_SOURCE_FILES.items():
+    for subdir, files in list(GENERATED_CLAD_SOURCE_FILES.items()):
         for source_file in files:
             source_files.append(os.path.join(GENERATED_CLAD_DIR, subdir, source_file))
-    for subdir, files in BASESTATION_SOURCE_FILES.items():
+    for subdir, files in list(BASESTATION_SOURCE_FILES.items()):
         for source_file in files:
             if subdir:
                 source_files.append(os.path.join(BASESTATION_DIR, subdir, source_file))
@@ -98,7 +98,7 @@ cozmo_basestation_py = Extension('cozmo_basestation_py',
     library_dirs = [OPENCV_LIBS_DIR, OPENCV_THIRD_PARTY_LIBS_DIR, JPEG_LIBS_DIR],
     define_macros = [('ANKICORETECH_USE_OPENCV', '1')],
     libraries = LIBRARIES,
-    extra_compile_args = ['-std=c++11','-stdlib=libc++', '-arch', 'x86_64'],
+    extra_compile_args = ['-std=c++11', '-stdlib=libc++', '-arch', 'x86_64'],
     extra_link_args = ['-stdlib=libc++', '-arch', 'x86_64']
     )
 

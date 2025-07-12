@@ -181,6 +181,8 @@ public:
 
   const std::string& GetBuildSha();
 
+  const std::string& GetBuildBranch();
+
   // Returns the semi-unique name of this robot, Vector_XYXY
   // Where X is a letter and Y is a digit
   // The name can change over the lifetime of the robot
@@ -249,6 +251,7 @@ private:
   std::string _osBuildVersion  = "";
   std::string _robotVersion    = "";
   std::string _buildSha        = "";
+  std::string _buildBranch     = "";
   std::string _bootID          = "";
   bool        _isUserSpaceSecure = false;
   bool        _hasValidIPAddress = false;

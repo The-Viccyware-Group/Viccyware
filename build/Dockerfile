@@ -5,6 +5,9 @@ ARG GID
 ARG USER_NAME
 ARG DIR_PATH
 
+# this is too much, but it's probably nice to lean on the "more" than "less" side here
+# in the case i want to compile something which might need one of these,
+# so i don't have to switch out the container
 RUN apt-get update && \ 
     apt-get install -y sudo build-essential chrpath cpio debianutils \
     diffstat expect file gcc git iputils-ping libacl1 liblz4-tool \
@@ -26,39 +29,8 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 RUN usermod -u ${UID} ${USER_NAME} && groupmod -g ${GID} ${USER_NAME}
 
-RUN set -e; \
-    arch="$(dpkg --print-architecture)"; \
-    for url in \
-        "http://ftp.debian.org/debian/pool/main/libf/libffi/libffi7_3.3-6_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1w-0+deb11u1_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/p/python2.7/libpython2.7-minimal_2.7.18-8+deb11u1_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/p/python2.7/python2.7-minimal_2.7.18-8+deb11u1_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/p/python2.7/libpython2.7-stdlib_2.7.18-8+deb11u1_${arch}.deb" \
-        "http://ftp.debian.org/debian/pool/main/p/python2.7/python2.7_2.7.18-8+deb11u1_${arch}.deb" \
-	    "https://github.com/upx/upx/releases/download/v5.0.0/upx-5.0.0-${arch}_linux.tar.xz" \
-	    "https://go.dev/dl/go1.24.4.linux-${arch}.tar.gz"; \
-    do \
-        wget -q "$url"; \
-    done && \
-    dpkg -i *.deb && \
-    tar -zxf go1.24.4.linux-${arch}.tar.gz && \
-    tar -xvf upx-5.0.0-${arch}_linux.tar.xz && \
-    mv upx-5.0.0-${arch}_linux/upx /usr/bin/ && \
-    rm -f *.deb *.tar.gz *.tar.xz
-
-RUN mv go /usr/local/
-RUN ln -sf /usr/local/go/bin/go /usr/bin/go
-RUN mkdir /root/go
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
-RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
-RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.27.1
-RUN mv $(go env GOPATH)/bin/* /usr/bin/
-
-RUN chmod 0755 /usr/bin/upx
-
-RUN ln -sf /usr/bin/python2.7 /usr/bin/python2
-RUN ln -sf /usr/bin/python2.7 /usr/bin/python
 RUN chmod 0755 /usr/local/bin
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 RUN ln -sf /usr/bin/ninja /usr/local/bin/ninja
 
 USER ${USER_NAME}

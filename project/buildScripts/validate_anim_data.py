@@ -61,7 +61,7 @@ def fill_file_dict(file_list):
         file_name = os.path.basename(one_file)
         if file_name in file_dict:
             file_dict[file_name].append(one_file)
-            print("ALERT: Multiple '%s' files found: %s" % (file_name, file_dict[file_name]))
+            print(("ALERT: Multiple '%s' files found: %s" % (file_name, file_dict[file_name])))
         else:
             file_dict[file_name] = [one_file]
     return file_dict
@@ -141,7 +141,7 @@ def get_audio_events_in_soundbanks_info_xml_file(xml_file, sound_banks_attr=SOUN
                 event_name = event.get(audio_event_name_attr)
                 event_name = event_name.lower()
                 event_id = event.get(audio_event_id_attr)
-                event_id = long(event_id)
+                event_id = int(event_id)
                 all_audio_events.append((event_name, event_id))
 
     return all_audio_events
@@ -166,7 +166,7 @@ def get_audio_event_usage_in_anim(json_file, all_available_events):
         raise ValueError("Invalid JSON file provided: %s" % json_file)
     with open(json_file, 'r') as fh:
         contents = json.load(fh)
-    for anim_clip, keyframes in contents.items():
+    for anim_clip, keyframes in list(contents.items()):
         # Loop over all keyframes in this animation and look for audio keyframes...
         anim_clip = str(anim_clip)
         for keyframe in keyframes:
@@ -200,7 +200,7 @@ def get_audio_event_usage_in_anim(json_file, all_available_events):
 
 def _check_using_event_id(audio_ids, all_available_event_ids, available_events, unavailable_events):
     for audio_id in audio_ids:
-        audio_id = long(audio_id)
+        audio_id = int(audio_id)
         #print("Looking for audio ID = %s" % audio_id)
         if audio_id in all_available_event_ids:
             available_events.append((None, audio_id))
@@ -218,7 +218,7 @@ def _check_using_event_name(audio_events, audio_ids, all_available_events,
         # so the event name strings are NOT case sensitive. Therefore, we converted
         # to lowercase earlier and compare to lowercase event names here.
         audio_event = str(audio_events[idx]).lower()
-        audio_id = long(audio_ids[idx])
+        audio_id = int(audio_ids[idx])
         #print("Looking for audio event '%s' with ID = %s" % (audio_event, audio_id))
         if (audio_event, audio_id) in all_available_events:
             available_events.append((audio_event, audio_id))
@@ -242,16 +242,16 @@ def check_anims_all_anim_groups(externals_dir, anim_assets_dir=ANIM_ASSETS_DIR,
         this_prob = "No tar files available in %s" % tar_files_dir
         raise ValueError(problem_msg % this_prob)
     tar_file_dict = fill_file_dict(tar_files)
-    for file_name, file_paths in tar_file_dict.items():
+    for file_name, file_paths in list(tar_file_dict.items()):
         file_path = file_paths[0]
         unpacked_files = unpack_tarball(file_path)
         for json_file in unpacked_files:
             all_anims.append(os.path.splitext(os.path.basename(json_file))[0])
         try:
-            map(os.remove, unpacked_files)
+            list(map(os.remove, unpacked_files))
             os.rmdir(os.path.dirname(unpacked_files[0]))
-        except OSError, e:
-            print("WARNING: Failed to cleanup temp files or directory: %s" % e)
+        except OSError as e:
+            print(("WARNING: Failed to cleanup temp files or directory: %s" % e))
 
     # Check all animations in all animation groups and keep track of what unavailable
     # animations are currently being used
@@ -293,7 +293,7 @@ def check_audio_events_all_anims(externals_dir, anim_assets_dir=ANIM_ASSETS_DIR,
     #print("Soundbanks XML file = %s" % soundbanks_xml_file)
     try:
         all_audio_events = get_audio_events_in_soundbanks_info_xml_file(soundbanks_xml_file)
-    except (IOError, OSError, ValueError, ET.ParseError), e:
+    except (IOError, OSError, ValueError, ET.ParseError) as e:
         raise ValueError(problem_msg % e)
 
     # Check all audio events in all animations and keep track of what unavailable
@@ -305,7 +305,7 @@ def check_audio_events_all_anims(externals_dir, anim_assets_dir=ANIM_ASSETS_DIR,
         this_prob = "No tar files available in %s" % tar_files_dir
         raise ValueError(problem_msg % this_prob)
     tar_file_dict = fill_file_dict(tar_files)
-    for file_name, file_paths in tar_file_dict.items():
+    for file_name, file_paths in list(tar_file_dict.items()):
         file_path = file_paths[0]
         unpacked_files = unpack_tarball(file_path)
         for json_file in unpacked_files:
@@ -315,10 +315,10 @@ def check_audio_events_all_anims(externals_dir, anim_assets_dir=ANIM_ASSETS_DIR,
                 anim_name = os.path.basename(json_file)
                 problems[anim_name] = unavailable_events
         try:
-            map(os.remove, unpacked_files)
+            list(map(os.remove, unpacked_files))
             os.rmdir(os.path.dirname(unpacked_files[0]))
-        except OSError, e:
-            print("WARNING: Failed to cleanup temp files or directory: %s" % e)
+        except OSError as e:
+            print(("WARNING: Failed to cleanup temp files or directory: %s" % e))
 
     if problems:
         msg_title = "Found unavailable audio events used in the following animations:"
@@ -327,10 +327,10 @@ def check_audio_events_all_anims(externals_dir, anim_assets_dir=ANIM_ASSETS_DIR,
 
 def report_problems(problems, msg_title):
     msgs = []
-    for container, unavailable_contents in problems.items():
+    for container, unavailable_contents in list(problems.items()):
         formatted_contents = []
         for content in unavailable_contents:
-            if isinstance(content, basestring):
+            if isinstance(content, str):
                 formatted_contents.append(content)
             else:
                 content_name = content[0]
@@ -373,15 +373,15 @@ def get_anim_name_and_length(json_file):
         raise ValueError("Invalid JSON file provided: %s" % json_file)
     with open(json_file, 'r') as fh:
         contents = json.load(fh)
-    for anim_name, keyframes in contents.items():
+    for anim_name, keyframes in list(contents.items()):
         anim_name = str(anim_name)
         anim_length = get_anim_length(keyframes)
         if not isinstance(anim_length, int):
             if anim_length == int(anim_length):
                 anim_length = int(anim_length)
             else:
-                print("WARNING: The length of '%s' is not an integer (length = %s)"
-                      % (anim_name, anim_length))
+                print(("WARNING: The length of '%s' is not an integer (length = %s)"
+                      % (anim_name, anim_length)))
         anim_name_length_mapping[anim_name] = anim_length
     return anim_name_length_mapping
 

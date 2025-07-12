@@ -27,6 +27,19 @@ DEFAULT_WWISE_HOME="${HOME}/.anki/wwise/versions"
 : ${ANKI_WWISE_SDK_ROOT:="${ANKI_BUILD_WWISE_HOME}/${VERSION}"}
 : ${WWISE_SDK_ROOT:="${ANKI_WWISE_SDK_ROOT}"}
 
+ADEPS="$HOME/.anki"
+
+if [[ ! -d "$ADEPS/wwise/versions/2017.2.7_a" ]]; then
+    mkdir -p "$ADEPS/wwise/versions/2017.2.7_a"
+    cd "$ADEPS/wwise/versions/2017.2.7_a"
+    echo "Downloading WWise 2017.2.7_a SDK..."
+    wget -q --show-progress https://github.com/os-vector/wire-os-externals/releases/download/4.0.0-r05/wwise-2017.2.7_a.tar.gz
+    echo "Extracting WWise 2017.2.7_a SDK..."
+    tar -zxf wwise-2017.2.7_a.tar.gz
+    rm -f wwise-2017.2.7_a.tar.gz
+fi
+
+
 logv "WWISE_SDK_ROOT = ${WWISE_SDK_ROOT}"
 
 NEEDS_INSTALL=0

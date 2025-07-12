@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import hashlib
 import os
@@ -8,7 +8,7 @@ import re
 import shutil
 import string
 import sys
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import tarfile
 
 # ankibuild
@@ -81,43 +81,40 @@ def download_and_install(archive_url,
     safe_rmfile(download_path)
 
     # if hash_url is actually already a hash, use it
-    m = re.match('^[a-fA-F0-9]+$', hash_url)
-    if m:
-        sys.stdout.write("\nusing known hash of {}\n".format(hash_url))
-        download_hash = hash_url
-    else:
-        # assume hash_url is a url; download it with wget
-        digests_path = os.path.join(downloads_path, os.path.basename(hash_url))
-        sys.stdout.write("\ndownloading {} {}:\n  url = {}\n  dst = {}\n".format(title, version, hash_url, digests_path))
-        wget_cmd = "wget -O {} {}".format(digests_path, hash_url)
-        ret = os.system(wget_cmd)
-        if ret != 0:
-            sys.stderr.write("failed to download hash file from {}\n".format(hash_url))
-            return
-        download_hash = None
-        with open(digests_path, 'r') as f:
-            for line in f:
-                if line.strip().endswith(archive_file):
-                    download_hash = line[0:64]
-                    break
-        if download_hash is None:
-            sys.stderr.write("could not find hash for {} in {}\n".format(archive_file, digests_path))
-            return
-
-    # download the archive using wget
+    #m = re.match('^[a-fA-F0-9]+$', hash_url)
+    #if m:
+    #    sys.stdout.write("\nusing known hash of {}\n".format(hash_url))
+    #    download_hash = hash_url
+    #else:
+    #    # assume hash_url is a url; download it with wget
+    #    digests_path = os.path.join(downloads_path, os.path.basename(hash_url))
+    #    sys.stdout.write("\nWownloading {} {}:\n  url = {}\n  dst = {}\n".format(title, version, hash_url, digests_path))
+    #    wget_cmd = "wget -q --show-progress -O {} {}".format(digests_path, hash_url)
+    #    ret = os.system(wget_cmd)
+    #    if ret != 0:
+    #        sys.stderr.write("failed to download hash file from {}\n".format(hash_url))
+    #        return
+    #    download_hash = None
+    #    with open(digests_path, 'r') as f:
+    #        for line in f:
+    #            if line.strip().endswith(archive_file):
+    #                download_hash = line[0:64]
+    #                break
+    #    if download_hash is None:
+    #        sys.stderr.write("could not find hash for {} in {}\n".format(archive_file, digests_path))
+    #        return
+    #
     sys.stdout.write("\ndownloading {} {}:\n  url = {}\n  dst = {}\n".format(title, version, archive_url, final_path))
-    wget_cmd = "wget -O {} {}".format(download_path, archive_url)
+    wget_cmd = "wget -q --show-progress -O {} {}".format(download_path, archive_url)
     ret = os.system(wget_cmd)
     if ret != 0:
         sys.stderr.write("failed to download {} from {}\n".format(title, archive_url))
         return
 
-    sys.stdout.write("\nverifying that sha256 hash matches {}\n".format(download_hash))
     #sha256 = sha256sum(download_path)
     #if sha256 == download_hash:
     os.rename(download_path, final_path)
     tar_ref = tarfile.open(final_path, 'r')
-    sys.stdout.write("extracting {} from {}. this could take several minutes.\n".format(title, final_path))
     tar_ref.extractall(downloads_path)
     os.rename(tmp_extract_path, final_extract_path)
     #else:

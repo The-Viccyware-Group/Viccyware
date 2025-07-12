@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
-from __future__ import print_function
+
 
 import argparse
-import ConfigParser
+import configparser
 import hashlib
 import io
 import os
@@ -14,11 +14,11 @@ import shutil
 import string
 import subprocess
 import sys
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import zipfile
 
 # ankibuild
-import util
+from . import util
 
 def get_toplevel_directory():
     toplevel = None
@@ -36,7 +36,7 @@ def parse_buckconfig_as_ini(path):
             ini_lines.append(ini_line.strip())
     ini_data = '\n'.join(ini_lines)
 
-    config = ConfigParser.RawConfigParser(allow_no_value=True)
+    config = configparser.RawConfigParser(allow_no_value=True)
     config.readfp(io.BytesIO(ini_data))
 
     return config
@@ -47,7 +47,7 @@ def get_property_from_buckconfig(path, section, key):
     config = parse_buckconfig_as_ini(path)
     try:
         return config.get(section, key)
-    except ConfigParser.NoSectionError:
+    except configparser.NoSectionError:
         return None
 
 def get_ndk_version_from_buckconfig(path):
@@ -103,8 +103,8 @@ def write_local_properties():
     properties['ndk.dir'] = os.environ['ANDROID_NDK_ROOT']
     properties['sdk.dir'] = os.environ['ANDROID_HOME']
     with open(path_to_local_properties, 'wb') as f:
-        for key, value in properties.items():
-            f.write("{0}={1}\n".format(key,value))
+        for key, value in list(properties.items()):
+            f.write("{0}={1}\n".format(key, value))
 
 def get_anki_android_directory():
     anki_android_dir = os.path.join(os.path.expanduser("~"), ".anki", "android")
@@ -256,7 +256,7 @@ def download_and_install_zip(url,
     safe_rmfile(download_path)
     download_size = info.get(version).get('size')
     download_hash = info.get(version).get('sha1')
-    handle = urllib.urlopen(url)
+    handle = urllib.request.urlopen(url)
     code = handle.getcode()
     if code >= 200 and code < 300:
         download_file = open(download_path, 'w')
@@ -280,7 +280,7 @@ def download_and_install_zip(url,
             # Fix permissions so we can execute the tools
             for zip_info in zip_info_list:
                 extracted_path = os.path.join(downloads_path, zip_info.filename)
-                perms = zip_info.external_attr >> 16L
+                perms = zip_info.external_attr >> 16
                 os.chmod(extracted_path, perms)
             zip_ref.close()
             os.rename(tmp_extract_path, final_extract_path)
@@ -299,7 +299,7 @@ def install_ndk(revision):
         'r10e': 'r10e',
         'r13b': 'r13b',
         '14.0.3770861': 'r14',
-        'r14' : 'r14',
+        'r14': 'r14',
         '14.1.3816874': 'r14b',
         'r14b': 'r14b',
         '15.1.4119039': 'r15b',

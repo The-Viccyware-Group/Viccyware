@@ -73,7 +73,7 @@ class Git(object):
         submodule_path = None
         status_lines = out.strip().rsplit('\n')
         for line in status_lines:
-            m = re.search('(.?)([0-9A-Fa-f]{40}) ([^\(]+) (.*)', line)
+            m = re.search(r'(.?)([0-9A-Fa-f]{40}) ([^\(]+) (.*)', line)
             path = m.group(3)
 
             path_match = re.search(pattern, path)
@@ -103,7 +103,7 @@ class File(object):
     def is_up_to_date(cls, target, deps):
         if not os.path.exists(target):
             if ECHO_ALL:
-                print('Not up to date; "{0}" does not exist.'.format(target))
+                print(('Not up to date; "{0}" does not exist.'.format(target)))
             return False
 
         if not isinstance(deps, collections.Iterable):
@@ -113,7 +113,7 @@ class File(object):
         for dep in deps:
             up_to_date = cls._is_file_up_to_date(target, dep)
             if not up_to_date:
-                print('Not up to date; "{0}" is newer than "{1}".'.format(dep, target))
+                print(('Not up to date; "{0}" is newer than "{1}".'.format(dep, target)))
                 break
 
         return up_to_date
@@ -149,7 +149,7 @@ class File(object):
         "Changes the current working directory to the given path."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print('cd ' + path)
+            print(('cd ' + path))
         try:
             os.chdir(path)
         except OSError as e:
@@ -161,7 +161,7 @@ class File(object):
         "Recursively creates new directories up to and including the given directory, if needed."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print(cls._escape(['mkdir', '-p', path]))
+            print((cls._escape(['mkdir', '-p', path])))
         try:
             os.makedirs(path)
         except OSError as e:
@@ -175,7 +175,7 @@ class File(object):
         source = os.path.abspath(source)
         link_name = os.path.abspath(link_name)
         if ECHO_ALL:
-            print(cls._escape(['ln', '-s', source, link_name]))
+            print((cls._escape(['ln', '-s', source, link_name])))
         try:
             os.symlink(source, link_name)
         except OSError as e:
@@ -188,7 +188,7 @@ class File(object):
         "Removes all files and directories including the given path."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print(cls._escape(['rm', '-rf', path]))
+            print((cls._escape(['rm', '-rf', path])))
         try:
             if os.path.isfile(path):
                 os.remove(path)
@@ -204,7 +204,7 @@ class File(object):
         "Removes a single specific cls."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print(cls._escape(['rm', path]))
+            print((cls._escape(['rm', path])))
         try:
             os.remove(path)
         except OSError as e:
@@ -217,7 +217,7 @@ class File(object):
         "Removes a directory if empty, or just contains directories."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print(cls._escape(['rmdir', path]))
+            print((cls._escape(['rmdir', path])))
         try:
             dirs = [path]
             cycle_detector = set()
@@ -237,7 +237,7 @@ class File(object):
                             dirs.append(fullpath)
                         else:
                             # normal file, so don't remove
-                            print('"{0}" still exists, so not removing "{1}"'.format(fullpath, path))
+                            print(('"{0}" still exists, so not removing "{1}"'.format(fullpath, path)))
                             return
             
             shutil.rmtree(path)
@@ -258,12 +258,12 @@ class File(object):
     @classmethod
     def cptree(cls, source, destination):
         if not os.path.isdir(source):
-            print (source + " is not a folder")
+            print((source + " is not a folder"))
             return False
         try:
             shutil.copytree(source, destination)
         except OSError as exc:
-            print ("error: " + str(exc))
+            print(("error: " + str(exc)))
             return False
         return True
 
@@ -272,7 +272,7 @@ class File(object):
         "Reads the contents of the file at the given path."
         path = os.path.abspath(path)
         if ECHO_ALL:
-            print('reading all from {0}'.format(path))
+            print(('reading all from {0}'.format(path)))
         try:
             with open(path, 'rb') as file:
                 return file.read()
@@ -285,7 +285,7 @@ class File(object):
         path = os.path.abspath(path)
         contents = str(contents)
         if ECHO_ALL:
-            print('writing {0} bytes to {1}'.format(len(contents), path))
+            print(('writing {0} bytes to {1}'.format(len(contents), path)))
         try:
             if os.path.isfile(path):
                 if os.path.getsize(path) == len(contents):
@@ -347,7 +347,7 @@ class File(object):
                 sys.exit('ERROR: Subprocess `{0}` exited with code {1}.'.format(cls._escape_piped(arglists), e.returncode)) 
         except OSError as e:
             if ignore_result:
-                print('WARNING: Subprocess `{0}` failed: {1}'.format(cls._escape_piped(arglists), e.strerror))
+                print(('WARNING: Subprocess `{0}` failed: {1}'.format(cls._escape_piped(arglists), e.strerror)))
                 return None
             else:
                 sys.exit('ERROR: Error in subprocess `{0}`: {1}'.format(cls._escape_piped(arglists), e.strerror))
@@ -355,7 +355,7 @@ class File(object):
     @classmethod
     def _raw_execute(cls, func, arglists, ignore_result):
         if ECHO_ALL:
-            print(cls._escape_piped(arglists))
+            print((cls._escape_piped(arglists)))
         return cls._run_subprocess(func, arglists, ignore_result)
 
     @classmethod
@@ -418,10 +418,10 @@ class Gyp(object):
     def getDefineString(defines, overrideDefines = None):
         if overrideDefines is not None:
             for entry in overrideDefines:
-                (k,v) = entry.split('=')
+                (k, v) = entry.split('=')
                 key = k.strip()
                 value = v.strip()
                 defines[key] = value
 
-        define_args = ["%s=%s" % (k, v) for k,v in defines.iteritems()]
+        define_args = ["%s=%s" % (k, v) for k, v in defines.items()]
         return "\n".join(define_args)
