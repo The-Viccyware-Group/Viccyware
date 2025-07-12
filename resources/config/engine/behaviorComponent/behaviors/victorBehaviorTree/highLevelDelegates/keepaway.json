@@ -10,7 +10,7 @@
   "noVisibleTargetGameEndTimeout_s":  8.0,   // Game will end with "Bored" if the cube goes this long unseen
   "outOfPlayGameEndTimeout_s":        5.0,   // Game will end with "Bored" if the cube is beyond inPlayDistance too long
   "targetVisibleTimeout_s":           1.0,   // Timeout to allow brief target occlusion (e.g. finger on marker)
-  "globalOffsetDist_mm":              7.0,   // Tuneable value to compensate animations vs. physical distances
+  "globalOffsetDist_mm":              15.0,   // Tuneable value to compensate animations vs. physical distances
   "inPlayDistance_mm":                190.0, // If the cube moves beyond here, victor goes to a standby posture
   "outOfPlayDistance_mm":             210.0, // If the cube is closer than this, victor gets ready to strike
   "targetUnmovedDistance_mm":         4.0,   // If the cube moves less than this in a frame, we consider it static
