@@ -372,7 +372,7 @@ def convert_json_to_binary(file_path, flatc_dir, schema_file, bin_file_ext):
     output_file = os.path.splitext(file_path)[0] + bin_file_ext
     if not os.path.isfile(output_file):
         raise ValueError("Unable to generate binary file: %s" % output_file)
-    print("Converted %s to %s" % (file_path, output_file))
+    #print("Converted %s to %s" % (file_path, output_file))
     return output_file
 
 

@@ -15,6 +15,8 @@ import argparse
 import glob
 import zipfile
 import shutil
+import concurrent.futures
+from functools import partial
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -244,41 +246,29 @@ def is_valid_checksum(url_string):
 
 
 def extract_files_from_tar(extract_dir, file_types, put_in_subdir=False):
-  """
-  Given the path to a directory that contains .tar files and a list
-  of file types, eg. [".json", ".png"], this function will unpack
-  the given file types from all the .tar files.  If the optional
-  'put_in_subdir' input argument is set to True, then the files are
-  unpacked into a sub-directory named after the .tar file.
-  """
-  anim_name_length_mapping = {}
+    anim_name_length_mapping = {}
 
-  for (dir_path, dir_names, file_names) in os.walk(extract_dir):
-    print("here???")
-    # Generate list of all .tar files in/under the directory provided by the caller (extract_dir)
-    all_files = [os.path.join(dir_path, x) for x in file_names]
-    tar_files = [a_file for a_file in all_files if a_file.endswith('.tar')]
+    for dir_path, dir_names, file_names in os.walk(extract_dir):
+        tar_files = [
+            os.path.join(dir_path, f)
+            for f in file_names
+            if f.endswith('.tar')
+        ]
 
-    if tar_files and not put_in_subdir:
-      # If we have any .tar files to unpack and they will NOT be unpacked into a sub-directory,
-      # then first clean up existing files that may conflict with what will be unpacked. For
-      # example, if a .tar file previously contained foo.json and it now contains bar.json, we
-      # don't want foo.json lingering from a previous unpacking.
-      # PS, if the .tar files WILL be unpacked into a sub-directory, we don't need to do any cleanup
-      # here because unpack_tarball() will first delete the sub-directory if it already exists.
-      file_types_to_cleanup = file_types + [binary_conversion.BIN_FILE_EXT]
-      delete_files_from_dir(file_types_to_cleanup, dir_path, file_names)
+        if tar_files:
+            worker = partial(
+                unpack_tarball,
+                file_types=file_types,
+                put_in_subdir=put_in_subdir,
+            )
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                for mapping in executor.map(worker, tar_files):
+                    anim_name_length_mapping.update(mapping)
 
-    for tar_file in tar_files:
-      anim_name_length_mapping.update(unpack_tarball(tar_file, file_types, put_in_subdir))
-      # No need to remove the tar file here after unpacking it - all tar files are
-      # deleted from cozmo_resources/assets/ on the device by Builder.cs
+        if put_in_subdir:
+            break
 
-    if put_in_subdir:
-      # If we are extracting tar files into subdirs, don't recurse into those subdirs.
-      break
-
-  return anim_name_length_mapping
+    return anim_name_length_mapping
 
 
 def _get_specific_members(members, file_types):
@@ -343,7 +333,7 @@ def get_flatc_dir():
     # default
     flatc_dir = os.path.join(THIRD_PARTY_DIR,
                              'flatbuffers', 'mac', 'Release')
-  print(flatc_dir)
+  #print(flatc_dir)
   return flatc_dir
   
 
@@ -356,11 +346,9 @@ def convert_json_to_binary(json_files, bin_name, dest_dir, flatc_dir):
         tmp_json_files.append(json_dest)
     bin_name = bin_name.lower()
     try:
-        print("i assume")
         bin_file = binary_conversion.main(tmp_json_files, bin_name, flatc_dir)
-        print("it's here")
-    except StandardError, e:
-        print("%s: %s" % (type(e).__name__, e.message))
+    except Exception as e:
+        print(("%s: %s" % (type(e).__name__, e.message)))
         # If binary conversion failed, use the json files...
         for json_file in tmp_json_files:
             json_dest = os.path.join(dest_dir, os.path.basename(json_file))
@@ -531,13 +519,14 @@ def svn_package(svn_dict):
         additional_files = repos[repo].get("additional_files", [])
         extract_types = repos[repo].get("extract_types_from_tar", [])
 
+	# WIRE: UNCOMMENT THIS TO NOT BUILD ANIMATIONS
         #Move on if the directory already exists
-        if os.path.isdir(loc):
-            print(export_dirname + " already exists!")
-            continue
+        #if os.path.isdir(loc):
+        #    print(export_dirname + " already exists!")
+        #    continue
 
         # Download from the local HTTP server
-        print("Downloading " + export_dirname + "...")
+        #print("Downloading " + export_dirname + "...")
         #if version is not None:
         #    remote_loc = os.path.join(root_url, svn_dict.get("main_folder", ""), repo + '-' + version + ".zip")
         #else:
@@ -586,7 +575,7 @@ def svn_package(svn_dict):
         if extract_types:
             print("Encoding animations JSONs into FBS...")
             for sub_dir in sub_dirs:
-                print(sub_dir)
+                #print(sub_dir)
                 put_in_sub_dir = os.path.basename(sub_dir) in UNPACK_INTO_SUBDIR
                 try:
                     anim_name_length_mapping = extract_files_from_tar(os.path.join(loc, sub_dir), extract_types, put_in_sub_dir)
@@ -594,7 +583,6 @@ def svn_package(svn_dict):
                     anim_name_length_mapping = {}
                     print(("Failed to unpack one or more tar files in [%s] because: %s" % (sub_dir, e)))
                     print(stale_warning)
-                print("possibly..")
                 file_stats = get_file_stats(sub_dir)
                 if anim_name_length_mapping:
                     write_animation_manifest(loc, anim_name_length_mapping, additional_files)
