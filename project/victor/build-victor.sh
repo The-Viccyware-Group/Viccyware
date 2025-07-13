@@ -484,6 +484,9 @@ else
   if [ -n "$CMAKE_TARGET" ]; then
     TARGET_ARG="--target $CMAKE_TARGET"
   fi
+  if [[ ${GENERATOR} == *"Makefiles"* ]]; then
+    TARGET_ARG="-j$(nproc) $TARGET_ARG"
+  fi
   $CMAKE_EXE --build . $TARGET_ARG $*
   if [[ "$PLATFORM" == "vicos" && $RUN_INSTALL -eq 1 ]]; then
     # run install target on robot-platforms

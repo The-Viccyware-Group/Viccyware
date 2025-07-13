@@ -38,7 +38,7 @@ mkdir -p generated
 mkdir -p _build
 
 if [[ ${DONT_ANIM} != "1" ]]; then
-  vlog "Extract and compile animation and sound assets. This should take about 20 seconds."
+  vlog "Extract and encode animation and sound assets. This will take a few seconds."
 	./project/buildScripts/dependencies.py -v --deps-file DEPS --externals-dir EXTERNALS
 else
 	vlog "Not extracting animation assets"
