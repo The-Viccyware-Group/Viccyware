@@ -513,6 +513,7 @@ enum uint_32 GenericEvent
   Play__Robot_Vic__External_Sdk_Playback_02 = 2749641935,
   Play__Robot_Vic__External_Voice_Message = 3168753800,
   Play__Robot_Vic__External_Voice_Text = 2774572774,
+  Play__Robot_Vo__Shared_Curious_Short = 4047754278,
   Stop__Robot_Vic_Sfx__Attention_Device_Loop_Stop = 2479504035,
   Stop__Robot_Vic_Sfx__Camera_Charge_Stop = 3169780311,
   Stop__Robot_Vic_Sfx__Concentrate_Loop_Stop = 1731537112,

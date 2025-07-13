@@ -12,6 +12,10 @@
       "cooldown_s": 10.0
     },
     {
+      "behavior": "Singing_Bingo",
+      "cooldown_s": 300.0
+    },
+    {
       "behavior": "ExploringInternal",
       "cooldown_s": 0.0
     }

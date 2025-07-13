@@ -40,27 +40,27 @@ namespace {
   const std::string kLogDirectory = "cliffSensors";
   
   // IIR filter coefficient used for filtering raw cliff sensor data
-  const f32 kCliffFiltCoef = 0.75f;
+  const f32 kCliffFiltCoef = 0.70f;
   
   // The maximum rate at which cliff sensor threshold updates will be sent to the robot.
   const int kCliffThresholdMaxUpdateRate_ms = 1000;
   
   // The default allowed delta above the minimum-ever-seen cliff sensor value before cliff
   // detection is triggered.
-  const u16 kCliffDetectAllowedDeltaDefault = 35;
+  const u16 kCliffDetectAllowedDeltaDefault = 25;
   
   // This value is used whenever it seems like we may be driving on a dark surface, to reduce
   // the chance of false cliff detections.
-  const u16 kCliffDetectAllowedDeltaLow = 20;
+  const u16 kCliffDetectAllowedDeltaLow = 15;
   
   // If all cliff sensors are reporting below this value, then we reduce the AllowedDelta to prevent
   // cliff detection false positives. Likewise if all cliff sensors are _above_ this value, the AllowedDelta
   // is restored to the default.
-  const u16 kCliffValDarkSurface = 250;
+  const u16 kCliffValDarkSurface = 280;
   
   // Also reduce the AllowedDelta if the robot could be driving over something (i.e. its pitch angle
   // is sufficiently far from zero)
-  const Radians kRobotPitchThresholdPossibleCliff_rad = DEG_TO_RAD(7.f);
+  const Radians kRobotPitchThresholdPossibleCliff_rad = DEG_TO_RAD(6.f);
 }
 
 
