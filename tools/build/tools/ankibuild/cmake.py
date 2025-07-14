@@ -24,7 +24,7 @@ def get_cmake_version_from_command(cmake_exe):
     version = None
     if cmake_exe and os.path.exists(cmake_exe):
         #output = subprocess.check_output([cmake_exe, '--version'])
-        output = subprocess.check_output([cmake_exe, '--version'], text=True)
+        output = subprocess.check_output([cmake_exe, '--version'], universal_newlines=True)
         if not output:
             return None
         m = re.match(r'^cmake version (\d+\.\d+\.\d+)', output)
@@ -83,7 +83,7 @@ def install_cmake(version):
 def find_cmake(required_ver, cmake_exe=None):
     if not cmake_exe:
         try:
-            cmake_exe = subprocess.check_output(['which', 'cmake'], text=True).rstrip()
+            cmake_exe = subprocess.check_output(['which', 'cmake'], universal_newlines=True).rstrip()
         except subprocess.CalledProcessError as e:
             pass
 

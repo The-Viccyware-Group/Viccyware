@@ -19,6 +19,26 @@ SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || e
 SCRIPT_NAME=`basename ${0}`
 TOPLEVEL=$(cd "${SCRIPT_PATH}/../.." && pwd)
 BUILD_TOOLS="${TOPLEVEL}/tools/build/tools"
+if [[ "$(uname -a)" == *"Linux"* ]]; then
+REQUIRED_GLIBC="2.27"
+
+if glibc_info=$(getconf GNU_LIBC_VERSION 2>/dev/null); then
+  version=${glibc_info#* }
+elif ldd_info=$(ldd --version 2>/dev/null | head -n1); then
+  # "ldd (GNU libc) 2.xx"
+  version=$(echo "$ldd_info" | grep -oE '[0-9]+\.[0-9]+')
+else
+  echo "Error: could not detect glibc version. Maybe you don't have all dependencies (like gcc/g++), or your OS is too old."
+  exit 1
+fi
+
+if [[ "$(printf '%s\n%s' "$REQUIRED_GLIBC" "$version" | sort -V | head -n1)" = "$REQUIRED_GLIBC" ]]; then
+  echo "glibc version $version is good"
+else
+  echo "Error: glibc $version < $REQUIRED_GLIBC. Your OS is too old."
+  exit 1
+fi
+fi
 
 function usage() {
     echo "$SCRIPT_NAME [OPTIONS]"
@@ -236,7 +256,7 @@ done
 #
 export ANKI_BUILD_SHA=`git rev-parse --short HEAD`
 
-export ANKI_BUILD_BRANCH=`git branch --show-current`
+export ANKI_BUILD_BRANCH=`git rev-parse --abbrev-ref HEAD`
 
 #
 # Enable export flags
