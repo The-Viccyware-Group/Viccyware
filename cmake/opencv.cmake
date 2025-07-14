@@ -68,11 +68,11 @@ set_target_properties(opencv_interface PROPERTIES
 )
 
 if(VICOS)
-  set(OPENCV_EXTERNAL_LIBS
-      libpng
-      libtiff
+  #set(OPENCV_EXTERNAL_LIBS
+  #    libpng
+  #    libtiff
       #cpufeatures # missing for vicos build?
-      libjpeg) # NOT using turbo jpeg below
+  #    libjpeg) # NOT using turbo jpeg below
 else()
   set(OPENCV_EXTERNAL_LIBS
       IlmImf
@@ -86,16 +86,16 @@ else()
       ittnotify)
 endif()
 
-foreach(LIB ${OPENCV_EXTERNAL_LIBS})
-    add_library(${LIB} STATIC IMPORTED)
-    set_target_properties(${LIB} PROPERTIES
-        IMPORTED_LOCATION
-        ${OPENCV_3RDPARTY_LIB_DIR}/lib${LIB}.a)
-endforeach()
+#foreach(LIB ${OPENCV_EXTERNAL_LIBS})
+#    add_library(${LIB} STATIC IMPORTED)
+#    set_target_properties(${LIB} PROPERTIES
+#        IMPORTED_LOCATION
+#        ${OPENCV_3RDPARTY_LIB_DIR}/lib${LIB}.a)
+#endforeach()
 
-anki_build_target_license(libpng "libpng,${CMAKE_SOURCE_DIR}/licenses/libpng.license")
-anki_build_target_license(libtiff "ISC,${CMAKE_SOURCE_DIR}/licenses/libtiff.license")
-anki_build_target_license(libjpeg "BSD-3-like,${CMAKE_SOURCE_DIR}/licenses/libjpeg-turbo.license")
+#anki_build_target_license(libpng "libpng,${CMAKE_SOURCE_DIR}/licenses/libpng.license")
+#anki_build_target_license(libtiff "ISC,${CMAKE_SOURCE_DIR}/licenses/libtiff.license")
+#anki_build_target_license(libjpeg "BSD-3-like,${CMAKE_SOURCE_DIR}/licenses/libjpeg-turbo.license")
 
 if(MACOSX)
     anki_build_target_license(IlmImf "BSD-3,${CMAKE_SOURCE_DIR}/licenses/openexr.license")
@@ -107,7 +107,7 @@ endif()
 
 message(STATUS "including OpenCV, [Modules: ${OPENCV_LIBS}], [3rdParty: ${OPENCV_EXTERNAL_LIBS}]")
 
-list(APPEND OPENCV_LIBS ${OPENCV_EXTERNAL_LIBS})
+#list(APPEND OPENCV_LIBS ${OPENCV_EXTERNAL_LIBS})
 
 if (MACOSX)
   # Add Frameworks

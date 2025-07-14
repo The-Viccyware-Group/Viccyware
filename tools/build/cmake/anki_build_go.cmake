@@ -82,7 +82,7 @@ function(anki_build_go)
   )
   if(UPX_EXECUTABLE)
     list(APPEND cmds
-      COMMAND ${CMAKE_SOURCE_DIR}/tools/build/tools/upx-if-packed.sh "${UPX_EXECUTABLE}" "${go_out}"
+      COMMAND ${CMAKE_SOURCE_DIR}/tools/build/tools/upx-if-packed.sh "${ANKI_UPX}" "${go_out}"
     )
   endif()
   list(APPEND cmds COMMAND ${CMAKE_COMMAND} -E touch ${stamp_file})

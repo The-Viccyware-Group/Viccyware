@@ -2,7 +2,7 @@
 // It is subject to the license terms in the LICENSE file found in the top-level directory
 // of this distribution and at http://opencv.org/license.html.
 
-#include <precomp.hpp>
+#include "precomp.hpp"
 
 #include <opencv2/core/utils/trace.hpp>
 #include <opencv2/core/utils/trace.private.hpp>
@@ -63,22 +63,22 @@ namespace details {
 #pragma warning(disable:4065) // switch statement contains 'default' but no 'case' labels
 #endif
 
-static int64 g_zero_timestamp = 0;
-
-static int64 getTimestamp()
+static bool getParameterTraceEnable()
 {
-    int64 t = getTickCount();
-    static double tick_to_ns = 1e9 / getTickFrequency();
-    return (int64)((t - g_zero_timestamp) * tick_to_ns);
+    static bool param_traceEnable = utils::getConfigurationParameterBool("OPENCV_TRACE", false);
+    return param_traceEnable;
 }
 
 // TODO lazy configuration flags
-static bool param_traceEnable = utils::getConfigurationParameterBool("OPENCV_TRACE", false);
-
 static int param_maxRegionDepthOpenCV = (int)utils::getConfigurationParameterSizeT("OPENCV_TRACE_DEPTH_OPENCV", 1);
 static int param_maxRegionChildrenOpenCV = (int)utils::getConfigurationParameterSizeT("OPENCV_TRACE_MAX_CHILDREN_OPENCV", 1000);
 static int param_maxRegionChildren = (int)utils::getConfigurationParameterSizeT("OPENCV_TRACE_MAX_CHILDREN", 10000);
-static cv::String param_traceLocation = utils::getConfigurationParameterString("OPENCV_TRACE_LOCATION", "OpenCVTrace");
+
+static const cv::String& getParameterTraceLocation()
+{
+    static cv::String param_traceLocation = utils::getConfigurationParameterString("OPENCV_TRACE_LOCATION", "OpenCVTrace");
+    return param_traceLocation;
+}
 
 #ifdef HAVE_OPENCL
 static bool param_synchronizeOpenCL = utils::getConfigurationParameterBool("OPENCV_TRACE_SYNC_OPENCL", false);
@@ -196,14 +196,27 @@ static __itt_domain* domain = NULL;
 
 static bool isITTEnabled()
 {
-    static bool isInitialized = false;
+    static volatile bool isInitialized = false;
     static bool isEnabled = false;
     if (!isInitialized)
     {
-        isEnabled = !!(__itt_api_version());
-        CV_LOG_ITT("ITT is " << (isEnabled ? "enabled" : "disabled"));
-        domain = __itt_domain_create("OpenCVTrace");
-        isInitialized = true;
+        cv::AutoLock lock(cv::getInitializationMutex());
+        if (!isInitialized)
+        {
+            bool param_traceITTEnable = utils::getConfigurationParameterBool("OPENCV_TRACE_ITT_ENABLE", true);
+            if (param_traceITTEnable)
+            {
+                isEnabled = !!(__itt_api_version());
+                CV_LOG_ITT("ITT is " << (isEnabled ? "enabled" : "disabled"));
+                domain = __itt_domain_create("OpenCVTrace");
+            }
+            else
+            {
+                CV_LOG_ITT("ITT is disabled through OpenCV parameter");
+                isEnabled = false;
+            }
+            isInitialized = true;
+        }
     }
     return isEnabled;
 }
@@ -463,7 +476,7 @@ Region::Region(const LocationStaticStorage& location) :
         }
     }
 
-    int64 beginTimestamp = getTimestamp();
+    int64 beginTimestamp = getTimestampNS();
 
     int currentDepth = ctx.getCurrentDepth() + 1;
     switch (location.flags & REGION_FLAG_IMPL_MASK)
@@ -613,7 +626,7 @@ void Region::destroy()
         }
     }
 
-    int64 endTimestamp = getTimestamp();
+    int64 endTimestamp = getTimestampNS();
     int64 duration = endTimestamp - ctx.stackTopBeginTimestamp();
 
     bool active = isActive();
@@ -726,7 +739,7 @@ void TraceManagerThreadLocal::dumpStack(std::ostream& out, bool onlyFunctions) c
     out << ss.str();
 }
 
-class AsyncTraceStorage : public TraceStorage
+class AsyncTraceStorage CV_FINAL : public TraceStorage
 {
     mutable std::ofstream out;
 public:
@@ -744,7 +757,7 @@ public:
         out.close();
     }
 
-    bool put(const TraceMessage& msg) const
+    bool put(const TraceMessage& msg) const CV_OVERRIDE
     {
         if (msg.hasError)
             return false;
@@ -754,7 +767,7 @@ public:
     }
 };
 
-class SyncTraceStorage : public TraceStorage
+class SyncTraceStorage CV_FINAL : public TraceStorage
 {
     mutable std::ofstream out;
     mutable cv::Mutex mutex;
@@ -774,7 +787,7 @@ public:
         out.close();
     }
 
-    bool put(const TraceMessage& msg) const
+    bool put(const TraceMessage& msg) const CV_OVERRIDE
     {
         if (msg.hasError)
             return false;
@@ -796,15 +809,17 @@ TraceStorage* TraceManagerThreadLocal::getStorage() const
         TraceStorage* global = getTraceManager().trace_storage.get();
         if (global)
         {
-            const std::string filepath = cv::format("%s-%03d.txt", param_traceLocation.c_str(), threadID).c_str();
+            const std::string filepath = cv::format("%s-%03d.txt", getParameterTraceLocation().c_str(), threadID).c_str();
             TraceMessage msg;
             const char* pos = strrchr(filepath.c_str(), '/'); // extract filename
 #ifdef _WIN32
             if (!pos)
-                strrchr(filepath.c_str(), '\\');
+                pos = strrchr(filepath.c_str(), '\\');
 #endif
             if (!pos)
                 pos = filepath.c_str();
+            else
+                pos += 1; // fix to skip extra slash in filename beginning
             msg.printf("#thread file: %s\n", pos);
             global->put(msg);
             storage.reset(new AsyncTraceStorage(filepath));
@@ -820,16 +835,16 @@ static bool isInitialized = false;
 
 TraceManager::TraceManager()
 {
-    g_zero_timestamp = cv::getTickCount();
+    (void)cv::getTimestampNS();
 
     isInitialized = true;
     CV_LOG("TraceManager ctor: " << (void*)this);
 
     CV_LOG("TraceManager configure()");
-    activated = param_traceEnable;
+    activated = getParameterTraceEnable();
 
     if (activated)
-        trace_storage.reset(new SyncTraceStorage(std::string(param_traceLocation) + ".txt"));
+        trace_storage.reset(new SyncTraceStorage(std::string(getParameterTraceLocation()) + ".txt"));
 
 #ifdef OPENCV_WITH_ITT
     if (isITTEnabled())
@@ -890,7 +905,7 @@ bool TraceManager::isActivated()
     if (!isInitialized)
     {
         TraceManager& m = getTraceManager();
-        (void)m; // TODO
+        CV_UNUSED(m); // TODO
     }
 
     return activated;
@@ -966,7 +981,7 @@ void parallelForFinalize(const Region& rootRegion)
 {
     TraceManagerThreadLocal& ctx = getTraceManager().tls.getRef();
 
-    int64 endTimestamp = getTimestamp();
+    int64 endTimestamp = getTimestampNS();
     int64 duration = endTimestamp - ctx.stackTopBeginTimestamp();
     CV_LOG_PARALLEL(NULL, "parallel_for duration: " << duration << " " << &rootRegion);
 

@@ -44,12 +44,9 @@
 #ifndef __CUDACODEC_VIDEO_SOURCE_H__
 #define __CUDACODEC_VIDEO_SOURCE_H__
 
-#include "opencv2/core/private.cuda.hpp"
-#include "opencv2/cudacodec.hpp"
 #include "thread.hpp"
 
-namespace cv { namespace cudacodec { namespace detail
-{
+namespace cv { namespace cudacodec { namespace detail {
 
 class VideoParser;
 
@@ -78,11 +75,11 @@ class RawVideoSourceWrapper : public VideoSource
 public:
     RawVideoSourceWrapper(const Ptr<RawVideoSource>& source);
 
-    FormatInfo format() const;
-    void start();
-    void stop();
-    bool isStarted() const;
-    bool hasError() const;
+    FormatInfo format() const CV_OVERRIDE;
+    void start() CV_OVERRIDE;
+    void stop() CV_OVERRIDE;
+    bool isStarted() const CV_OVERRIDE;
+    bool hasError() const CV_OVERRIDE;
 
 private:
     Ptr<RawVideoSource> source_;

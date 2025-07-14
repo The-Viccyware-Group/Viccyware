@@ -342,15 +342,15 @@ namespace color_cvt_detail
 
             const int delta = ColorChannel<T>::half() * (1 << yuv_shift);
 
-            const int Y = CV_CUDEV_DESCALE(b * c_RGB2YUVCoeffs_i[2] + g * c_RGB2YUVCoeffs_i[1] + r * c_RGB2YUVCoeffs_i[0], yuv_shift);
-            const int Cr = CV_CUDEV_DESCALE((r - Y) * c_RGB2YUVCoeffs_i[3] + delta, yuv_shift);
-            const int Cb = CV_CUDEV_DESCALE((b - Y) * c_RGB2YUVCoeffs_i[4] + delta, yuv_shift);
+            const int Y = CV_CUDEV_DESCALE(b * c_RGB2YUVCoeffs_i[0] + g * c_RGB2YUVCoeffs_i[1] + r * c_RGB2YUVCoeffs_i[2], yuv_shift);
+            const int Cb = CV_CUDEV_DESCALE((b - Y) * c_RGB2YUVCoeffs_i[3] + delta, yuv_shift);
+            const int Cr = CV_CUDEV_DESCALE((r - Y) * c_RGB2YUVCoeffs_i[4] + delta, yuv_shift);
 
             typename MakeVec<T, dcn>::type dst;
 
             dst.x = saturate_cast<T>(Y);
-            dst.y = saturate_cast<T>(Cr);
-            dst.z = saturate_cast<T>(Cb);
+            dst.y = saturate_cast<T>(Cb);
+            dst.z = saturate_cast<T>(Cr);
 
             return dst;
         }
@@ -367,9 +367,9 @@ namespace color_cvt_detail
 
             typename MakeVec<float, dcn>::type dst;
 
-            dst.x = b * c_RGB2YUVCoeffs_f[2] + g * c_RGB2YUVCoeffs_f[1] + r * c_RGB2YUVCoeffs_f[0];
-            dst.y = (r - dst.x) * c_RGB2YUVCoeffs_f[3] + ColorChannel<float>::half();
-            dst.z = (b - dst.x) * c_RGB2YUVCoeffs_f[4] + ColorChannel<float>::half();
+            dst.x = b * c_RGB2YUVCoeffs_f[0] + g * c_RGB2YUVCoeffs_f[1] + r * c_RGB2YUVCoeffs_f[2];
+            dst.y = (b - dst.x) * c_RGB2YUVCoeffs_f[3] + ColorChannel<float>::half();
+            dst.z = (r - dst.x) * c_RGB2YUVCoeffs_f[4] + ColorChannel<float>::half();
 
             return dst;
         }
@@ -385,9 +385,9 @@ namespace color_cvt_detail
     {
         __device__ typename MakeVec<T, dcn>::type operator ()(const typename MakeVec<T, scn>::type& src) const
         {
-            const int b = src.x + CV_CUDEV_DESCALE((src.z - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[3], yuv_shift);
+            const int r = src.x + CV_CUDEV_DESCALE((src.z - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[3], yuv_shift);
             const int g = src.x + CV_CUDEV_DESCALE((src.z - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[2] + (src.y - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[1], yuv_shift);
-            const int r = src.x + CV_CUDEV_DESCALE((src.y - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[0], yuv_shift);
+            const int b = src.x + CV_CUDEV_DESCALE((src.y - ColorChannel<T>::half()) * c_YUV2RGBCoeffs_i[0], yuv_shift);
 
             typename MakeVec<T, dcn>::type dst;
 
@@ -405,9 +405,9 @@ namespace color_cvt_detail
     {
         __device__ typename MakeVec<float, dcn>::type operator ()(const typename MakeVec<float, scn>::type& src) const
         {
-            const float b = src.x + (src.z - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[3];
+            const float r = src.x + (src.z - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[3];
             const float g = src.x + (src.z - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[2] + (src.y - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[1];
-            const float r = src.x + (src.y - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[0];
+            const float b = src.x + (src.y - ColorChannel<float>::half()) * c_YUV2RGBCoeffs_f[0];
 
             typename MakeVec<float, dcn>::type dst;
 
@@ -1207,27 +1207,29 @@ namespace color_cvt_detail
         __device__ typename MakeVec<float, dcn>::type operator ()(const typename MakeVec<float, scn>::type& src) const
         {
             const float _d = 1.f / (0.950456f + 15 + 1.088754f * 3);
-            const float _un = 4 * 0.950456f * _d;
-            const float _vn = 9 * _d;
+            const float _un = 13 * 4 * 0.950456f * _d;
+            const float _vn = 13 * 9 * _d;
 
             float L = src.x;
             float u = src.y;
             float v = src.z;
 
-            float Y = (L + 16.f) * (1.f / 116.f);
-            Y = Y * Y * Y;
+            float Y1 = (L + 16.f) * (1.f / 116.f);
+            Y1 = Y1 * Y1 * Y1;
+            float Y0 = L * (1.f / 903.3f);
+            float Y = L <= 8.f ? Y0 : Y1;
 
-            float d = (1.f / 13.f) / L;
-            u = u * d + _un;
-            v = v * d + _vn;
+            u = (u + _un * L) * 3.f;
+            v = (v + _vn * L) * 4.f;
 
             float iv = 1.f / v;
-            float X = 2.25f * u * Y * iv;
-            float Z = (12 - 3 * u - 20 * v) * Y * 0.25f * iv;
+            iv = ::fmaxf(-0.25f, ::fminf(0.25f, iv));
+            float X = 3.f * u * iv;
+            float Z = (12.f * 13.f * L - u) * iv - 5.f;
 
-            float B = 0.055648f * X - 0.204043f * Y + 1.057311f * Z;
-            float G = -0.969256f * X + 1.875991f * Y + 0.041556f * Z;
-            float R = 3.240479f * X - 1.537150f * Y - 0.498535f * Z;
+            float B = (0.055648f * X - 0.204043f + 1.057311f * Z) * Y;
+            float G = (-0.969256f * X + 1.875991f + 0.041556f * Z) * Y;
+            float R = (3.240479f * X - 1.537150f - 0.498535f * Z) * Y;
 
             R = ::fminf(::fmaxf(R, 0.f), 1.f);
             G = ::fminf(::fmaxf(G, 0.f), 1.f);

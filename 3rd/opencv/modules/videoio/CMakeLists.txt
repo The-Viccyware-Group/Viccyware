@@ -19,12 +19,14 @@ endif()
 set(videoio_hdrs
     ${CMAKE_CURRENT_LIST_DIR}/src/precomp.hpp
     )
-
 set(videoio_srcs
+    ${CMAKE_CURRENT_LIST_DIR}/src/videoio_registry.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/videoio_c.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cap.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cap_images.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cap_mjpeg_encoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cap_mjpeg_decoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/container_avi.cpp
     )
 
 file(GLOB videoio_ext_hdrs
@@ -78,14 +80,17 @@ endif()
 if (WIN32 AND HAVE_DSHOW)
   list(APPEND videoio_srcs ${CMAKE_CURRENT_LIST_DIR}/src/cap_dshow.cpp)
   list(APPEND videoio_hdrs ${CMAKE_CURRENT_LIST_DIR}/src/cap_dshow.hpp)
-  if (MINGW64)
+  if(MINGW AND X86_64)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTRSAFE_NO_DEPRECATE")
   endif()
 endif()
 
-if (WIN32 AND HAVE_MSMF)
+if(WIN32 AND HAVE_MSMF)
   list(APPEND videoio_srcs ${CMAKE_CURRENT_LIST_DIR}/src/cap_msmf.hpp)
   list(APPEND videoio_srcs ${CMAKE_CURRENT_LIST_DIR}/src/cap_msmf.cpp)
+  if(HAVE_MSMF_DXVA)
+    add_definitions(-DHAVE_MSMF_DXVA)
+  endif()
 endif()
 
 if (WIN32 AND HAVE_VFW)
@@ -162,6 +167,9 @@ if(HAVE_FFMPEG)
   if(APPLE)
     list(APPEND VIDEOIO_LIBRARIES "-framework VideoDecodeAcceleration" bz2)
   endif()
+  if(HAVE_FFMPEG_WRAPPER)
+    add_definitions(-DHAVE_FFMPEG_WRAPPER=1)
+  endif()
 endif(HAVE_FFMPEG)
 
 if(HAVE_PVAPI)
@@ -225,14 +233,8 @@ if(IOS)
   list(APPEND VIDEOIO_LIBRARIES "-framework Accelerate" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreImage" "-framework CoreMedia" "-framework CoreVideo" "-framework QuartzCore" "-framework UIKit")
 endif()
 
-if(WIN32)
-  link_directories("${OpenCV_SOURCE_DIR}/3rdparty/lib") # for ffmpeg wrapper only
-  include_directories(AFTER SYSTEM "${OpenCV_SOURCE_DIR}/3rdparty/include") # for directshow in VS2005 and multi-monitor support on MinGW
-  include_directories(AFTER SYSTEM "${OpenCV_SOURCE_DIR}/3rdparty/include/ffmpeg_") # for tests
-endif()
-
-if(UNIX)
-  #these variables are set by CHECK_MODULE macro
+if(TRUE)
+  # these variables are set by 'ocv_append_build_options(VIDEOIO ...)'
   foreach(P ${VIDEOIO_INCLUDE_DIRS})
     ocv_include_directories(${P})
   endforeach()
@@ -251,7 +253,7 @@ ocv_create_module(${VIDEOIO_LIBRARIES})
 
 macro(ocv_videoio_configure_target)
 if(APPLE)
-  add_apple_compiler_options(the_module)
+  add_apple_compiler_options(${the_module})
 endif()
 
 if(MSVC)
@@ -263,9 +265,9 @@ endif()
 
 ocv_warnings_disable(CMAKE_CXX_FLAGS -Wno-deprecated-declarations)
 
-if(WIN32 AND HAVE_FFMPEG)
+if(WIN32 AND HAVE_FFMPEG_WRAPPER)
   #copy ffmpeg dll to the output folder
-  if(MSVC64 OR MINGW64)
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(FFMPEG_SUFFIX _64)
   endif()
 
@@ -292,8 +294,7 @@ if(WIN32 AND HAVE_FFMPEG)
   install(FILES "${ffmpeg_path}" DESTINATION ${OPENCV_BIN_INSTALL_PATH} COMPONENT libs RENAME "${ffmpeg_bare_name_ver}")
 
   if(INSTALL_CREATE_DISTRIB)
-    install(FILES "${ffmpeg_dir}/opencv_ffmpeg.dll" DESTINATION "bin/" COMPONENT libs RENAME "opencv_ffmpeg${OPENCV_DLLVERSION}.dll")
-    install(FILES "${ffmpeg_dir}/opencv_ffmpeg_64.dll" DESTINATION "bin/" COMPONENT libs RENAME "opencv_ffmpeg${OPENCV_DLLVERSION}_64.dll")
+    install(FILES "${ffmpeg_dir}/opencv_ffmpeg${FFMPEG_SUFFIX}.dll" DESTINATION "bin/" COMPONENT libs RENAME "opencv_ffmpeg${OPENCV_DLLVERSION}${FFMPEG_SUFFIX}.dll")
   endif()
 endif()
 endmacro()

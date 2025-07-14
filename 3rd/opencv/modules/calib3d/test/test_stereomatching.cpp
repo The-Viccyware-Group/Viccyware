@@ -41,17 +41,13 @@
 
 /*
   This is a regression test for stereo matching algorithms. This test gets some quality metrics
-  discribed in "A Taxonomy and Evaluation of Dense Two-Frame Stereo Correspondence Algorithms".
+  described in "A Taxonomy and Evaluation of Dense Two-Frame Stereo Correspondence Algorithms".
   Daniel Scharstein, Richard Szeliski
 */
 
 #include "test_precomp.hpp"
-#include <limits>
-#include <cstdio>
-#include <map>
 
-using namespace std;
-using namespace cv;
+namespace opencv_test { namespace {
 
 const float EVAL_BAD_THRESH = 1.f;
 const int EVAL_TEXTURELESS_WIDTH = 3;
@@ -238,10 +234,10 @@ void computeDepthDiscontMask( const Mat& disp, Mat& depthDiscontMask, const Mat&
 
     Mat curDisp; disp.copyTo( curDisp );
     if( !unknDispMask.empty() )
-        curDisp.setTo( Scalar(numeric_limits<float>::min()), unknDispMask );
+        curDisp.setTo( Scalar(std::numeric_limits<float>::min()), unknDispMask );
     Mat maxNeighbDisp; dilate( curDisp, maxNeighbDisp, Mat(3, 3, CV_8UC1, Scalar(1)) );
     if( !unknDispMask.empty() )
-        curDisp.setTo( Scalar(numeric_limits<float>::max()), unknDispMask );
+        curDisp.setTo( Scalar(std::numeric_limits<float>::max()), unknDispMask );
     Mat minNeighbDisp; erode( curDisp, minNeighbDisp, Mat(3, 3, CV_8UC1, Scalar(1)) );
     depthDiscontMask = max( (Mat)(maxNeighbDisp-disp), (Mat)(disp-minNeighbDisp) ) > dispGap;
     if( !unknDispMask.empty() )
@@ -410,7 +406,7 @@ void CV_StereoMatchingTest::run(int)
 {
     string dataPath = ts->get_data_path() + "cv/";
     string algorithmName = name;
-    assert( !algorithmName.empty() );
+    CV_Assert( !algorithmName.empty() );
     if( dataPath.empty() )
     {
         ts->printf( cvtest::TS::LOG, "dataPath is empty" );
@@ -460,8 +456,8 @@ void CV_StereoMatchingTest::run(int)
         string datasetFullDirName = dataPath + DATASETS_DIR + datasetName + "/";
         Mat leftImg = imread(datasetFullDirName + LEFT_IMG_NAME);
         Mat rightImg = imread(datasetFullDirName + RIGHT_IMG_NAME);
-        Mat trueLeftDisp = imread(datasetFullDirName + TRUE_LEFT_DISP_NAME, 0);
-        Mat trueRightDisp = imread(datasetFullDirName + TRUE_RIGHT_DISP_NAME, 0);
+        Mat trueLeftDisp = imread(datasetFullDirName + TRUE_LEFT_DISP_NAME, IMREAD_GRAYSCALE);
+        Mat trueRightDisp = imread(datasetFullDirName + TRUE_RIGHT_DISP_NAME, IMREAD_GRAYSCALE);
         Rect calcROI;
 
         if( leftImg.empty() || rightImg.empty() || trueLeftDisp.empty() )
@@ -557,22 +553,22 @@ int CV_StereoMatchingTest::processStereoMatchingResults( FileStorage& fs, int ca
 {
     // rightDisp is not used in current test virsion
     int code = cvtest::TS::OK;
-    assert( fs.isOpened() );
-    assert( trueLeftDisp.type() == CV_32FC1 );
-    assert( trueRightDisp.empty() || trueRightDisp.type() == CV_32FC1 );
-    assert( leftDisp.type() == CV_32FC1 && rightDisp.type() == CV_32FC1 );
+    CV_Assert( fs.isOpened() );
+    CV_Assert( trueLeftDisp.type() == CV_32FC1 );
+    CV_Assert( trueRightDisp.empty() || trueRightDisp.type() == CV_32FC1 );
+    CV_Assert( leftDisp.type() == CV_32FC1 && (rightDisp.empty() || rightDisp.type() == CV_32FC1) );
 
     // get masks for unknown ground truth disparity values
     Mat leftUnknMask, rightUnknMask;
     DatasetParams params = datasetsParams[caseDatasets[caseIdx]];
     absdiff( trueLeftDisp, Scalar(params.dispUnknVal), leftUnknMask );
-    leftUnknMask = leftUnknMask < numeric_limits<float>::epsilon();
-    assert(leftUnknMask.type() == CV_8UC1);
+    leftUnknMask = leftUnknMask < std::numeric_limits<float>::epsilon();
+    CV_Assert(leftUnknMask.type() == CV_8UC1);
     if( !trueRightDisp.empty() )
     {
         absdiff( trueRightDisp, Scalar(params.dispUnknVal), rightUnknMask );
-        rightUnknMask = rightUnknMask < numeric_limits<float>::epsilon();
-        assert(rightUnknMask.type() == CV_8UC1);
+        rightUnknMask = rightUnknMask < std::numeric_limits<float>::epsilon();
+        CV_Assert(rightUnknMask.type() == CV_8UC1);
     }
 
     // calculate errors
@@ -627,7 +623,7 @@ int CV_StereoMatchingTest::readDatasetsParams( FileStorage& fs )
     }
     datasetsParams.clear();
     FileNode fn = fs.getFirstTopLevelNode();
-    assert(fn.isSeq());
+    CV_Assert(fn.isSeq());
     for( int i = 0; i < (int)fn.size(); i+=3 )
     {
         String _name = fn[i];
@@ -653,7 +649,7 @@ int CV_StereoMatchingTest::readRunParams( FileStorage& fs )
 
 void CV_StereoMatchingTest::writeErrors( const string& errName, const vector<float>& errors, FileStorage* fs )
 {
-    assert( (int)errors.size() == ERROR_KINDS_COUNT );
+    CV_Assert( (int)errors.size() == ERROR_KINDS_COUNT );
     vector<float>::const_iterator it = errors.begin();
     if( fs )
         for( int i = 0; i < ERROR_KINDS_COUNT; i++, ++it )
@@ -700,9 +696,9 @@ void CV_StereoMatchingTest::readROI( FileNode& fn, Rect& validROI )
 int CV_StereoMatchingTest::compareErrors( const vector<float>& calcErrors, const vector<float>& validErrors,
                    const vector<float>& eps, const string& errName )
 {
-    assert( (int)calcErrors.size() == ERROR_KINDS_COUNT );
-    assert( (int)validErrors.size() == ERROR_KINDS_COUNT );
-    assert( (int)eps.size() == ERROR_KINDS_COUNT );
+    CV_Assert( (int)calcErrors.size() == ERROR_KINDS_COUNT );
+    CV_Assert( (int)validErrors.size() == ERROR_KINDS_COUNT );
+    CV_Assert( (int)eps.size() == ERROR_KINDS_COUNT );
     vector<float>::const_iterator calcIt = calcErrors.begin(),
                                   validIt = validErrors.begin(),
                                   epsIt = eps.begin();
@@ -761,7 +757,7 @@ protected:
     {
         int code = CV_StereoMatchingTest::readRunParams( fs );
         FileNode fn = fs.getFirstTopLevelNode();
-        assert(fn.isSeq());
+        CV_Assert(fn.isSeq());
         for( int i = 0; i < (int)fn.size(); i+=5 )
         {
             String caseName = fn[i], datasetName = fn[i+1];
@@ -780,8 +776,8 @@ protected:
                    Rect& calcROI, Mat& leftDisp, Mat& /*rightDisp*/, int caseIdx )
     {
         RunParams params = caseRunParams[caseIdx];
-        assert( params.ndisp%16 == 0 );
-        assert( _leftImg.type() == CV_8UC3 && _rightImg.type() == CV_8UC3 );
+        CV_Assert( params.ndisp%16 == 0 );
+        CV_Assert( _leftImg.type() == CV_8UC3 && _rightImg.type() == CV_8UC3 );
         Mat leftImg; cvtColor( _leftImg, leftImg, COLOR_BGR2GRAY );
         Mat rightImg; cvtColor( _rightImg, rightImg, COLOR_BGR2GRAY );
 
@@ -795,6 +791,12 @@ protected:
         bm->compute( leftImg, rightImg, tempDisp );
         tempDisp.convertTo(leftDisp, CV_32F, 1./StereoMatcher::DISP_SCALE);
 
+        //check for fixed-type disparity data type
+        Mat_<float> fixedFloatDisp;
+        bm->compute( leftImg, rightImg, fixedFloatDisp );
+        EXPECT_LT(cvtest::norm(fixedFloatDisp, leftDisp, cv::NORM_L2 | cv::NORM_RELATIVE),
+                  0.005 + DBL_EPSILON);
+
         if (params.mindisp != 0)
             for (int y = 0; y < leftDisp.rows; y++)
                 for (int x = 0; x < leftDisp.cols; x++)
@@ -806,6 +808,55 @@ protected:
         return params.winSize/2;
     }
 };
+
+TEST(Calib3d_StereoBM, regression) { CV_StereoBMTest test; test.safe_run(); }
+
+/* < preFilter, < preFilterCap, SADWindowSize > >*/
+typedef tuple < int, tuple < int, int > > BufferBM_Params_t;
+
+typedef testing::TestWithParam< BufferBM_Params_t > Calib3d_StereoBM_BufferBM;
+
+const int preFilters[] =
+{
+    StereoBM::PREFILTER_NORMALIZED_RESPONSE,
+    StereoBM::PREFILTER_XSOBEL
+};
+
+const tuple < int, int > useShortsConditions[] =
+{
+    make_tuple(30, 19),
+    make_tuple(32, 23)
+};
+
+TEST_P(Calib3d_StereoBM_BufferBM, memAllocsTest)
+{
+    const int preFilter     = get<0>(GetParam());
+    const int preFilterCap  = get<0>(get<1>(GetParam()));
+    const int SADWindowSize = get<1>(get<1>(GetParam()));
+
+    String path = cvtest::TS::ptr()->get_data_path() + "cv/stereomatching/datasets/teddy/";
+    Mat leftImg = imread(path + "im2.png", IMREAD_GRAYSCALE);
+    ASSERT_FALSE(leftImg.empty());
+    Mat rightImg = imread(path + "im6.png", IMREAD_GRAYSCALE);
+    ASSERT_FALSE(rightImg.empty());
+    Mat leftDisp;
+    {
+        Ptr<StereoBM> bm = StereoBM::create(16,9);
+        bm->setPreFilterType(preFilter);
+        bm->setPreFilterCap(preFilterCap);
+        bm->setBlockSize(SADWindowSize);
+        bm->compute( leftImg, rightImg, leftDisp);
+
+        ASSERT_FALSE(leftDisp.empty());
+    }
+}
+
+INSTANTIATE_TEST_CASE_P(/*nothing*/, Calib3d_StereoBM_BufferBM,
+        testing::Combine(
+            testing::ValuesIn(preFilters),
+            testing::ValuesIn(useShortsConditions)
+            )
+        );
 
 //----------------------------------- StereoSGBM test -----------------------------------------------------
 
@@ -832,7 +883,7 @@ protected:
     {
         int code = CV_StereoMatchingTest::readRunParams(fs);
         FileNode fn = fs.getFirstTopLevelNode();
-        assert(fn.isSeq());
+        CV_Assert(fn.isSeq());
         for( int i = 0; i < (int)fn.size(); i+=5 )
         {
             String caseName = fn[i], datasetName = fn[i+1];
@@ -851,7 +902,7 @@ protected:
                    Rect& calcROI, Mat& leftDisp, Mat& /*rightDisp*/, int caseIdx )
     {
         RunParams params = caseRunParams[caseIdx];
-        assert( params.ndisp%16 == 0 );
+        CV_Assert( params.ndisp%16 == 0 );
         Ptr<StereoSGBM> sgbm = StereoSGBM::create( 0, params.ndisp, params.winSize,
                                                  10*params.winSize*params.winSize,
                                                  40*params.winSize*params.winSize,
@@ -867,16 +918,14 @@ protected:
     }
 };
 
-
-TEST(Calib3d_StereoBM, regression) { CV_StereoBMTest test; test.safe_run(); }
 TEST(Calib3d_StereoSGBM, regression) { CV_StereoSGBMTest test; test.safe_run(); }
 
 TEST(Calib3d_StereoSGBM_HH4, regression)
 {
     String path = cvtest::TS::ptr()->get_data_path() + "cv/stereomatching/datasets/teddy/";
-    Mat leftImg = imread(path + "im2.png", 0);
+    Mat leftImg = imread(path + "im2.png", IMREAD_GRAYSCALE);
     ASSERT_FALSE(leftImg.empty());
-    Mat rightImg = imread(path + "im6.png", 0);
+    Mat rightImg = imread(path + "im6.png", IMREAD_GRAYSCALE);
     ASSERT_FALSE(rightImg.empty());
     Mat testData = imread(path + "disp2_hh4.png",-1);
     ASSERT_FALSE(testData.empty());
@@ -892,3 +941,5 @@ TEST(Calib3d_StereoSGBM_HH4, regression)
     absdiff(toCheck, testData,diff);
     CV_Assert( countNonZero(diff)==0);
 }
+
+}} // namespace

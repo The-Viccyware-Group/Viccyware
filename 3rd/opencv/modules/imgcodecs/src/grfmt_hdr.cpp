@@ -44,6 +44,8 @@
 #include "grfmt_hdr.hpp"
 #include "rgbe.hpp"
 
+#ifdef HAVE_IMGCODEC_HDR
+
 namespace cv
 {
 
@@ -101,10 +103,14 @@ bool HdrDecoder::readData(Mat& _img)
 
 bool HdrDecoder::checkSignature( const String& signature ) const
 {
-    if(signature.size() >= m_signature.size() &&
-       (!memcmp(signature.c_str(), m_signature.c_str(), m_signature.size()) ||
-       !memcmp(signature.c_str(), m_signature_alt.c_str(), m_signature_alt.size())))
-       return true;
+    if (signature.size() >= m_signature.size() &&
+        0 == memcmp(signature.c_str(), m_signature.c_str(), m_signature.size())
+    )
+        return true;
+    if (signature.size() >= m_signature_alt.size() &&
+        0 == memcmp(signature.c_str(), m_signature_alt.c_str(), m_signature_alt.size())
+    )
+        return true;
     return false;
 }
 
@@ -135,14 +141,28 @@ bool HdrEncoder::write( const Mat& input_img, const std::vector<int>& params )
     if(img.depth() != CV_32F) {
         img.convertTo(img, CV_32FC3, 1/255.0f);
     }
-    CV_Assert(params.empty() || params[0] == HDR_NONE || params[0] == HDR_RLE);
+
+    int compression = IMWRITE_HDR_COMPRESSION_RLE;
+    for (size_t i = 0; i + 1 < params.size(); i += 2)
+    {
+        switch (params[i])
+        {
+        case IMWRITE_HDR_COMPRESSION:
+            compression = params[i + 1];
+            break;
+        default:
+            break;
+        }
+    }
+    CV_Check(compression, compression == IMWRITE_HDR_COMPRESSION_NONE || compression == IMWRITE_HDR_COMPRESSION_RLE, "");
+
     FILE *fout = fopen(m_filename.c_str(), "wb");
     if(!fout) {
         return false;
     }
 
     RGBE_WriteHeader(fout, img.cols, img.rows, NULL);
-    if(params.empty() || params[0] == HDR_RLE) {
+    if (compression == IMWRITE_HDR_COMPRESSION_RLE) {
         RGBE_WritePixels_RLE(fout, const_cast<float*>(img.ptr<float>()), img.cols, img.rows);
     } else {
         RGBE_WritePixels(fout, const_cast<float*>(img.ptr<float>()), img.cols * img.rows);
@@ -162,3 +182,5 @@ bool HdrEncoder::isFormatSupported( int depth ) const {
 }
 
 }
+
+#endif // HAVE_IMGCODEC_HDR

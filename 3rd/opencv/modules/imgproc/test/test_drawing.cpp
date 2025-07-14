@@ -42,10 +42,7 @@
 
 #include "test_precomp.hpp"
 
-namespace {
-
-using namespace std;
-using namespace cv;
+namespace opencv_test { namespace {
 
 //#define DRAW_TEST_IMAGE
 
@@ -248,176 +245,6 @@ int CV_DrawingTest_CPP::checkLineIterator( Mat& img )
     return 0;
 }
 
-class CV_DrawingTest_C : public CV_DrawingTest
-{
-public:
-    CV_DrawingTest_C() {}
-protected:
-    virtual void draw( Mat& img );
-    virtual int checkLineIterator( Mat& img);
-};
-
-void CV_DrawingTest_C::draw( Mat& _img )
-{
-    CvSize imgSize = cvSize(600, 400);
-    _img.create( imgSize, CV_8UC3 );
-    CvMat img = _img;
-
-    vector<CvPoint> polyline(4);
-    polyline[0] = cvPoint(0, 0);
-    polyline[1] = cvPoint(imgSize.width, 0);
-    polyline[2] = cvPoint(imgSize.width, imgSize.height);
-    polyline[3] = cvPoint(0, imgSize.height);
-    CvPoint* pts = &polyline[0];
-    int n = (int)polyline.size();
-    int actualSize = 0;
-    cvFillPoly( &img, &pts, &n, 1, cvScalar(255,255,255) );
-
-    CvPoint p1 = cvPoint(1,1), p2 = cvPoint(3,3);
-    if( cvClipLine(imgSize, &p1, &p2) )
-        cvCircle( &img, cvPoint(300,100), 40, cvScalar(0,0,255), 3 ); // draw
-
-    p1 = cvPoint(1,1), p2 = cvPoint(3,imgSize.height+1000);
-    if( cvClipLine(imgSize, &p1, &p2) )
-        cvCircle( &img, cvPoint(500,300), 50, cvScalar(255,0,0), 5, 8, 1 ); // draw
-
-    p1 = cvPoint(imgSize.width,1), p2 = cvPoint(imgSize.width,3);
-    if( cvClipLine(imgSize, &p1, &p2) )
-        cvCircle( &img, cvPoint(390,100), 10, cvScalar(0,0,255), 3 ); // not draw
-
-    p1 = Point(imgSize.width-1,1), p2 = Point(imgSize.width,3);
-    if( cvClipLine(imgSize, &p1, &p2) )
-        cvEllipse( &img, cvPoint(390,100), cvSize(20,30), 60, 0, 220.0, cvScalar(0,200,0), 4 ); //draw
-
-    CvBox2D box;
-    box.center.x = 100;
-    box.center.y = 200;
-    box.size.width = 200;
-    box.size.height = 100;
-    box.angle = 160;
-    cvEllipseBox( &img, box, Scalar(200,200,255), 5 );
-
-    polyline.resize(9);
-    pts = &polyline[0];
-    n = (int)polyline.size();
-    actualSize = cvEllipse2Poly( cvPoint(430,180), cvSize(100,150), 30, 0, 150, &polyline[0], 20 );
-    CV_Assert(actualSize == n);
-    cvPolyLine( &img, &pts, &n, 1, false, cvScalar(0,0,150), 4, CV_AA );
-    n = 0;
-    for( vector<CvPoint>::const_iterator it = polyline.begin(); n < (int)polyline.size()-1; ++it, n++ )
-    {
-        cvLine( &img, *it, *(it+1), cvScalar(50,250,100) );
-    }
-
-    polyline.resize(19);
-    pts = &polyline[0];
-    n = (int)polyline.size();
-    actualSize = cvEllipse2Poly( cvPoint(500,300), cvSize(50,80), 0, 0, 180, &polyline[0], 10 );
-    CV_Assert(actualSize == n);
-    cvPolyLine( &img, &pts, &n, 1, true, Scalar(100,200,100), 20 );
-    cvFillConvexPoly( &img, pts, n, cvScalar(0, 80, 0) );
-
-    polyline.resize(8);
-    // external rectengular
-    polyline[0] = cvPoint(500, 20);
-    polyline[1] = cvPoint(580, 20);
-    polyline[2] = cvPoint(580, 100);
-    polyline[3] = cvPoint(500, 100);
-    // internal rectangular
-    polyline[4] = cvPoint(520, 40);
-    polyline[5] = cvPoint(560, 40);
-    polyline[6] = cvPoint(560, 80);
-    polyline[7] = cvPoint(520, 80);
-    CvPoint* ppts[] = {&polyline[0], &polyline[0]+4};
-    int pn[] = {4, 4};
-    cvFillPoly( &img, ppts, pn, 2, cvScalar(100, 100, 0), 8, 0 );
-
-    cvRectangle( &img, cvPoint(0, 300), cvPoint(50, 398), cvScalar(0,0,255) );
-
-    string text1 = "OpenCV";
-    CvFont font;
-    cvInitFont( &font, FONT_HERSHEY_SCRIPT_SIMPLEX, 2, 2, 0, 3 );
-    int baseline = 0;
-    CvSize textSize;
-    cvGetTextSize( text1.c_str(), &font, &textSize, &baseline );
-    baseline += font.thickness;
-    CvPoint textOrg = cvPoint((imgSize.width - textSize.width)/2, (imgSize.height + textSize.height)/2);
-    cvRectangle( &img, cvPoint( textOrg.x, textOrg.y + baseline),
-                 cvPoint(textOrg.x + textSize.width, textOrg.y - textSize.height), cvScalar(0,0,255));
-    cvLine( &img, cvPoint(textOrg.x, textOrg.y + font.thickness),
-            cvPoint(textOrg.x + textSize.width, textOrg.y + font.thickness), cvScalar(0, 0, 255));
-    cvPutText( &img, text1.c_str(), textOrg, &font, cvScalar(150,0,150) );
-
-    int dist = 5;
-    string text2 = "abcdefghijklmnopqrstuvwxyz1234567890";
-    CvScalar color = cvScalar(200,0,0);
-    cvInitFont( &font, FONT_HERSHEY_SIMPLEX, 0.5, 0.5, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(5, 5+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_PLAIN, 1, 1, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_DUPLEX, 0.5, 0.5, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_COMPLEX, 0.5, 0.5, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_TRIPLEX, 0.5, 0.5, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_COMPLEX_SMALL, 1, 1, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist + 180);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_SCRIPT_SIMPLEX, 1, 1, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    cvInitFont( &font, FONT_HERSHEY_SCRIPT_COMPLEX, 1, 1, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-
-    dist = 15;
-    cvInitFont( &font, FONT_ITALIC, 0.5, 0.5, 0, 1, CV_AA );
-    cvGetTextSize( text2.c_str(), &font, &textSize, &baseline );
-    textOrg = cvPoint(textOrg.x,textOrg.y+textSize.height+dist);
-    cvPutText(&img, text2.c_str(), textOrg, &font, color );
-}
-
-int CV_DrawingTest_C::checkLineIterator( Mat& _img )
-{
-    CvLineIterator it;
-    CvMat img = _img;
-    int count = cvInitLineIterator( &img, cvPoint(0,300), cvPoint(1000, 300), &it );
-    for(int i = 0; i < count; i++ )
-    {
-        Vec3b v = (Vec3b)(*(it.ptr)) - _img.at<Vec3b>(300,i);
-        float err = (float)cvtest::norm( v, NORM_L2 );
-        if( err != 0 )
-        {
-            ts->printf( ts->LOG, "CvLineIterator works incorrect" );
-            ts->set_failed_test_info(cvtest::TS::FAIL_INVALID_OUTPUT);
-        }
-        CV_NEXT_LINE_POINT(it);
-    }
-    ts->set_failed_test_info(cvtest::TS::OK);
-    return 0;
-}
-
 class CV_DrawingTest_Far : public CV_DrawingTest_CPP
 {
 public:
@@ -552,7 +379,6 @@ void CV_DrawingTest_Far::draw(Mat& img)
 }
 
 TEST(Drawing,    cpp_regression) { CV_DrawingTest_CPP test; test.safe_run(); }
-TEST(Drawing,      c_regression) { CV_DrawingTest_C   test; test.safe_run(); }
 TEST(Drawing,    far_regression) { CV_DrawingTest_Far test; test.safe_run(); }
 
 class CV_FillConvexPolyTest : public cvtest::BaseTest
@@ -661,7 +487,8 @@ protected:
             img->copyTo(sub);
             shift += img->size().height + 1;
         }
-        //imwrite("/tmp/all_fonts.png", result);
+        if (cvtest::debugLevel > 0)
+            imwrite("all_fonts.png", result);
     }
 };
 
@@ -750,5 +577,292 @@ TEST(Drawing, putText_no_garbage)
 }
 
 
+TEST(Drawing, line)
+{
+    Mat mat = Mat::zeros(Size(100,100), CV_8UC1);
 
-} // namespace
+    ASSERT_THROW(line(mat, Point(1,1),Point(99,99),Scalar(255),0), cv::Exception);
+}
+
+TEST(Drawing, regression_16308)
+{
+    Mat_<uchar> img(Size(100, 100), (uchar)0);
+    circle(img, Point(50, 50), 50, 255, 1, LINE_AA);
+    EXPECT_NE(0, (int)img.at<uchar>(0, 50));
+    EXPECT_NE(0, (int)img.at<uchar>(50, 0));
+    EXPECT_NE(0, (int)img.at<uchar>(50, 99));
+    EXPECT_NE(0, (int)img.at<uchar>(99, 50));
+}
+
+TEST(Drawing, fillpoly_circle)
+{
+    Mat img_c(640, 480, CV_8UC3, Scalar::all(0));
+    Mat img_fp = img_c.clone(), img_fcp = img_c.clone(), img_fp3 = img_c.clone();
+
+    Point center1(img_c.cols/2, img_c.rows/2);
+    Point center2(img_c.cols/10, img_c.rows*3/4);
+    Point center3 = Point(img_c.cols, img_c.rows) - center2;
+    int radius = img_c.rows/4;
+    int radius_small = img_c.cols/15;
+    Scalar color(0, 0, 255);
+
+    circle(img_c, center1, radius, color, -1);
+
+    // check that circle, fillConvexPoly and fillPoly
+    // give almost the same result then asked to draw a single circle
+    vector<Point> vtx;
+    ellipse2Poly(center1, Size(radius, radius), 0, 0, 360, 1, vtx);
+    fillConvexPoly(img_fcp, vtx, color);
+    fillPoly(img_fp, vtx, color);
+    double diff_fp = cv::norm(img_c, img_fp, NORM_L1)/(255*radius*2*CV_PI);
+    double diff_fcp = cv::norm(img_c, img_fcp, NORM_L1)/(255*radius*2*CV_PI);
+    EXPECT_LT(diff_fp, 1.);
+    EXPECT_LT(diff_fcp, 1.);
+
+    // check that fillPoly can draw 3 disjoint circles at once
+    circle(img_c, center2, radius_small, color, -1);
+    circle(img_c, center3, radius_small, color, -1);
+
+    vector<vector<Point> > vtx3(3);
+    vtx3[0] = vtx;
+    ellipse2Poly(center2, Size(radius_small, radius_small), 0, 0, 360, 1, vtx3[1]);
+    ellipse2Poly(center3, Size(radius_small, radius_small), 0, 0, 360, 1, vtx3[2]);
+    fillPoly(img_fp3, vtx3, color);
+    double diff_fp3 = cv::norm(img_c, img_fp3, NORM_L1)/(255*(radius+radius_small*2)*2*CV_PI);
+    EXPECT_LT(diff_fp3, 1.);
+}
+
+TEST(Drawing, fillpoly_fully)
+{
+    unsigned imageWidth = 256;
+    unsigned imageHeight = 256;
+    int type = CV_8UC1;
+    int shift = 0;
+    Point offset(0, 0);
+    cv::LineTypes lineType = LINE_4;
+
+    int imageSizeOffset = 15;
+
+    cv::Mat img(imageHeight, imageWidth, type);
+    img = 0;
+
+    std::vector<cv::Point> polygonPoints;
+    polygonPoints.push_back(cv::Point(100, -50));
+    polygonPoints.push_back(cv::Point(imageSizeOffset, imageHeight - imageSizeOffset));
+    polygonPoints.push_back(cv::Point(imageSizeOffset, imageSizeOffset));
+
+    // convert data
+    std::vector<const cv::Point*> polygonPointPointers(polygonPoints.size());
+    for (size_t i = 0; i < polygonPoints.size(); i++)
+    {
+        polygonPointPointers[i] = &polygonPoints[i];
+    }
+
+    const cv::Point** data = &polygonPointPointers.front();
+    int size = (int)polygonPoints.size();
+    const int* npts = &size;
+    int ncontours = 1;
+
+    // generate image
+    cv::fillPoly(img, data, npts, ncontours, 255, lineType, shift, offset);
+
+    // check for artifacts
+    {
+        cv::Mat binary = img < 128;
+        cv::Mat labelImage(binary.size(), CV_32S);
+        cv::Mat labelCentroids;
+        int labels = cv::connectedComponents(binary, labelImage, 4);
+        EXPECT_EQ(2, labels) << "artifacts occured";
+    }
+
+    // check if filling went over border
+    {
+        int xy_shift = 16, delta = offset.y + ((1 << shift) >> 1);
+        int xy_one = 1 << xy_shift;
+
+        Point pt0(polygonPoints[polygonPoints.size() - 1]), pt1;
+        for (size_t i = 0; i < polygonPoints.size(); i++, pt0 = pt1)
+        {
+            pt1 = polygonPoints[i];
+
+            // offset/shift treated like in fillPoly
+            Point t0(pt0), t1(pt1);
+
+            t0.x = (t0.x + offset.x) << (xy_shift - shift);
+            t0.y = (t0.y + delta) >> shift;
+
+            t1.x = (t1.x + offset.x) << (xy_shift - shift);
+            t1.y = (t1.y + delta) >> shift;
+
+            if (lineType < CV_AA)
+            {
+                t0.x = (t0.x + (xy_one >> 1)) >> xy_shift;
+                t1.x = (t1.x + (xy_one >> 1)) >> xy_shift;
+
+                // LINE_4 to use the same type of line which is used in fillPoly
+                line(img, t0, t1, 0, 1, LINE_4, 0);
+            }
+            else
+            {
+                t0.x >>= (xy_shift);
+                t1.x >>= (xy_shift);
+                line(img, t0, t1, 0, 1, lineType, 0);
+            }
+
+        }
+        cv::Mat binary = img < 254;
+        cv::Mat labelImage(binary.size(), CV_32S);
+        int labels = cv::connectedComponents(binary, labelImage, 4);
+        EXPECT_EQ(2, labels) << "filling went over the border";
+    }
+}
+
+PARAM_TEST_CASE(FillPolyFully, unsigned, unsigned, int, int, Point, cv::LineTypes)
+{
+    unsigned imageWidth;
+    unsigned imageHeight;
+    int type;
+    int shift;
+    Point offset;
+    cv::LineTypes lineType;
+
+    virtual void SetUp()
+    {
+        imageWidth = GET_PARAM(0);
+        imageHeight = GET_PARAM(1);
+        type = GET_PARAM(2);
+        shift = GET_PARAM(3);
+        offset = GET_PARAM(4);
+        lineType = GET_PARAM(5);
+    }
+
+    void draw_polygon(cv::Mat& img, const std::vector<cv::Point>& polygonPoints)
+    {
+        // convert data
+        std::vector<const cv::Point*> polygonPointPointers(polygonPoints.size());
+        for (size_t i = 0; i < polygonPoints.size(); i++)
+        {
+            polygonPointPointers[i] = &polygonPoints[i];
+        }
+
+        const cv::Point** data = &polygonPointPointers.front();
+        int size = (int)polygonPoints.size();
+        const int* npts = &size;
+        int ncontours = 1;
+
+        // generate image
+        cv::fillPoly(img, data, npts, ncontours, 255, lineType, shift, offset);
+    }
+
+    void check_artifacts(cv::Mat& img)
+    {
+        // check for artifacts
+        cv::Mat binary = img < 128;
+        cv::Mat labelImage(binary.size(), CV_32S);
+        cv::Mat labelCentroids;
+        int labels = cv::connectedComponents(binary, labelImage, 4);
+        EXPECT_EQ(2, labels) << "artifacts occured";
+    }
+
+    void check_filling_over_border(cv::Mat& img, const std::vector<cv::Point>& polygonPoints)
+    {
+        int xy_shift = 16, delta = offset.y + ((1 << shift) >> 1);
+        int xy_one = 1 << xy_shift;
+
+        Point pt0(polygonPoints[polygonPoints.size() - 1]), pt1;
+        for (size_t i = 0; i < polygonPoints.size(); i++, pt0 = pt1)
+        {
+            pt1 = polygonPoints[i];
+
+            // offset/shift treated like in fillPoly
+            Point t0(pt0), t1(pt1);
+
+            t0.x = (t0.x + offset.x) << (xy_shift - shift);
+            t0.y = (t0.y + delta) >> shift;
+
+            t1.x = (t1.x + offset.x) << (xy_shift - shift);
+            t1.y = (t1.y + delta) >> shift;
+
+            if (lineType < CV_AA)
+            {
+                t0.x = (t0.x + (xy_one >> 1)) >> xy_shift;
+                t1.x = (t1.x + (xy_one >> 1)) >> xy_shift;
+
+                // LINE_4 to use the same type of line which is used in fillPoly
+                line(img, t0, t1, 0, 1, LINE_4, 0);
+            }
+            else
+            {
+                t0.x >>= (xy_shift);
+                t1.x >>= (xy_shift);
+                line(img, t0, t1, 0, 1, lineType, 0);
+            }
+
+        }
+        cv::Mat binary = img < 254;
+        cv::Mat labelImage(binary.size(), CV_32S);
+        int labels = cv::connectedComponents(binary, labelImage, 4);
+        EXPECT_EQ(2, labels) << "filling went over the border";
+    }
+
+    void run_test(const std::vector<cv::Point>& polygonPoints)
+    {
+        cv::Mat img(imageHeight, imageWidth, type);
+        img = 0;
+
+        draw_polygon(img, polygonPoints);
+        check_artifacts(img);
+        check_filling_over_border(img, polygonPoints);
+    }
+};
+
+TEST_P(FillPolyFully, DISABLED_fillpoly_fully)
+{
+    int imageSizeOffset = 15;
+
+    // testing for polygon with straight edge at left/right side
+    int positions1[2] = { imageSizeOffset, (int)imageWidth - imageSizeOffset };
+    for (size_t i = 0; i < 2; i++)
+    {
+        for (int y = imageHeight + 50; y > -50; y -= 1)
+        {
+            // define polygon
+            std::vector<cv::Point> polygonPoints;
+            polygonPoints.push_back(cv::Point(100, imageHeight - y));
+            polygonPoints.push_back(cv::Point(positions1[i], positions1[1]));
+            polygonPoints.push_back(cv::Point(positions1[i], positions1[0]));
+
+            run_test(polygonPoints);
+        }
+    }
+
+    // testing for polygon with straight edge at top/bottom side
+    int positions2[2] = { imageSizeOffset, (int)imageHeight - imageSizeOffset };
+    for (size_t i = 0; i < 2; i++)
+    {
+        for (int x = imageWidth + 50; x > -50; x -= 1)
+        {
+            // define polygon
+            std::vector<cv::Point> polygonPoints;
+            polygonPoints.push_back(cv::Point(imageWidth - x, 100));
+            polygonPoints.push_back(cv::Point(positions2[1], positions2[i]));
+            polygonPoints.push_back(cv::Point(positions2[0], positions2[i]));
+
+            run_test(polygonPoints);
+        }
+    }
+}
+
+INSTANTIATE_TEST_CASE_P(
+    FillPolyTest, FillPolyFully,
+    testing::Combine(
+        testing::Values(256),
+        testing::Values(256),
+        testing::Values(CV_8UC1),
+        testing::Values(0, 1, 2),
+        testing::Values(cv::Point(0, 0), cv::Point(10, 10)),
+        testing::Values(LINE_4, LINE_8, LINE_AA)
+    )
+);
+
+}} // namespace

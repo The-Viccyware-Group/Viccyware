@@ -40,9 +40,17 @@
 //
 //M*/
 
+#define CONCAT(A,B) A##_##B
+#define TEMPLATE(name,type) CONCAT(name,type)
+#define KERNEL_ARG_DTYPE float
+
+#if defined(cl_khr_fp16)
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#endif
+
 __kernel void ReLUForward(const int count, __global const T* in, __global T* out
 #ifndef RELU_NO_SLOPE
-, T negative_slope
+, KERNEL_ARG_DTYPE negative_slope
 #endif
 ) {
   int index = get_global_id(0);
@@ -52,6 +60,27 @@ __kernel void ReLUForward(const int count, __global const T* in, __global T* out
 #else
   out[index] = in[index] > 0 ? in[index] : 0;
 #endif
+}
+
+__kernel void ReLU6Forward(const int count, __global const T* in, __global T* out,
+                           const KERNEL_ARG_DTYPE minValue, const KERNEL_ARG_DTYPE maxValue)
+{
+  int index = get_global_id(0);
+  if(index < count)
+  {
+    T x = in[index];
+    out[index] = clamp(x, convert_T(minValue), convert_T(maxValue));
+  }
+}
+
+__kernel void PReLUForward(const int count, const int channels, const int plane_size,
+                           __global const T* in, __global T* out,
+                           __global const KERNEL_ARG_DTYPE* slope_data)
+{
+  int index = get_global_id(0);
+  int c = (index / plane_size) % channels;
+  if(index < count)
+  out[index] = in[index] > 0 ? in[index] : in[index] * slope_data[c];
 }
 
 __kernel void TanHForward(const int count, __global T* in, __global T* out) {
@@ -66,10 +95,23 @@ __kernel void SigmoidForward(const int count, __global const T* in, __global T* 
   out[index] = 1.0f / (1.0f + exp(-in[index]));
 }
 
+__kernel void SwishForward(const int count, __global const T* in, __global T* out) {
+  int index = get_global_id(0);
+  if(index < count)
+  out[index] = in[index] / (1.0f + exp(-in[index]));
+}
+
+__kernel void MishForward(const int count, __global const T* in, __global T* out) {
+  int index = get_global_id(0);
+  if(index < count)
+  out[index] = in[index] * tanh(log(1.0f + exp(in[index])));
+}
+
 __kernel void BNLLForward(const int n, __global const T* in, __global T* out) {
   int index = get_global_id(0);
   if (index < n) {
-    out[index] = in[index] > 0 ? in[index] + log(1.0f + exp(-in[index])) : log(1.0f + exp(in[index]));
+    T x = in[index];
+    out[index] = x > 0 ? x + log(1.0f + exp(-x)) : log(1.0f + exp(x));
   }
 }
 
@@ -79,8 +121,34 @@ __kernel void AbsValForward(const int n, __global const T* in, __global T* out) 
     out[index] = fabs(in[index]);
 }
 
-__kernel void PowForward(const int n, __global const T* in, __global T* out, const T power, const T scale, const T shift) {
+__kernel void PowForward(const int n, __global const T* in, __global T* out,
+                         const KERNEL_ARG_DTYPE power,
+                         const KERNEL_ARG_DTYPE scale,
+                         const KERNEL_ARG_DTYPE shift)
+{
   int index = get_global_id(0);
   if (index < n)
     out[index] = pow(shift + scale * in[index], power);
+}
+
+__kernel void ELUForward(const int n, __global const T* in, __global T* out,
+                         const KERNEL_ARG_DTYPE alpha)
+{
+  int index = get_global_id(0);
+  if (index < n)
+  {
+    T src = in[index];
+    out[index] = (src >= 0.f) ? src : alpha * (exp(src) - 1);
+  }
+}
+
+__kernel void ExpForward(const int n, __global const T* in, __global T* out,
+                         const KERNEL_ARG_DTYPE normScale,
+                         const KERNEL_ARG_DTYPE normShift)
+{
+  int index = get_global_id(0);
+  if (index < n)
+  {
+    out[index] = exp(normShift + normScale * in[index]);
+  }
 }

@@ -356,14 +356,14 @@ namespace
         for (int m = 0, ind = 0; m <= ksize; ++m)
         {
             for (int l = ksize; l + m >= 0; --l, ++ind)
-                btvWeights[ind] = pow(alpha_f, std::abs(m) + std::abs(l));
+                btvWeights[ind] = static_cast<float>(pow(alpha_f, std::abs(m) + std::abs(l)));
         }
     }
 
     template <typename T>
     struct BtvRegularizationBody : ParallelLoopBody
     {
-        void operator ()(const Range& range) const;
+        void operator ()(const Range& range) const CV_OVERRIDE;
 
         Mat src;
         mutable Mat dst;
@@ -470,18 +470,28 @@ namespace
         void process(InputArrayOfArrays src, OutputArray dst, InputArrayOfArrays forwardMotions,
                      InputArrayOfArrays backwardMotions, int baseIdx);
 
-        void collectGarbage();
+        void collectGarbage() CV_OVERRIDE;
 
-        CV_IMPL_PROPERTY(int, Scale, scale_)
-        CV_IMPL_PROPERTY(int, Iterations, iterations_)
-        CV_IMPL_PROPERTY(double, Tau, tau_)
-        CV_IMPL_PROPERTY(double, Labmda, lambda_)
-        CV_IMPL_PROPERTY(double, Alpha, alpha_)
-        CV_IMPL_PROPERTY(int, KernelSize, btvKernelSize_)
-        CV_IMPL_PROPERTY(int, BlurKernelSize, blurKernelSize_)
-        CV_IMPL_PROPERTY(double, BlurSigma, blurSigma_)
-        CV_IMPL_PROPERTY(int, TemporalAreaRadius, temporalAreaRadius_)
-        CV_IMPL_PROPERTY_S(Ptr<cv::superres::DenseOpticalFlowExt>, OpticalFlow, opticalFlow_)
+        inline int getScale() const CV_OVERRIDE { return scale_; }
+        inline void setScale(int val) CV_OVERRIDE { scale_ = val; }
+        inline int getIterations() const CV_OVERRIDE { return iterations_; }
+        inline void setIterations(int val) CV_OVERRIDE { iterations_ = val; }
+        inline double getTau() const CV_OVERRIDE { return tau_; }
+        inline void setTau(double val) CV_OVERRIDE { tau_ = val; }
+        inline double getLabmda() const CV_OVERRIDE { return lambda_; }
+        inline void setLabmda(double val) CV_OVERRIDE { lambda_ = val; }
+        inline double getAlpha() const CV_OVERRIDE { return alpha_; }
+        inline void setAlpha(double val) CV_OVERRIDE { alpha_ = val; }
+        inline int getKernelSize() const CV_OVERRIDE { return btvKernelSize_; }
+        inline void setKernelSize(int val) CV_OVERRIDE { btvKernelSize_ = val; }
+        inline int getBlurKernelSize() const CV_OVERRIDE { return blurKernelSize_; }
+        inline void setBlurKernelSize(int val) CV_OVERRIDE { blurKernelSize_ = val; }
+        inline double getBlurSigma() const CV_OVERRIDE { return blurSigma_; }
+        inline void setBlurSigma(double val) CV_OVERRIDE { blurSigma_ = val; }
+        inline int getTemporalAreaRadius() const CV_OVERRIDE { return temporalAreaRadius_; }
+        inline void setTemporalAreaRadius(int val) CV_OVERRIDE { temporalAreaRadius_ = val; }
+        inline Ptr<cv::superres::DenseOpticalFlowExt> getOpticalFlow() const CV_OVERRIDE { return opticalFlow_; }
+        inline void setOpticalFlow(const Ptr<cv::superres::DenseOpticalFlowExt>& val) CV_OVERRIDE { opticalFlow_ = val; }
 
     protected:
         int scale_;
@@ -660,7 +670,7 @@ namespace
     void BTVL1_Base::process(InputArrayOfArrays _src, OutputArray _dst, InputArrayOfArrays _forwardMotions,
                              InputArrayOfArrays _backwardMotions, int baseIdx)
     {
-        CV_INSTRUMENT_REGION()
+        CV_INSTRUMENT_REGION();
 
         CV_Assert( scale_ > 1 );
         CV_Assert( iterations_ > 0 );
@@ -798,18 +808,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////
 
-    class BTVL1 : public BTVL1_Base
+    class BTVL1 CV_FINAL : public BTVL1_Base
     {
     public:
         BTVL1();
 
-        void collectGarbage();
+        void collectGarbage() CV_OVERRIDE;
 
     protected:
-        void initImpl(Ptr<FrameSource>& frameSource);
+        void initImpl(Ptr<FrameSource>& frameSource) CV_OVERRIDE;
         bool ocl_initImpl(Ptr<FrameSource>& frameSource);
 
-        void processImpl(Ptr<FrameSource>& frameSource, OutputArray output);
+        void processImpl(Ptr<FrameSource>& frameSource, OutputArray output) CV_OVERRIDE;
         bool ocl_processImpl(Ptr<FrameSource>& frameSource, OutputArray output);
 
     private:
@@ -961,7 +971,7 @@ namespace
 
     void BTVL1::processImpl(Ptr<FrameSource>& frameSource, OutputArray _output)
     {
-        CV_INSTRUMENT_REGION()
+        CV_INSTRUMENT_REGION();
 
         if (outPos_ >= storePos_)
         {
@@ -1012,7 +1022,7 @@ namespace
 
     void BTVL1::readNextFrame(Ptr<FrameSource>& frameSource)
     {
-        CV_INSTRUMENT_REGION()
+        CV_INSTRUMENT_REGION();
 
         frameSource->nextFrame(curFrame_);
         if (curFrame_.empty())
@@ -1076,7 +1086,7 @@ namespace
 
     void BTVL1::processFrame(int idx)
     {
-        CV_INSTRUMENT_REGION()
+        CV_INSTRUMENT_REGION();
 
         CV_OCL_RUN(isUmat_,
                    ocl_processFrame(idx))

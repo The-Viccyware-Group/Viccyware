@@ -42,14 +42,17 @@
 
 #include "../precomp.hpp"
 #include "layers_common.hpp"
-#include "op_halide.hpp"
+#include "../op_halide.hpp"
+#include "../op_inf_engine.hpp"
+#include "../ie_ngraph.hpp"
+
 #include "opencv2/imgproc.hpp"
 #include "opencv2/dnn/shape_utils.hpp"
 #include "opencv2/core/hal/hal.hpp"
-#include "opencl_kernels_dnn.hpp"
 #include <algorithm>
 
 #ifdef HAVE_OPENCL
+#include "opencl_kernels_dnn.hpp"
 using namespace cv::dnn::ocl4dnn;
 #endif
 
@@ -58,7 +61,7 @@ namespace cv
 namespace dnn
 {
 
-class LRNLayerImpl : public LRNLayer
+class LRNLayerImpl CV_FINAL : public LRNLayer
 {
 public:
     LRNLayerImpl(const LayerParams& params)
@@ -77,7 +80,7 @@ public:
         if (size % 2 != 1 || size <= 0)
             CV_Error(Error::StsBadArg, "LRN layer supports only positive odd values for local_size");
 
-        alpha = params.get<double>("alpha", 1);
+        alpha = params.get<double>("alpha", 0.0001);
         beta = params.get<double>("beta", 0.75);
         bias = params.get<double>("bias", 1);
         normBySize = params.get<bool>("norm_by_size", true);
@@ -87,18 +90,28 @@ public:
     Ptr<OCL4DNNLRN<float> > lrnOp;
 #endif
 
-    virtual bool supportBackend(int backendId)
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
     {
-        return backendId == DNN_BACKEND_DEFAULT ||
-               backendId == DNN_BACKEND_HALIDE && haveHalide();
+#ifdef HAVE_INF_ENGINE
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+            return bias == (int)bias;
+#endif
+        return backendId == DNN_BACKEND_OPENCV ||
+               backendId == DNN_BACKEND_HALIDE;
     }
 
 #ifdef HAVE_OPENCL
+    virtual void finalize(InputArrayOfArrays, OutputArrayOfArrays) CV_OVERRIDE
+    {
+        lrnOp.release();
+    }
+
     bool forward_ocl(InputArrayOfArrays inps, OutputArrayOfArrays outs, OutputArrayOfArrays internals)
     {
         std::vector<UMat> inputs;
         std::vector<UMat> outputs;
 
+        bool use_half = (inps.depth() == CV_16S);
         inps.getUMatVector(inputs);
         outs.getUMatVector(outputs);
 
@@ -121,6 +134,7 @@ public:
             config.height = inputs[0].size[2];
             config.width = inputs[0].size[3];
             config.norm_by_size = normBySize;
+            config.use_half = use_half;
 
             lrnOp = Ptr<OCL4DNNLRN<float> >(new OCL4DNNLRN<float>(config));
         }
@@ -132,32 +146,33 @@ public:
     }
 #endif
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
     {
         CV_TRACE_FUNCTION();
         CV_TRACE_ARG_VALUE(name, "name", name.c_str());
 
         CV_Assert(inputs_arr.total() == outputs_arr.total());
 
-        CV_OCL_RUN((preferableTarget == DNN_TARGET_OPENCL) &&
-                   OCL_PERFORMANCE_CHECK(ocl::Device::getDefault().isIntel()),
+        CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
                    forward_ocl(inputs_arr, outputs_arr, internals_arr))
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
+        if (inputs_arr.depth() == CV_16S)
+        {
+            forward_fallback(inputs_arr, outputs_arr, internals_arr);
+            return;
+        }
 
-    void forward(std::vector<Mat*> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
 
         CV_Assert(inputs.size() == outputs.size());
 
         for (int i = 0; i < inputs.size(); i++)
         {
-            CV_Assert(inputs[i]->dims == 4);
+            CV_Assert(inputs[i].dims == 4);
 
-            Mat &src = *inputs[i];
+            Mat &src = inputs[i];
             Mat &dst = outputs[i];
 
             switch (type)
@@ -189,7 +204,7 @@ public:
             planeSize_ = planeSize; nsamples_ = nsamples; nstripes_ = nstripes;
         }
 
-        void operator()(const Range& r) const
+        void operator()(const Range& r) const CV_OVERRIDE
         {
             int nsamples = nsamples_, nstripes = nstripes_;
             size_t planeSize = planeSize_, planeSize_n = planeSize * nsamples;
@@ -201,8 +216,8 @@ public:
             float alpha1 = alpha1_, bias1 = bias1_, beta1 = beta1_;
             int k, channels = channels_, ksize = ksize_;
 
-            AutoBuffer<float> buf_((channels + ksize*2 + 4)*2);
-            float* acc = (float*)buf_;
+            AutoBuffer<float> buf_((channels + ksize + 1)*2);
+            float* acc = buf_.data();
             float* buf = acc + channels + ksize + 1;
             for( k = 0; k <= ksize; k++ )
                 buf[-k-1] = buf[channels + k] = 0.f;
@@ -296,7 +311,7 @@ public:
         }
     }
 
-    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs)
+    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs) CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         float alphaSize = alpha;
@@ -340,7 +355,7 @@ public:
     virtual void applyHalideScheduler(Ptr<BackendNode>& node,
                                       const std::vector<Mat*> &inputs,
                                       const std::vector<Mat> &outputs,
-                                      int targetId) const
+                                      int targetId) const CV_OVERRIDE
     {
 #ifdef  HAVE_HALIDE
         if (targetId != DNN_TARGET_CPU)
@@ -369,10 +384,32 @@ public:
 #endif  // HAVE_HALIDE
     }
 
-    virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
-                           const std::vector<MatShape> &outputs) const
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> >& inputs, const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
     {
-        (void)outputs; // suppress unused variable warning
+        float alphaSize = alpha;
+        if (!normBySize)
+            alphaSize *= (type == SPATIAL_NRM ? size*size : size);
+
+        auto& ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+        std::vector<int64_t> axes;
+        if (type != SPATIAL_NRM) {
+            axes = {1};
+        } else {
+            axes.resize(ieInpNode->get_shape().size() - 2);
+            std::iota(axes.begin(), axes.end(), 2);
+        }
+        auto ngraph_axes = std::make_shared<ngraph::op::Constant>(ngraph::element::i64, ngraph::Shape{axes.size()}, axes.data());
+        auto lrn = std::make_shared<ngraph::op::LRN>(ieInpNode, ngraph_axes, alphaSize, beta, bias, size);
+        return Ptr<BackendNode>(new InfEngineNgraphNode(lrn));
+    }
+#endif  // HAVE_DNN_NGRAPH
+
+    virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
+                           const std::vector<MatShape> &outputs) const CV_OVERRIDE
+    {
+        CV_UNUSED(outputs); // suppress unused variable warning
         CV_Assert(inputs.size() > 0);
         long flops = 0;
 

@@ -4,11 +4,8 @@
 
 #include "test_precomp.hpp"
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
-namespace
-{
     static const int fixedShiftU8 = 8;
 
     template <typename T, int fixedShift>
@@ -20,7 +17,6 @@ namespace
                       (((T*)src_pt10)[cn] * xcoeff0 + ((T*)src_pt11)[cn] * xcoeff1) * ycoeff1 ;
         ((T*)dst_pt)[cn] = saturate_cast<T>((val + fixedRound) >> (fixedShift * 2));
     }
-}
 
 TEST(Resize_Bitexact, Linear8U)
 {
@@ -49,9 +45,9 @@ TEST(Resize_Bitexact, Linear8U)
         { CV_8UC4, Size(   4,   3) },
         { CV_8UC1, Size( 342, 384) }, //   1/3      1/2
         { CV_8UC1, Size( 342, 256) }, //   1/3      1/3
-        { CV_8UC1, Size( 342, 256) },
-        { CV_8UC1, Size( 342, 256) },
-        { CV_8UC1, Size( 342, 256) },
+        { CV_8UC2, Size( 342, 256) },
+        { CV_8UC3, Size( 342, 256) },
+        { CV_8UC4, Size( 342, 256) },
         { CV_8UC1, Size( 512, 256) }, //   1/2      1/3
         { CV_8UC1, Size( 146, 110) }, //   1/7      1/7
         { CV_8UC3, Size( 146, 110) },
@@ -87,13 +83,13 @@ TEST(Resize_Bitexact, Linear8U)
             softdouble scale_y = softdouble::one() / softdouble(inv_scale_y);
 
             Mat src(rows, cols, type), refdst(drows, dcols, type), dst;
+            RNG rnd(0x123456789abcdefULL);
             for (int j = 0; j < rows; j++)
             {
                 uint8_t* line = src.ptr(j);
                 for (int i = 0; i < cols; i++)
                     for (int c = 0; c < cn; c++)
                     {
-                        RNG rnd(0x123456789abcdefULL);
                         double val = j < rows / 2 ? ( i < cols / 2 ? ((sin((i + 1)*CV_PI / 256.)*sin((j + 1)*CV_PI / 256.)*sin((cn + 4)*CV_PI / 8.) + 1.)*128.)                         :
                                                                      (((i / 128 + j / 128) % 2) * 250 + (j / 128) % 2)                                                                ) :
                                                     ( i < cols / 2 ? ((i / 128) * (85 - j / 256 * 40) * ((j / 128) % 2) + (7 - i / 128) * (85 - j / 256 * 40) * ((j / 128 + 1) % 2))    :
@@ -156,4 +152,89 @@ TEST(Resize_Bitexact, Linear8U)
         }
 }
 
-///* End of file. */
+PARAM_TEST_CASE(Resize_Bitexact, int)
+{
+public:
+    int depth;
+
+    virtual void SetUp()
+    {
+        depth = GET_PARAM(0);
+    }
+
+    double CountDiff(const Mat& src)
+    {
+        Mat dstExact; cv::resize(src, dstExact, Size(), 2, 1, INTER_NEAREST_EXACT);
+        Mat dstNonExact; cv::resize(src, dstNonExact, Size(), 2, 1, INTER_NEAREST);
+
+        return cv::norm(dstExact, dstNonExact, NORM_INF);
+    }
+};
+
+TEST_P(Resize_Bitexact, Nearest8U_vsNonExact)
+{
+    Mat mat_color, mat_gray;
+    Mat src_color = imread(cvtest::findDataFile("shared/lena.png"));
+    Mat src_gray; cv::cvtColor(src_color, src_gray, COLOR_BGR2GRAY);
+    src_color.convertTo(mat_color, depth);
+    src_gray.convertTo(mat_gray, depth);
+
+    EXPECT_EQ(CountDiff(mat_color), 0) << "color, type: " << depth;
+    EXPECT_EQ(CountDiff(mat_gray), 0) << "gray, type: " << depth;
+}
+
+// Now INTER_NEAREST's convention and INTER_NEAREST_EXACT's one are different.
+INSTANTIATE_TEST_CASE_P(DISABLED_Imgproc, Resize_Bitexact,
+    testing::Values(CV_8U, CV_16U, CV_32F, CV_64F)
+);
+
+TEST(Resize_Bitexact, Nearest8U)
+{
+    Mat src[6], dst[6];
+
+    // 2x decimation
+    src[0] = (Mat_<uint8_t>(1, 6) << 0, 1, 2, 3, 4, 5);
+    dst[0] = (Mat_<uint8_t>(1, 3) << 0, 2, 4);
+
+    // decimation odd to 1
+    src[1] = (Mat_<uint8_t>(1, 5) << 0, 1, 2, 3, 4);
+    dst[1] = (Mat_<uint8_t>(1, 1) << 2);
+
+    // decimation n*2-1 to n
+    src[2] = (Mat_<uint8_t>(1, 5) << 0, 1, 2, 3, 4);
+    dst[2] = (Mat_<uint8_t>(1, 3) << 0, 2, 4);
+
+    // decimation n*2+1 to n
+    src[3] = (Mat_<uint8_t>(1, 5) << 0, 1, 2, 3, 4);
+    dst[3] = (Mat_<uint8_t>(1, 2) << 1, 3);
+
+    // zoom
+    src[4] = (Mat_<uint8_t>(3, 5) <<
+        0, 1, 2, 3, 4,
+        5, 6, 7, 8, 9,
+        10, 11, 12, 13, 14);
+    dst[4] = (Mat_<uint8_t>(5, 7) <<
+        0, 1, 1, 2, 3, 3, 4,
+        0, 1, 1, 2, 3, 3, 4,
+        5, 6, 6, 7, 8, 8, 9,
+        10, 11, 11, 12, 13, 13, 14,
+        10, 11, 11, 12, 13, 13, 14);
+
+    src[5] = (Mat_<uint8_t>(2, 3) <<
+        0, 1, 2,
+        3, 4, 5);
+    dst[5] = (Mat_<uint8_t>(4, 6) <<
+        0, 0, 1, 1, 2, 2,
+        0, 0, 1, 1, 2, 2,
+        3, 3, 4, 4, 5, 5,
+        3, 3, 4, 4, 5, 5);
+
+    for (int i = 0; i < 6; i++)
+    {
+        Mat calc;
+        resize(src[i], calc, dst[i].size(), 0, 0, INTER_NEAREST_EXACT);
+        EXPECT_EQ(cvtest::norm(calc, dst[i], cv::NORM_L1), 0);
+    }
+}
+
+}} // namespace

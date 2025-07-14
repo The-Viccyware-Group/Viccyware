@@ -85,7 +85,7 @@ public:
 protected:
     virtual bool validProfile(const PXCCapture::VideoStream::ProfileInfo& pinfo);
 protected:
-    bool retriveFrame(int type, int planeIdx, OutputArray frame);
+    bool retrieveFrame(int type, int planeIdx, OutputArray frame);
 };
 
 class VideoCapture_IntelPerC : public IVideoCapture
@@ -94,13 +94,13 @@ public:
     VideoCapture_IntelPerC();
     virtual ~VideoCapture_IntelPerC();
 
-    virtual double getProperty(int propIdx) const;
-    virtual bool setProperty(int propIdx, double propVal);
+    virtual double getProperty(int propIdx) const CV_OVERRIDE;
+    virtual bool setProperty(int propIdx, double propVal) CV_OVERRIDE;
 
-    virtual bool grabFrame();
-    virtual bool retrieveFrame(int outputType, OutputArray frame);
-    virtual int getCaptureDomain();
-    virtual bool isOpened() const;
+    virtual bool grabFrame() CV_OVERRIDE;
+    virtual bool retrieveFrame(int outputType, OutputArray frame) CV_OVERRIDE;
+    virtual int getCaptureDomain() CV_OVERRIDE;
+    virtual bool isOpened() const CV_OVERRIDE;
 protected:
     bool m_contextOpened;
 

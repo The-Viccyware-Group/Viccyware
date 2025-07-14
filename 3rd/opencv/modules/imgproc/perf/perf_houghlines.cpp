@@ -1,14 +1,11 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
 #include "perf_precomp.hpp"
 
-#include "cmath"
+namespace opencv_test {
 
-using namespace std;
-using namespace cv;
-using namespace perf;
-using std::tr1::make_tuple;
-using std::tr1::get;
-
-typedef std::tr1::tuple<string, double, double, double> Image_RhoStep_ThetaStep_Threshold_t;
+typedef tuple<string, double, double, double> Image_RhoStep_ThetaStep_Threshold_t;
 typedef perf::TestBaseWithParam<Image_RhoStep_ThetaStep_Threshold_t> Image_RhoStep_ThetaStep_Threshold;
 
 PERF_TEST_P(Image_RhoStep_ThetaStep_Threshold, HoughLines,
@@ -31,16 +28,16 @@ PERF_TEST_P(Image_RhoStep_ThetaStep_Threshold, HoughLines,
 
     Canny(image, image, 32, 128);
 
-    // add some syntetic lines:
+    // add some synthetic lines:
     line(image, Point(0, 0), Point(image.cols, image.rows), Scalar::all(255), 3);
     line(image, Point(image.cols, 0), Point(image.cols/2, image.rows), Scalar::all(255), 3);
 
     vector<Vec2f> lines;
     declare.time(60);
 
-    int threshold = (int)(std::min(image.cols, image.rows) * threshold_ratio);
+    int hough_threshold = (int)(std::min(image.cols, image.rows) * threshold_ratio);
 
-    TEST_CYCLE() HoughLines(image, lines, rhoStep, thetaStep, threshold);
+    TEST_CYCLE() HoughLines(image, lines, rhoStep, thetaStep, hough_threshold);
 
     printf("%dx%d: %d lines\n", image.cols, image.rows, (int)lines.size());
 
@@ -71,3 +68,48 @@ PERF_TEST_P(Image_RhoStep_ThetaStep_Threshold, HoughLines,
 
     SANITY_CHECK_NOTHING();
 }
+
+PERF_TEST_P(Image_RhoStep_ThetaStep_Threshold, HoughLines3f,
+            testing::Combine(
+                testing::Values( "cv/shared/pic5.png", "stitching/a1.png" ),
+                testing::Values( 1, 10 ),
+                testing::Values( 0.01, 0.1 ),
+                testing::Values( 0.5, 1.1 )
+                )
+            )
+{
+    string filename = getDataPath(get<0>(GetParam()));
+    double rhoStep = get<1>(GetParam());
+    double thetaStep = get<2>(GetParam());
+    double threshold_ratio = get<3>(GetParam());
+
+    Mat image = imread(filename, IMREAD_GRAYSCALE);
+    if (image.empty())
+        FAIL() << "Unable to load source image" << filename;
+
+    Canny(image, image, 32, 128);
+
+    // add some synthetic lines:
+    line(image, Point(0, 0), Point(image.cols, image.rows), Scalar::all(255), 3);
+    line(image, Point(image.cols, 0), Point(image.cols/2, image.rows), Scalar::all(255), 3);
+
+    vector<Vec3f> lines;
+    declare.time(60);
+
+    int hough_threshold = (int)(std::min(image.cols, image.rows) * threshold_ratio);
+
+    TEST_CYCLE() HoughLines(image, lines, rhoStep, thetaStep, hough_threshold);
+
+    printf("%dx%d: %d lines\n", image.cols, image.rows, (int)lines.size());
+
+    if (threshold_ratio < 1.0)
+    {
+        EXPECT_GE(lines.size(), 2u);
+    }
+
+    EXPECT_LT(lines.size(), 3000u);
+
+    SANITY_CHECK_NOTHING();
+}
+
+} // namespace

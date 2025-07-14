@@ -68,10 +68,10 @@ public:
 
     virtual bool open(int cameraId);
     virtual void close();
-    virtual double getProperty(int) const;
-    virtual bool setProperty(int, double);
-    virtual bool grabFrame();
-    virtual IplImage* retrieveFrame(int);
+    virtual double getProperty(int) const CV_OVERRIDE;
+    virtual bool setProperty(int, double) CV_OVERRIDE;
+    virtual bool grabFrame() CV_OVERRIDE;
+    virtual IplImage* retrieveFrame(int) CV_OVERRIDE;
 
 protected:
     C1394Camera* camera();
@@ -212,7 +212,7 @@ int CvCaptureCAM_CMU::getDepth()
 
     // TODO
     if( format==7 ) {
-        assert(0);
+        CV_Assert(0);
         return 1;
     }
     // irrelvant to depth
@@ -233,7 +233,7 @@ int CvCaptureCAM_CMU::getNChannels()
     int mode = cmucam->GetVideoMode();
 
     if( format==7 ){
-        assert(0);
+        CV_Assert(0);
         return 1;
     }
 
@@ -362,7 +362,7 @@ bool CvCaptureCAM_CMU::open( int _index )
         CMU_numActiveCameras++;
         CMU_useCameraFlags[_index] = true;
     }
-    catch ( int )
+    catch (const int &)
     {
         return false;
     }

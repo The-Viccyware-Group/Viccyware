@@ -3,15 +3,13 @@
 #include "opencv2/opencv_modules.hpp"
 #include "opencv2/flann.hpp"
 
-using namespace std;
-using namespace cv;
+namespace opencv_test
+{
 using namespace perf;
-using std::tr1::make_tuple;
-using std::tr1::get;
 
 typedef TestBaseWithParam<size_t> FeaturesFinderVec;
 typedef TestBaseWithParam<string> match;
-typedef std::tr1::tuple<string, int> matchVector_t;
+typedef tuple<string, int> matchVector_t;
 typedef TestBaseWithParam<matchVector_t> matchVector;
 
 #define NUMBER_IMAGES testing::Values(1, 5, 20)
@@ -19,7 +17,7 @@ typedef TestBaseWithParam<matchVector_t> matchVector;
 #define ORB_MATCH_CONFIDENCE  0.3f
 #define WORK_MEGAPIX 0.6
 
-#ifdef HAVE_OPENCV_XFEATURES2D
+#if defined(HAVE_OPENCV_XFEATURES2D) && defined(OPENCV_ENABLE_NONFREE)
 #define TEST_DETECTORS testing::Values("surf", "orb")
 #else
 #define TEST_DETECTORS testing::Values<string>("orb")
@@ -104,8 +102,8 @@ PERF_TEST_P( match, bestOf2Nearest, TEST_DETECTORS)
     Mat dist (pairwise_matches.H, Range::all(), Range(2, 3));
     Mat R (pairwise_matches.H, Range::all(), Range(0, 2));
     // separate transform matrix, use lower error on rotations
-    SANITY_CHECK(dist, 1., ERROR_ABSOLUTE);
-    SANITY_CHECK(R, .015, ERROR_ABSOLUTE);
+    SANITY_CHECK(dist, 3., ERROR_ABSOLUTE);
+    SANITY_CHECK(R, .06, ERROR_ABSOLUTE);
 }
 
 PERF_TEST_P( matchVector, bestOf2NearestVectorFeatures, testing::Combine(
@@ -290,7 +288,7 @@ PERF_TEST_P( matchVector, affineBestOf2NearestVectorFeatures, testing::Combine(
         if (pairwise_matches[i].src_img_idx < 0)
             continue;
 
-        EXPECT_TRUE(pairwise_matches[i].matches.size() > 400);
+        EXPECT_GT(pairwise_matches[i].matches.size(), (size_t)300);
         EXPECT_FALSE(pairwise_matches[i].H.empty());
         ++matches_count;
     }
@@ -299,3 +297,5 @@ PERF_TEST_P( matchVector, affineBestOf2NearestVectorFeatures, testing::Combine(
 
     SANITY_CHECK_NOTHING();
 }
+
+} // namespace

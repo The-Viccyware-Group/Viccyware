@@ -56,7 +56,7 @@
 
 #ifdef HAVE_OPENCL
 
-namespace cvtest {
+namespace opencv_test {
 namespace ocl {
 
 enum
@@ -289,7 +289,7 @@ PARAM_TEST_CASE(Resize, MatType, double, double, Interpolation, bool, int)
         dstRoiSize.width = cvRound(srcRoiSize.width * fx);
         dstRoiSize.height = cvRound(srcRoiSize.height * fy);
 
-        if (dstRoiSize.area() == 0)
+        if (dstRoiSize.empty())
         {
             random_roi();
             return;
@@ -304,28 +304,42 @@ PARAM_TEST_CASE(Resize, MatType, double, double, Interpolation, bool, int)
         UMAT_UPLOAD_INPUT_PARAMETER(src);
         UMAT_UPLOAD_OUTPUT_PARAMETER(dst);
     }
-
-    void Near(double threshold = 0.0)
-    {
-        OCL_EXPECT_MATS_NEAR(dst, threshold);
-    }
 };
 
+#if defined(__aarch64__) || defined(__arm__)
+const int integerEps = 3;
+#else
+const int integerEps = 1;
+#endif
 OCL_TEST_P(Resize, Mat)
 {
     for (int j = 0; j < test_loop_times; j++)
     {
         int depth = CV_MAT_DEPTH(type);
-        double eps = depth <= CV_32S ? 1 : 5e-2;
+        double eps = depth <= CV_32S ? integerEps : 5e-2;
 
         random_roi();
 
         OCL_OFF(cv::resize(src_roi, dst_roi, Size(), fx, fy, interpolation));
         OCL_ON(cv::resize(usrc_roi, udst_roi, Size(), fx, fy, interpolation));
 
-        Near(eps);
+        OCL_EXPECT_MAT_N_DIFF(dst, eps);
     }
 }
+
+OCL_TEST(Resize, overflow_21198)
+{
+    Mat src(Size(600, 600), CV_16UC3, Scalar::all(32768));
+    UMat src_u;
+    src.copyTo(src_u);
+
+    Mat dst;
+    cv::resize(src, dst, Size(1024, 1024), 0, 0, INTER_LINEAR);
+    UMat dst_u;
+    cv::resize(src_u, dst_u, Size(1024, 1024), 0, 0, INTER_LINEAR);
+    EXPECT_LE(cv::norm(dst_u, dst, NORM_INF), 1.0f);
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // remap
@@ -383,11 +397,6 @@ PARAM_TEST_CASE(Remap, MatDepth, Channels, std::pair<MatType, MatType>, BorderTy
         if (noType != map2Type)
             UMAT_UPLOAD_INPUT_PARAMETER(map2);
     }
-
-    void Near(double threshold = 0.0)
-    {
-        OCL_EXPECT_MATS_NEAR(dst, threshold);
-    }
 };
 
 typedef Remap Remap_INTER_NEAREST;
@@ -401,7 +410,7 @@ OCL_TEST_P(Remap_INTER_NEAREST, Mat)
         OCL_OFF(cv::remap(src_roi, dst_roi, map1_roi, map2_roi, INTER_NEAREST, borderType, val));
         OCL_ON(cv::remap(usrc_roi, udst_roi, umap1_roi, umap2_roi, INTER_NEAREST, borderType, val));
 
-        Near(1.0);
+        OCL_EXPECT_MAT_N_DIFF(dst, 1.0);
     }
 }
 
@@ -418,12 +427,14 @@ OCL_TEST_P(Remap_INTER_LINEAR, Mat)
         // TODO investigate accuracy
         if (cv::ocl::Device::getDefault().isNVidia())
             eps = 8.0;
+#elif defined(__arm__)
+        eps = 8.0;
 #endif
 
         OCL_OFF(cv::remap(src_roi, dst_roi, map1_roi, map2_roi, INTER_LINEAR, borderType, val));
         OCL_ON(cv::remap(usrc_roi, udst_roi, umap1_roi, umap2_roi, INTER_LINEAR, borderType, val));
 
-        Near(eps);
+        OCL_EXPECT_MAT_N_DIFF(dst, eps);
     }
 }
 
@@ -504,6 +515,6 @@ OCL_INSTANTIATE_TEST_CASE_P(ImgprocWarp, Remap_INTER_NEAREST, Combine(
                                    (BorderType)BORDER_REFLECT_101),
                             Bool()));
 
-} } // namespace cvtest::ocl
+} } // namespace opencv_test::ocl
 
 #endif // HAVE_OPENCL

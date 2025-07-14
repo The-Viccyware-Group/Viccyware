@@ -42,6 +42,8 @@
 #include "test_precomp.hpp"
 #include "opencv2/video/tracking_c.h"
 
+namespace opencv_test { namespace {
+
 /* ///////////////////// pyrlk_test ///////////////////////// */
 
 class CV_OptFlowPyrLKTest : public cvtest::BaseTest
@@ -63,7 +65,7 @@ void CV_OptFlowPyrLKTest::run( int )
     const int bad_points_max = 8;
 
     /* test parameters */
-    double  max_err = 0., sum_err = 0;
+    double  max_err = 0.;
     int     pt_cmpd = 0;
     int     pt_exceed = 0;
     int     merr_i = 0, merr_j = 0, merr_k = 0, merr_nan = 0;
@@ -118,7 +120,7 @@ void CV_OptFlowPyrLKTest::run( int )
     /* read first image */
     sprintf( filename, "%soptflow/%s", ts->get_data_path().c_str(), "rock_1.bmp" );
     imgI2 = cv::imread( filename, cv::IMREAD_UNCHANGED );
-    imgI = imgI2;
+    imgI = cvIplImage(imgI2);
 
     if( imgI2.empty() )
     {
@@ -130,7 +132,7 @@ void CV_OptFlowPyrLKTest::run( int )
     /* read second image */
     sprintf( filename, "%soptflow/%s", ts->get_data_path().c_str(), "rock_2.bmp" );
     imgJ2 = cv::imread( filename, cv::IMREAD_UNCHANGED );
-    imgJ = imgJ2;
+    imgJ = cvIplImage(imgJ2);
 
     if( imgJ2.empty() )
     {
@@ -173,7 +175,6 @@ void CV_OptFlowPyrLKTest::run( int )
             }
 
             pt_exceed += err > success_error_level;
-            sum_err += err;
             pt_cmpd++;
         }
         else
@@ -256,3 +257,5 @@ TEST(Video_OpticalFlowPyrLK, submat)
 
     ASSERT_NO_THROW(cv::calcOpticalFlowPyrLK(img1, img2, prev, next, status, error));
 }
+
+}} // namespace

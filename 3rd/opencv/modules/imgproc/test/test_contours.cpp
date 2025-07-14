@@ -40,9 +40,9 @@
 //M*/
 
 #include "test_precomp.hpp"
+#include <opencv2/highgui.hpp>
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 class CV_FindContourTest : public cvtest::BaseTest
 {
@@ -65,7 +65,7 @@ protected:
 
     int min_log_img_width, max_log_img_width;
     int min_log_img_height, max_log_img_height;
-    CvSize img_size;
+    Size img_size;
     int count, count2;
 
     IplImage* img[NUM_IMG];
@@ -170,9 +170,9 @@ cvTsGenerateBlobImage( IplImage* img, int min_blob_size, int max_blob_size,
                        RNG& rng )
 {
     int i;
-    CvSize size;
+    Size size;
 
-    assert( img->depth == IPL_DEPTH_8U && img->nChannels == 1 );
+    CV_Assert(img->depth == IPL_DEPTH_8U && img->nChannels == 1);
 
     cvZero( img );
 
@@ -182,8 +182,8 @@ cvTsGenerateBlobImage( IplImage* img, int min_blob_size, int max_blob_size,
 
     for( i = 0; i < blob_count; i++ )
     {
-        CvPoint center;
-        CvSize  axes;
+        Point center;
+        Size  axes;
         int angle = cvtest::randInt(rng) % 180;
         int brightness = cvtest::randInt(rng) %
                          (max_brightness - min_brightness) + min_brightness;
@@ -195,7 +195,7 @@ cvTsGenerateBlobImage( IplImage* img, int min_blob_size, int max_blob_size,
         axes.height = (cvtest::randInt(rng) %
                       (max_blob_size - min_blob_size) + min_blob_size + 1)/2;
 
-        cvEllipse( img, center, axes, angle, 0, 360, cvScalar(brightness), CV_FILLED );
+        cvEllipse( img, cvPoint(center), cvSize(axes), angle, 0, 360, cvScalar(brightness), CV_FILLED );
     }
 
     cvResetImageROI( img );
@@ -208,7 +208,7 @@ cvTsMarkContours( IplImage* img, int val )
     int i, j;
     int step = img->widthStep;
 
-    assert( img->depth == IPL_DEPTH_8U && img->nChannels == 1 && (val&1) != 0);
+    CV_Assert( img->depth == IPL_DEPTH_8U && img->nChannels == 1 && (val&1) != 0);
 
     for( i = 1; i < img->height - 1; i++ )
         for( j = 1; j < img->width - 1; j++ )
@@ -246,7 +246,7 @@ int CV_FindContourTest::prepare_test_case( int test_case_idx )
     storage = cvCreateMemStorage( 1 << 10 );
 
     for( i = 0; i < NUM_IMG; i++ )
-        img[i] = cvCreateImage( img_size, 8, 1 );
+        img[i] = cvCreateImage( cvSize(img_size), 8, 1 );
 
     cvTsGenerateBlobImage( img[0], min_blob_size, max_blob_size,
         blob_count, min_brightness, max_brightness, rng );
@@ -376,8 +376,8 @@ int CV_FindContourTest::validate_test_results( int /*test_case_idx*/ )
 
             for(int i = 0; i < seq1->total; i++ )
             {
-                CvPoint pt1;
-                CvPoint pt2;
+                CvPoint pt1 = {0, 0};
+                CvPoint pt2 = {0, 0};
 
                 CV_READ_SEQ_ELEM( pt1, reader1 );
                 CV_READ_SEQ_ELEM( pt2, reader2 );
@@ -471,7 +471,7 @@ TEST(Imgproc_FindContours, hilbert)
 TEST(Imgproc_FindContours, border)
 {
     Mat img;
-    copyMakeBorder(Mat::zeros(8, 10, CV_8U), img, 1, 1, 1, 1, BORDER_CONSTANT, Scalar(1));
+    cv::copyMakeBorder(Mat::zeros(8, 10, CV_8U), img, 1, 1, 1, 1, BORDER_CONSTANT, Scalar(1));
 
     std::vector<std::vector<cv::Point> > contours;
     findContours(img, contours, RETR_LIST, CHAIN_APPROX_NONE);
@@ -479,10 +479,59 @@ TEST(Imgproc_FindContours, border)
     Mat img_draw_contours = Mat::zeros(img.size(), CV_8U);
     for (size_t cpt = 0; cpt < contours.size(); cpt++)
     {
-      drawContours(img_draw_contours, contours, static_cast<int>(cpt), cv::Scalar(255));
+      drawContours(img_draw_contours, contours, static_cast<int>(cpt), cv::Scalar(1));
     }
 
-    ASSERT_TRUE(norm(img - img_draw_contours, NORM_INF) == 0.0);
+    ASSERT_EQ(0, cvtest::norm(img, img_draw_contours, NORM_INF));
+}
+
+TEST(Imgproc_FindContours, regression_4363_shared_nbd)
+{
+    // Create specific test image
+    Mat1b img(12, 69, (const uchar&)0);
+
+    img(1, 1) = 1;
+
+    // Vertical rectangle with hole sharing the same NBD
+    for (int r = 1; r <= 10; ++r) {
+        for (int c = 3; c <= 5; ++c) {
+            img(r, c) = 1;
+        }
+    }
+    img(9, 4) = 0;
+
+    // 124 small CCs
+    for (int r = 1; r <= 7; r += 2) {
+        for (int c = 7; c <= 67; c += 2) {
+            img(r, c) = 1;
+        }
+    }
+
+    // Last CC
+    img(9, 7) = 1;
+
+    vector< vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+    findContours(img, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE);
+
+    bool found = false;
+    size_t index = 0;
+    for (vector< vector<Point> >::const_iterator i = contours.begin(); i != contours.end(); ++i)
+    {
+        const vector<Point>& c = *i;
+        if (!c.empty() && c[0] == Point(7, 9))
+        {
+            found = true;
+            index = (size_t)(i - contours.begin());
+            break;
+        }
+    }
+    EXPECT_TRUE(found) << "Desired result: point (7,9) is a contour - Actual result: point (7,9) is not a contour";
+
+    if (found)
+    {
+        EXPECT_LT(hierarchy[index][3], 0) << "Desired result: (7,9) has no parent - Actual result: parent of (7,9) is another contour. index = " << index;
+    }
 }
 
 TEST(Imgproc_PointPolygonTest, regression_10222)
@@ -499,4 +548,5 @@ TEST(Imgproc_PointPolygonTest, regression_10222)
     EXPECT_GT(result, 0) << "Desired result: point is inside polygon - actual result: point is not inside polygon";
 }
 
+}} // namespace
 /* End of file. */

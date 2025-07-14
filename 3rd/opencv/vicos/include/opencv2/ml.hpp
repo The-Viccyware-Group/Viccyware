@@ -120,7 +120,7 @@ public:
     \f[(minVal, minVal*step, minVal*{step}^2, \dots,  minVal*{logStep}^n),\f]
     where \f$n\f$ is the maximal index satisfying
     \f[\texttt{minVal} * \texttt{logStep} ^n <  \texttt{maxVal}\f]
-    The grid is logarithmic, so logStep must always be greater then 1. Default value is 1.
+    The grid is logarithmic, so logStep must always be greater than 1. Default value is 1.
     */
     CV_PROP_RW double logStep;
 
@@ -239,7 +239,18 @@ public:
     /** @brief Returns vector of symbolic names captured in loadFromCSV() */
     CV_WRAP void getNames(std::vector<String>& names) const;
 
-    CV_WRAP static Mat getSubVector(const Mat& vec, const Mat& idx);
+    /** @brief Extract from 1D vector elements specified by passed indexes.
+    @param vec input vector (supported types: CV_32S, CV_32F, CV_64F)
+    @param idx 1D index vector
+     */
+    static CV_WRAP Mat getSubVector(const Mat& vec, const Mat& idx);
+
+    /** @brief Extract from matrix rows/cols specified by passed indexes.
+    @param matrix input matrix (supported types: CV_32S, CV_32F, CV_64F)
+    @param idx 1D index vector
+    @param layout specifies to extract rows (cv::ml::ROW_SAMPLES) or to extract columns (cv::ml::COL_SAMPLES)
+     */
+    static CV_WRAP Mat getSubMatrix(const Mat& matrix, const Mat& idx, int layout);
 
     /** @brief Reads the dataset from a .csv file and returns the ready-to-use training data.
 
@@ -318,7 +329,7 @@ public:
     /** @brief Returns the number of variables in training samples */
     CV_WRAP virtual int getVarCount() const = 0;
 
-    CV_WRAP virtual bool empty() const;
+    CV_WRAP virtual bool empty() const CV_OVERRIDE;
 
     /** @brief Returns true if the model is trained */
     CV_WRAP virtual bool isTrained() const = 0;
@@ -494,6 +505,14 @@ public:
     The static method creates empty %KNearest classifier. It should be then trained using StatModel::train method.
      */
     CV_WRAP static Ptr<KNearest> create();
+    /** @brief Loads and creates a serialized knearest from a file
+     *
+     * Use KNearest::save to serialize and store an KNearest to disk.
+     * Load the KNearest from this file again, by calling this function with the path to the file.
+     *
+     * @param filepath path to serialized KNearest
+     */
+    CV_WRAP static Ptr<KNearest> load(const String& filepath);
 };
 
 /****************************************************************************************\
@@ -894,7 +913,7 @@ public:
     posterior probabilities for each sample from the input
     @param flags This parameter will be ignored
      */
-    CV_WRAP virtual float predict( InputArray samples, OutputArray results=noArray(), int flags=0 ) const = 0;
+    CV_WRAP virtual float predict( InputArray samples, OutputArray results=noArray(), int flags=0 ) const CV_OVERRIDE = 0;
 
     /** @brief Returns a likelihood logarithm value and an index of the most probable mixture component
     for the given sample.
@@ -985,7 +1004,7 @@ public:
     @param samples Samples from which the Gaussian mixture model will be estimated. It should be a
         one-channel matrix, each row of which is a sample. If the matrix does not have CV_64F type
         it will be converted to the inner matrix of such type for the further computing.
-    @param probs0
+    @param probs0 the probabilities
     @param logLikelihoods The optional output matrix that contains a likelihood logarithm value for
         each sample. It has \f$nsamples \times 1\f$ size and CV_64FC1 type.
     @param labels The optional output "class label" for each sample:
@@ -1269,11 +1288,20 @@ public:
     results for each of the sample cases. If the model is a classifier, it will return
     a Mat with samples + 1 rows, where the first row gives the class number and the
     following rows return the votes each class had for each sample.
-        @param samples Array containg the samples for which votes will be calculated.
+        @param samples Array containing the samples for which votes will be calculated.
         @param results Array where the result of the calculation will be written.
         @param flags Flags for defining the type of RTrees.
     */
     CV_WRAP void getVotes(InputArray samples, OutputArray results, int flags) const;
+
+    /** Returns the OOB error value, computed at the training stage when calcOOBError is set to true.
+     * If this flag was set to false, 0 is returned. The OOB error is also scaled by sample weighting.
+     */
+#if CV_VERSION_MAJOR == 3
+    CV_WRAP double getOOBError() const;
+#else
+    /*CV_WRAP*/ virtual double getOOBError() const = 0;
+#endif
 
     /** Creates the empty model.
     Use StatModel::train to train the model, StatModel::train to create and train the model,
@@ -1656,11 +1684,11 @@ public:
     @param results Predicted labels as a column matrix of type CV_32S.
     @param flags Not used.
      */
-    CV_WRAP virtual float predict( InputArray samples, OutputArray results=noArray(), int flags=0 ) const = 0;
+    CV_WRAP virtual float predict( InputArray samples, OutputArray results=noArray(), int flags=0 ) const CV_OVERRIDE = 0;
 
-    /** @brief This function returns the trained paramters arranged across rows.
+    /** @brief This function returns the trained parameters arranged across rows.
 
-    For a two class classifcation problem, it returns a row matrix. It returns learnt paramters of
+    For a two class classification problem, it returns a row matrix. It returns learnt parameters of
     the Logistic Regression as a matrix of type CV_32F.
      */
     CV_WRAP virtual Mat get_learnt_thetas() const = 0;
@@ -1741,7 +1769,7 @@ Note that the parameters margin regularization, initial step size, and step decr
 
 To use SVMSGD algorithm do as follows:
 
-- first, create the SVMSGD object. The algoorithm will set optimal parameters by default, but you can set your own parameters via functions setSvmsgdType(),
+- first, create the SVMSGD object. The algorithm will set optimal parameters by default, but you can set your own parameters via functions setSvmsgdType(),
   setMarginType(), setMarginRegularization(), setInitialStepSize(), and setStepDecreasingPower().
 
 - then the SVM model can be trained using the train features and the correspondent labels by the method train().
@@ -1854,7 +1882,7 @@ public:
 
 
 /****************************************************************************************\
-*                           Auxilary functions declarations                              *
+*                           Auxiliary functions declarations                              *
 \****************************************************************************************/
 
 /** @brief Generates _sample_ from multivariate normal distribution
@@ -1921,7 +1949,7 @@ struct SimulatedAnnealingSolverSystem
 {
     /** Give energy value for a state of system.*/
     double energy() const;
-    /** Function which change the state of system (random pertubation).*/
+    /** Function which change the state of system (random perturbation).*/
     void changeState();
     /** Function to reverse to the previous state. Can be called once only after changeState(). */
     void reverseState();

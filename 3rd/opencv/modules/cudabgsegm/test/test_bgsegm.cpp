@@ -44,7 +44,7 @@
 
 #ifdef HAVE_CUDA
 
-using namespace cvtest;
+namespace opencv_test { namespace {
 
 //////////////////////////////////////////////////////
 // MOG2
@@ -110,14 +110,7 @@ CUDA_TEST_P(MOG2, Update)
 
         mog2_gold->apply(frame, foreground_gold);
 
-        if (detectShadow)
-        {
-            ASSERT_MAT_SIMILAR(foreground_gold, foreground, 1e-2);
-        }
-        else
-        {
-            ASSERT_MAT_NEAR(foreground_gold, foreground, 0);
-        }
+        ASSERT_MAT_SIMILAR(foreground_gold, foreground, detectShadow ? 13e-3 : 2e-4);
     }
 }
 
@@ -167,4 +160,5 @@ INSTANTIATE_TEST_CASE_P(CUDA_BgSegm, MOG2, testing::Combine(
 
 #endif
 
+}} // namespace
 #endif // HAVE_CUDA

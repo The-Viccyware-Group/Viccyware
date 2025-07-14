@@ -53,6 +53,75 @@
 namespace cv
 {
 
+template <typename T> static inline
+void scalarToRawData_(const Scalar& s, T * const buf, const int cn, const int unroll_to)
+{
+    int i = 0;
+    for(; i < cn; i++)
+        buf[i] = saturate_cast<T>(s.val[i]);
+    for(; i < unroll_to; i++)
+        buf[i] = buf[i-cn];
+}
+
+void scalarToRawData(const Scalar& s, void* _buf, int type, int unroll_to)
+{
+    CV_INSTRUMENT_REGION();
+
+    const int depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
+    CV_Assert(cn <= 4);
+    switch(depth)
+    {
+    case CV_8U:
+        scalarToRawData_<uchar>(s, (uchar*)_buf, cn, unroll_to);
+        break;
+    case CV_8S:
+        scalarToRawData_<schar>(s, (schar*)_buf, cn, unroll_to);
+        break;
+    case CV_16U:
+        scalarToRawData_<ushort>(s, (ushort*)_buf, cn, unroll_to);
+        break;
+    case CV_16S:
+        scalarToRawData_<short>(s, (short*)_buf, cn, unroll_to);
+        break;
+    case CV_32S:
+        scalarToRawData_<int>(s, (int*)_buf, cn, unroll_to);
+        break;
+    case CV_32F:
+        scalarToRawData_<float>(s, (float*)_buf, cn, unroll_to);
+        break;
+    case CV_64F:
+        scalarToRawData_<double>(s, (double*)_buf, cn, unroll_to);
+        break;
+#if CV_VERSION_MAJOR >= 4
+    case CV_16F:
+        scalarToRawData_<float16_t>(s, (float16_t*)_buf, cn, unroll_to);
+        break;
+#endif
+    default:
+        CV_Error(CV_StsUnsupportedFormat,"");
+    }
+}
+
+void convertAndUnrollScalar( const Mat& sc, int buftype, uchar* scbuf, size_t blocksize )
+{
+    int scn = (int)sc.total(), cn = CV_MAT_CN(buftype);
+    size_t esz = CV_ELEM_SIZE(buftype);
+    BinaryFunc cvtFn = getConvertFunc(sc.depth(), buftype);
+    CV_Assert(cvtFn);
+    cvtFn(sc.ptr(), 1, 0, 1, scbuf, 1, Size(std::min(cn, scn), 1), 0);
+    // unroll the scalar
+    if( scn < cn )
+    {
+        CV_Assert( scn == 1 );
+        size_t esz1 = CV_ELEM_SIZE1(buftype);
+        for( size_t i = esz1; i < esz; i++ )
+            scbuf[i] = scbuf[i - esz1];
+    }
+    for( size_t i = esz; i < blocksize*esz; i++ )
+        scbuf[i] = scbuf[i - esz];
+}
+
+
 template<typename T> static void
 copyMask_(const uchar* _src, size_t sstep, const uchar* mask, size_t mstep, uchar* _dst, size_t dstep, Size size)
 {
@@ -90,29 +159,21 @@ copyMask_<uchar>(const uchar* _src, size_t sstep, const uchar* mask, size_t mste
         const uchar* src = (const uchar*)_src;
         uchar* dst = (uchar*)_dst;
         int x = 0;
-        #if CV_SSE4_2
-        if(USE_SSE4_2)//
+        #if CV_SIMD
         {
-            __m128i zero = _mm_setzero_si128 ();
+            v_uint8 v_zero = vx_setzero_u8();
 
-             for( ; x <= size.width - 16; x += 16 )
-             {
-                 const __m128i rSrc = _mm_lddqu_si128((const __m128i*)(src+x));
-                 __m128i _mask = _mm_lddqu_si128((const __m128i*)(mask+x));
-                 __m128i rDst = _mm_lddqu_si128((__m128i*)(dst+x));
-                 __m128i _negMask = _mm_cmpeq_epi8(_mask, zero);
-                 rDst = _mm_blendv_epi8(rSrc, rDst, _negMask);
-                 _mm_storeu_si128((__m128i*)(dst + x), rDst);
-             }
+            for( ; x <= size.width - v_uint8::nlanes; x += v_uint8::nlanes )
+            {
+                v_uint8 v_src   = vx_load(src  + x),
+                        v_dst   = vx_load(dst  + x),
+                        v_nmask = vx_load(mask + x) == v_zero;
+
+                v_dst = v_select(v_nmask, v_dst, v_src);
+                v_store(dst + x, v_dst);
+            }
         }
-        #elif CV_NEON
-        uint8x16_t v_one = vdupq_n_u8(1);
-        for( ; x <= size.width - 16; x += 16 )
-        {
-            uint8x16_t v_mask = vcgeq_u8(vld1q_u8(mask + x), v_one);
-            uint8x16_t v_dst = vld1q_u8(dst + x), v_src = vld1q_u8(src + x);
-            vst1q_u8(dst + x, vbslq_u8(v_mask, v_src, v_dst));
-        }
+        vx_cleanup();
         #endif
         for( ; x < size.width; x++ )
             if( mask[x] )
@@ -130,32 +191,26 @@ copyMask_<ushort>(const uchar* _src, size_t sstep, const uchar* mask, size_t mst
         const ushort* src = (const ushort*)_src;
         ushort* dst = (ushort*)_dst;
         int x = 0;
-        #if CV_SSE4_2
-        if(USE_SSE4_2)//
+        #if CV_SIMD
         {
-            __m128i zero = _mm_setzero_si128 ();
-            for( ; x <= size.width - 8; x += 8 )
-            {
-                 const __m128i rSrc =_mm_lddqu_si128((const __m128i*)(src+x));
-                 __m128i _mask = _mm_loadl_epi64((const __m128i*)(mask+x));
-                 _mask = _mm_unpacklo_epi8(_mask, _mask);
-                 __m128i rDst = _mm_lddqu_si128((const __m128i*)(dst+x));
-                 __m128i _negMask = _mm_cmpeq_epi8(_mask, zero);
-                 rDst = _mm_blendv_epi8(rSrc, rDst, _negMask);
-                 _mm_storeu_si128((__m128i*)(dst + x), rDst);
-             }
-        }
-        #elif CV_NEON
-        uint8x8_t v_one = vdup_n_u8(1);
-        for( ; x <= size.width - 8; x += 8 )
-        {
-            uint8x8_t v_mask = vcge_u8(vld1_u8(mask + x), v_one);
-            uint8x8x2_t v_mask2 = vzip_u8(v_mask, v_mask);
-            uint16x8_t v_mask_res = vreinterpretq_u16_u8(vcombine_u8(v_mask2.val[0], v_mask2.val[1]));
+            v_uint8 v_zero = vx_setzero_u8();
 
-            uint16x8_t v_src = vld1q_u16(src + x), v_dst = vld1q_u16(dst + x);
-            vst1q_u16(dst + x, vbslq_u16(v_mask_res, v_src, v_dst));
+            for( ; x <= size.width - v_uint8::nlanes; x += v_uint8::nlanes )
+            {
+                v_uint16 v_src1 = vx_load(src + x), v_src2 = vx_load(src + x + v_uint16::nlanes),
+                         v_dst1 = vx_load(dst + x), v_dst2 = vx_load(dst + x + v_uint16::nlanes);
+
+                v_uint8 v_nmask1, v_nmask2;
+                v_uint8 v_nmask = vx_load(mask + x) == v_zero;
+                v_zip(v_nmask, v_nmask, v_nmask1, v_nmask2);
+
+                v_dst1 = v_select(v_reinterpret_as_u16(v_nmask1), v_dst1, v_src1);
+                v_dst2 = v_select(v_reinterpret_as_u16(v_nmask2), v_dst2, v_src2);
+                v_store(dst + x, v_dst1);
+                v_store(dst + x + v_uint16::nlanes, v_dst2);
+            }
         }
+        vx_cleanup();
         #endif
         for( ; x < size.width; x++ )
             if( mask[x] )
@@ -252,7 +307,15 @@ BinaryFunc getCopyMaskFunc(size_t esz)
 /* dst = src */
 void Mat::copyTo( OutputArray _dst ) const
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
+
+#ifdef HAVE_CUDA
+    if (_dst.isGpuMat())
+    {
+        _dst.getGpuMat().upload(*this);
+        return;
+    }
+#endif
 
     int dtype = _dst.type();
     if( _dst.fixedType() && dtype != type() )
@@ -262,18 +325,19 @@ void Mat::copyTo( OutputArray _dst ) const
         return;
     }
 
+    if( empty() )
+    {
+        _dst.release();
+        return;
+    }
+
     if( _dst.isUMat() )
     {
-        if( empty() )
-        {
-            _dst.release();
-            return;
-        }
         _dst.create( dims, size.p, type() );
         UMat dst = _dst.getUMat();
         CV_Assert(dst.u != NULL);
         size_t i, sz[CV_MAX_DIM] = {0}, dstofs[CV_MAX_DIM], esz = elemSize();
-        CV_Assert(dims >= 0 && dims < CV_MAX_DIM);
+        CV_Assert(dims > 0 && dims < CV_MAX_DIM);
         for( i = 0; i < (size_t)dims; i++ )
             sz[i] = size.p[i];
         sz[dims-1] *= esz;
@@ -292,23 +356,19 @@ void Mat::copyTo( OutputArray _dst ) const
 
         if( rows > 0 && cols > 0 )
         {
-            // For some cases (with vector) dst.size != src.size, so force to column-based form
-            // It prevents memory corruption in case of column-based src
-            if (_dst.isVector())
-                dst = dst.reshape(0, (int)dst.total());
+            Mat src = *this;
+            Size sz = getContinuousSize2D(src, dst, (int)elemSize());
+            CV_CheckGE(sz.width, 0, "");
 
-            const uchar* sptr = data;
+            const uchar* sptr = src.data;
             uchar* dptr = dst.data;
 
 #if IPP_VERSION_X100 >= 201700
-            CV_IPP_RUN_FAST(CV_INSTRUMENT_FUN_IPP(ippiCopy_8u_C1R_L, sptr, (int)step, dptr, (int)dst.step, ippiSizeL((int)(cols*elemSize()), rows)) >= 0)
+            CV_IPP_RUN_FAST(CV_INSTRUMENT_FUN_IPP(ippiCopy_8u_C1R_L, sptr, (int)src.step, dptr, (int)dst.step, ippiSizeL(sz.width, sz.height)) >= 0)
 #endif
 
-            Size sz = getContinuousSize(*this, dst);
-            size_t len = sz.width*elemSize();
-
-            for( ; sz.height--; sptr += step, dptr += dst.step )
-                memcpy( dptr, sptr, len );
+            for (; sz.height--; sptr += src.step, dptr += dst.step)
+                memcpy(dptr, sptr, sz.width);
         }
         return;
     }
@@ -321,7 +381,7 @@ void Mat::copyTo( OutputArray _dst ) const
     if( total() != 0 )
     {
         const Mat* arrays[] = { this, &dst };
-        uchar* ptrs[2];
+        uchar* ptrs[2] = {};
         NAryMatIterator it(arrays, ptrs, 2);
         size_t sz = it.size*elemSize();
 
@@ -333,8 +393,8 @@ void Mat::copyTo( OutputArray _dst ) const
 #ifdef HAVE_IPP
 static bool ipp_copyTo(const Mat &src, Mat &dst, const Mat &mask)
 {
-#ifdef HAVE_IPP_IW
-    CV_INSTRUMENT_REGION_IPP()
+#ifdef HAVE_IPP_IW_LL
+    CV_INSTRUMENT_REGION_IPP();
 
     if(mask.channels() > 1 || mask.depth() != CV_8U)
         return false;
@@ -368,7 +428,7 @@ static bool ipp_copyTo(const Mat &src, Mat &dst, const Mat &mask)
 
 void Mat::copyTo( OutputArray _dst, InputArray _mask ) const
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat mask = _mask.getMat();
     if( !mask.data )
@@ -408,13 +468,14 @@ void Mat::copyTo( OutputArray _dst, InputArray _mask ) const
 
     if( dims <= 2 )
     {
-        Size sz = getContinuousSize(*this, dst, mask, mcn);
-        copymask(data, step, mask.data, mask.step, dst.data, dst.step, sz, &esz);
+        Mat src = *this;
+        Size sz = getContinuousSize2D(src, dst, mask, mcn);
+        copymask(src.data, src.step, mask.data, mask.step, dst.data, dst.step, sz, &esz);
         return;
     }
 
     const Mat* arrays[] = { this, &dst, &mask, 0 };
-    uchar* ptrs[3];
+    uchar* ptrs[3] = {};
     NAryMatIterator it(arrays, ptrs);
     Size sz((int)(it.size*mcn), 1);
 
@@ -422,9 +483,35 @@ void Mat::copyTo( OutputArray _dst, InputArray _mask ) const
         copymask(ptrs[0], 0, ptrs[2], 0, ptrs[1], 0, sz, &esz);
 }
 
+
+static bool can_apply_memset(const Mat &mat, const Scalar &s, int &fill_value)
+{
+    // check if depth is 1 byte.
+    switch (mat.depth())
+    {
+    case CV_8U: fill_value = saturate_cast<uchar>( s.val[0] ); break;
+    case CV_8S: fill_value = saturate_cast<schar>( s.val[0] ); break;
+    default: return false;
+    }
+
+    // check if all element is same.
+    const int64* is = (const int64*)&s.val[0];
+    switch (mat.channels())
+    {
+    case 1: return true;
+    case 2: return (is[0] == is[1]);
+    case 3: return (is[0] == is[1] && is[1] == is[2]);
+    case 4: return (is[0] == is[1] && is[1] == is[2] && is[2] == is[3]);
+    default: return false;
+    }
+}
+
 Mat& Mat::operator = (const Scalar& s)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
+
+    if (this->empty())
+        return *this;
 
     const Mat* arrays[] = { this };
     uchar* dptr;
@@ -439,6 +526,14 @@ Mat& Mat::operator = (const Scalar& s)
     }
     else
     {
+        int fill_value = 0;
+        if ( can_apply_memset(*this, s, fill_value) )
+        {
+            for (size_t i = 0; i < it.nplanes; i++, ++it)
+                memset(dptr, fill_value, elsize);
+            return *this;
+        }
+
         if( it.nplanes > 0 )
         {
             double scalar[12];
@@ -465,8 +560,8 @@ Mat& Mat::operator = (const Scalar& s)
 #ifdef HAVE_IPP
 static bool ipp_Mat_setTo_Mat(Mat &dst, Mat &_val, Mat &mask)
 {
-#ifdef HAVE_IPP_IW
-    CV_INSTRUMENT_REGION_IPP()
+#ifdef HAVE_IPP_IW_LL
+    CV_INSTRUMENT_REGION_IPP();
 
     if(mask.empty())
         return false;
@@ -476,6 +571,16 @@ static bool ipp_Mat_setTo_Mat(Mat &dst, Mat &_val, Mat &mask)
 
     if(dst.channels() > 4)
         return false;
+
+    if (dst.depth() == CV_32F)
+    {
+        for (int i = 0; i < (int)(_val.total()); i++)
+        {
+            float v = (float)(_val.at<double>(i));  // cast to float
+            if (cvIsNaN(v) || cvIsInf(v))  // accept finite numbers only
+                return false;
+        }
+    }
 
     if(dst.dims <= 2)
     {
@@ -513,7 +618,7 @@ static bool ipp_Mat_setTo_Mat(Mat &dst, Mat &_val, Mat &mask)
 
 Mat& Mat::setTo(InputArray _value, InputArray _mask)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     if( empty() )
         return *this;
@@ -536,7 +641,7 @@ Mat& Mat::setTo(InputArray _value, InputArray _mask)
     int blockSize0 = std::min(totalsz, (int)((BLOCK_SIZE + esz-1)/esz));
     blockSize0 -= blockSize0 % mcn;    // must be divisible without remainder for unrolling and advancing
     AutoBuffer<uchar> _scbuf(blockSize0*esz + 32);
-    uchar* scbuf = alignPtr((uchar*)_scbuf, (int)sizeof(double));
+    uchar* scbuf = alignPtr((uchar*)_scbuf.data(), (int)sizeof(double));
     convertAndUnrollScalar( value, type(), scbuf, blockSize0/mcn );
 
     for( size_t i = 0; i < it.nplanes; i++, ++it )
@@ -558,272 +663,6 @@ Mat& Mat::setTo(InputArray _value, InputArray _mask)
     return *this;
 }
 
-
-static void
-flipHoriz( const uchar* src, size_t sstep, uchar* dst, size_t dstep, Size size, size_t esz )
-{
-    int i, j, limit = (int)(((size.width + 1)/2)*esz);
-    AutoBuffer<int> _tab(size.width*esz);
-    int* tab = _tab;
-
-    for( i = 0; i < size.width; i++ )
-        for( size_t k = 0; k < esz; k++ )
-            tab[i*esz + k] = (int)((size.width - i - 1)*esz + k);
-
-    for( ; size.height--; src += sstep, dst += dstep )
-    {
-        for( i = 0; i < limit; i++ )
-        {
-            j = tab[i];
-            uchar t0 = src[i], t1 = src[j];
-            dst[i] = t1; dst[j] = t0;
-        }
-    }
-}
-
-static void
-flipVert( const uchar* src0, size_t sstep, uchar* dst0, size_t dstep, Size size, size_t esz )
-{
-    const uchar* src1 = src0 + (size.height - 1)*sstep;
-    uchar* dst1 = dst0 + (size.height - 1)*dstep;
-    size.width *= (int)esz;
-
-    for( int y = 0; y < (size.height + 1)/2; y++, src0 += sstep, src1 -= sstep,
-                                                  dst0 += dstep, dst1 -= dstep )
-    {
-        int i = 0;
-        if( ((size_t)src0|(size_t)dst0|(size_t)src1|(size_t)dst1) % sizeof(int) == 0 )
-        {
-            for( ; i <= size.width - 16; i += 16 )
-            {
-                int t0 = ((int*)(src0 + i))[0];
-                int t1 = ((int*)(src1 + i))[0];
-
-                ((int*)(dst0 + i))[0] = t1;
-                ((int*)(dst1 + i))[0] = t0;
-
-                t0 = ((int*)(src0 + i))[1];
-                t1 = ((int*)(src1 + i))[1];
-
-                ((int*)(dst0 + i))[1] = t1;
-                ((int*)(dst1 + i))[1] = t0;
-
-                t0 = ((int*)(src0 + i))[2];
-                t1 = ((int*)(src1 + i))[2];
-
-                ((int*)(dst0 + i))[2] = t1;
-                ((int*)(dst1 + i))[2] = t0;
-
-                t0 = ((int*)(src0 + i))[3];
-                t1 = ((int*)(src1 + i))[3];
-
-                ((int*)(dst0 + i))[3] = t1;
-                ((int*)(dst1 + i))[3] = t0;
-            }
-
-            for( ; i <= size.width - 4; i += 4 )
-            {
-                int t0 = ((int*)(src0 + i))[0];
-                int t1 = ((int*)(src1 + i))[0];
-
-                ((int*)(dst0 + i))[0] = t1;
-                ((int*)(dst1 + i))[0] = t0;
-            }
-        }
-
-        for( ; i < size.width; i++ )
-        {
-            uchar t0 = src0[i];
-            uchar t1 = src1[i];
-
-            dst0[i] = t1;
-            dst1[i] = t0;
-        }
-    }
-}
-
-#ifdef HAVE_OPENCL
-
-enum { FLIP_COLS = 1 << 0, FLIP_ROWS = 1 << 1, FLIP_BOTH = FLIP_ROWS | FLIP_COLS };
-
-static bool ocl_flip(InputArray _src, OutputArray _dst, int flipCode )
-{
-    CV_Assert(flipCode >= -1 && flipCode <= 1);
-
-    const ocl::Device & dev = ocl::Device::getDefault();
-    int type = _src.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type),
-            flipType, kercn = std::min(ocl::predictOptimalVectorWidth(_src, _dst), 4);
-
-    bool doubleSupport = dev.doubleFPConfig() > 0;
-    if (!doubleSupport && depth == CV_64F)
-        kercn = cn;
-
-    if (cn > 4)
-        return false;
-
-    const char * kernelName;
-    if (flipCode == 0)
-        kernelName = "arithm_flip_rows", flipType = FLIP_ROWS;
-    else if (flipCode > 0)
-        kernelName = "arithm_flip_cols", flipType = FLIP_COLS;
-    else
-        kernelName = "arithm_flip_rows_cols", flipType = FLIP_BOTH;
-
-    int pxPerWIy = (dev.isIntel() && (dev.type() & ocl::Device::TYPE_GPU)) ? 4 : 1;
-    kercn = (cn!=3 || flipType == FLIP_ROWS) ? std::max(kercn, cn) : cn;
-
-    ocl::Kernel k(kernelName, ocl::core::flip_oclsrc,
-        format( "-D T=%s -D T1=%s -D cn=%d -D PIX_PER_WI_Y=%d -D kercn=%d",
-                kercn != cn ? ocl::typeToStr(CV_MAKE_TYPE(depth, kercn)) : ocl::vecopTypeToStr(CV_MAKE_TYPE(depth, kercn)),
-                kercn != cn ? ocl::typeToStr(depth) : ocl::vecopTypeToStr(depth), cn, pxPerWIy, kercn));
-    if (k.empty())
-        return false;
-
-    Size size = _src.size();
-    _dst.create(size, type);
-    UMat src = _src.getUMat(), dst = _dst.getUMat();
-
-    int cols = size.width * cn / kercn, rows = size.height;
-    cols = flipType == FLIP_COLS ? (cols + 1) >> 1 : cols;
-    rows = flipType & FLIP_ROWS ? (rows + 1) >> 1 : rows;
-
-    k.args(ocl::KernelArg::ReadOnlyNoSize(src),
-           ocl::KernelArg::WriteOnly(dst, cn, kercn), rows, cols);
-
-    size_t maxWorkGroupSize = dev.maxWorkGroupSize();
-    CV_Assert(maxWorkGroupSize % 4 == 0);
-
-    size_t globalsize[2] = { (size_t)cols, ((size_t)rows + pxPerWIy - 1) / pxPerWIy },
-            localsize[2] = { maxWorkGroupSize / 4, 4 };
-    return k.run(2, globalsize, (flipType == FLIP_COLS) && !dev.isIntel() ? localsize : NULL, false);
-}
-
-#endif
-
-#if defined HAVE_IPP
-static bool ipp_flip(Mat &src, Mat &dst, int flip_mode)
-{
-#ifdef HAVE_IPP_IW
-    CV_INSTRUMENT_REGION_IPP()
-
-    IppiAxis ippMode;
-    if(flip_mode < 0)
-        ippMode = ippAxsBoth;
-    else if(flip_mode == 0)
-        ippMode = ippAxsHorizontal;
-    else
-        ippMode = ippAxsVertical;
-
-    try
-    {
-        ::ipp::IwiImage iwSrc = ippiGetImage(src);
-        ::ipp::IwiImage iwDst = ippiGetImage(dst);
-
-        CV_INSTRUMENT_FUN_IPP(::ipp::iwiMirror, iwSrc, iwDst, ippMode);
-    }
-    catch(::ipp::IwException)
-    {
-        return false;
-    }
-
-    return true;
-#else
-    CV_UNUSED(src); CV_UNUSED(dst); CV_UNUSED(flip_mode);
-    return false;
-#endif
-}
-#endif
-
-
-void flip( InputArray _src, OutputArray _dst, int flip_mode )
-{
-    CV_INSTRUMENT_REGION()
-
-    CV_Assert( _src.dims() <= 2 );
-    Size size = _src.size();
-
-    if (flip_mode < 0)
-    {
-        if (size.width == 1)
-            flip_mode = 0;
-        if (size.height == 1)
-            flip_mode = 1;
-    }
-
-    if ((size.width == 1 && flip_mode > 0) ||
-        (size.height == 1 && flip_mode == 0) ||
-        (size.height == 1 && size.width == 1 && flip_mode < 0))
-    {
-        return _src.copyTo(_dst);
-    }
-
-    CV_OCL_RUN( _dst.isUMat(), ocl_flip(_src, _dst, flip_mode))
-
-    Mat src = _src.getMat();
-    int type = src.type();
-    _dst.create( size, type );
-    Mat dst = _dst.getMat();
-
-    CV_IPP_RUN_FAST(ipp_flip(src, dst, flip_mode));
-
-    size_t esz = CV_ELEM_SIZE(type);
-
-    if( flip_mode <= 0 )
-        flipVert( src.ptr(), src.step, dst.ptr(), dst.step, src.size(), esz );
-    else
-        flipHoriz( src.ptr(), src.step, dst.ptr(), dst.step, src.size(), esz );
-
-    if( flip_mode < 0 )
-        flipHoriz( dst.ptr(), dst.step, dst.ptr(), dst.step, dst.size(), esz );
-}
-
-#ifdef HAVE_OPENCL
-
-static bool ocl_rotate(InputArray _src, OutputArray _dst, int rotateMode)
-{
-    switch (rotateMode)
-    {
-    case ROTATE_90_CLOCKWISE:
-        transpose(_src, _dst);
-        flip(_dst, _dst, 1);
-        break;
-    case ROTATE_180:
-        flip(_src, _dst, -1);
-        break;
-    case ROTATE_90_COUNTERCLOCKWISE:
-        transpose(_src, _dst);
-        flip(_dst, _dst, 0);
-        break;
-    default:
-        break;
-    }
-    return true;
-}
-#endif
-
-void rotate(InputArray _src, OutputArray _dst, int rotateMode)
-{
-    CV_Assert(_src.dims() <= 2);
-
-    CV_OCL_RUN(_dst.isUMat(), ocl_rotate(_src, _dst, rotateMode))
-
-    switch (rotateMode)
-    {
-    case ROTATE_90_CLOCKWISE:
-        transpose(_src, _dst);
-        flip(_dst, _dst, 1);
-        break;
-    case ROTATE_180:
-        flip(_src, _dst, -1);
-        break;
-    case ROTATE_90_COUNTERCLOCKWISE:
-        transpose(_src, _dst);
-        flip(_dst, _dst, 0);
-        break;
-    default:
-        break;
-    }
-}
 
 #if defined HAVE_OPENCL && !defined __APPLE__
 
@@ -857,7 +696,7 @@ static bool ocl_repeat(InputArray _src, int ny, int nx, OutputArray _dst)
 
 void repeat(InputArray _src, int ny, int nx, OutputArray _dst)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert(_src.getObj() != _dst.getObj());
     CV_Assert( _src.dims() <= 2 );
@@ -913,7 +752,13 @@ int cv::borderInterpolate( int p, int len, int borderType )
 {
     CV_TRACE_FUNCTION_VERBOSE();
 
+    CV_DbgAssert(len > 0);
+
+#ifdef CV_STATIC_ANALYSIS
+    if(p >= 0 && p < len)
+#else
     if( (unsigned)p < (unsigned)len )
+#endif
         ;
     else if( borderType == BORDER_REPLICATE )
         p = p < 0 ? 0 : len - 1;
@@ -929,7 +774,11 @@ int cv::borderInterpolate( int p, int len, int borderType )
             else
                 p = len - 1 - (p - len) - delta;
         }
+#ifdef CV_STATIC_ANALYSIS
+        while(p < 0 || p >= len);
+#else
         while( (unsigned)p >= (unsigned)len );
+#endif
     }
     else if( borderType == BORDER_WRAP )
     {
@@ -965,7 +814,7 @@ void copyMakeBorder_8u( const uchar* src, size_t srcstep, cv::Size srcroi,
     }
 
     cv::AutoBuffer<int> _tab((dstroi.width - srcroi.width)*cn);
-    int* tab = _tab;
+    int* tab = _tab.data();
     int right = dstroi.width - srcroi.width - left;
     int bottom = dstroi.height - srcroi.height - top;
 
@@ -1036,7 +885,7 @@ void copyMakeConstBorder_8u( const uchar* src, size_t srcstep, cv::Size srcroi,
 {
     int i, j;
     cv::AutoBuffer<uchar> _constBuf(dstroi.width*cn);
-    uchar* constBuf = _constBuf;
+    uchar* constBuf = _constBuf.data();
     int right = dstroi.width - srcroi.width - left;
     int bottom = dstroi.height - srcroi.height - top;
 
@@ -1061,13 +910,12 @@ void copyMakeConstBorder_8u( const uchar* src, size_t srcstep, cv::Size srcroi,
         memcpy( dstInner + srcroi.width, constBuf, right );
     }
 
-    dst += dststep*top;
-
     for( i = 0; i < top; i++ )
-        memcpy(dst + (i - top)*dststep, constBuf, dstroi.width);
+        memcpy(dst + i * dststep, constBuf, dstroi.width);
 
+    dst += (top + srcroi.height) * dststep;
     for( i = 0; i < bottom; i++ )
-        memcpy(dst + (i + srcroi.height)*dststep, constBuf, dstroi.width);
+        memcpy(dst + i * dststep, constBuf, dstroi.width);
 }
 
 }
@@ -1144,8 +992,8 @@ namespace cv {
 static bool ipp_copyMakeBorder( Mat &_src, Mat &_dst, int top, int bottom,
                                 int left, int right, int _borderType, const Scalar& value )
 {
-#if defined HAVE_IPP_IW && !IPP_DISABLE_PERF_COPYMAKE
-    CV_INSTRUMENT_REGION_IPP()
+#if defined HAVE_IPP_IW_LL && !IPP_DISABLE_PERF_COPYMAKE
+    CV_INSTRUMENT_REGION_IPP();
 
     ::ipp::IwiBorderSize borderSize(left, top, right, bottom);
     ::ipp::IwiSize       size(_src.cols, _src.rows);
@@ -1176,11 +1024,11 @@ static bool ipp_copyMakeBorder( Mat &_src, Mat &_dst, int top, int bottom,
 void cv::copyMakeBorder( InputArray _src, OutputArray _dst, int top, int bottom,
                          int left, int right, int borderType, const Scalar& value )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
-    CV_Assert( top >= 0 && bottom >= 0 && left >= 0 && right >= 0 );
+    CV_Assert( top >= 0 && bottom >= 0 && left >= 0 && right >= 0 && _src.dims() <= 2);
 
-    CV_OCL_RUN(_dst.isUMat() && _src.dims() <= 2,
+    CV_OCL_RUN(_dst.isUMat(),
                ocl_copyMakeBorder(_src, _dst, top, bottom, left, right, borderType, value))
 
     Mat src = _src.getMat();
@@ -1229,12 +1077,15 @@ void cv::copyMakeBorder( InputArray _src, OutputArray _dst, int top, int bottom,
             CV_Assert( value[0] == value[1] && value[0] == value[2] && value[0] == value[3] );
             cn1 = 1;
         }
-        scalarToRawData(value, buf, CV_MAKETYPE(src.depth(), cn1), cn);
+        scalarToRawData(value, buf.data(), CV_MAKETYPE(src.depth(), cn1), cn);
         copyMakeConstBorder_8u( src.ptr(), src.step, src.size(),
                                 dst.ptr(), dst.step, dst.size(),
-                                top, left, (int)src.elemSize(), (uchar*)(double*)buf );
+                                top, left, (int)src.elemSize(), (uchar*)buf.data() );
     }
 }
+
+
+#ifndef OPENCV_EXCLUDE_C_API
 
 /* dst = src */
 CV_IMPL void
@@ -1351,4 +1202,5 @@ cvRepeat( const CvArr* srcarr, CvArr* dstarr )
     cv::repeat(src, dst.rows/src.rows, dst.cols/src.cols, dst);
 }
 
+#endif  // OPENCV_EXCLUDE_C_API
 /* End of file. */

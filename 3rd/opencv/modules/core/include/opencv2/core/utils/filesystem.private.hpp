@@ -9,13 +9,15 @@
 #ifndef OPENCV_HAVE_FILESYSTEM_SUPPORT
 #  if defined(__EMSCRIPTEN__) || defined(__native_client__)
      /* no support */
+#  elif defined WINRT || defined _WIN32_WCE
+     /* not supported */
 #  elif defined __ANDROID__ || defined __linux__ || defined _WIN32 || \
-        defined __FreeBSD__ || defined __bsdi__
+        defined __FreeBSD__ || defined __bsdi__ || defined __HAIKU__
 #      define OPENCV_HAVE_FILESYSTEM_SUPPORT 1
 #  elif defined(__APPLE__)
 #    include <TargetConditionals.h>
-#    if (defined(TARGET_OS_OSX) && TARGET_OS_OSX) || (!defined(TARGET_OS_OSX) && !TARGET_OS_IPHONE)
-#      define OPENCV_HAVE_FILESYSTEM_SUPPORT 1 // OSX only
+#    if (defined(TARGET_OS_OSX) && TARGET_OS_OSX) || (defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#      define OPENCV_HAVE_FILESYSTEM_SUPPORT 1 // OSX, iOS only
 #    endif
 #  else
      /* unknown */
@@ -34,7 +36,7 @@ namespace cv { namespace utils { namespace fs {
  * Provides interprocess synchronization mechanism.
  * Platform dependent.
  *
- * Supports multiple readers / single writer access pattern (RW / readers–writer / shared-exclusive lock).
+ * Supports multiple readers / single writer access pattern (RW / readers-writer / shared-exclusive lock).
  *
  * File must exist.
  * File can't be re-used (for example, I/O operations via std::fstream is not safe)
@@ -47,8 +49,8 @@ public:
     void lock(); //< acquire exclusive (writer) lock
     void unlock(); //< release exclusive (writer) lock
 
-    void lock_shared(); //< acquire sharable (reader) lock
-    void unlock_shared(); //< release sharable (reader) lock
+    void lock_shared(); //< acquire shareable (reader) lock
+    void unlock_shared(); //< release shareable (reader) lock
 
     struct Impl;
 protected:

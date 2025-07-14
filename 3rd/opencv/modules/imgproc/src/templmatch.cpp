@@ -564,7 +564,6 @@ static bool ocl_matchTemplate( InputArray _img, InputArray _templ, OutputArray _
 #include "opencv2/core/hal/hal.hpp"
 
 void crossCorr( const Mat& img, const Mat& _templ, Mat& corr,
-                Size corrsize, int ctype,
                 Point anchor, double delta, int borderType )
 {
     const double blockScale = 4.5;
@@ -574,7 +573,7 @@ void crossCorr( const Mat& img, const Mat& _templ, Mat& corr,
     Mat templ = _templ;
     int depth = img.depth(), cn = img.channels();
     int tdepth = templ.depth(), tcn = templ.channels();
-    int cdepth = CV_MAT_DEPTH(ctype), ccn = CV_MAT_CN(ctype);
+    int cdepth = corr.depth(), ccn = corr.channels();
 
     CV_Assert( img.dims <= 2 && templ.dims <= 2 && corr.dims <= 2 );
 
@@ -585,12 +584,10 @@ void crossCorr( const Mat& img, const Mat& _templ, Mat& corr,
     }
 
     CV_Assert( depth == tdepth || tdepth == CV_32F);
-    CV_Assert( corrsize.height <= img.rows + templ.rows - 1 &&
-               corrsize.width <= img.cols + templ.cols - 1 );
+    CV_Assert( corr.rows <= img.rows + templ.rows - 1 &&
+               corr.cols <= img.cols + templ.cols - 1 );
 
     CV_Assert( ccn == 1 || delta == 0 );
-
-    corr.create(corrsize, ctype);
 
     int maxDepth = depth > CV_8S ? CV_64F : std::max(std::max(CV_32F, tdepth), cdepth);
     Size blocksize, dftsize;
@@ -815,8 +812,8 @@ static void matchTemplateMask( InputArray _img, InputArray _templ, OutputArray _
         Mat mask2_templ = templ.mul(mask2);
 
         Mat corr(corrSize, CV_32F);
-        crossCorr( img, mask2_templ, corr, corr.size(), corr.type(), Point(0,0), 0, 0 );
-        crossCorr( img2, mask, result, result.size(), result.type(), Point(0,0), 0, 0 );
+        crossCorr( img, mask2_templ, corr, Point(0,0), 0, 0 );
+        crossCorr( img2, mask, result, Point(0,0), 0, 0 );
 
         result -= corr * 2;
         result += templSum2;
@@ -830,8 +827,8 @@ static void matchTemplateMask( InputArray _img, InputArray _templ, OutputArray _
         }
 
         Mat corr(corrSize, CV_32F);
-        crossCorr( img2, mask2, corr, corr.size(), corr.type(), Point(0,0), 0, 0 );
-        crossCorr( img, mask_templ, result, result.size(), result.type(), Point(0,0), 0, 0 );
+        crossCorr( img2, mask2, corr, Point(0,0), 0, 0 );
+        crossCorr( img, mask_templ, result, Point(0,0), 0, 0 );
 
         sqrt(corr, corr);
         result = result.mul(1/corr);
@@ -947,7 +944,12 @@ static void common_matchTemplate( Mat& img, Mat& templ, Mat& result, int method,
 
             if( isNormed )
             {
-                t = std::sqrt(MAX(wndSum2 - wndMean2,0))*templNorm;
+                double diff2 = MAX(wndSum2 - wndMean2, 0);
+                if (diff2 <= std::min(0.5, 10 * FLT_EPSILON * wndSum2))
+                    t = 0; // avoid rounding errors
+                else
+                    t = std::sqrt(diff2)*templNorm;
+
                 if( fabs(num) < t )
                     num /= t;
                 else if( fabs(num) < t*1.125 )
@@ -970,7 +972,7 @@ typedef IppStatus (CV_STDCALL * ippimatchTemplate)(const void*, int, IppiSize, c
 
 static bool ipp_crossCorr(const Mat& src, const Mat& tpl, Mat& dst, bool normed)
 {
-    CV_INSTRUMENT_REGION_IPP()
+    CV_INSTRUMENT_REGION_IPP();
 
     IppStatus status;
 
@@ -1007,7 +1009,7 @@ static bool ipp_crossCorr(const Mat& src, const Mat& tpl, Mat& dst, bool normed)
 
 static bool ipp_sqrDistance(const Mat& src, const Mat& tpl, Mat& dst)
 {
-    CV_INSTRUMENT_REGION_IPP()
+    CV_INSTRUMENT_REGION_IPP();
 
     IppStatus status;
 
@@ -1034,12 +1036,13 @@ static bool ipp_sqrDistance(const Mat& src, const Mat& tpl, Mat& dst)
     buffer.allocate( bufSize );
 
     status = CV_INSTRUMENT_FUN_IPP(ippiSqrDistanceNorm, src.ptr(), (int)src.step, srcRoiSize, tpl.ptr(), (int)tpl.step, tplRoiSize, dst.ptr<Ipp32f>(), (int)dst.step, funCfg, buffer);
+    dst = cv::max(dst, 0); // handle edge case from rounding in variance computation which can result in negative values
     return status >= 0;
 }
 
 static bool ipp_matchTemplate( Mat& img, Mat& templ, Mat& result, int method)
 {
-    CV_INSTRUMENT_REGION_IPP()
+    CV_INSTRUMENT_REGION_IPP();
 
     if(img.channels() != 1)
         return false;
@@ -1089,7 +1092,7 @@ static bool ipp_matchTemplate( Mat& img, Mat& templ, Mat& result, int method)
 
 void cv::matchTemplate( InputArray _img, InputArray _templ, OutputArray _result, int method, InputArray _mask )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     if (!_mask.empty())
     {
@@ -1125,7 +1128,7 @@ void cv::matchTemplate( InputArray _img, InputArray _templ, OutputArray _result,
 
     CV_IPP_RUN_FAST(ipp_matchTemplate(img, templ, result, method))
 
-    crossCorr( img, templ, result, result.size(), result.type(), Point(0,0), 0, 0);
+    crossCorr( img, templ, result, Point(0,0), 0, 0);
 
     common_matchTemplate(img, templ, result, method, cn);
 }

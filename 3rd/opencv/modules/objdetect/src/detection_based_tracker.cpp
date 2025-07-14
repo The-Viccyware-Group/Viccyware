@@ -42,7 +42,6 @@
 //M*/
 
 #include "precomp.hpp"
-#include <cassert>
 
 #ifdef CV_CXX11
 #define USE_STD_THREADS
@@ -284,23 +283,23 @@ bool cv::DetectionBasedTracker::SeparateDetectionWork::run()
 }
 
 #define CATCH_ALL_AND_LOG(_block)                                                           \
-    CV_TRY {                                                                                   \
+    try {                                                                                   \
         _block;                                                                             \
     }                                                                                       \
-    CV_CATCH(cv::Exception, e) {                                                               \
+    catch(const cv::Exception& e) {                                                         \
         LOGE0("\n %s: ERROR: OpenCV Exception caught: \n'%s'\n\n", CV_Func, e.what());      \
-    } CV_CATCH(std::exception, e) {                                                            \
+    } catch(const std::exception& e) {                                                      \
         LOGE0("\n %s: ERROR: Exception caught: \n'%s'\n\n", CV_Func, e.what());             \
-    } CV_CATCH_ALL {                                                                          \
+    } catch(...) {                                                                          \
         LOGE0("\n %s: ERROR: UNKNOWN Exception caught\n\n", CV_Func);                       \
     }
 
 void* cv::workcycleObjectDetectorFunction(void* p)
 {
     CATCH_ALL_AND_LOG({ ((cv::DetectionBasedTracker::SeparateDetectionWork*)p)->workcycleObjectDetector(); });
-    CV_TRY{
+    try{
         ((cv::DetectionBasedTracker::SeparateDetectionWork*)p)->init();
-    } CV_CATCH_ALL {
+    } catch(...) {
         LOGE0("DetectionBasedTracker: workcycleObjectDetectorFunction: ERROR concerning pointer, received as the function parameter");
     }
     return NULL;
@@ -626,7 +625,7 @@ cv::DetectionBasedTracker::~DetectionBasedTracker()
 
 void DetectionBasedTracker::process(const Mat& imageGray)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert(imageGray.type()==CV_8UC1);
 
@@ -661,7 +660,7 @@ void DetectionBasedTracker::process(const Mat& imageGray)
             CV_Assert(n > 0);
 
             Rect r = trackedObjects[i].lastPositions[n-1];
-            if(r.area() == 0) {
+            if(r.empty()) {
                 LOGE("DetectionBasedTracker::process: ERROR: ATTENTION: strange algorithm's behavior: trackedObjects[i].rect() is empty");
                 continue;
             }
@@ -701,7 +700,7 @@ void cv::DetectionBasedTracker::getObjects(std::vector<cv::Rect>& result) const
 
     for(size_t i=0; i < trackedObjects.size(); i++) {
         Rect r=calcTrackedObjectPositionToShow((int)i);
-        if (r.area()==0) {
+        if (r.empty()) {
             continue;
         }
         result.push_back(r);
@@ -715,7 +714,7 @@ void cv::DetectionBasedTracker::getObjects(std::vector<Object>& result) const
 
     for(size_t i=0; i < trackedObjects.size(); i++) {
         Rect r=calcTrackedObjectPositionToShow((int)i);
-        if (r.area()==0) {
+        if (r.empty()) {
             continue;
         }
         result.push_back(Object(r, trackedObjects[i].id));

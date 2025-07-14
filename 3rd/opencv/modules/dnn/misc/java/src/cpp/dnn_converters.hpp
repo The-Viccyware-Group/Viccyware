@@ -8,7 +8,7 @@
 #define	DNN_CONVERTERS_HPP
 
 #include <jni.h>
-#include "opencv2/java.hpp"
+#include "opencv_java.hpp"
 #include "opencv2/core.hpp"
 #include "opencv2/dnn/dnn.hpp"
 
@@ -28,5 +28,6 @@ jobject vector_Ptr_Layer_to_List(JNIEnv* env, std::vector<cv::Ptr<cv::dnn::Layer
 
 std::vector<cv::Ptr<cv::dnn::Layer> > List_to_vector_Ptr_Layer(JNIEnv* env, jobject list);
 
+jobject vector_Target_to_List(JNIEnv* env, std::vector<cv::dnn::Target>& vs);
 
 #endif	/* DNN_CONVERTERS_HPP */

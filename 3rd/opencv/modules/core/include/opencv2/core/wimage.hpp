@@ -236,11 +236,11 @@ protected:
     void operator=(const WImage&);
 
     explicit WImage(IplImage* img) : image_(img) {
-        assert(!img || img->depth == Depth());
+        CV_Assert(!img || img->depth == Depth());
     }
 
     void SetIpl(IplImage* image) {
-        assert(!image || image->depth == Depth());
+        CV_Assert(!image || image->depth == Depth());
         image_ = image;
     }
 
@@ -260,7 +260,7 @@ public:
     enum { kChannels = C };
 
     explicit WImageC(IplImage* img) : WImage<T>(img) {
-        assert(!img || img->nChannels == Channels());
+        CV_Assert(!img || img->nChannels == Channels());
     }
 
     // Construct a view into a region of this image
@@ -283,13 +283,13 @@ protected:
     void operator=(const WImageC&);
 
     void SetIpl(IplImage* image) {
-        assert(!image || image->depth == WImage<T>::Depth());
+        CV_Assert(!image || image->depth == WImage<T>::Depth());
         WImage<T>::SetIpl(image);
     }
 };
 
 /** Image class which owns the data, so it can be allocated and is always
-freed.  It cannot be copied but can be explicity cloned.
+freed.  It cannot be copied but can be explicitly cloned.
 */
 template<typename T>
 class WImageBuffer : public WImage<T>

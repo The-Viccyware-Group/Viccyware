@@ -13,9 +13,6 @@
 /* Compile for 'real' NVIDIA GPU architectures */
 #define CUDA_ARCH_BIN ""
 
-/* Create PTX or BIN for 1.0 compute capability */
-/* #undef CUDA_ARCH_BIN_OR_PTX_10 */
-
 /* NVIDIA GPU features are used */
 #define CUDA_ARCH_FEATURES ""
 
@@ -49,13 +46,13 @@
 /* C= */
 /* #undef HAVE_CSTRIPES */
 
-/* NVidia Cuda Basic Linear Algebra Subprograms (BLAS) API*/
+/* NVIDIA CUDA Basic Linear Algebra Subprograms (BLAS) API*/
 /* #undef HAVE_CUBLAS */
 
-/* NVidia Cuda Runtime API*/
+/* NVIDIA CUDA Runtime API*/
 /* #undef HAVE_CUDA */
 
-/* NVidia Cuda Fast Fourier Transform (FFT) API*/
+/* NVIDIA CUDA Fast Fourier Transform (FFT) API*/
 /* #undef HAVE_CUFFT */
 
 /* IEEE1394 capturing support */
@@ -105,9 +102,7 @@
 /* #undef HAVE_IPP */
 /* #undef HAVE_IPP_ICV */
 /* #undef HAVE_IPP_IW */
-
-/* Intel IPP Async */
-/* #undef HAVE_IPP_A */
+/* #undef HAVE_IPP_IW_LL */
 
 /* JPEG-2000 codec */
 /* #undef HAVE_JASPER */
@@ -127,16 +122,21 @@
 /* Microsoft Media Foundation Capture library */
 /* #undef HAVE_MSMF */
 
-/* NVidia Video Decoding API*/
+/* NVIDIA Video Decoding API*/
 /* #undef HAVE_NVCUVID */
+/* #undef HAVE_NVCUVID_HEADER */
+/* #undef HAVE_DYNLINK_NVCUVID_HEADER */
 
-/* NVidia Video Encoding API*/
+/* NVIDIA Video Encoding API*/
 /* #undef HAVE_NVCUVENC */
 
 /* OpenCL Support */
 #define HAVE_OPENCL
 /* #undef HAVE_OPENCL_STATIC */
 /* #undef HAVE_OPENCL_SVM */
+
+/* NVIDIA OpenCL D3D Extensions support */
+/* #undef HAVE_OPENCL_D3D11_NV */
 
 /* OpenEXR codec */
 /* #undef HAVE_OPENEXR */
@@ -244,5 +244,7 @@
 /* OpenCV trace utilities */
 #define OPENCV_TRACE
 
+/* Library QR-code decoding */
+#define HAVE_QUIRC
 
 #endif // OPENCV_CVCONFIG_H_INCLUDED

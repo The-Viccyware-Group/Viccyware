@@ -113,7 +113,7 @@ static Mat normalizePoints(int npoints, Point2f *points)
     T(0,0) = T(1,1) = s;
     T(0,2) = -cx*s;
     T(1,2) = -cy*s;
-    return T;
+    return CV_CXX_MOVE(T);
 }
 
 
@@ -138,7 +138,7 @@ static Mat estimateGlobMotionLeastSquaresTranslation(
         *rmse = std::sqrt(*rmse / npoints);
     }
 
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 
@@ -219,7 +219,7 @@ static Mat estimateGlobMotionLeastSquaresRotation(
         *rmse = std::sqrt(*rmse / npoints);
     }
 
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 static Mat  estimateGlobMotionLeastSquaresRigid(
@@ -273,7 +273,7 @@ static Mat  estimateGlobMotionLeastSquaresRigid(
         *rmse = std::sqrt(*rmse / npoints);
     }
 
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 
@@ -356,7 +356,7 @@ static Mat estimateGlobMotionLeastSquaresAffine(
 Mat estimateGlobalMotionLeastSquares(
         InputOutputArray points0, InputOutputArray points1, int model, float *rmse)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert(model <= MM_AFFINE);
     CV_Assert(points0.type() == points1.type());
@@ -382,7 +382,7 @@ Mat estimateGlobalMotionRansac(
         InputArray points0, InputArray points1, int model, const RansacParams &params,
         float *rmse, int *ninliers)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert(model <= MM_AFFINE);
     CV_Assert(points0.type() == points1.type());
@@ -484,7 +484,7 @@ Mat estimateGlobalMotionRansac(
     if (ninliers)
         *ninliers = ninliersMax;
 
-    return bestM;
+    return CV_CXX_MOVE(bestM);
 }
 
 
@@ -527,7 +527,7 @@ Mat MotionEstimatorRansacL2::estimate(InputArray points0, InputArray points1, bo
         if (ok) *ok = false;
     }
 
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 
@@ -546,9 +546,8 @@ Mat MotionEstimatorL1::estimate(InputArray points0, InputArray points1, bool *ok
 
 #ifndef HAVE_CLP
 
+    CV_UNUSED(ok);
     CV_Error(Error::StsError, "The library is built without Clp support");
-    if (ok) *ok = false;
-    return Mat::eye(3, 3, CV_32F);
 
 #else
 
@@ -682,7 +681,7 @@ Mat FromFileMotionReader::estimate(const Mat &/*frame0*/, const Mat &/*frame1*/,
           >> M(1,0) >> M(1,1) >> M(1,2)
           >> M(2,0) >> M(2,1) >> M(2,2) >> ok_;
     if (ok) *ok = ok_;
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 
@@ -702,7 +701,7 @@ Mat ToFileMotionWriter::estimate(const Mat &frame0, const Mat &frame1, bool *ok)
           << M(1,0) << " " << M(1,1) << " " << M(1,2) << " "
           << M(2,0) << " " << M(2,1) << " " << M(2,2) << " " << ok_ << std::endl;
     if (ok) *ok = ok_;
-    return M;
+    return CV_CXX_MOVE(M);
 }
 
 
@@ -862,7 +861,7 @@ Mat KeypointBasedMotionEstimatorGpu::estimate(const cuda::GpuMat &frame0, const 
 
 Mat getMotion(int from, int to, const std::vector<Mat> &motions)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat M = Mat::eye(3, 3, CV_32F);
     if (to > from)

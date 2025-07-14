@@ -54,7 +54,6 @@
 #include "hal_replacement.hpp"
 
 #include <math.h>
-#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -117,9 +116,15 @@ inline bool isStorageOrMat(void * arr)
         return true;
     else if (CV_IS_MAT( arr ))
         return false;
-    else
-        CV_Error( CV_StsBadArg, "Destination is not CvMemStorage* nor CvMat*" );
-    return false;
+    CV_Error( CV_StsBadArg, "Destination is not CvMemStorage* nor CvMat*" );
 }
 
-#endif /*__OPENCV_CV_INTERNAL_H_*/
+
+namespace cv {
+
+CV_EXPORTS
+cv::Mutex& getInitializationMutex();  // defined in core module
+
+}  // namespace cv
+
+#endif /*__OPENCV_PRECOMP_H__*/

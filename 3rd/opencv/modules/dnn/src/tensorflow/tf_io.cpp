@@ -9,6 +9,8 @@
 Implementation of various functions which are related to Tensorflow models reading.
 */
 
+#include "../precomp.hpp"
+
 #ifdef HAVE_PROTOBUF
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
@@ -21,8 +23,8 @@ Implementation of various functions which are related to Tensorflow models readi
 #include <fstream>
 #include <vector>
 
-#include "graph.pb.h"
 #include "tf_io.hpp"
+
 #include "../caffe/caffe_io.hpp"
 #include "../caffe/glog_emulator.hpp"
 
@@ -34,8 +36,6 @@ using std::map;
 using namespace tensorflow;
 using namespace ::google::protobuf;
 using namespace ::google::protobuf::io;
-
-const int kProtoReadBytesLimit = INT_MAX;  // Max size of 2 GB minus 1 byte.
 
 void ReadTFNetParamsFromBinaryFileOrDie(const char* param_file,
                                         tensorflow::GraphDef* param) {

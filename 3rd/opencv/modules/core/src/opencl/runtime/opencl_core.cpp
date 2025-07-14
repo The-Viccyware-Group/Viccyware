@@ -47,6 +47,7 @@
 
 #if defined(HAVE_OPENCL_STATIC)
 #if defined __APPLE__
+#define CL_SILENCE_DEPRECATION
 #include <OpenCL/cl.h>
 #else
 #include <CL/cl.h>
@@ -154,7 +155,7 @@ static void* WinGetProcAddress(const char* name)
 #define CV_CL_GET_PROC_ADDRESS(name) WinGetProcAddress(name)
 #endif // _WIN32
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__FreeBSD__)
 #include <dlfcn.h>
 #include <stdio.h>
 
@@ -316,7 +317,7 @@ static void* opencl_check_fn(int ID)
 #endif
     else
     {
-        CV_ErrorNoReturn(cv::Error::StsBadArg, "Invalid function ID");
+        CV_Error(cv::Error::StsBadArg, "Invalid function ID");
     }
     void* func = CV_CL_GET_PROC_ADDRESS(e->fnName);
     if (!func)
@@ -359,7 +360,7 @@ static void* opencl_gl_check_fn(int ID);
 static void* opencl_gl_check_fn(int ID)
 {
     const struct DynamicFnEntry* e = NULL;
-    assert(ID >= 0 && ID < (int)(sizeof(opencl_gl_fn_list)/sizeof(opencl_gl_fn_list[0])));
+    CV_Assert(ID >= 0 && ID < (int)(sizeof(opencl_gl_fn_list)/sizeof(opencl_gl_fn_list[0])));
     e = opencl_gl_fn_list[ID];
     void* func = CV_CL_GET_PROC_ADDRESS(e->fnName);
     if (!func)

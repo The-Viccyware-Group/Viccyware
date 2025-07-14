@@ -44,7 +44,7 @@
 
 #ifdef HAVE_CUDA
 
-using namespace cvtest;
+namespace opencv_test { namespace {
 
 namespace
 {
@@ -62,8 +62,6 @@ namespace
         return m(roi);
     }
 }
-
-namespace {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Blur
@@ -447,8 +445,8 @@ PARAM_TEST_CASE(GaussianBlur, cv::cuda::DeviceInfo, cv::Size, MatDepth, Channels
 CUDA_TEST_P(GaussianBlur, Accuracy)
 {
     cv::Mat src = randomMat(size, type);
-    double sigma1 = randomDouble(0.1, 1.0);
-    double sigma2 = randomDouble(0.1, 1.0);
+    double sigma1 = randomDouble(0.0, 1.0);
+    double sigma2 = randomDouble(0.0, 1.0);
 
     cv::Ptr<cv::cuda::Filter> gauss = cv::cuda::createGaussianFilter(src.type(), -1, ksize, sigma1, sigma2, borderType);
 
@@ -705,6 +703,6 @@ INSTANTIATE_TEST_CASE_P(CUDA_Filters, Median, testing::Combine(
     WHOLE_SUBMAT)
     );
 
-} //namespace
+}} // namespace
 
 #endif // HAVE_CUDA

@@ -102,38 +102,34 @@ void cv::cuda::calcHist(InputArray _src, InputArray _mask, OutputArray _hist, St
 
 namespace hist
 {
-    void equalizeHist(PtrStepSzb src, PtrStepSzb dst, const int* lut, cudaStream_t stream);
+    void equalizeHist(PtrStepSzb src, PtrStepSzb dst, const uchar* lut, cudaStream_t stream);
+    void buildLut(PtrStepSzi hist, PtrStepSzb lut, int size, cudaStream_t stream);
 }
 
 void cv::cuda::equalizeHist(InputArray _src, OutputArray _dst, Stream& _stream)
 {
-    GpuMat src = _src.getGpuMat();
+    GpuMat src = getInputMat(_src, _stream);
 
     CV_Assert( src.type() == CV_8UC1 );
 
     _dst.create(src.size(), src.type());
     GpuMat dst = _dst.getGpuMat();
 
-    int intBufSize;
-    nppSafeCall( nppsIntegralGetBufferSize_32s(256, &intBufSize) );
-
-    size_t bufSize = intBufSize + 2 * 256 * sizeof(int);
+    size_t bufSize = 256 * sizeof(int) + 256 * sizeof(uchar);
 
     BufferPool pool(_stream);
     GpuMat buf = pool.getBuffer(1, static_cast<int>(bufSize), CV_8UC1);
 
     GpuMat hist(1, 256, CV_32SC1, buf.data);
-    GpuMat lut(1, 256, CV_32SC1, buf.data + 256 * sizeof(int));
-    GpuMat intBuf(1, intBufSize, CV_8UC1, buf.data + 2 * 256 * sizeof(int));
+    GpuMat lut(1, 256, CV_8UC1, buf.data + 256 * sizeof(int));
 
     cuda::calcHist(src, hist, _stream);
 
     cudaStream_t stream = StreamAccessor::getStream(_stream);
-    NppStreamHandler h(stream);
 
-    nppSafeCall( nppsIntegral_32s(hist.ptr<Npp32s>(), lut.ptr<Npp32s>(), 256, intBuf.ptr<Npp8u>()) );
+    hist::buildLut(hist, lut, src.rows * src.cols, stream);
 
-    hist::equalizeHist(src, dst, lut.ptr<int>(), stream);
+    hist::equalizeHist(src, dst, lut.data, stream);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -141,8 +137,9 @@ void cv::cuda::equalizeHist(InputArray _src, OutputArray _dst, Stream& _stream)
 
 namespace clahe
 {
-    void calcLut(PtrStepSzb src, PtrStepb lut, int tilesX, int tilesY, int2 tileSize, int clipLimit, float lutScale, cudaStream_t stream);
-    void transform(PtrStepSzb src, PtrStepSzb dst, PtrStepb lut, int tilesX, int tilesY, int2 tileSize, cudaStream_t stream);
+    void calcLut_8U(PtrStepSzb src, PtrStepb lut, int tilesX, int tilesY, int2 tileSize, int clipLimit, float lutScale, cudaStream_t stream);
+    void calcLut_16U(PtrStepSzus src, PtrStepus lut, int tilesX, int tilesY, int2 tileSize, int clipLimit, float lutScale, PtrStepSzi hist, cudaStream_t stream);
+    template <typename T> void transform(PtrStepSz<T> src, PtrStepSz<T> dst, PtrStep<T> lut, int tilesX, int tilesY, int2 tileSize, cudaStream_t stream);
 }
 
 namespace
@@ -170,6 +167,7 @@ namespace
 
         GpuMat srcExt_;
         GpuMat lut_;
+        GpuMat hist_; // histogram on global memory for CV_16UC1 case
     };
 
     CLAHE_Impl::CLAHE_Impl(double clipLimit, int tilesX, int tilesY) :
@@ -186,14 +184,16 @@ namespace
     {
         GpuMat src = _src.getGpuMat();
 
-        CV_Assert( src.type() == CV_8UC1 );
+        const int type = src.type();
 
-        _dst.create( src.size(), src.type() );
+        CV_Assert( type == CV_8UC1 || type == CV_16UC1 );
+
+        _dst.create( src.size(), type );
         GpuMat dst = _dst.getGpuMat();
 
-        const int histSize = 256;
+        const int histSize = type == CV_8UC1 ? 256 : 65536;
 
-        ensureSizeIsEnough(tilesX_ * tilesY_, histSize, CV_8UC1, lut_);
+        ensureSizeIsEnough(tilesX_ * tilesY_, histSize, type, lut_);
 
         cudaStream_t stream = StreamAccessor::getStream(s);
 
@@ -227,9 +227,18 @@ namespace
             clipLimit = std::max(clipLimit, 1);
         }
 
-        clahe::calcLut(srcForLut, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), clipLimit, lutScale, stream);
+        if (type == CV_8UC1)
+            clahe::calcLut_8U(srcForLut, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), clipLimit, lutScale, stream);
+        else // type == CV_16UC1
+        {
+            ensureSizeIsEnough(tilesX_ * tilesY_, histSize, CV_32SC1, hist_);
+            clahe::calcLut_16U(srcForLut, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), clipLimit, lutScale, hist_, stream);
+        }
 
-        clahe::transform(src, dst, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), stream);
+        if (type == CV_8UC1)
+            clahe::transform<uchar>(src, dst, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), stream);
+        else // type == CV_16UC1
+            clahe::transform<ushort>(src, dst, lut_, tilesX_, tilesY_, make_int2(tileSize.width, tileSize.height), stream);
     }
 
     void CLAHE_Impl::setClipLimit(double clipLimit)

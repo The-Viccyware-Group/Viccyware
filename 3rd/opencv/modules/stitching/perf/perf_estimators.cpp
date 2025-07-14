@@ -2,15 +2,13 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/opencv_modules.hpp"
 
-using namespace std;
-using namespace cv;
+namespace opencv_test
+{
 using namespace perf;
-using std::tr1::tuple;
-using std::tr1::get;
 
 typedef TestBaseWithParam<tuple<string, string> > bundleAdjuster;
 
-#ifdef HAVE_OPENCV_XFEATURES2D
+#if defined(HAVE_OPENCV_XFEATURES2D) && defined(OPENCV_ENABLE_NONFREE)
 #define TEST_DETECTORS testing::Values("surf", "orb")
 #else
 #define TEST_DETECTORS testing::Values<string>("orb")
@@ -98,3 +96,5 @@ PERF_TEST_P(bundleAdjuster, affine, testing::Combine(TEST_DETECTORS, AFFINE_FUNC
     EXPECT_FLOAT_EQ(h.at<float>(1), 0.f);
     EXPECT_FLOAT_EQ(h.at<float>(2), 1.f);
 }
+
+} // namespace

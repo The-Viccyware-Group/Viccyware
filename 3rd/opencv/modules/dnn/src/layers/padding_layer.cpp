@@ -11,7 +11,10 @@ Implementation of padding layer, which adds paddings to input blob.
 
 #include "../precomp.hpp"
 #include "layers_common.hpp"
-#include "op_halide.hpp"
+#include "../op_halide.hpp"
+#include "../op_inf_engine.hpp"
+#include "../ie_ngraph.hpp"
+
 #include <vector>
 
 namespace cv
@@ -19,7 +22,7 @@ namespace cv
 namespace dnn
 {
 
-class PaddingLayerImpl : public PaddingLayer
+class PaddingLayerImpl CV_FINAL : public PaddingLayer
 {
 public:
     PaddingLayerImpl(const LayerParams &params)
@@ -38,14 +41,14 @@ public:
         {
             paddings[i].first = paddingsParam.get<int>(i * 2);  // Pad before.
             paddings[i].second = paddingsParam.get<int>(i * 2 + 1);  // Pad after.
-            CV_Assert(paddings[i].first >= 0, paddings[i].second >= 0);
+            CV_Assert_N(paddings[i].first >= 0, paddings[i].second >= 0);
         }
     }
 
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
                          const int requiredOutputs,
                          std::vector<MatShape> &outputs,
-                         std::vector<MatShape> &internals) const
+                         std::vector<MatShape> &internals) const CV_OVERRIDE
     {
         CV_Assert(inputs.size() == 1);
         const MatShape& inpShape = inputs[0];
@@ -61,83 +64,103 @@ public:
         return false;
     }
 
-    void finalize(const std::vector<Mat*> &inputs, std::vector<Mat> &outputs)
+    void finalize(InputArrayOfArrays inputs_arr, OutputArrayOfArrays) CV_OVERRIDE
     {
-        // Compute dstRanges.
-        const MatSize& inpShape = inputs[0]->size;
-        dstRanges.resize(paddings.size());
+        std::vector<Mat> inputs;
+        inputs_arr.getMatVector(inputs);
 
-        int offset = 0;
-        if (inputDims != -1 && inputs[0]->dims != inputDims)
+        // Compute dstRanges.
+        const MatSize& inpShape = inputs[0].size;
+
+        if (inputDims != -1 && inputs[0].dims != inputDims)
         {
-            dstRanges.insert(dstRanges.begin(), Range::all());
-            offset = 1;
+            paddings.insert(paddings.begin(), std::make_pair(0, 0));
         }
 
+        dstRanges.resize(paddings.size());
         for (int i = 0; i < paddings.size(); ++i)
         {
-            dstRanges[offset + i].start = paddings[i].first;
-            dstRanges[offset + i].end = paddings[i].first + inpShape[offset + i];
+            dstRanges[i].start = paddings[i].first;
+            dstRanges[i].end = paddings[i].first + inpShape[i];
         }
 
         // Add the rest of dimensions.
-        for (int i = dstRanges.size(); i < inputs[0]->dims; ++i)
+        for (int i = dstRanges.size(); i < inputs[0].dims; ++i)
+        {
             dstRanges.push_back(Range::all());
+            paddings.push_back(std::make_pair(0, 0));
+        }
+        inputDims = -1;  // Next time paddings are filled for all the dimensions.
     }
 
-    virtual bool supportBackend(int backendId)
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
     {
-        return backendId == DNN_BACKEND_DEFAULT ||
-               backendId == DNN_BACKEND_HALIDE && haveHalide() && dstRanges.size() == 4;
+#ifdef HAVE_INF_ENGINE
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+        {
+            bool isMyriad = preferableTarget == DNN_TARGET_MYRIAD;
+            if (isMyriad)
+                return dstRanges.size() == 4 && paddings[0].first == 0 && paddings[0].second == 0;
+
+            return (dstRanges.size() <= 4 || !isArmComputePlugin());
+        }
+#endif
+        return backendId == DNN_BACKEND_OPENCV ||
+               (backendId == DNN_BACKEND_HALIDE && haveHalide() && dstRanges.size() == 4);
     }
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
     {
         CV_TRACE_FUNCTION();
         CV_TRACE_ARG_VALUE(name, "name", name.c_str());
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
-
-    void forward(std::vector<Mat*> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
 
         if (paddingType == "constant")
         {
-            outputs[0].setTo(paddingValue);
-            inputs[0]->copyTo(outputs[0](dstRanges));
+            if (inputs_arr.depth() == CV_16S)
+            {
+                std::vector<float> paddingValue_fp32(1, paddingValue);
+                std::vector<int16_t> paddingValue_fp16(1);
+                cv::convertFp16(paddingValue_fp32, paddingValue_fp16);
+                outputs[0].setTo(paddingValue_fp16[0]);
+            }
+            else
+                outputs[0].setTo(paddingValue);
+            inputs[0].copyTo(outputs[0](dstRanges));
         }
-        else if (paddingType == "reflect")
+        else if (paddingType == "reflect" || paddingType == "edge")
         {
             CV_Assert(inputs.size() == 1);
             CV_Assert(outputs.size() == 1);
-            CV_Assert(inputs[0]->dims == 4);
+            CV_Assert(inputs[0].dims == 4);
             CV_Assert(outputs[0].dims == 4);
+            int borderType = paddingType == "reflect" ? BORDER_REFLECT_101 : BORDER_REPLICATE;
 
-            if (inputs[0]->size[0] != outputs[0].size[0] || inputs[0]->size[1] != outputs[0].size[1])
+            if (inputs[0].size[0] != outputs[0].size[0] || inputs[0].size[1] != outputs[0].size[1])
                 CV_Error(Error::StsNotImplemented, "Only spatial reflection padding is supported.");
 
-            const int inpHeight = inputs[0]->size[2];
-            const int inpWidth = inputs[0]->size[3];
+            const int inpHeight = inputs[0].size[2];
+            const int inpWidth = inputs[0].size[3];
             const int outHeight = outputs[0].size[2];
             const int outWidth = outputs[0].size[3];
             const int padTop = dstRanges[2].start;
             const int padBottom = outHeight - dstRanges[2].end;
             const int padLeft = dstRanges[3].start;
             const int padRight = outWidth - dstRanges[3].end;
-            CV_Assert(padTop < inpHeight, padBottom < inpHeight,
-                      padLeft < inpWidth, padRight < inpWidth);
+            CV_CheckLE(padTop, inpHeight, ""); CV_CheckLE(padBottom, inpHeight, "");
+            CV_CheckLE(padLeft, inpWidth, ""); CV_CheckLE(padRight, inpWidth, "");
 
-            for (size_t n = 0; n < inputs[0]->size[0]; ++n)
+            for (size_t n = 0; n < inputs[0].size[0]; ++n)
             {
-                for (size_t ch = 0; ch < inputs[0]->size[1]; ++ch)
+                for (size_t ch = 0; ch < inputs[0].size[1]; ++ch)
                 {
-                    copyMakeBorder(getPlane(*inputs[0], n, ch),
+                    copyMakeBorder(getPlane(inputs[0], n, ch),
                                    getPlane(outputs[0], n, ch),
                                    padTop, padBottom, padLeft, padRight,
-                                   BORDER_REFLECT_101);
+                                   borderType);
                 }
             }
         }
@@ -145,7 +168,7 @@ public:
             CV_Error(Error::StsNotImplemented, "Unknown padding type: " + paddingType);
     }
 
-    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs)
+    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs) CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         int inW, inH, inC, inN;
@@ -165,6 +188,30 @@ public:
 #endif  // HAVE_HALIDE
         return Ptr<BackendNode>();
     }
+
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> >& inputs,
+                                        const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
+    {
+        auto& ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+        std::vector<int64_t> begins(paddings.size(), 0), ends(paddings.size(), 0);
+        for (int i = 0; i < paddings.size(); ++i)
+        {
+            begins[i] = static_cast<int64_t>(paddings[i].first);
+            ends[i]   = static_cast<int64_t>(paddings[i].second);
+        }
+        auto padding_below = std::make_shared<ngraph::op::Constant>(ngraph::element::i64, ngraph::Shape{begins.size()}, begins.data());
+        auto padding_above = std::make_shared<ngraph::op::Constant>(ngraph::element::i64, ngraph::Shape{ends.size()}, ends.data());
+        auto pad_mode = paddingType == "constant" ? ngraph::op::PadMode::CONSTANT : ngraph::op::PadMode::REFLECT; // SYMMETRIC
+        auto arg_pad_value = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, ngraph::Shape{}, &paddingValue);;
+
+        auto pad = paddingType == "constant" ?
+             std::make_shared<ngraph::op::v1::Pad>(ieInpNode, padding_below, padding_above, arg_pad_value, pad_mode) :
+             std::make_shared<ngraph::op::v1::Pad>(ieInpNode, padding_below, padding_above, pad_mode);
+        return Ptr<BackendNode>(new InfEngineNgraphNode(pad));
+    }
+#endif
 
 private:
     std::vector<std::pair<int, int> > paddings;  // Pairs pad before, pad after.

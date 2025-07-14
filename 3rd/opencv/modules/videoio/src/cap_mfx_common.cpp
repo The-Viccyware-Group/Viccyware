@@ -14,10 +14,30 @@
 using namespace std;
 using namespace cv;
 
+static mfxIMPL getImpl()
+{
+    static const size_t res = utils::getConfigurationParameterSizeT("OPENCV_VIDEOIO_MFX_IMPL", MFX_IMPL_AUTO_ANY);
+    return (mfxIMPL)res;
+}
+
+static size_t getExtraSurfaceNum()
+{
+    static const size_t res = cv::utils::getConfigurationParameterSizeT("OPENCV_VIDEOIO_MFX_EXTRA_SURFACE_NUM", 1);
+    return res;
+}
+
+static size_t getPoolTimeoutSec()
+{
+    static const size_t res = utils::getConfigurationParameterSizeT("OPENCV_VIDEOIO_MFX_POOL_TIMEOUT", 1);
+    return res;
+}
+
+//==================================================================================================
+
 bool DeviceHandler::init(MFXVideoSession &session)
 {
     mfxStatus res = MFX_ERR_NONE;
-    mfxIMPL impl = MFX_IMPL_AUTO;
+    mfxIMPL impl = getImpl();
     mfxVersion ver = { {19, 1} };
 
     res = session.Init(impl, &ver);
@@ -41,7 +61,7 @@ bool DeviceHandler::init(MFXVideoSession &session)
 
 VAHandle::VAHandle() {
     // TODO: provide a way of modifying this path
-    const string filename = "/dev/dri/card0";
+    const string filename = "/dev/dri/renderD128";
     file = open(filename.c_str(), O_RDWR);
     if (file < 0)
         CV_Error(Error::StsError, "Can't open file: " + filename);
@@ -96,7 +116,7 @@ SurfacePool::SurfacePool(ushort width_, ushort height_, ushort count, const mfxF
     for(int i = 0; i < count; ++i)
     {
         mfxFrameSurface1 &surface = surfaces[i];
-        uint8_t * dataPtr = buffers + oneSize * i;
+        uint8_t * dataPtr = buffers.data() + oneSize * i;
         memset(&surface, 0, sizeof(mfxFrameSurface1));
         surface.Info = frameInfo;
         surface.Data.Y = dataPtr;
@@ -114,11 +134,26 @@ SurfacePool::~SurfacePool()
 {
 }
 
+SurfacePool * SurfacePool::_create(const mfxFrameAllocRequest &request, const mfxVideoParam &params)
+{
+    return new SurfacePool(request.Info.Width,
+                           request.Info.Height,
+                           saturate_cast<ushort>((size_t)request.NumFrameSuggested + getExtraSurfaceNum()),
+                           params.mfx.FrameInfo);
+}
+
 mfxFrameSurface1 *SurfacePool::getFreeSurface()
 {
-    for(std::vector<mfxFrameSurface1>::iterator i = surfaces.begin(); i != surfaces.end(); ++i)
-        if (!i->Data.Locked)
-            return &(*i);
+    const int64 start = cv::getTickCount();
+    do
+    {
+        for(std::vector<mfxFrameSurface1>::iterator i = surfaces.begin(); i != surfaces.end(); ++i)
+            if (!i->Data.Locked)
+                return &(*i);
+        sleep_ms(10);
+    }
+    while((cv::getTickCount() - start) / cv::getTickFrequency() < getPoolTimeoutSec()); // seconds
+    DBG(cout << "No free surface!" << std::endl);
     return 0;
 }
 

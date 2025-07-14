@@ -41,8 +41,7 @@
 #include "test_precomp.hpp"
 #include "opencv2/ts/ocl_test.hpp"
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 #define OCL_TUNING_MODE 0
 #if OCL_TUNING_MODE
@@ -162,7 +161,7 @@ void CV_MomentsTest::run_func()
             ttime += (double)getTickCount() - t;
             ncalls++;
             printf("%g\n", ttime/ncalls/u.total()));
-        *m = new_m;
+        *m = cvMoments(new_m);
     }
     else
         cvMoments( test_array[INPUT][0], m, is_binary );
@@ -180,14 +179,12 @@ void CV_MomentsTest::run_func()
 void CV_MomentsTest::prepare_to_validation( int /*test_case_idx*/ )
 {
     Mat& src = test_mat[INPUT][0];
-    CvMoments m;
+    CvMoments m = cvMoments();
     double* mdata = test_mat[REF_OUTPUT][0].ptr<double>();
     int depth = src.depth();
     int cn = src.channels();
     int i, y, x, cols = src.cols;
     double xc = 0., yc = 0.;
-
-    memset( &m, 0, sizeof(m));
 
     int coi = 0;
     for( y = 0; y < src.rows; y++ )
@@ -442,3 +439,5 @@ protected:
 };
 
 TEST(Imgproc_ContourMoment, small) { CV_SmallContourMomentTest test; test.safe_run(); }
+
+}} // namespace

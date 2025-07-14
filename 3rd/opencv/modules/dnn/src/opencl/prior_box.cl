@@ -39,20 +39,19 @@
 //
 //M*/
 
-#define Dtype float
-#define Dtype4 float4
+#if defined(cl_khr_fp16)
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#endif
 
 __kernel void prior_box(const int nthreads,
-                        const Dtype stepX,
-                        const Dtype stepY,
-                        const Dtype _minSize,
-                        const Dtype _maxSize,
-                        __global const Dtype* _offsetsX,
-                        __global const Dtype* _offsetsY,
+                        const float stepX,
+                        const float stepY,
+                        __global const float* _offsetsX,
+                        __global const float* _offsetsY,
                         const int offsetsX_size,
-                        __global const Dtype* _aspectRatios,
-                        const int aspectRatios_size,
-                        __global const Dtype* scales,
+                        __global const float* _widths,
+                        __global const float* _heights,
+                        const int widths_size,
                         __global Dtype* dst,
                         const int _layerHeight,
                         const int _layerWidth,
@@ -64,57 +63,19 @@ __kernel void prior_box(const int nthreads,
         int w = index % _layerWidth;
         int h = index / _layerWidth;
         __global Dtype* outputPtr;
-        int aspect_count = (_maxSize > 0) ? 1 : 0;
-        outputPtr = dst + index * 4 * offsetsX_size * (1 + aspect_count + aspectRatios_size);
 
-        Dtype _boxWidth, _boxHeight;
+        outputPtr = dst + index * 4 * offsetsX_size * widths_size;
+
+        float _boxWidth, _boxHeight;
         Dtype4 vec;
-        _boxWidth = _boxHeight = _minSize * scales[0];
-        for (int i = 0; i < offsetsX_size; ++i)
+        for (int i = 0; i < widths_size; ++i)
         {
-            float center_x = (w + _offsetsX[i]) * stepX;
-            float center_y = (h + _offsetsY[i]) * stepY;
-
-            vec.x = (center_x - _boxWidth * 0.5f) / imgWidth;    // xmin
-            vec.y = (center_y - _boxHeight * 0.5f) / imgHeight;  // ymin
-            vec.z = (center_x + _boxWidth * 0.5f) / imgWidth;    // xmax
-            vec.w = (center_y + _boxHeight * 0.5f) / imgHeight;  // ymax
-            vstore4(vec, 0, outputPtr);
-
-            outputPtr += 4;
-        }
-
-        if (_maxSize > 0)
-        {
-            _boxWidth = _boxHeight = native_sqrt(_minSize * _maxSize) * scales[1];
-
-            for (int i = 0; i < offsetsX_size; ++i)
+            _boxWidth = _widths[i];
+            _boxHeight = _heights[i];
+            for (int j = 0; j < offsetsX_size; ++j)
             {
-                float center_x = (w + _offsetsX[i]) * stepX;
-                float center_y = (h + _offsetsY[i]) * stepY;
-
-                vec.x = (center_x - _boxWidth * 0.5f) / imgWidth;    // xmin
-                vec.y = (center_y - _boxHeight * 0.5f) / imgHeight;  // ymin
-                vec.z = (center_x + _boxWidth * 0.5f) / imgWidth;    // xmax
-                vec.w = (center_y + _boxHeight * 0.5f) / imgHeight;  // ymax
-                vstore4(vec, 0, outputPtr);
-
-                outputPtr += 4;
-            }
-        }
-
-        for (int r = 0; r < aspectRatios_size; ++r)
-        {
-            float ar = native_sqrt(_aspectRatios[r]);
-            float scale = scales[(_maxSize > 0 ? 2 : 1) + r];
-
-            _boxWidth = _minSize * ar * scale;
-            _boxHeight = _minSize / ar * scale;
-
-            for (int i = 0; i < offsetsX_size; ++i)
-            {
-                float center_x = (w + _offsetsX[i]) * stepX;
-                float center_y = (h + _offsetsY[i]) * stepY;
+                Dtype center_x = (w + _offsetsX[j]) * (Dtype)stepX;
+                Dtype center_y = (h + _offsetsY[j]) * (Dtype)stepY;
 
                 vec.x = (center_x - _boxWidth * 0.5f) / imgWidth;    // xmin
                 vec.y = (center_y - _boxHeight * 0.5f) / imgHeight;  // ymin
@@ -131,7 +92,7 @@ __kernel void prior_box(const int nthreads,
 __kernel void set_variance(const int nthreads,
                            const int offset,
                            const int variance_size,
-                           __global const Dtype* variance,
+                           __global const float* variance,
                            __global Dtype* dst)
 {
     for (int index = get_global_id(0); index < nthreads; index += get_global_size(0))
@@ -141,8 +102,18 @@ __kernel void set_variance(const int nthreads,
         if (variance_size == 1)
             var_vec = (Dtype4)(variance[0]);
         else
-            var_vec = vload4(0, variance);
+            var_vec = convert_T(vload4(0, variance));
 
         vstore4(var_vec, 0, dst + offset + index * 4);
+    }
+}
+
+__kernel void clip(const int nthreads,
+                   __global Dtype* dst)
+{
+    for (int index = get_global_id(0); index < nthreads; index += get_global_size(0))
+    {
+        Dtype4 vec = vload4(index, dst);
+        vstore4(clamp(vec, (Dtype)0.0f, (Dtype)1.0f), index, dst);
     }
 }

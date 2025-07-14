@@ -158,7 +158,7 @@ namespace
     void HoughCirclesDetectorImpl::detect(InputArray _src, OutputArray circles, Stream& stream)
     {
         // TODO : implement async version
-        (void) stream;
+        CV_UNUSED(stream);
 
         using namespace cv::cuda::device::hough;
         using namespace cv::cuda::device::hough_circles;
@@ -215,8 +215,8 @@ namespace
             AutoBuffer<ushort2> newBuf_(centersCount);
             int newCount = 0;
 
-            ushort2* oldBuf = oldBuf_;
-            ushort2* newBuf = newBuf_;
+            ushort2* oldBuf = oldBuf_.data();
+            ushort2* newBuf = newBuf_.data();
 
             cudaSafeCall( cudaMemcpy(oldBuf, centers, centersCount * sizeof(ushort2), cudaMemcpyDeviceToHost) );
 

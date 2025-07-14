@@ -49,7 +49,7 @@
 namespace cv
 {
 
-#define OPENCV_TRAITS_ENABLE_DEPRECATED
+//#define OPENCV_TRAITS_ENABLE_DEPRECATED
 
 //! @addtogroup core_basic
 //! @{

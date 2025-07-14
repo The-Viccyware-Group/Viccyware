@@ -44,6 +44,8 @@
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
 #include "opencv2/core/hal/intrin.hpp"
+#include <algorithm>
+#include <iterator>
 
 namespace cv
 {
@@ -66,6 +68,44 @@ struct hough_cmp_gt
     const int* aux;
 };
 
+static inline int
+computeNumangle( double min_theta, double max_theta, double theta_step )
+{
+    int numangle = cvFloor((max_theta - min_theta) / theta_step) + 1;
+    // If the distance between the first angle and the last angle is
+    // approximately equal to pi, then the last angle will be removed
+    // in order to prevent a line to be detected twice.
+    if ( numangle > 1 && fabs(CV_PI - (numangle-1)*theta_step) < theta_step/2 )
+        --numangle;
+    return numangle;
+}
+
+static void
+createTrigTable( int numangle, double min_theta, double theta_step,
+                 float irho, float *tabSin, float *tabCos )
+{
+    float ang = static_cast<float>(min_theta);
+    for(int n = 0; n < numangle; ang += (float)theta_step, n++ )
+    {
+        tabSin[n] = (float)(sin((double)ang) * irho);
+        tabCos[n] = (float)(cos((double)ang) * irho);
+    }
+}
+
+static void
+findLocalMaximums( int numrho, int numangle, int threshold,
+                   const int *accum, std::vector<int>& sort_buf )
+{
+    for(int r = 0; r < numrho; r++ )
+        for(int n = 0; n < numangle; n++ )
+        {
+            int base = (n+1) * (numrho+2) + r+1;
+            if( accum[base] > threshold &&
+                accum[base] > accum[base - 1] && accum[base] >= accum[base + 1] &&
+                accum[base] > accum[base - numrho - 2] && accum[base] >= accum[base + numrho + 2] )
+                sort_buf.push_back(base);
+        }
+}
 
 /*
 Here image is an input raster;
@@ -77,67 +117,71 @@ array of (rho, theta) pairs. linesMax is the buffer size (number of pairs).
 Functions return the actual number of found lines.
 */
 static void
-HoughLinesStandard( const Mat& img, float rho, float theta,
-                    int threshold, std::vector<Vec2f>& lines, int linesMax,
+HoughLinesStandard( InputArray src, OutputArray lines, int type,
+                    float rho, float theta,
+                    int threshold, int linesMax,
                     double min_theta, double max_theta )
 {
+    CV_CheckType(type, type == CV_32FC2 || type == CV_32FC3, "Internal error");
+
+    Mat img = src.getMat();
+
     int i, j;
     float irho = 1 / rho;
 
     CV_Assert( img.type() == CV_8UC1 );
+    CV_Assert( linesMax > 0 );
 
     const uchar* image = img.ptr();
     int step = (int)img.step;
     int width = img.cols;
     int height = img.rows;
 
-    if (max_theta < min_theta ) {
-        CV_Error( CV_StsBadArg, "max_theta must be greater than min_theta" );
-    }
-    int numangle = cvRound((max_theta - min_theta) / theta);
-    int numrho = cvRound(((width + height) * 2 + 1) / rho);
+    int max_rho = width + height;
+    int min_rho = -max_rho;
+
+    CV_CheckGE(max_theta, min_theta, "max_theta must be greater than min_theta");
+
+    int numangle = computeNumangle(min_theta, max_theta, theta);
+    int numrho = cvRound(((max_rho - min_rho) + 1) / rho);
 
 #if defined HAVE_IPP && IPP_VERSION_X100 >= 810 && !IPP_DISABLE_HOUGH
-    CV_IPP_CHECK()
+    if (type == CV_32FC2 && CV_IPP_CHECK_COND)
     {
         IppiSize srcSize = { width, height };
         IppPointPolar delta = { rho, theta };
-        IppPointPolar dstRoi[2] = {{(Ipp32f) -(width + height), (Ipp32f) min_theta},{(Ipp32f) (width + height), (Ipp32f) max_theta}};
+        IppPointPolar dstRoi[2] = {{(Ipp32f) min_rho, (Ipp32f) min_theta},{(Ipp32f) max_rho, (Ipp32f) max_theta}};
         int bufferSize;
         int nz = countNonZero(img);
         int ipp_linesMax = std::min(linesMax, nz*numangle/threshold);
         int linesCount = 0;
-        lines.resize(ipp_linesMax);
+        std::vector<Vec2f> _lines(ipp_linesMax);
         IppStatus ok = ippiHoughLineGetSize_8u_C1R(srcSize, delta, ipp_linesMax, &bufferSize);
         Ipp8u* buffer = ippsMalloc_8u_L(bufferSize);
-        if (ok >= 0) {ok = CV_INSTRUMENT_FUN_IPP(ippiHoughLine_Region_8u32f_C1R, image, step, srcSize, (IppPointPolar*) &lines[0], dstRoi, ipp_linesMax, &linesCount, delta, threshold, buffer);};
+        if (ok >= 0) {ok = CV_INSTRUMENT_FUN_IPP(ippiHoughLine_Region_8u32f_C1R, image, step, srcSize, (IppPointPolar*) &_lines[0], dstRoi, ipp_linesMax, &linesCount, delta, threshold, buffer);};
         ippsFree(buffer);
         if (ok >= 0)
         {
-            lines.resize(linesCount);
+            lines.create(linesCount, 1, CV_32FC2);
+            Mat(linesCount, 1, CV_32FC2, &_lines[0]).copyTo(lines);
             CV_IMPL_ADD(CV_IMPL_IPP);
             return;
         }
-        lines.clear();
         setIppErrorStatus();
     }
 #endif
 
-    AutoBuffer<int> _accum((numangle+2) * (numrho+2));
+
+    Mat _accum = Mat::zeros( (numangle+2), (numrho+2), CV_32SC1 );
     std::vector<int> _sort_buf;
     AutoBuffer<float> _tabSin(numangle);
     AutoBuffer<float> _tabCos(numangle);
-    int *accum = _accum;
-    float *tabSin = _tabSin, *tabCos = _tabCos;
+    int *accum = _accum.ptr<int>();
+    float *tabSin = _tabSin.data(), *tabCos = _tabCos.data();
 
-    memset( accum, 0, sizeof(accum[0]) * (numangle+2) * (numrho+2) );
-
-    float ang = static_cast<float>(min_theta);
-    for(int n = 0; n < numangle; ang += theta, n++ )
-    {
-        tabSin[n] = (float)(sin((double)ang) * irho);
-        tabCos[n] = (float)(cos((double)ang) * irho);
-    }
+    // create sin and cos table
+    createTrigTable( numangle, min_theta, theta,
+                     irho, tabSin, tabCos);
 
     // stage 1. fill accumulator
     for( i = 0; i < height; i++ )
@@ -153,15 +197,7 @@ HoughLinesStandard( const Mat& img, float rho, float theta,
         }
 
     // stage 2. find local maximums
-    for(int r = 0; r < numrho; r++ )
-        for(int n = 0; n < numangle; n++ )
-        {
-            int base = (n+1) * (numrho+2) + r+1;
-            if( accum[base] > threshold &&
-                accum[base] > accum[base - 1] && accum[base] >= accum[base + 1] &&
-                accum[base] > accum[base - numrho - 2] && accum[base] >= accum[base + numrho + 2] )
-                _sort_buf.push_back(base);
-        }
+    findLocalMaximums( numrho, numangle, threshold, accum, _sort_buf );
 
     // stage 3. sort the detected lines by accumulator value
     std::sort(_sort_buf.begin(), _sort_buf.end(), hough_cmp_gt(accum));
@@ -169,6 +205,9 @@ HoughLinesStandard( const Mat& img, float rho, float theta,
     // stage 4. store the first min(total,linesMax) lines to the output buffer
     linesMax = std::min(linesMax, (int)_sort_buf.size());
     double scale = 1./(numrho+2);
+
+    lines.create(linesMax, 1, type);
+    Mat _lines = lines.getMat();
     for( i = 0; i < linesMax; i++ )
     {
         LinePolar line;
@@ -177,7 +216,15 @@ HoughLinesStandard( const Mat& img, float rho, float theta,
         int r = idx - (n+1)*(numrho+2) - 1;
         line.rho = (r - (numrho - 1)*0.5f) * rho;
         line.angle = static_cast<float>(min_theta) + n * theta;
-        lines.push_back(Vec2f(line.rho, line.angle));
+        if (type == CV_32FC2)
+        {
+            _lines.at<Vec2f>(i) = Vec2f(line.rho, line.angle);
+        }
+        else
+        {
+            CV_DbgAssert(type == CV_32FC3);
+            _lines.at<Vec3f>(i) = Vec3f(line.rho, line.angle, (float)accum[idx]);
+        }
     }
 }
 
@@ -196,15 +243,17 @@ struct hough_index
 
 
 static void
-HoughLinesSDiv( const Mat& img,
+HoughLinesSDiv( InputArray image, OutputArray lines, int type,
                 float rho, float theta, int threshold,
-                int srn, int stn,
-                std::vector<Vec2f>& lines, int linesMax,
+                int srn, int stn, int linesMax,
                 double min_theta, double max_theta )
 {
+    CV_CheckType(type, type == CV_32FC2 || type == CV_32FC3, "Internal error");
+
     #define _POINT(row, column)\
         (image_src[(row)*step+(column)])
 
+    Mat img = image.getMat();
     int index, i;
     int ri, ti, ti1, ti0;
     int row, col;
@@ -303,8 +352,8 @@ HoughLinesSDiv( const Mat& img,
                     rv = r0 * std::cos( phi );
                     i = (int)rv * tn;
                     i += cvFloor( phi1 );
-                    assert( i >= 0 );
-                    assert( i < rn * tn );
+                    CV_Assert( i >= 0 );
+                    CV_Assert( i < rn * tn );
                     caccum[i] = (uchar) (caccum[i] + ((i ^ iprev) != 0));
                     iprev = i;
                     if( cmax < caccum[i] )
@@ -327,7 +376,7 @@ HoughLinesSDiv( const Mat& img,
 
     if( count * 100 > rn * tn )
     {
-        HoughLinesStandard( img, rho, theta, threshold, lines, linesMax, min_theta, max_theta );
+        HoughLinesStandard( image, lines, type, rho, theta, threshold, linesMax, min_theta, max_theta );
         return;
     }
 
@@ -368,15 +417,14 @@ HoughLinesSDiv( const Mat& img,
                         i = CV_IMAX( i, -1 );
                         i = CV_IMIN( i, sfn );
                         mcaccum[i]++;
-                        assert( i >= -1 );
-                        assert( i <= sfn );
+                        CV_Assert( i >= -1 );
+                        CV_Assert( i <= sfn );
                     }
                 }
 
                 // Find peaks in maccum...
                 for( index = 0; index < sfn; index++ )
                 {
-                    i = 0;
                     int pos = (int)(lst.size() - 1);
                     if( pos < 0 || lst[pos].value < mcaccum[index] )
                     {
@@ -399,11 +447,23 @@ HoughLinesSDiv( const Mat& img,
         }
     }
 
+    int pos = (int)(lst.size() - 1);
+    if( pos >= 0 && lst[pos].rho < 0 )
+        lst.pop_back();
+
+    lines.create((int)lst.size(), 1, type);
+    Mat _lines = lines.getMat();
     for( size_t idx = 0; idx < lst.size(); idx++ )
     {
-        if( lst[idx].rho < 0 )
-            continue;
-        lines.push_back(Vec2f(lst[idx].rho, lst[idx].theta));
+        if (type == CV_32FC2)
+        {
+            _lines.at<Vec2f>((int)idx) = Vec2f(lst[idx].rho, lst[idx].theta);
+        }
+        else
+        {
+            CV_DbgAssert(type == CV_32FC3);
+            _lines.at<Vec3f>((int)idx) = Vec3f(lst[idx].rho, lst[idx].theta, (float)lst[idx].value);
+        }
     }
 }
 
@@ -427,7 +487,7 @@ HoughLinesProbabilistic( Mat& image,
     int width = image.cols;
     int height = image.rows;
 
-    int numangle = cvRound(CV_PI / theta);
+    int numangle = computeNumangle(0.0, CV_PI, theta);
     int numrho = cvRound(((width + height) * 2 + 1) / rho);
 
 #if defined HAVE_IPP && IPP_VERSION_X100 >= 810 && !IPP_DISABLE_HOUGH
@@ -557,7 +617,7 @@ HoughLinesProbabilistic( Mat& image,
             if( k > 0 )
                 dx = -dx, dy = -dy;
 
-            // walk along the line using fixed-point arithmetics,
+            // walk along the line using fixed-point arithmetic,
             // stop at the image border or in case of too big gap
             for( ;; x += dx, y += dy )
             {
@@ -605,7 +665,7 @@ HoughLinesProbabilistic( Mat& image,
             if( k > 0 )
                 dx = -dx, dy = -dy;
 
-            // walk along the line using fixed-point arithmetics,
+            // walk along the line using fixed-point arithmetic,
             // stop at the image border or in case of too big gap
             for( ;; x += dx, y += dy )
             {
@@ -744,7 +804,7 @@ static bool ocl_HoughLines(InputArray _src, OutputArray _lines, double rho, doub
     }
 
     UMat src = _src.getUMat();
-    int numangle = cvRound((max_theta - min_theta) / theta);
+    int numangle = computeNumangle(min_theta, max_theta, theta);
     int numrho = cvRound(((src.cols + src.rows) * 2 + 1) / rho);
 
     UMat pointsList;
@@ -756,7 +816,7 @@ static bool ocl_HoughLines(InputArray _src, OutputArray _lines, double rho, doub
     int total_points = counters.getMat(ACCESS_READ).at<int>(0, 0);
     if (total_points <= 0)
     {
-        _lines.assign(UMat(0,0,CV_32FC2));
+        _lines.release();
         return true;
     }
 
@@ -784,7 +844,7 @@ static bool ocl_HoughLines(InputArray _src, OutputArray _lines, double rho, doub
     if (total_lines > 0)
         _lines.assign(lines.rowRange(Range(0, total_lines)));
     else
-        _lines.assign(UMat(0,0,CV_32FC2));
+        _lines.release();
     return true;
 }
 
@@ -798,7 +858,7 @@ static bool ocl_HoughLinesP(InputArray _src, OutputArray _lines, double rho, dou
     }
 
     UMat src = _src.getUMat();
-    int numangle = cvRound(CV_PI / theta);
+    int numangle = computeNumangle(0.0, CV_PI, theta);
     int numrho = cvRound(((src.cols + src.rows) * 2 + 1) / rho);
 
     UMat pointsList;
@@ -810,7 +870,7 @@ static bool ocl_HoughLinesP(InputArray _src, OutputArray _lines, double rho, dou
     int total_points = counters.getMat(ACCESS_READ).at<int>(0, 0);
     if (total_points <= 0)
     {
-        _lines.assign(UMat(0,0,CV_32SC4));
+        _lines.release();
         return true;
     }
 
@@ -838,31 +898,33 @@ static bool ocl_HoughLinesP(InputArray _src, OutputArray _lines, double rho, dou
     if (total_lines > 0)
         _lines.assign(lines.rowRange(Range(0, total_lines)));
     else
-        _lines.assign(UMat(0,0,CV_32SC4));
+        _lines.release();
 
     return true;
 }
 
 #endif /* HAVE_OPENCL */
 
-void HoughLines( InputArray _image, OutputArray _lines,
+void HoughLines( InputArray _image, OutputArray lines,
                  double rho, double theta, int threshold,
                  double srn, double stn, double min_theta, double max_theta )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
-    CV_OCL_RUN(srn == 0 && stn == 0 && _image.isUMat() && _lines.isUMat(),
-               ocl_HoughLines(_image, _lines, rho, theta, threshold, min_theta, max_theta));
+    int type = CV_32FC2;
+    if (lines.fixedType())
+    {
+        type = lines.type();
+        CV_CheckType(type, type == CV_32FC2 || type == CV_32FC3, "Wrong type of output lines");
+    }
 
-    Mat image = _image.getMat();
-    std::vector<Vec2f> lines;
+    CV_OCL_RUN(srn == 0 && stn == 0 && _image.isUMat() && lines.isUMat() && type == CV_32FC2,
+               ocl_HoughLines(_image, lines, rho, theta, threshold, min_theta, max_theta));
 
     if( srn == 0 && stn == 0 )
-        HoughLinesStandard(image, (float)rho, (float)theta, threshold, lines, INT_MAX, min_theta, max_theta );
+        HoughLinesStandard(_image, lines, type, (float)rho, (float)theta, threshold, INT_MAX, min_theta, max_theta );
     else
-        HoughLinesSDiv(image, (float)rho, (float)theta, threshold, cvRound(srn), cvRound(stn), lines, INT_MAX, min_theta, max_theta);
-
-    Mat(lines).copyTo(_lines);
+        HoughLinesSDiv(_image, lines, type, (float)rho, (float)theta, threshold, cvRound(srn), cvRound(stn), INT_MAX, min_theta, max_theta);
 }
 
 
@@ -870,7 +932,7 @@ void HoughLinesP(InputArray _image, OutputArray _lines,
                  double rho, double theta, int threshold,
                  double minLineLength, double maxGap )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_OCL_RUN(_image.isUMat() && _lines.isUMat(),
                ocl_HoughLinesP(_image, _lines, rho, theta, threshold, minLineLength, maxGap));
@@ -881,46 +943,198 @@ void HoughLinesP(InputArray _image, OutputArray _lines,
     Mat(lines).copyTo(_lines);
 }
 
+void HoughLinesPointSet( InputArray _point, OutputArray _lines, int lines_max, int threshold,
+                         double min_rho, double max_rho, double rho_step,
+                         double min_theta, double max_theta, double theta_step )
+{
+    std::vector<Vec3d> lines;
+    std::vector<Point2f> point;
+    _point.copyTo(point);
+
+    CV_Assert( _point.type() == CV_32FC2 || _point.type() == CV_32SC2 );
+    if( lines_max <= 0 ) {
+        CV_Error( Error::StsBadArg, "lines_max must be greater than 0" );
+    }
+    if( threshold < 0) {
+        CV_Error( Error::StsBadArg, "threshold must be greater than 0" );
+    }
+    if( ((max_rho - min_rho) <= 0) || ((max_theta - min_theta) <= 0) ) {
+        CV_Error( Error::StsBadArg, "max must be greater than min" );
+    }
+    if( ((rho_step <= 0)) || ((theta_step <= 0)) ) {
+        CV_Error( Error::StsBadArg, "step must be greater than 0" );
+    }
+
+    int i;
+    float irho = 1 / (float)rho_step;
+    float irho_min = ((float)min_rho * irho);
+    int numangle = computeNumangle(min_theta, max_theta, theta_step);
+    int numrho = cvRound((max_rho - min_rho + 1) / rho_step);
+
+    Mat _accum = Mat::zeros( (numangle+2), (numrho+2), CV_32SC1 );
+    std::vector<int> _sort_buf;
+    AutoBuffer<float> _tabSin(numangle);
+    AutoBuffer<float> _tabCos(numangle);
+    int *accum = _accum.ptr<int>();
+    float *tabSin = _tabSin.data(), *tabCos = _tabCos.data();
+
+    // create sin and cos table
+    createTrigTable( numangle, min_theta, theta_step,
+                     irho, tabSin, tabCos );
+
+    // stage 1. fill accumulator
+    for( i = 0; i < (int)point.size(); i++ )
+        for(int n = 0; n < numangle; n++ )
+        {
+            int r = cvRound( point.at(i).x  * tabCos[n] + point.at(i).y * tabSin[n] - irho_min);
+            if ( r >= 0 && r <= numrho) {
+                accum[(n+1) * (numrho+2) + r+1]++;
+            }
+        }
+
+    // stage 2. find local maximums
+    findLocalMaximums( numrho, numangle, threshold, accum, _sort_buf );
+
+    // stage 3. sort the detected lines by accumulator value
+    std::sort(_sort_buf.begin(), _sort_buf.end(), hough_cmp_gt(accum));
+
+    // stage 4. store the first min(total,linesMax) lines to the output buffer
+    lines_max = std::min(lines_max, (int)_sort_buf.size());
+    double scale = 1./(numrho+2);
+    for( i = 0; i < lines_max; i++ )
+    {
+        LinePolar line;
+        int idx = _sort_buf[i];
+        int n = cvFloor(idx*scale) - 1;
+        int r = idx - (n+1)*(numrho+2) - 1;
+        line.rho = static_cast<float>(min_rho) + r * (float)rho_step;
+        line.angle = static_cast<float>(min_theta) + n * (float)theta_step;
+        lines.push_back(Vec3d((double)accum[idx], (double)line.rho, (double)line.angle));
+    }
+
+    Mat(lines).copyTo(_lines);
+}
+
 /****************************************************************************************\
 *                                     Circle Detection                                   *
 \****************************************************************************************/
 
-struct markedCircle
+struct EstimatedCircle
 {
-    markedCircle(Vec3f _c, int _idx, int _idxC) :
-        c(_c), idx(_idx), idxC(_idxC) {}
+    EstimatedCircle(Vec3f _c, int _accum) :
+        c(_c), accum(_accum) {}
     Vec3f c;
-    int idx, idxC;
+    int accum;
 };
 
-inline bool cmpCircleIndex(const markedCircle &left, const markedCircle &right)
+static bool cmpAccum(const EstimatedCircle& left, const EstimatedCircle& right)
 {
-    return left.idx > right.idx;
+    // Compare everything so the order is completely deterministic
+    // Larger accum first
+    if (left.accum > right.accum)
+        return true;
+    else if (left.accum < right.accum)
+        return false;
+    // Larger radius first
+    else if (left.c[2] > right.c[2])
+        return true;
+    else if (left.c[2] < right.c[2])
+        return false;
+    // Smaller X
+    else if (left.c[0] < right.c[0])
+        return true;
+    else if (left.c[0] > right.c[0])
+        return false;
+    // Smaller Y
+    else if (left.c[1] < right.c[1])
+        return true;
+    else if (left.c[1] > right.c[1])
+        return false;
+    // Identical - neither object is less than the other
+    else
+        return false;
 }
+
+static inline Vec3f GetCircle(const EstimatedCircle& est)
+{
+    return est.c;
+}
+
+static inline Vec4f GetCircle4f(const EstimatedCircle& est)
+{
+    return Vec4f(est.c[0], est.c[1], est.c[2], (float)est.accum);
+}
+
+class NZPointList : public std::vector<Point>
+{
+private:
+    NZPointList(const NZPointList& other); // non-copyable
+
+public:
+    NZPointList(int reserveSize = 256)
+    {
+        reserve(reserveSize);
+    }
+};
+
+class NZPointSet
+{
+private:
+    NZPointSet(const NZPointSet& other); // non-copyable
+
+public:
+    Mat_<uchar> positions;
+
+    NZPointSet(int rows, int cols) :
+        positions(rows, cols, (uchar)0)
+    {
+    }
+
+    void insert(const Point& pt)
+    {
+        positions(pt) = 1;
+    }
+
+    void insert(const NZPointSet& from)
+    {
+        cv::bitwise_or(from.positions, positions, positions);
+    }
+
+    void toList(NZPointList& list) const
+    {
+        for (int y = 0; y < positions.rows; y++)
+        {
+            const uchar *ptr = positions.ptr<uchar>(y, 0);
+            for (int x = 0; x < positions.cols; x++)
+            {
+                if (ptr[x])
+                {
+                    list.push_back(Point(x, y));
+                }
+            }
+        }
+    }
+};
 
 class HoughCirclesAccumInvoker : public ParallelLoopBody
 {
 public:
     HoughCirclesAccumInvoker(const Mat &_edges, const Mat &_dx, const Mat &_dy, int _minRadius, int _maxRadius, float _idp,
-                             std::vector<Mat>& _accumVec, std::vector<Point>& _nz, Mutex& _mtx) :
+                             std::vector<Mat>& _accumVec, NZPointSet& _nz, Mutex& _mtx) :
         edges(_edges), dx(_dx), dy(_dy), minRadius(_minRadius), maxRadius(_maxRadius), idp(_idp),
         accumVec(_accumVec), nz(_nz), mutex(_mtx)
     {
         acols = cvCeil(edges.cols * idp), arows = cvCeil(edges.rows * idp);
         astep = acols + 2;
-#if CV_SIMD128
-        haveSIMD = hasSIMD128();
-#endif
     }
 
     ~HoughCirclesAccumInvoker() { }
 
-    void operator()(const Range &boundaries) const
+    void operator()(const Range &boundaries) const CV_OVERRIDE
     {
         Mat accumLocal = Mat(arows + 2, acols + 2, CV_32SC1, Scalar::all(0));
         int *adataLocal = accumLocal.ptr<int>();
-        std::vector<Point> nzLocal;
-        nzLocal.reserve(256);
+        NZPointSet nzLocal(nz.positions.rows, nz.positions.cols);
         int startRow = boundaries.start;
         int endRow = boundaries.end;
         int numCols = edges.cols;
@@ -941,33 +1155,23 @@ public:
 
             for(; x < numCols; ++x )
             {
-#if CV_SIMD128
-                if(haveSIMD)
+#if CV_SIMD
                 {
-                    v_uint8x16 v_zero = v_setzero_u8();
+                    v_uint8 v_zero = vx_setzero_u8();
 
-                    for(; x <= numCols - 32; x += 32) {
-                        v_uint8x16 v_edge1 = v_load(edgeData + x);
-                        v_uint8x16 v_edge2 = v_load(edgeData + x + 16);
+                    for(; x <= numCols - 2*v_uint8::nlanes; x += 2*v_uint8::nlanes) {
+                        v_uint8 v_edge1 = (vx_load(edgeData + x                  ) != v_zero);
+                        v_uint8 v_edge2 = (vx_load(edgeData + x + v_uint8::nlanes) != v_zero);
 
-                        v_uint8x16 v_cmp1 = (v_edge1 == v_zero);
-                        v_uint8x16 v_cmp2 = (v_edge2 == v_zero);
-
-                        unsigned int mask1 = v_signmask(v_cmp1);
-                        unsigned int mask2 = v_signmask(v_cmp2);
-
-                        mask1 ^= 0x0000ffff;
-                        mask2 ^= 0x0000ffff;
-
-                        if(mask1)
+                        if(v_check_any(v_edge1))
                         {
-                            x += trailingZeros32(mask1);
+                            x += v_scan_forward(v_edge1);
                             goto _next_step;
                         }
 
-                        if(mask2)
+                        if(v_check_any(v_edge2))
                         {
-                            x += trailingZeros32(mask2 << 16);
+                            x += v_uint8::nlanes + v_scan_forward(v_edge2);
                             goto _next_step;
                         }
                     }
@@ -978,7 +1182,7 @@ public:
 
                 if(x == numCols)
                     continue;
-#if CV_SIMD128
+#if CV_SIMD
 _next_step:
 #endif
                 float vx, vy;
@@ -996,7 +1200,7 @@ _next_step:
                     continue;
 
                 Point pt = Point(x % edges.cols, y + x / edges.cols);
-                nzLocal.push_back(pt);
+                nzLocal.insert(pt);
 
                 sx = cvRound((vx * idp) * 1024 / mag);
                 sy = cvRound((vy * idp) * 1024 / mag);
@@ -1025,9 +1229,11 @@ _next_step:
             }
         }
 
-        AutoLock lock(mutex);
-        accumVec.push_back(accumLocal);
-        nz.insert(nz.end(), nzLocal.begin(), nzLocal.end());
+        { // TODO Try using TLSContainers
+            AutoLock lock(mutex);
+            accumVec.push_back(accumLocal);
+            nz.insert(nzLocal);
+        }
     }
 
 private:
@@ -1035,12 +1241,9 @@ private:
     int minRadius, maxRadius;
     float idp;
     std::vector<Mat>& accumVec;
-    std::vector<Point>& nz;
+    NZPointSet& nz;
 
     int acols, arows, astep;
-#if CV_SIMD128
-    bool haveSIMD;
-#endif
 
     Mutex& mutex;
 };
@@ -1058,7 +1261,7 @@ public:
 
     ~HoughCirclesFindCentersInvoker() {}
 
-    void operator()(const Range &boundaries) const
+    void operator()(const Range &boundaries) const CV_OVERRIDE
     {
         int startRow = boundaries.start;
         int endRow = boundaries.end;
@@ -1105,296 +1308,336 @@ private:
     Mutex& _lock;
 };
 
+template<typename T>
+static bool CheckDistance(const std::vector<T> &circles, size_t endIdx, const T& circle, float minDist2)
+{
+    bool goodPoint = true;
+    for (uint j = 0; j < endIdx; ++j)
+    {
+        T pt = circles[j];
+        float distX = circle[0] - pt[0], distY = circle[1] - pt[1];
+        if (distX * distX + distY * distY < minDist2)
+        {
+            goodPoint = false;
+            break;
+        }
+    }
+    return goodPoint;
+}
+
+static void GetCircleCenters(const std::vector<int> &centers, std::vector<Vec3f> &circles, int acols, float minDist, float dr)
+{
+    size_t centerCnt = centers.size();
+    float minDist2 = minDist * minDist;
+    for (size_t i = 0; i < centerCnt; ++i)
+    {
+        int center = centers[i];
+        int y = center / acols;
+        int x = center - y * acols;
+        Vec3f circle = Vec3f((x + 0.5f) * dr, (y + 0.5f) * dr, 0);
+
+        bool goodPoint = CheckDistance(circles, circles.size(), circle, minDist2);
+        if (goodPoint)
+            circles.push_back(circle);
+    }
+}
+
+static void GetCircleCenters(const std::vector<int> &centers, std::vector<Vec4f> &circles, int acols, float minDist, float dr)
+{
+    size_t centerCnt = centers.size();
+    float minDist2 = minDist * minDist;
+    for (size_t i = 0; i < centerCnt; ++i)
+    {
+        int center = centers[i];
+        int y = center / acols;
+        int x = center - y * acols;
+        Vec4f circle = Vec4f((x + 0.5f) * dr, (y + 0.5f) * dr, 0, (float)center);
+
+        bool goodPoint = CheckDistance(circles, circles.size(), circle, minDist2);
+        if (goodPoint)
+            circles.push_back(circle);
+    }
+}
+
+template<typename T>
+static void RemoveOverlaps(std::vector<T>& circles, float minDist)
+{
+    if (circles.size() <= 1u)
+        return;
+    float minDist2 = minDist * minDist;
+    size_t endIdx = 1;
+    for (size_t i = 1; i < circles.size(); ++i)
+    {
+        T circle = circles[i];
+        if (CheckDistance(circles, endIdx, circle, minDist2))
+        {
+            circles[endIdx] = circle;
+            ++endIdx;
+        }
+    }
+    circles.resize(endIdx);
+}
+
+static void CreateCircles(const std::vector<EstimatedCircle>& circlesEst, std::vector<Vec3f>& circles)
+{
+    std::transform(circlesEst.begin(), circlesEst.end(), std::back_inserter(circles), GetCircle);
+}
+
+static void CreateCircles(const std::vector<EstimatedCircle>& circlesEst, std::vector<Vec4f>& circles)
+{
+    std::transform(circlesEst.begin(), circlesEst.end(), std::back_inserter(circles), GetCircle4f);
+}
+
+template<class NZPoints>
 class HoughCircleEstimateRadiusInvoker : public ParallelLoopBody
 {
 public:
-    HoughCircleEstimateRadiusInvoker(const std::vector<Point> &_nz, const std::vector<int> &_centers, std::vector<Vec3f> &_circles,
-                                     int _acols, int _circlesMax, int _accThreshold, int _minRadius, int _maxRadius,
-                                     float _minDist, float _dp, Mutex& _mutex) :
-        nz(_nz), centers(_centers), circles(_circles), acols(_acols), circlesMax(_circlesMax), accThreshold(_accThreshold),
-        minRadius(_minRadius), maxRadius(_maxRadius), minDist(_minDist), dr(_dp), _lock(_mutex)
+    HoughCircleEstimateRadiusInvoker(const NZPoints &_nz, int _nzSz, const std::vector<int> &_centers, std::vector<EstimatedCircle> &_circlesEst,
+                                     int _acols, int _accThreshold, int _minRadius, int _maxRadius,
+                                     float _dp, Mutex& _mutex) :
+        nz(_nz), nzSz(_nzSz), centers(_centers), circlesEst(_circlesEst), acols(_acols), accThreshold(_accThreshold),
+        minRadius(_minRadius), maxRadius(_maxRadius), dr(_dp), _lock(_mutex)
     {
         minRadius2 = (float)minRadius * minRadius;
         maxRadius2 = (float)maxRadius * maxRadius;
-        minDist = std::max(dr, minDist);
-        minDist *= minDist;
-        nzSz = (int)nz.size();
         centerSz = (int)centers.size();
-
-        iMax = -1;
-        isMaxCircles = false;
-        isLastCenter = false;
-        mc.reserve(64);
-        loopIdx = std::vector<bool>(centerSz + 1, false);
-#if CV_SIMD128
-        haveSIMD = hasSIMD128();
-        if(haveSIMD)
-        {
-            v_minRadius2 = v_setall_f32(minRadius2);
-            v_maxRadius2 = v_setall_f32(maxRadius2);
-        }
-#endif
+        CV_Assert(nzSz > 0);
     }
 
-    ~HoughCircleEstimateRadiusInvoker() {_lock.unlock();}
+    ~HoughCircleEstimateRadiusInvoker() {}
 
-    void operator()(const Range &boundaries) const
+protected:
+    inline int filterCircles(const Point2f& curCenter, float* ddata) const;
+
+    void operator()(const Range &boundaries) const CV_OVERRIDE
     {
-        if (isMaxCircles)
-            return;
-
+        std::vector<EstimatedCircle> circlesLocal;
         const int nBinsPerDr = 10;
         int nBins = cvRound((maxRadius - minRadius)/dr*nBinsPerDr);
-        std::vector<int> bins(nBins, 0);
-        Mat distBuf(1, nzSz, CV_32FC1), distSqrBuf(1, nzSz, CV_32FC1);
-        float *ddata = distBuf.ptr<float>();
-        float *dSqrData = distSqrBuf.ptr<float>();
+        AutoBuffer<int> bins(nBins);
+        AutoBuffer<float> distBuf(nzSz), distSqrtBuf(nzSz);
+        float *ddata = distBuf.data();
+        float *dSqrtData = distSqrtBuf.data();
 
         bool singleThread = (boundaries == Range(0, centerSz));
         int i = boundaries.start;
-
-        if(boundaries.end == centerSz)
-            isLastCenter = true;
 
         // For each found possible center
         // Estimate radius and check support
         for(; i < boundaries.end; ++i)
         {
-            if (isMaxCircles)
-                return;
-
             int ofs = centers[i];
             int y = ofs / acols;
             int x = ofs - y * acols;
 
             //Calculate circle's center in pixels
             Point2f curCenter = Point2f((x + 0.5f) * dr, (y + 0.5f) * dr);
+            int nzCount = filterCircles(curCenter, ddata);
+
+            int maxCount = 0;
             float rBest = 0;
-            int j = 0, nzCount = 0, maxCount = 0;
-
-            // Check distance with previously detected valid circles
-            int curCircleSz = (int)circles.size();
-            bool valid = checkDistance(curCenter, 0, curCircleSz);
-
-            if (isMaxCircles)
-                return;
-
-            if(valid)
+            if(nzCount)
             {
-#if CV_SIMD128
-                if(haveSIMD)
+                Mat_<float> distMat(1, nzCount, ddata);
+                Mat_<float> distSqrtMat(1, nzCount, dSqrtData);
+                sqrt(distMat, distSqrtMat);
+
+                memset(bins.data(), 0, sizeof(bins[0])*bins.size());
+                for(int k = 0; k < nzCount; k++)
                 {
-                    v_float32x4 v_curCenterX = v_setall_f32(curCenter.x);
-                    v_float32x4 v_curCenterY = v_setall_f32(curCenter.y);
+                    int bin = std::max(0, std::min(nBins-1, cvRound((dSqrtData[k] - minRadius)/dr*nBinsPerDr)));
+                    bins[bin]++;
+                }
 
-                    float CV_DECL_ALIGNED(16) rbuf[4];
-                    int   CV_DECL_ALIGNED(16) mbuf[4];
-                    for(; j <= nzSz - 4; j += 4)
+                for(int j = nBins - 1; j > 0; j--)
+                {
+                    if(bins[j])
                     {
-                        v_float32x4 v_nzX, v_nzY;
-                        v_load_deinterleave((const float*)&nz[j], v_nzX, v_nzY);
-
-                        v_float32x4 v_x = v_cvt_f32(v_reinterpret_as_s32(v_nzX));
-                        v_float32x4 v_y = v_cvt_f32(v_reinterpret_as_s32(v_nzY));
-
-                        v_float32x4 v_dx = v_x - v_curCenterX;
-                        v_float32x4 v_dy = v_y - v_curCenterY;
-
-                        v_float32x4 v_r2 = (v_dx * v_dx) + (v_dy * v_dy);
-                        v_float32x4 vmask = (v_minRadius2 <= v_r2) & (v_r2 <= v_maxRadius2);
-
-                        v_store_aligned(rbuf, v_r2);
-                        v_store_aligned(mbuf, v_reinterpret_as_s32(vmask));
-                        for(int p = 0; p < 4; p++)
+                        int upbin = j;
+                        int curCount = 0;
+                        for(; j > upbin - nBinsPerDr && j >= 0; j--)
                         {
-                            if(mbuf[p] < 0)
-                            {
-                                ddata[nzCount] = rbuf[p]; nzCount++;
-                            }
+                            curCount += bins[j];
                         }
-                    }
-                }
-#endif
-
-                // Estimate best radius
-                for(; j < nzSz; ++j)
-                {
-                    Point pt = nz[j];
-                    float _dx = curCenter.x - pt.x, _dy = curCenter.y - pt.y;
-                    float _r2 = _dx * _dx + _dy * _dy;
-
-                    if(minRadius2 <= _r2 && _r2 <= maxRadius2)
-                    {
-                        ddata[nzCount] = _r2;
-                        ++nzCount;
-                    }
-                }
-
-                if (isMaxCircles)
-                    return;
-
-                if(nzCount)
-                {
-                    Mat bufRange = distSqrBuf.colRange(Range(0, nzCount));
-                    sqrt(distBuf.colRange(Range(0, nzCount)), bufRange);
-
-                    std::fill(bins.begin(), bins.end(), 0);
-                    for(int k = 0; k < nzCount; k++)
-                    {
-                        int bin = std::max(0, std::min(nBins-1, cvRound((dSqrData[k] - minRadius)/dr*nBinsPerDr)));
-                        bins[bin]++;
-                    }
-
-                    if (isMaxCircles)
-                        return;
-
-                    for(j = nBins - 1; j > 0; j--)
-                    {
-                        if(bins[j])
+                        float rCur = (upbin + j)/2.f /nBinsPerDr * dr + minRadius;
+                        if((curCount * rBest >= maxCount * rCur) ||
+                            (rBest < FLT_EPSILON && curCount >= maxCount))
                         {
-                            int upbin = j;
-                            int curCount = 0;
-                            for(; j > upbin - nBinsPerDr && j >= 0; j--)
-                            {
-                                curCount += bins[j];
-                            }
-                            float rCur = (upbin + j)/2.f /nBinsPerDr * dr + minRadius;
-                            if((curCount * rBest >= maxCount * rCur) ||
-                               (rBest < FLT_EPSILON && curCount >= maxCount))
-                            {
-                                rBest = rCur;
-                                maxCount = curCount;
-                            }
+                            rBest = rCur;
+                            maxCount = curCount;
                         }
                     }
                 }
             }
 
+            // Check if the circle has enough support
+            if(maxCount > accThreshold)
+            {
+                circlesLocal.push_back(EstimatedCircle(Vec3f(curCenter.x, curCenter.y, rBest), maxCount));
+            }
+        }
+
+        if(!circlesLocal.empty())
+        {
+            std::sort(circlesLocal.begin(), circlesLocal.end(), cmpAccum);
             if(singleThread)
             {
-                // Check if the circle has enough support
-                if(maxCount > accThreshold)
-                {
-                    circles.push_back(Vec3f(curCenter.x, curCenter.y, rBest));
-
-                    if( circles.size() >= (unsigned int)circlesMax )
-                        return;
-                }
+                std::swap(circlesEst, circlesLocal);
             }
             else
             {
-                _lock.lock();
-                if(isMaxCircles)
-                {
-                    _lock.unlock();
-                    return;
-                }
-
-                loopIdx[i] = true;
-
-                if( maxCount > accThreshold )
-                {
-                    while(loopIdx[iMax + 1])
-                        ++iMax;
-
-                    // Temporary store circle, index and already checked index for block wise testing
-                    mc.push_back(markedCircle(Vec3f(curCenter.x, curCenter.y, rBest),
-                                              i, curCircleSz));
-
-                    if(i <= iMax)
-                    {
-                        std::sort(mc.begin(), mc.end(), cmpCircleIndex);
-                        for(int k = (int)mc.size() - 1; k >= 0; --k)
-                        {
-                            if(mc[k].idx <= iMax)
-                            {
-                                if(checkDistance(Point2f(mc[k].c[0], mc[k].c[1]),
-                                                 mc[k].idxC, (int)circles.size()))
-                                {
-                                    circles.push_back(mc[k].c);
-                                    if(circles.size() >= (unsigned int)circlesMax)
-                                    {
-                                        isMaxCircles = true;
-                                        _lock.unlock();
-                                        return;
-                                    }
-                                }
-                                mc.pop_back();
-                            }
-                            else
-                                break;
-                        }
-                    }
-                }
-
-                if(isLastCenter && !mc.empty())
-                {
-                    while(loopIdx[iMax + 1])
-                        ++iMax;
-
-                    if(iMax == centerSz - 1)
-                    {
-                        std::sort(mc.begin(), mc.end(), cmpCircleIndex);
-                        for(int k = (int)mc.size() - 1; k >= 0; --k)
-                        {
-                            if(checkDistance(Point2f(mc[k].c[0], mc[k].c[1]), mc[k].idxC, (int)circles.size()))
-                            {
-                                circles.push_back(mc[k].c);
-                                if(circles.size() >= (unsigned int)circlesMax)
-                                {
-                                    isMaxCircles = true;
-                                    _lock.unlock();
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }
-                _lock.unlock();
+                AutoLock alock(_lock);
+                if (circlesEst.empty())
+                    std::swap(circlesEst, circlesLocal);
+                else
+                    circlesEst.insert(circlesEst.end(), circlesLocal.begin(), circlesLocal.end());
             }
         }
     }
 
 private:
-    bool checkDistance(Point2f curCenter, int startIdx, int endIdx) const
-    {
-        // Check distance with previously detected circles
-        for(int j = startIdx; j < endIdx; ++j )
-        {
-            float dx = circles[j][0] - curCenter.x;
-            float dy = circles[j][1] - curCenter.y;
-
-            if( dx * dx + dy * dy < minDist )
-                return false;
-        }
-        return true;
-    }
-
-    const std::vector<Point> &nz;
+    const NZPoints &nz;
+    int nzSz;
     const std::vector<int> &centers;
-    std::vector<Vec3f> &circles;
-    int acols, circlesMax, accThreshold, minRadius, maxRadius;
-    float minDist, dr;
-
-#if CV_SIMD128
-    bool haveSIMD;
-    v_float32x4 v_minRadius2, v_maxRadius2;
-#endif
-    int nzSz, centerSz;
+    std::vector<EstimatedCircle> &circlesEst;
+    int acols, accThreshold, minRadius, maxRadius;
+    float dr;
+    int centerSz;
     float minRadius2, maxRadius2;
-
-    mutable std::vector<bool> loopIdx;
-    mutable std::vector<markedCircle> mc;
-    mutable volatile int iMax;
-    mutable volatile bool isMaxCircles, isLastCenter;
     Mutex& _lock;
 };
 
-static void HoughCirclesGradient(InputArray _image, OutputArray _circles, float dp, float minDist,
+template<>
+inline int HoughCircleEstimateRadiusInvoker<NZPointList>::filterCircles(const Point2f& curCenter, float* ddata) const
+{
+    int nzCount = 0;
+    const Point* nz_ = &nz[0];
+    int j = 0;
+#if CV_SIMD
+    {
+        const v_float32 v_minRadius2 = vx_setall_f32(minRadius2);
+        const v_float32 v_maxRadius2 = vx_setall_f32(maxRadius2);
+
+        v_float32 v_curCenterX = vx_setall_f32(curCenter.x);
+        v_float32 v_curCenterY = vx_setall_f32(curCenter.y);
+
+        float CV_DECL_ALIGNED(CV_SIMD_WIDTH) rbuf[v_float32::nlanes];
+        int CV_DECL_ALIGNED(CV_SIMD_WIDTH) rmask[v_int32::nlanes];
+        for(; j <= nzSz - v_float32::nlanes; j += v_float32::nlanes)
+        {
+            v_float32 v_nzX, v_nzY;
+            v_load_deinterleave((const float*)&nz_[j], v_nzX, v_nzY); // FIXIT use proper datatype
+
+            v_float32 v_x = v_cvt_f32(v_reinterpret_as_s32(v_nzX));
+            v_float32 v_y = v_cvt_f32(v_reinterpret_as_s32(v_nzY));
+
+            v_float32 v_dx = v_x - v_curCenterX;
+            v_float32 v_dy = v_y - v_curCenterY;
+
+            v_float32 v_r2 = (v_dx * v_dx) + (v_dy * v_dy);
+            v_float32 vmask = (v_minRadius2 <= v_r2) & (v_r2 <= v_maxRadius2);
+            if (v_check_any(vmask))
+            {
+                v_store_aligned(rmask, v_reinterpret_as_s32(vmask));
+                v_store_aligned(rbuf, v_r2);
+                for (int i = 0; i < v_int32::nlanes; ++i)
+                    if (rmask[i]) ddata[nzCount++] = rbuf[i];
+            }
+        }
+    }
+#endif
+
+    // Estimate best radius
+    for(; j < nzSz; ++j)
+    {
+        const Point pt = nz_[j];
+        float _dx = curCenter.x - pt.x, _dy = curCenter.y - pt.y;
+        float _r2 = _dx * _dx + _dy * _dy;
+
+        if(minRadius2 <= _r2 && _r2 <= maxRadius2)
+        {
+            ddata[nzCount++] = _r2;
+        }
+    }
+    return nzCount;
+}
+
+template<>
+inline int HoughCircleEstimateRadiusInvoker<NZPointSet>::filterCircles(const Point2f& curCenter, float* ddata) const
+{
+    int nzCount = 0;
+    const Mat_<uchar>& positions = nz.positions;
+
+    const int rOuter = maxRadius + 1;
+    const Range xOuter = Range(std::max(int(curCenter.x - rOuter), 0), std::min(int(curCenter.x + rOuter), positions.cols));
+    const Range yOuter = Range(std::max(int(curCenter.y - rOuter), 0), std::min(int(curCenter.y + rOuter), positions.rows));
+
+#if CV_SIMD
+    float v_seq[v_float32::nlanes];
+    for (int i = 0; i < v_float32::nlanes; ++i)
+        v_seq[i] = (float)i;
+    const v_float32 v_minRadius2 = vx_setall_f32(minRadius2);
+    const v_float32 v_maxRadius2 = vx_setall_f32(maxRadius2);
+    const v_float32 v_curCenterX_0123 = vx_setall_f32(curCenter.x) - vx_load(v_seq);
+#endif
+
+    for (int y = yOuter.start; y < yOuter.end; y++)
+    {
+        const uchar* ptr = positions.ptr(y, 0);
+        float dy = curCenter.y - y;
+        float dy2 = dy * dy;
+
+        int x = xOuter.start;
+#if CV_SIMD
+        {
+            const v_float32 v_dy2 = vx_setall_f32(dy2);
+            const v_uint32 v_zero_u32 = vx_setall_u32(0);
+            float CV_DECL_ALIGNED(CV_SIMD_WIDTH) rbuf[v_float32::nlanes];
+            int CV_DECL_ALIGNED(CV_SIMD_WIDTH) rmask[v_int32::nlanes];
+            for (; x <= xOuter.end - v_float32::nlanes; x += v_float32::nlanes)
+            {
+                v_uint32 v_mask = vx_load_expand_q(ptr + x);
+                v_mask = v_mask != v_zero_u32;
+
+                v_float32 v_x = v_cvt_f32(vx_setall_s32(x));
+                v_float32 v_dx = v_x - v_curCenterX_0123;
+
+                v_float32 v_r2 = (v_dx * v_dx) + v_dy2;
+                v_float32 vmask = (v_minRadius2 <= v_r2) & (v_r2 <= v_maxRadius2) & v_reinterpret_as_f32(v_mask);
+                if (v_check_any(vmask))
+                {
+                    v_store_aligned(rmask, v_reinterpret_as_s32(vmask));
+                    v_store_aligned(rbuf, v_r2);
+                    for (int i = 0; i < v_int32::nlanes; ++i)
+                        if (rmask[i]) ddata[nzCount++] = rbuf[i];
+                }
+            }
+        }
+#endif
+        for (; x < xOuter.end; x++)
+        {
+            if (ptr[x])
+            {
+                float _dx = curCenter.x - x;
+                float _r2 = _dx * _dx + dy2;
+                if(minRadius2 <= _r2 && _r2 <= maxRadius2)
+                {
+                    ddata[nzCount++] = _r2;
+                }
+            }
+        }
+    }
+    return nzCount;
+}
+
+template <typename CircleType>
+static void HoughCirclesGradient(InputArray _image, OutputArray _circles,
+                                 float dp, float minDist,
                                  int minRadius, int maxRadius, int cannyThreshold,
-                                 int accThreshold, int maxCircles, int kernelSize )
+                                 int accThreshold, int maxCircles, int kernelSize, bool centersOnly)
 {
     CV_Assert(kernelSize == -1 || kernelSize == 3 || kernelSize == 5 || kernelSize == 7);
+
     dp = max(dp, 1.f);
     float idp = 1.f/dp;
 
@@ -1407,19 +1650,20 @@ static void HoughCirclesGradient(InputArray _image, OutputArray _circles, float 
     Mutex mtx;
     int numThreads = std::max(1, getNumThreads());
     std::vector<Mat> accumVec;
-    std::vector<Point> nz;
+    NZPointSet nz(_image.rows(), _image.cols());
     parallel_for_(Range(0, edges.rows),
                   HoughCirclesAccumInvoker(edges, dx, dy, minRadius, maxRadius, idp, accumVec, nz, mtx),
                   numThreads);
-
-    if(nz.empty())
+    int nzSz = cv::countNonZero(nz.positions);
+    if(nzSz <= 0)
         return;
 
-    Mat accum = accumVec[0].clone();
+    Mat accum = accumVec[0];
     for(size_t i = 1; i < accumVec.size(); i++)
     {
         accum += accumVec[i];
     }
+    accumVec.clear();
 
     std::vector<int> centers;
 
@@ -1435,51 +1679,50 @@ static void HoughCirclesGradient(InputArray _image, OutputArray _circles, float 
 
     std::sort(centers.begin(), centers.end(), hough_cmp_gt(accum.ptr<int>()));
 
-    std::vector<Vec3f> circles;
+    std::vector<CircleType> circles;
     circles.reserve(256);
-
-    if(maxCircles == 0)
+    if (centersOnly)
     {
-        minDist *= minDist;
-        for(int i = 0; i < centerCnt; ++i)
+        // Just get the circle centers
+        GetCircleCenters(centers, circles, accum.cols, minDist, dp);
+    }
+    else
+    {
+        std::vector<EstimatedCircle> circlesEst;
+        if (nzSz < maxRadius * maxRadius)
         {
-            int _centers = centers[i];
-            int y = _centers / accum.cols;
-            int x = _centers - y * accum.cols;
-
-            bool goodPoint = true;
-            for(uint j = 0; j < circles.size(); ++j)
-            {
-                Vec3f pt = circles[j];
-                float distX = x - pt[0], distY = y - pt[1];
-                if (distX * distX + distY * distY < minDist)
-                {
-                    goodPoint = false; break;
-                }
-            }
-
-            if(goodPoint)
-                circles.push_back(Vec3f((x + 0.5f) * dp, (y + 0.5f) * dp, 0));
+            // Faster to use a list
+            NZPointList nzList(nzSz);
+            nz.toList(nzList);
+            // One loop iteration per thread if multithreaded.
+            parallel_for_(Range(0, centerCnt),
+                HoughCircleEstimateRadiusInvoker<NZPointList>(nzList, nzSz, centers, circlesEst, accum.cols,
+                    accThreshold, minRadius, maxRadius, dp, mtx),
+                numThreads);
+        }
+        else
+        {
+            // Faster to use a matrix
+            // One loop iteration per thread if multithreaded.
+            parallel_for_(Range(0, centerCnt),
+                HoughCircleEstimateRadiusInvoker<NZPointSet>(nz, nzSz, centers, circlesEst, accum.cols,
+                    accThreshold, minRadius, maxRadius, dp, mtx),
+                numThreads);
         }
 
-        if(circles.size() > 0)
-        {
-            _circles.create(1, (int)circles.size(), CV_32FC3);
-            Mat(1, (int)circles.size(), CV_32FC3, &circles[0]).copyTo(_circles.getMat());
-            return;
-        }
+        // Sort by accumulator value
+        std::sort(circlesEst.begin(), circlesEst.end(), cmpAccum);
+
+        // Create Circles
+        CreateCircles(circlesEst, circles);
+        RemoveOverlaps(circles, minDist);
     }
 
-    // One loop iteration per thread if multithreaded.
-    parallel_for_(Range(0, centerCnt),
-                  HoughCircleEstimateRadiusInvoker(nz, centers, circles, accum.cols, maxCircles,
-                                                   accThreshold, minRadius, maxRadius, minDist, dp, mtx),
-                  (numThreads > 1) ? centerCnt : 1);
-
-    if(circles.size() > 0)
+    if (circles.size() > 0)
     {
-        _circles.create(1, (int)circles.size(), CV_32FC3);
-        Mat(1, (int)circles.size(), CV_32FC3, &circles[0]).copyTo(_circles.getMat());
+        int numCircles = std::min(maxCircles, int(circles.size()));
+        Mat(1, numCircles, cv::traits::Type<CircleType>::value, &circles[0]).copyTo(_circles);
+        return;
     }
 }
 
@@ -1489,10 +1732,16 @@ static void HoughCircles( InputArray _image, OutputArray _circles,
                           int minRadius, int maxRadius,
                           int maxCircles, double param3 )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
+
+    int type = CV_32FC3;
+    if( _circles.fixedType() )
+    {
+        type = _circles.type();
+        CV_CheckType(type, type == CV_32FC3 || type == CV_32FC4, "Wrong type of output circles");
+    }
 
     CV_Assert(!_image.empty() && _image.type() == CV_8UC1 && (_image.isMat() || _image.isUMat()));
-    CV_Assert(_circles.isMat() || _circles.isVector());
 
     if( dp <= 0 || minDist <= 0 || param1 <= 0 || param2 <= 0)
         CV_Error( Error::StsOutOfRange, "dp, min_dist, canny_threshold and acc_threshold must be all positive numbers" );
@@ -1504,6 +1753,8 @@ static void HoughCircles( InputArray _image, OutputArray _circles,
     if(maxCircles < 0)
         maxCircles = INT_MAX;
 
+    bool centersOnly = (maxRadius < 0);
+
     if( maxRadius <= 0 )
         maxRadius = std::max( _image.rows(), _image.cols() );
     else if( maxRadius <= minRadius )
@@ -1512,9 +1763,16 @@ static void HoughCircles( InputArray _image, OutputArray _circles,
     switch( method )
     {
     case CV_HOUGH_GRADIENT:
-        HoughCirclesGradient(_image, _circles, (float)dp, (float)minDist,
-                             minRadius, maxRadius, cannyThresh,
-                             accThresh, maxCircles, kernelSize);
+        if (type == CV_32FC3)
+            HoughCirclesGradient<Vec3f>(_image, _circles, (float)dp, (float)minDist,
+                                        minRadius, maxRadius, cannyThresh,
+                                        accThresh, maxCircles, kernelSize, centersOnly);
+        else if (type == CV_32FC4)
+            HoughCirclesGradient<Vec4f>(_image, _circles, (float)dp, (float)minDist,
+                                        minRadius, maxRadius, cannyThresh,
+                                        accThresh, maxCircles, kernelSize, centersOnly);
+        else
+            CV_Error(Error::StsError, "Internal error");
         break;
     default:
         CV_Error( Error::StsBadArg, "Unrecognized method id. Actually only CV_HOUGH_GRADIENT is supported." );
@@ -1528,7 +1786,6 @@ void HoughCircles( InputArray _image, OutputArray _circles,
 {
     HoughCircles(_image, _circles, method, dp, minDist, param1, param2, minRadius, maxRadius, -1, 3);
 }
-
 } // \namespace cv
 
 
@@ -1598,12 +1855,12 @@ cvHoughLines2( CvArr* src_image, void* lineStorage, int method,
     switch( method )
     {
     case CV_HOUGH_STANDARD:
-        HoughLinesStandard( image, (float)rho,
-                (float)theta, threshold, l2, linesMax, min_theta, max_theta );
+        HoughLinesStandard( image, l2, CV_32FC2, (float)rho,
+                (float)theta, threshold, linesMax, min_theta, max_theta );
         break;
     case CV_HOUGH_MULTI_SCALE:
-        HoughLinesSDiv( image, (float)rho, (float)theta,
-                threshold, iparam1, iparam2, l2, linesMax, min_theta, max_theta );
+        HoughLinesSDiv( image, l2, CV_32FC2, (float)rho, (float)theta,
+                threshold, iparam1, iparam2, linesMax, min_theta, max_theta );
         break;
     case CV_HOUGH_PROBABILISTIC:
         HoughLinesProbabilistic( image, (float)rho, (float)theta,

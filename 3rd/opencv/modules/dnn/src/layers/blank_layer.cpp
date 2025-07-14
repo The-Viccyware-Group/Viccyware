@@ -40,12 +40,14 @@
 //
 //M*/
 #include "../precomp.hpp"
+#include "../op_inf_engine.hpp"
+#include "../ie_ngraph.hpp"
 
 namespace cv
 {
 namespace dnn
 {
-class BlankLayerImpl : public BlankLayer
+class BlankLayerImpl CV_FINAL : public BlankLayer
 {
 public:
     BlankLayerImpl(const LayerParams& params)
@@ -53,43 +55,73 @@ public:
         setParamsFrom(params);
     }
 
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
+    {
+#ifdef HAVE_INF_ENGINE
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+            return true;
+#endif
+        return backendId == DNN_BACKEND_OPENCV;
+    }
+
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
                          const int requiredOutputs,
                          std::vector<MatShape> &outputs,
-                         std::vector<MatShape> &internals) const
+                         std::vector<MatShape> &internals) const CV_OVERRIDE
     {
         Layer::getMemoryShapes(inputs, requiredOutputs, outputs, internals);
         return true;
     }
 
 #ifdef HAVE_OPENCL
-    bool forward_ocl(InputArrayOfArrays inputs, OutputArrayOfArrays outputs, OutputArrayOfArrays internals)
+    bool forward_ocl(InputArrayOfArrays inputs_, OutputArrayOfArrays outputs_, OutputArrayOfArrays internals_)
     {
+        std::vector<UMat> inputs;
+        std::vector<UMat> outputs;
+
+        inputs_.getUMatVector(inputs);
+        outputs_.getUMatVector(outputs);
+
+        for (int i = 0, n = outputs.size(); i < n; ++i)
+        {
+            void *src_handle = inputs[i].handle(ACCESS_READ);
+            void *dst_handle = outputs[i].handle(ACCESS_WRITE);
+            if (src_handle != dst_handle)
+                inputs[i].copyTo(outputs[i]);
+        }
+
         return true;
     }
 #endif
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
     {
         CV_TRACE_FUNCTION();
         CV_TRACE_ARG_VALUE(name, "name", name.c_str());
 
-        CV_OCL_RUN((preferableTarget == DNN_TARGET_OPENCL) &&
-                   OCL_PERFORMANCE_CHECK(ocl::Device::getDefault().isIntel()),
+        CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
                    forward_ocl(inputs_arr, outputs_arr, internals_arr))
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
-
-    void forward(std::vector<Mat*> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
 
         for (int i = 0, n = outputs.size(); i < n; ++i)
-            if (outputs[i].data != inputs[i]->data)
-                inputs[i]->copyTo(outputs[i]);
+            if (outputs[i].data != inputs[i].data)
+                inputs[i].copyTo(outputs[i]);
     }
+
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> >& inputs,
+                                        const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
+    {
+        auto& ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+        ngraph::OutputVector inp{ieInpNode};
+        auto blank = std::make_shared<ngraph::op::Concat>(inp, 0);
+        return Ptr<BackendNode>(new InfEngineNgraphNode(blank));
+    }
+#endif  // HAVE_DNN_NGRAPH
 };
 
 Ptr<Layer> BlankLayer::create(const LayerParams& params)

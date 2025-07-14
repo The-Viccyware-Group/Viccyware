@@ -208,7 +208,7 @@ CV_EXPORTS void pow(InputArray src, double power, OutputArray dst, Stream& strea
 
 @param src1 First source matrix or scalar.
 @param src2 Second source matrix or scalar.
-@param dst Destination matrix that has the same size and type as the input array(s).
+@param dst Destination matrix that has the same size as the input array(s) and type CV_8U.
 @param cmpop Flag specifying the relation between the elements to be checked:
 -   **CMP_EQ:** a(.) == b(.)
 -   **CMP_GT:** a(.) \> b(.)
@@ -415,10 +415,10 @@ CV_EXPORTS void cartToPolar(InputArray x, InputArray y, OutputArray magnitude, O
 
 /** @brief Converts polar coordinates into Cartesian.
 
-@param magnitude Source matrix containing magnitudes ( CV_32FC1 ).
-@param angle Source matrix containing angles ( CV_32FC1 ).
-@param x Destination matrix of real components ( CV_32FC1 ).
-@param y Destination matrix of imaginary components ( CV_32FC1 ).
+@param magnitude Source matrix containing magnitudes ( CV_32FC1 or CV_64FC1 ).
+@param angle Source matrix containing angles ( same type as magnitude ).
+@param x Destination matrix of real components ( same type as magnitude ).
+@param y Destination matrix of imaginary components ( same type as magnitude ).
 @param angleInDegrees Flag that indicates angles in degrees.
 @param stream Stream for the asynchronous version.
  */
@@ -505,9 +505,9 @@ CV_EXPORTS Ptr<LookUpTable> createLookUpTable(InputArray lut);
 @param src Source image. CV_8UC1 , CV_8UC4 , CV_32SC1 , and CV_32FC1 types are supported.
 @param dst Destination image with the same type as src. The size is
 Size(src.cols+left+right, src.rows+top+bottom) .
-@param top
-@param bottom
-@param left
+@param top Number of top pixels
+@param bottom Number of bottom pixels
+@param left Number of left pixels
 @param right Number of pixels in each direction from the source image rectangle to extrapolate.
 For example: top=1, bottom=1, left=1, right=1 mean that 1 pixel-wide border needs to be built.
 @param borderType Border type. See borderInterpolate for details. BORDER_REFLECT101 ,

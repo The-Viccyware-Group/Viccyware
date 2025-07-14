@@ -184,7 +184,7 @@ public:
      Mat Iyy( DELTA + kd.rows - 1, src.cols, dst.type() );
 
      // inside the loop we always pass DELTA rows to the filter
-     // (note that the "proceed" method takes care of possibe overflow, since
+     // (note that the "proceed" method takes care of possible overflow, since
      // it was given the actual image height in the "start" method)
      // on output we can get:
      //  * < DELTA rows (the initial buffer accumulation stage)
@@ -366,7 +366,6 @@ static inline Point normalizeAnchor( Point anchor, Size ksize )
 
 void preprocess2DKernel( const Mat& kernel, std::vector<Point>& coords, std::vector<uchar>& coeffs );
 void crossCorr( const Mat& src, const Mat& templ, Mat& dst,
-               Size corrsize, int ctype,
                Point anchor=Point(0,0), double delta=0,
                int borderType=BORDER_REFLECT_101 );
 

@@ -10,26 +10,42 @@ Implementation of Batch Normalization layer.
 */
 
 #include "../precomp.hpp"
-#include "op_halide.hpp"
+#include "layers_common.hpp"
+#include "../op_halide.hpp"
+#include "../op_inf_engine.hpp"
+#include "../ie_ngraph.hpp"
+
 #include <opencv2/dnn/shape_utils.hpp>
+
+#ifdef HAVE_OPENCL
+#include "opencl_kernels_dnn.hpp"
+#endif
 
 namespace cv
 {
 namespace dnn
 {
 
-class BatchNormLayerImpl : public BatchNormLayer
+class BatchNormLayerImpl CV_FINAL : public BatchNormLayer
 {
 public:
+    Mat origin_weights, origin_bias;
     Mat weights_, bias_;
+    UMat umat_weight, umat_bias;
+    mutable int dims;
+
 
     BatchNormLayerImpl(const LayerParams& params)
+        : dims(-1)
     {
         setParamsFrom(params);
-        CV_Assert(blobs.size() >= 3);
+        CV_Assert(blobs.size() >= 2);
 
         hasWeights = params.get<bool>("has_weight", false);
         hasBias = params.get<bool>("has_bias", false);
+        useGlobalStats = params.get<bool>("use_global_stats", true);
+        if(params.get<bool>("scale_bias", false))
+            hasWeights = hasBias = true;
         epsilon = params.get<float>("eps", 1E-5);
 
         size_t n = blobs[0].total();
@@ -38,15 +54,15 @@ public:
                   blobs[0].type() == CV_32F && blobs[1].type() == CV_32F);
 
         float varMeanScale = 1.f;
-        if (!hasWeights && !hasBias) {
-            CV_Assert(blobs[2].type() == CV_32F);
+        if (!hasWeights && !hasBias && blobs.size() > 2 && useGlobalStats) {
+            CV_Assert(blobs.size() == 3); CV_CheckTypeEQ(blobs[2].type(), CV_32FC1, "");
             varMeanScale = blobs[2].at<float>(0);
             if (varMeanScale != 0)
                 varMeanScale = 1/varMeanScale;
         }
 
-        const int weightsBlobIndex = 2;
-        const int biasBlobIndex = weightsBlobIndex + hasWeights;
+        const int biasBlobIndex = blobs.size() - 1;
+        const int weightsBlobIndex = biasBlobIndex - hasBias;
 
         if( hasWeights )
         {
@@ -67,11 +83,11 @@ public:
         const float* weightsData = hasWeights ? blobs[weightsBlobIndex].ptr<float>() : 0;
         const float* biasData = hasBias ? blobs[biasBlobIndex].ptr<float>() : 0;
 
-        weights_.create(1, (int)n, CV_32F);
-        bias_.create(1, (int)n, CV_32F);
+        origin_weights.create(1, (int)n, CV_32F);
+        origin_bias.create(1, (int)n, CV_32F);
 
-        float* dstWeightsData = weights_.ptr<float>();
-        float* dstBiasData = bias_.ptr<float>();
+        float* dstWeightsData = origin_weights.ptr<float>();
+        float* dstBiasData = origin_bias.ptr<float>();
 
         for (size_t i = 0; i < n; ++i)
         {
@@ -81,47 +97,178 @@ public:
         }
     }
 
-    void getScaleShift(Mat& scale, Mat& shift) const
+    virtual void finalize(InputArrayOfArrays, OutputArrayOfArrays) CV_OVERRIDE
+    {
+        origin_weights.reshape(1, 1).copyTo(weights_);
+        origin_bias.reshape(1, 1).copyTo(bias_);
+    }
+
+    void getScaleShift(Mat& scale, Mat& shift) const CV_OVERRIDE
     {
         scale = weights_;
         shift = bias_;
     }
 
+    virtual bool tryFuse(Ptr<Layer>& top) CV_OVERRIDE
+    {
+        Mat w, b;
+        top->getScaleShift(w, b);
+        if (w.empty() && b.empty())
+            return false;
+
+        const int numChannels = weights_.total();
+        const int numFusedWeights = w.total();
+        const int numFusedBias = b.total();
+
+        if ((numFusedWeights != numChannels && numFusedWeights != 1 && !w.empty()) ||
+            (numFusedBias != numChannels && numFusedBias != 1 && !b.empty()))
+            return false;
+
+        if (!w.empty())
+        {
+            w = w.reshape(1, 1);
+            if (numFusedWeights == 1)
+            {
+                multiply(weights_, w.at<float>(0), weights_);
+                multiply(bias_, w.at<float>(0), bias_);
+            }
+            else
+            {
+                multiply(weights_, w, weights_);
+                multiply(bias_, w, bias_);
+            }
+        }
+        if (!b.empty())
+        {
+            b = b.reshape(1, 1);
+            if (numFusedBias == 1)
+                add(bias_, b.at<float>(0), bias_);
+            else
+                add(bias_, b.reshape(1, 1), bias_);
+        }
+        return true;
+    }
+
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
                          const int requiredOutputs,
                          std::vector<MatShape> &outputs,
-                         std::vector<MatShape> &internals) const
+                         std::vector<MatShape> &internals) const CV_OVERRIDE
     {
+        dims = inputs[0].size();
+        if (!useGlobalStats && inputs[0][0] != 1)
+            CV_Error(Error::StsNotImplemented, "Batch normalization in training mode with batch size > 1");
         Layer::getMemoryShapes(inputs, requiredOutputs, outputs, internals);
         return true;
     }
 
-    virtual bool supportBackend(int backendId)
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
     {
-        return backendId == DNN_BACKEND_DEFAULT ||
-               backendId == DNN_BACKEND_HALIDE && haveHalide();
+#ifdef HAVE_INF_ENGINE
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+            return preferableTarget == DNN_TARGET_CPU || dims == 4;
+#endif
+        return (backendId == DNN_BACKEND_OPENCV) ||
+               (backendId == DNN_BACKEND_HALIDE && haveHalide());
     }
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+#ifdef HAVE_OPENCL
+    bool forward_ocl(InputArrayOfArrays inputs_, OutputArrayOfArrays outputs_, OutputArrayOfArrays internals_)
     {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        std::vector<UMat> inputs;
+        std::vector<UMat> outputs;
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
-
-    void forward(std::vector<Mat*> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        bool use_half = (inputs_.depth() == CV_16S);
+        inputs_.getUMatVector(inputs);
+        outputs_.getUMatVector(outputs);
 
         CV_Assert(blobs.size() >= 2);
         CV_Assert(inputs.size() == 1);
 
-        Mat &inpBlob = *inputs[0];
-        CV_Assert(inpBlob.dims == 2 || inpBlob.dims == 4);
-        int rows = inpBlob.dims > 2 ? inpBlob.size[2] : 1;
-        int cols = inpBlob.dims > 2 ? inpBlob.size[3] : 1;
+        if (use_half && inputs[0].dims == 2)
+            return false;
+
+        if (umat_weight.empty())
+        {
+            weights_.copyTo(umat_weight);
+            bias_.copyTo(umat_bias);
+        }
+
+        UMat &inpBlob = inputs[0];
+        int groups = inpBlob.size[0];
+        int channels = inpBlob.size[1];
+        int planeSize = 1;
+        for (size_t i = 2; i < inpBlob.dims; i++) {
+            planeSize *= inpBlob.size[i];
+        }
+
+        String opts = (use_half) ? " -DDtype=half" : " -DDtype=float";
+        for (size_t ii = 0; ii < outputs.size(); ii++)
+        {
+            if (inpBlob.dims == 2)
+            {
+                UMat& src = inputs[ii];
+                UMat& dst = outputs[ii];
+                multiply(src, weights_, dst);
+                add(dst, bias_, dst);
+            }
+            else
+            {
+                MatShape s = shape(groups * channels, planeSize);
+                UMat src = inputs[ii].reshape(1, s.size(), &s[0]);
+                UMat dst = outputs[ii].reshape(1, s.size(), &s[0]);
+                int number = (s[1] % 8 == 0) ? 8 : ((s[1] % 4 == 0) ? 4 : 1);
+                String buildopt = format("-DNUM=%d", number) + opts;
+                String kname = format("batch_norm%d", number);
+                if (number == 1)
+                    buildopt += format(" -Dconvert_T=convert_%s", use_half ? "half" : "float");
+                else
+                    buildopt += format(" -Dconvert_T=convert_%s%d", use_half ? "half" : "float", number);
+                ocl::Kernel kernel(kname.c_str(), ocl::dnn::batchnorm_oclsrc, buildopt);
+                if (kernel.empty())
+                    return false;
+                size_t global[] = { (size_t)s[0], (size_t)(s[1] / number) };
+                kernel.set(0, ocl::KernelArg::PtrReadOnly(src));
+                kernel.set(1, (int)s[0]);
+                kernel.set(2, (int)s[1]);
+                kernel.set(3, (int)channels);
+                kernel.set(4, ocl::KernelArg::PtrReadOnly(umat_weight));
+                kernel.set(5, ocl::KernelArg::PtrReadOnly(umat_bias));
+                kernel.set(6, ocl::KernelArg::PtrWriteOnly(dst));
+                bool ret = kernel.run_(2, global, NULL, false);
+                if (!ret)
+                    return false;
+            }
+        }
+        return true;
+    }
+#endif
+
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
+    {
+        CV_TRACE_FUNCTION();
+        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+
+        CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
+                   forward_ocl(inputs_arr, outputs_arr, internals_arr))
+
+        if (inputs_arr.depth() == CV_16S)
+        {
+            forward_fallback(inputs_arr, outputs_arr, internals_arr);
+            return;
+        }
+
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
+
+        CV_Assert(blobs.size() >= 2);
+        CV_Assert(inputs.size() == 1);
+
+        Mat &inpBlob = inputs[0];
+        int planeSize = 1;
+        for (size_t i = 2; i < inpBlob.dims; i++) {
+            planeSize *= inpBlob.size[i];
+        }
 
         for (size_t ii = 0; ii < outputs.size(); ii++)
         {
@@ -133,15 +280,45 @@ public:
                 {
                     float w = weights_.at<float>(n);
                     float b = bias_.at<float>(n);
-                    Mat inpBlobPlane(rows, cols, CV_32F, inpBlob.ptr<float>(num, n));
-                    Mat outBlobPlane(rows, cols, CV_32F, outBlob.ptr<float>(num, n));
+                    Mat inpBlobPlane(1, planeSize, CV_32F, inpBlob.ptr<float>(num, n));
+                    Mat outBlobPlane(1, planeSize, CV_32F, outBlob.ptr<float>(num, n));
                     inpBlobPlane.convertTo(outBlobPlane, CV_32F, w, b);
                 }
             }
         }
     }
 
-    virtual Ptr<BackendNode> tryAttach(const Ptr<BackendNode>& node)
+    void forwardSlice(const float* srcptr, float* dstptr, int len, size_t planeSize, int cn0, int cn1) const CV_OVERRIDE
+    {
+        for( int cn = cn0; cn < cn1; cn++, srcptr += planeSize, dstptr += planeSize )
+        {
+            int i = 0;
+            float w = weights_.at<float>(cn);
+            float b = bias_.at<float>(cn);
+#if CV_SIMD128
+            v_float32x4 wV = v_setall_f32(w), bV = v_setall_f32(b);
+            for( ; i <= len - 16; i += 16 )
+            {
+                v_float32x4 x0 = v_load(srcptr + i);
+                v_float32x4 x1 = v_load(srcptr + i + 4);
+                v_float32x4 x2 = v_load(srcptr + i + 8);
+                v_float32x4 x3 = v_load(srcptr + i + 12);
+                x0 = v_muladd(x0, wV, bV);
+                x1 = v_muladd(x1, wV, bV);
+                x2 = v_muladd(x2, wV, bV);
+                x3 = v_muladd(x3, wV, bV);
+                v_store(dstptr + i, x0);
+                v_store(dstptr + i + 4, x1);
+                v_store(dstptr + i + 8, x2);
+                v_store(dstptr + i + 12, x3);
+            }
+#endif
+            for( ; i < len; i++ )
+                dstptr[i] = w * srcptr[i] + b;
+        }
+    }
+
+    virtual Ptr<BackendNode> tryAttach(const Ptr<BackendNode>& node) CV_OVERRIDE
     {
         switch (node->backendId)
         {
@@ -160,7 +337,7 @@ public:
         return Ptr<BackendNode>();
     }
 
-    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs)
+    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs) CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         Halide::Buffer<float> input = halideBuffer(inputs[0]);
@@ -187,10 +364,29 @@ public:
     }
 #endif  // HAVE_HALIDE
 
-    virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
-                           const std::vector<MatShape> &outputs) const
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> >& inputs, const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
     {
-        (void)outputs; // suppress unused variable warning
+        auto ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+        std::vector<size_t> shape(ieInpNode->get_shape().size(), 1);
+        shape[1] = weights_.total();
+        auto weight = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, ngraph::Shape(shape), weights_.data);
+        auto bias = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, ngraph::Shape(shape), bias_.data);
+#if INF_ENGINE_VER_MAJOR_GT(INF_ENGINE_RELEASE_2021_2)
+        auto scale_node = std::make_shared<ngraph::op::v1::Multiply>(ieInpNode, weight, ngraph::op::AutoBroadcastType::NUMPY);
+#else
+        auto scale_node = std::make_shared<ngraph::op::v0::Multiply>(ieInpNode, weight, ngraph::op::AutoBroadcastType::NUMPY);
+#endif
+        auto scale_shift = std::make_shared<ngraph::op::v1::Add>(scale_node, bias, ngraph::op::AutoBroadcastType::NUMPY);
+        return Ptr<BackendNode>(new InfEngineNgraphNode(scale_shift));
+    }
+#endif  // HAVE_DNN_NGRAPH
+
+    virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
+                           const std::vector<MatShape> &outputs) const CV_OVERRIDE
+    {
+        CV_UNUSED(outputs); // suppress unused variable warning
 
         int64 flops = 0;
         for(int i = 0; i < inputs.size(); i++)
@@ -199,6 +395,9 @@ public:
         }
         return flops;
     }
+
+private:
+    bool useGlobalStats;
 };
 
 Ptr<BatchNormLayer> BatchNormLayer::create(const LayerParams& params)

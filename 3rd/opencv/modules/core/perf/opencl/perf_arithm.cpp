@@ -44,7 +44,7 @@
 
 #ifdef HAVE_OPENCL
 
-namespace cvtest {
+namespace opencv_test {
 namespace ocl {
 
 ///////////// Lut ////////////////////////
@@ -117,7 +117,7 @@ OCL_PERF_TEST_P(LogFixture, Log, ::testing::Combine(
     OCL_TEST_CYCLE() cv::log(src, dst);
 
     if (CV_MAT_DEPTH(type) >= CV_32F)
-        SANITY_CHECK(dst, 1e-5, ERROR_RELATIVE);
+        SANITY_CHECK(dst, 2e-4, ERROR_RELATIVE);
     else
         SANITY_CHECK(dst, 1);
 }
@@ -352,7 +352,7 @@ enum
 
 CV_ENUM(FlipType, FLIP_BOTH, FLIP_ROWS, FLIP_COLS)
 
-typedef std::tr1::tuple<Size, MatType, FlipType> FlipParams;
+typedef tuple<Size, MatType, FlipType> FlipParams;
 typedef TestBaseWithParam<FlipParams> FlipFixture;
 
 OCL_PERF_TEST_P(FlipFixture, Flip,
@@ -570,7 +570,7 @@ OCL_PERF_TEST_P(BitwiseNotFixture, Bitwise_not,
 
 CV_ENUM(CmpCode, CMP_LT, CMP_LE, CMP_EQ, CMP_NE, CMP_GE, CMP_GT)
 
-typedef std::tr1::tuple<Size, MatType, CmpCode> CompareParams;
+typedef tuple<Size, MatType, CmpCode> CompareParams;
 typedef TestBaseWithParam<CompareParams> CompareFixture;
 
 OCL_PERF_TEST_P(CompareFixture, Compare,
@@ -678,7 +678,12 @@ OCL_PERF_TEST_P(SqrtFixture, Sqrt, ::testing::Combine(
 
     OCL_TEST_CYCLE() cv::sqrt(src, dst);
 
-    if (CV_MAT_DEPTH(type) >= CV_32F)
+    // To square root 32 bit floats we use native_sqrt, which has implementation
+    // defined accuracy. We know intel devices have accurate native_sqrt, but
+    // otherwise stick to a relaxed sanity check. For types larger than 32 bits
+    // we can do the accuracy check for all devices as normal.
+    if (CV_MAT_DEPTH(type) > CV_32F || !ocl::useOpenCL() ||
+        ocl::Device::getDefault().isIntel())
         SANITY_CHECK(dst, 1e-5, ERROR_RELATIVE);
     else
         SANITY_CHECK(dst, 1);
@@ -773,7 +778,7 @@ OCL_PERF_TEST_P(MeanStdDevFixture, MeanStdDevWithMask,
 
 CV_ENUM(NormType, NORM_INF, NORM_L1, NORM_L2)
 
-typedef std::tr1::tuple<Size, MatType, NormType> NormParams;
+typedef tuple<Size, MatType, NormType> NormParams;
 typedef TestBaseWithParam<NormParams> NormFixture;
 
 OCL_PERF_TEST_P(NormFixture, Norm1Arg,
@@ -1176,6 +1181,6 @@ OCL_PERF_TEST_P(ReduceAccFixture, Reduce,
     SANITY_CHECK(dst, eps);
 }
 
-} } // namespace cvtest::ocl
+} } // namespace opencv_test::ocl
 
 #endif // HAVE_OPENCL

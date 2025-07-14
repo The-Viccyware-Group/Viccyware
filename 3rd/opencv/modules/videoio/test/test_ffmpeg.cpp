@@ -41,9 +41,8 @@
 //M*/
 
 #include "test_precomp.hpp"
-#include "opencv2/videoio.hpp"
 
-using namespace cv;
+namespace opencv_test { namespace {
 
 #ifdef HAVE_FFMPEG
 
@@ -195,7 +194,7 @@ public:
         {
             string filename = ts->get_data_path() + "readwrite/ordinary.bmp";
             VideoCapture cap(filename, CAP_FFMPEG);
-            Mat img0 = imread(filename, 1);
+            Mat img0 = imread(filename, IMREAD_COLOR);
             Mat img, img_next;
             cap >> img;
             cap >> img_next;
@@ -219,6 +218,141 @@ TEST(Videoio_Video, ffmpeg_image) { CV_FFmpegReadImageTest test; test.safe_run()
 
 #if defined(HAVE_FFMPEG)
 
+typedef tuple<VideoCaptureAPIs, string, string, string, string, string> videoio_container_params_t;
+typedef testing::TestWithParam< videoio_container_params_t > videoio_container;
+
+TEST_P(videoio_container, read)
+{
+    const VideoCaptureAPIs api = get<0>(GetParam());
+
+    //if (!videoio_registry::hasBackend(api))
+    //    throw SkipTestException("Backend was not found");
+
+    const string path = get<1>(GetParam());
+    const string ext = get<2>(GetParam());
+    const string ext_raw = get<3>(GetParam());
+    const string codec = get<4>(GetParam());
+    const string pixelFormat = get<5>(GetParam());
+    const string fileName = path + "." + ext;
+    const string fileNameOut = tempfile(cv::format("test_container_stream.%s", ext_raw.c_str()).c_str());
+
+    // Write encoded video read using VideoContainer to tmp file
+    size_t totalBytes = 0;
+    {
+        VideoCapture container(findDataFile(fileName), api);
+        if (!container.isOpened())
+            throw SkipTestException("Video stream is not supported");
+        if (!container.set(CAP_PROP_FORMAT, -1))  // turn off video decoder (extract stream)
+            throw SkipTestException("Fetching of RAW video streams is not supported");
+        ASSERT_EQ(-1.f, container.get(CAP_PROP_FORMAT));  // check
+        EXPECT_EQ(codec, fourccToString((int)container.get(CAP_PROP_FOURCC)));
+        EXPECT_EQ(pixelFormat, fourccToString((int)container.get(CAP_PROP_CODEC_PIXEL_FORMAT)));
+
+        std::ofstream file(fileNameOut.c_str(), ios::out | ios::trunc | std::ios::binary);
+        Mat raw_data;
+        while (true)
+        {
+            container >> raw_data;
+            size_t size = raw_data.total();
+            if (raw_data.empty())
+                break;
+            ASSERT_EQ(CV_8UC1, raw_data.type());
+            ASSERT_LE(raw_data.dims, 2);
+            ASSERT_EQ(raw_data.rows, 1);
+            ASSERT_EQ((size_t)raw_data.cols, raw_data.total());
+            ASSERT_TRUE(raw_data.isContinuous());
+            totalBytes += size;
+            file.write(reinterpret_cast<char*>(raw_data.data), size);
+            ASSERT_FALSE(file.fail());
+        }
+        ASSERT_GE(totalBytes, (size_t)65536) << "Encoded stream is too small";
+    }
+
+    std::cout << "Checking extracted video stream: " << fileNameOut << " (size: " << totalBytes << " bytes)" << std::endl;
+
+    // Check decoded frames read from original media are equal to frames decoded from tmp file
+    {
+        VideoCapture capReference(findDataFile(fileName), api);
+        ASSERT_TRUE(capReference.isOpened());
+        VideoCapture capActual(fileNameOut.c_str(), api);
+        ASSERT_TRUE(capActual.isOpened());
+        Mat reference, actual;
+        int nframes = 0, n_err = 0;
+        while (capReference.read(reference) && n_err < 3)
+        {
+            nframes++;
+            ASSERT_TRUE(capActual.read(actual)) << nframes;
+            EXPECT_EQ(0, cvtest::norm(actual, reference, NORM_INF)) << "frame=" << nframes << " err=" << ++n_err;
+        }
+        ASSERT_GT(nframes, 0);
+    }
+
+    ASSERT_EQ(0, remove(fileNameOut.c_str()));
+}
+
+const videoio_container_params_t videoio_container_params[] =
+{
+    videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h264", "h264", "h264", "I420"),
+    videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h265", "h265", "hevc", "I420"),
+    videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "mjpg.avi", "mjpg", "MJPG", "I420"),
+    //videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h264.mkv", "mkv.h264", "h264", "I420"),
+    //videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h265.mkv", "mkv.h265", "hevc", "I420"),
+    //videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h264.mp4", "mp4.avc1", "avc1", "I420"),
+    //videoio_container_params_t(CAP_FFMPEG, "video/big_buck_bunny", "h265.mp4", "mp4.hev1", "hev1", "I420"),
+};
+
+INSTANTIATE_TEST_CASE_P(/**/, videoio_container, testing::ValuesIn(videoio_container_params));
+
+typedef tuple<string, string, int> videoio_skip_params_t;
+typedef testing::TestWithParam< videoio_skip_params_t > videoio_skip;
+
+TEST_P(videoio_skip, DISABLED_read)  // optional test, may fail in some configurations
+{
+#if CV_VERSION_MAJOR >= 4
+    if (!videoio_registry::hasBackend(CAP_FFMPEG))
+        throw SkipTestException("Backend was not found");
+#endif
+
+    const string path = get<0>(GetParam());
+    const string env = get<1>(GetParam());
+    const int expectedFrameNumber = get<2>(GetParam());
+
+    #ifdef _WIN32
+        _putenv_s("OPENCV_FFMPEG_CAPTURE_OPTIONS", env.c_str());
+    #else
+        setenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", env.c_str(), 1);
+    #endif
+    VideoCapture container(findDataFile(path), CAP_FFMPEG);
+    #ifdef _WIN32
+        _putenv_s("OPENCV_FFMPEG_CAPTURE_OPTIONS", "");
+    #else
+        setenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", "", 1);
+    #endif
+
+    ASSERT_TRUE(container.isOpened());
+
+    Mat reference;
+    int nframes = 0, n_err = 0;
+    while (container.isOpened())
+    {
+        if (container.read(reference))
+            nframes++;
+        else if (++n_err > 3)
+            break;
+    }
+    EXPECT_EQ(expectedFrameNumber, nframes);
+}
+
+const videoio_skip_params_t videoio_skip_params[] =
+{
+    videoio_skip_params_t("video/big_buck_bunny.mp4", "", 125),
+    videoio_skip_params_t("video/big_buck_bunny.mp4", "avdiscard;nonkey", 11)
+};
+
+INSTANTIATE_TEST_CASE_P(/**/, videoio_skip, testing::ValuesIn(videoio_skip_params));
+
+//==========================================================================
+
 //////////////////////////////// Parallel VideoWriters and VideoCaptures ////////////////////////////////////
 
 class CreateVideoWriterInvoker :
@@ -228,12 +362,12 @@ public:
     const static Size FrameSize;
     static std::string TmpDirectory;
 
-    CreateVideoWriterInvoker(std::vector<VideoWriter*>& _writers, std::vector<std::string>& _files) :
-        ParallelLoopBody(), writers(&_writers), files(&_files)
+    CreateVideoWriterInvoker(std::vector< cv::Ptr<VideoWriter> >& _writers, std::vector<std::string>& _files) :
+        writers(_writers), files(_files)
     {
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         for (int i = range.start; i != range.end; ++i)
         {
@@ -241,16 +375,16 @@ public:
             stream << i << ".avi";
             std::string fileName = tempfile(stream.str().c_str());
 
-            files->operator[](i) = fileName;
-            writers->operator[](i) = new VideoWriter(fileName, CAP_FFMPEG, VideoWriter::fourcc('X','V','I','D'), 25.0f, FrameSize);
+            files[i] = fileName;
+            writers[i] = makePtr<VideoWriter>(fileName, CAP_FFMPEG, VideoWriter::fourcc('X','V','I','D'), 25.0f, FrameSize);
 
-            CV_Assert(writers->operator[](i)->isOpened());
+            CV_Assert(writers[i]->isOpened());
         }
     }
 
 private:
-    std::vector<VideoWriter*>* writers;
-    std::vector<std::string>* files;
+    std::vector< cv::Ptr<VideoWriter> >& writers;
+    std::vector<std::string>& files;
 };
 
 std::string CreateVideoWriterInvoker::TmpDirectory;
@@ -265,7 +399,7 @@ public:
     static const Scalar ObjectColor;
     static const Point Center;
 
-    WriteVideo_Invoker(const std::vector<VideoWriter*>& _writers) :
+    WriteVideo_Invoker(const std::vector< cv::Ptr<VideoWriter> >& _writers) :
         ParallelLoopBody(), writers(&_writers)
     {
     }
@@ -279,7 +413,7 @@ public:
         circle(frame, Center, i + 2, ObjectColor, 2, CV_AA);
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         for (int j = range.start; j < range.end; ++j)
         {
@@ -305,7 +439,7 @@ protected:
     }
 
 private:
-    const std::vector<VideoWriter*>* writers;
+    const std::vector< cv::Ptr<VideoWriter> >* writers;
 };
 
 const Scalar WriteVideo_Invoker::ObjectColor(Scalar::all(0));
@@ -316,21 +450,21 @@ class CreateVideoCaptureInvoker :
     public ParallelLoopBody
 {
 public:
-    CreateVideoCaptureInvoker(std::vector<VideoCapture*>& _readers, const std::vector<std::string>& _files) :
+    CreateVideoCaptureInvoker(std::vector< cv::Ptr<VideoCapture> >& _readers, const std::vector<std::string>& _files) :
         ParallelLoopBody(), readers(&_readers), files(&_files)
     {
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         for (int i = range.start; i != range.end; ++i)
         {
-            readers->operator[](i) = new VideoCapture(files->operator[](i), CAP_FFMPEG);
+            readers->operator[](i) = makePtr<VideoCapture>(files->operator[](i), CAP_FFMPEG);
             CV_Assert(readers->operator[](i)->isOpened());
         }
     }
 private:
-    std::vector<VideoCapture*>* readers;
+    std::vector< cv::Ptr<VideoCapture> >* readers;
     const std::vector<std::string>* files;
 };
 
@@ -338,16 +472,16 @@ class ReadImageAndTest :
     public ParallelLoopBody
 {
 public:
-    ReadImageAndTest(const std::vector<VideoCapture*>& _readers, cvtest::TS* _ts) :
+    ReadImageAndTest(const std::vector< cv::Ptr<VideoCapture> >& _readers, cvtest::TS* _ts) :
         ParallelLoopBody(), readers(&_readers), ts(_ts)
     {
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         for (int j = range.start; j < range.end; ++j)
         {
-            VideoCapture* capture = readers->operator[](j);
+            VideoCapture* capture = readers->operator[](j).get();
             CV_Assert(capture != NULL);
             CV_Assert(capture->isOpened());
 
@@ -358,6 +492,8 @@ public:
 
             for (unsigned int i = 0; i < frameCount && next; ++i)
             {
+                SCOPED_TRACE(cv::format("frame=%d/%d", (int)i, (int)frameCount));
+
                 Mat actual;
                 (*capture) >> actual;
 
@@ -393,7 +529,7 @@ public:
     static bool next;
 
 private:
-    const std::vector<VideoCapture*>* readers;
+    const std::vector< cv::Ptr<VideoCapture> >* readers;
     cvtest::TS* ts;
 };
 
@@ -405,7 +541,7 @@ TEST(Videoio_Video_parallel_writers_and_readers, accuracy)
     cvtest::TS* ts = cvtest::TS::ptr();
 
     // creating VideoWriters
-    std::vector<VideoWriter*> writers(threadsCount);
+    std::vector< cv::Ptr<VideoWriter> > writers(threadsCount);
     Range range(0, threadsCount);
     std::vector<std::string> files(threadsCount);
     CreateVideoWriterInvoker invoker1(writers, files);
@@ -415,11 +551,9 @@ TEST(Videoio_Video_parallel_writers_and_readers, accuracy)
     parallel_for_(range, WriteVideo_Invoker(writers));
 
     // deleting the writers
-    for (std::vector<VideoWriter*>::iterator i = writers.begin(), end = writers.end(); i != end; ++i)
-        delete *i;
     writers.clear();
 
-    std::vector<VideoCapture*> readers(threadsCount);
+    std::vector<cv::Ptr<VideoCapture> > readers(threadsCount);
     CreateVideoCaptureInvoker invoker2(readers, files);
     parallel_for_(range, invoker2);
 
@@ -436,8 +570,123 @@ TEST(Videoio_Video_parallel_writers_and_readers, accuracy)
     }
 
     // delete the readers
-    for (std::vector<VideoCapture *>::iterator i = readers.begin(), end = readers.end(); i != end; ++i)
-        delete *i;
+    readers.clear();
+}
+
+typedef std::pair<VideoCaptureProperties, double> cap_property_t;
+typedef std::vector<cap_property_t> cap_properties_t;
+typedef std::pair<std::string, cap_properties_t> ffmpeg_cap_properties_param_t;
+typedef testing::TestWithParam<ffmpeg_cap_properties_param_t> ffmpeg_cap_properties;
+
+#ifdef _WIN32
+namespace {
+::testing::AssertionResult IsOneOf(double value, double expected1, double expected2)
+{
+    // internal floating point class is used to perform accurate floating point types comparison
+    typedef ::testing::internal::FloatingPoint<double> FloatingPoint;
+
+    FloatingPoint val(value);
+    if (val.AlmostEquals(FloatingPoint(expected1)) || val.AlmostEquals(FloatingPoint(expected2)))
+    {
+        return ::testing::AssertionSuccess();
+    }
+    else
+    {
+        return ::testing::AssertionFailure()
+               << value << " is neither  equal to " << expected1 << " nor " << expected2;
+    }
+}
+}
+#endif
+
+TEST_P(ffmpeg_cap_properties, can_read_property)
+{
+    ffmpeg_cap_properties_param_t parameters = GetParam();
+    const std::string path = parameters.first;
+    const cap_properties_t properties = parameters.second;
+
+    VideoCapture cap(findDataFile(path), CAP_FFMPEG);
+    ASSERT_TRUE(cap.isOpened()) << "Can not open " << findDataFile(path);
+
+    for (std::size_t i = 0; i < properties.size(); ++i)
+    {
+        const cap_property_t& prop = properties[i];
+        const double actualValue = cap.get(static_cast<int>(prop.first));
+    #ifndef _WIN32
+        EXPECT_DOUBLE_EQ(actualValue, prop.second)
+            << "Property " << static_cast<int>(prop.first) << " has wrong value";
+    #else
+        EXPECT_TRUE(IsOneOf(actualValue, prop.second, 0.0))
+            << "Property " << static_cast<int>(prop.first) << " has wrong value";
+    #endif
+    }
+}
+
+cap_properties_t loadBigBuckBunnyFFProbeResults() {
+    cap_property_t properties[] = { cap_property_t(CAP_PROP_BITRATE, 5851.),
+                                    cap_property_t(CAP_PROP_FPS, 24.),
+                                    cap_property_t(CAP_PROP_FRAME_HEIGHT, 384.),
+                                    cap_property_t(CAP_PROP_FRAME_WIDTH, 672.) };
+    return cap_properties_t(properties, properties + sizeof(properties) / sizeof(cap_property_t));
+}
+
+const ffmpeg_cap_properties_param_t videoio_ffmpeg_properties[] = {
+    ffmpeg_cap_properties_param_t("video/big_buck_bunny.avi", loadBigBuckBunnyFFProbeResults())
+};
+
+INSTANTIATE_TEST_CASE_P(videoio, ffmpeg_cap_properties, testing::ValuesIn(videoio_ffmpeg_properties));
+
+// related issue: https://github.com/opencv/opencv/issues/15499
+TEST(videoio, mp4_orientation_meta_auto)
+{
+    string video_file = string(cvtest::TS::ptr()->get_data_path()) + "video/big_buck_bunny_rotated.mp4";
+
+    VideoCapture cap;
+    EXPECT_NO_THROW(cap.open(video_file, CAP_FFMPEG));
+    ASSERT_TRUE(cap.isOpened()) << "Can't open the video: " << video_file << " with backend " << CAP_FFMPEG << std::endl;
+
+    cap.set(CAP_PROP_ORIENTATION_AUTO, true);
+    if (cap.get(CAP_PROP_ORIENTATION_AUTO) == 0)
+        throw SkipTestException("FFmpeg frame rotation metadata is not supported");
+
+    Size actual;
+    EXPECT_NO_THROW(actual = Size((int)cap.get(CAP_PROP_FRAME_WIDTH),
+                                    (int)cap.get(CAP_PROP_FRAME_HEIGHT)));
+    EXPECT_EQ(384, actual.width);
+    EXPECT_EQ(672, actual.height);
+
+    Mat frame;
+
+    cap >> frame;
+
+    ASSERT_EQ(384, frame.cols);
+    ASSERT_EQ(672, frame.rows);
+}
+
+// related issue: https://github.com/opencv/opencv/issues/15499
+TEST(videoio, mp4_orientation_no_rotation)
+{
+    string video_file = string(cvtest::TS::ptr()->get_data_path()) + "video/big_buck_bunny_rotated.mp4";
+
+    VideoCapture cap;
+    EXPECT_NO_THROW(cap.open(video_file, CAP_FFMPEG));
+    cap.set(CAP_PROP_ORIENTATION_AUTO, 0);
+    ASSERT_TRUE(cap.isOpened()) << "Can't open the video: " << video_file << " with backend " << CAP_FFMPEG << std::endl;
+    ASSERT_FALSE(cap.get(CAP_PROP_ORIENTATION_AUTO));
+
+    Size actual;
+    EXPECT_NO_THROW(actual = Size((int)cap.get(CAP_PROP_FRAME_WIDTH),
+                                    (int)cap.get(CAP_PROP_FRAME_HEIGHT)));
+    EXPECT_EQ(672, actual.width);
+    EXPECT_EQ(384, actual.height);
+
+    Mat frame;
+
+    cap >> frame;
+
+    ASSERT_EQ(672, frame.cols);
+    ASSERT_EQ(384, frame.rows);
 }
 
 #endif
+}} // namespace

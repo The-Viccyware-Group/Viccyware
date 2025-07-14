@@ -41,8 +41,7 @@
 
 #include "test_precomp.hpp"
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 void loadImage(string path, Mat &img)
 {
@@ -60,7 +59,7 @@ void checkEqual(Mat img0, Mat img1, double threshold, const string& name)
 static vector<float> DEFAULT_VECTOR;
 void loadExposureSeq(String path, vector<Mat>& images, vector<float>& times = DEFAULT_VECTOR)
 {
-    ifstream list_file((path + "list.txt").c_str());
+    std::ifstream list_file((path + "list.txt").c_str());
     ASSERT_TRUE(list_file.is_open());
     string name;
     float val;
@@ -76,7 +75,7 @@ void loadExposureSeq(String path, vector<Mat>& images, vector<float>& times = DE
 void loadResponseCSV(String path, Mat& response)
 {
     response = Mat(256, 1, CV_32FC3);
-    ifstream resp_file(path.c_str());
+    std::ifstream resp_file(path.c_str());
     for(int i = 0; i < 256; i++) {
         for(int c = 0; c < 3; c++) {
             resp_file >> response.at<Vec3f>(i)[c];
@@ -105,12 +104,6 @@ TEST(Photo_Tonemap, regression)
     loadImage(test_path + "drago.png", expected);
     result.convertTo(result, CV_8UC3, 255);
     checkEqual(result, expected, 3, "Drago");
-
-    Ptr<TonemapDurand> durand = createTonemapDurand(gamma);
-    durand->process(img, result);
-    loadImage(test_path + "durand.png", expected);
-    result.convertTo(result, CV_8UC3, 255);
-    checkEqual(result, expected, 3, "Durand");
 
     Ptr<TonemapReinhard> reinhard = createTonemapReinhard(gamma);
     reinhard->process(img, result);
@@ -141,7 +134,7 @@ TEST(Photo_AlignMTB, regression)
     int errors = 0;
 
     Ptr<AlignMTB> align = createAlignMTB(max_bits);
-    RNG rng = ::theRNG();
+    RNG rng = theRNG();
 
     for(int i = 0; i < TESTS_COUNT; i++) {
         Point shift(rng.uniform(0, max_shift), rng.uniform(0, max_shift));
@@ -214,11 +207,7 @@ TEST(Photo_MergeRobertson, regression)
     loadImage(test_path + "merge/robertson.hdr", expected);
     merge->process(images, result, times);
 
-#ifdef __aarch64__
     const float eps = 6.f;
-#else
-    const float eps = 5.f;
-#endif
     checkEqual(expected, result, eps, "MergeRobertson");
 }
 
@@ -238,7 +227,11 @@ TEST(Photo_CalibrateDebevec, regression)
     diff = diff.mul(1.0f / response);
     double max;
     minMaxLoc(diff, NULL, &max);
-    ASSERT_FALSE(max > 0.1);
+#if defined(__arm__) || defined(__aarch64__)
+    ASSERT_LT(max, 0.131);
+#else
+    ASSERT_LT(max, 0.1);
+#endif
 }
 
 TEST(Photo_CalibrateRobertson, regression)
@@ -255,3 +248,5 @@ TEST(Photo_CalibrateRobertson, regression)
     calibrate->process(images, response, times);
     checkEqual(expected, response, 1e-1f, "CalibrateRobertson");
 }
+
+}} // namespace

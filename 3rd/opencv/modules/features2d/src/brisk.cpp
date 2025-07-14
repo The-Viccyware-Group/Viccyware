@@ -51,7 +51,7 @@
 namespace cv
 {
 
-class BRISK_Impl : public BRISK
+class BRISK_Impl CV_FINAL : public BRISK
 {
 public:
     explicit BRISK_Impl(int thresh=30, int octaves=3, float patternScale=1.0f);
@@ -65,17 +65,17 @@ public:
 
     virtual ~BRISK_Impl();
 
-    int descriptorSize() const
+    int descriptorSize() const CV_OVERRIDE
     {
         return strings_;
     }
 
-    int descriptorType() const
+    int descriptorType() const CV_OVERRIDE
     {
         return CV_8U;
     }
 
-    int defaultNorm() const
+    int defaultNorm() const CV_OVERRIDE
     {
         return NORM_HAMMING;
     }
@@ -90,7 +90,7 @@ public:
     void detectAndCompute( InputArray image, InputArray mask,
                      CV_OUT std::vector<KeyPoint>& keypoints,
                      OutputArray descriptors,
-                     bool useProvidedKeypoints );
+                     bool useProvidedKeypoints ) CV_OVERRIDE;
 
 protected:
 
@@ -151,11 +151,11 @@ private:
 
 
 // a layer in the Brisk detector pyramid
-class CV_EXPORTS BriskLayer
+class BriskLayer
 {
 public:
   // constructor arguments
-  struct CV_EXPORTS CommonParams
+  struct CommonParams
   {
     static const int HALFSAMPLE = 0;
     static const int TWOTHIRDSAMPLE = 1;
@@ -223,7 +223,7 @@ private:
   int pixel_9_16_[25];
 };
 
-class CV_EXPORTS BriskScaleSpace
+class BriskScaleSpace
 {
 public:
   // construct telling the octaves number:
@@ -353,13 +353,30 @@ BRISK_Impl::generateKernel(const std::vector<float> &radiusList,
   const int rings = (int)radiusList.size();
   CV_Assert(radiusList.size() != 0 && radiusList.size() == numberList.size());
   points_ = 0; // remember the total number of points
+  double sineThetaLookupTable[n_rot_];
+  double cosThetaLookupTable[n_rot_];
   for (int ring = 0; ring < rings; ring++)
   {
     points_ += numberList[ring];
   }
+
+  // using a sine/cosine approximation for the lookup table
+  // utilizes the trig identities:
+  // sin(a + b) = sin(a)cos(b) + cos(a)sin(b)
+  // cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
+  // and the fact that sin(0) = 0, cos(0) = 1
+  double cosval = 1., sinval = 0.;
+  double dcos = cos(2*CV_PI/double(n_rot_)), dsin = sin(2*CV_PI/double(n_rot_));
+  for( size_t rot = 0; rot < n_rot_; ++rot)
+  {
+    sineThetaLookupTable[rot] = sinval;
+    cosThetaLookupTable[rot] = cosval;
+    double t = sinval*dcos + cosval*dsin;
+    cosval = cosval*dcos - sinval*dsin;
+    sinval = t;
+  }
   // set up the patterns
   patternPoints_ = new BriskPatternPoint[points_ * scales_ * n_rot_];
-  BriskPatternPoint* patternIterator = patternPoints_;
 
   // define the scale discretization:
   static const float lb_scale = (float)(std::log(scalerange_) / std::log(2.0));
@@ -370,46 +387,51 @@ BRISK_Impl::generateKernel(const std::vector<float> &radiusList,
 
   const float sigma_scale = 1.3f;
 
-  for (unsigned int scale = 0; scale < scales_; ++scale)
-  {
-    scaleList_[scale] = (float)std::pow((double) 2.0, (double) (scale * lb_scale_step));
-    sizeList_[scale] = 0;
-
-    // generate the pattern points look-up
-    double alpha, theta;
-    for (size_t rot = 0; rot < n_rot_; ++rot)
-    {
-      theta = double(rot) * 2 * CV_PI / double(n_rot_); // this is the rotation of the feature
-      for (int ring = 0; ring < rings; ++ring)
-      {
-        for (int num = 0; num < numberList[ring]; ++num)
-        {
-          // the actual coordinates on the circle
-          alpha = (double(num)) * 2 * CV_PI / double(numberList[ring]);
-          patternIterator->x = (float)(scaleList_[scale] * radiusList[ring] * cos(alpha + theta)); // feature rotation plus angle of the point
-          patternIterator->y = (float)(scaleList_[scale] * radiusList[ring] * sin(alpha + theta));
-          // and the gaussian kernel sigma
-          if (ring == 0)
-          {
-            patternIterator->sigma = sigma_scale * scaleList_[scale] * 0.5f;
-          }
-          else
-          {
-            patternIterator->sigma = (float)(sigma_scale * scaleList_[scale] * (double(radiusList[ring]))
-                                     * sin(CV_PI / numberList[ring]));
+  for (unsigned int scale = 0; scale < scales_; ++scale) {
+      scaleList_[scale] = (float) std::pow((double) 2.0, (double) (scale * lb_scale_step));
+      sizeList_[scale] = 0;
+      BriskPatternPoint *patternIteratorOuter = patternPoints_ + (scale * n_rot_ * points_);
+      // generate the pattern points look-up
+      for (int ring = 0; ring < rings; ++ring) {
+          double scaleRadiusProduct = scaleList_[scale] * radiusList[ring];
+          float patternSigma = 0.0f;
+          if (ring == 0) {
+              patternSigma = sigma_scale * scaleList_[scale] * 0.5f;
+          } else {
+              patternSigma = (float) (sigma_scale * scaleList_[scale] * (double(radiusList[ring]))
+                                      * sin(CV_PI / numberList[ring]));
           }
           // adapt the sizeList if necessary
-          const unsigned int size = cvCeil(((scaleList_[scale] * radiusList[ring]) + patternIterator->sigma)) + 1;
-          if (sizeList_[scale] < size)
-          {
-            sizeList_[scale] = size;
+          const unsigned int size = cvCeil(((scaleList_[scale] * radiusList[ring]) + patternSigma)) + 1;
+          if (sizeList_[scale] < size) {
+              sizeList_[scale] = size;
           }
+          for (int num = 0; num < numberList[ring]; ++num) {
+              BriskPatternPoint *patternIterator = patternIteratorOuter;
+              double alpha = (double(num)) * 2 * CV_PI / double(numberList[ring]);
+              double sine_alpha = sin(alpha);
+              double cosine_alpha = cos(alpha);
 
-          // increment the iterator
-          ++patternIterator;
-        }
+              for (size_t rot = 0; rot < n_rot_; ++rot) {
+                  double cosine_theta = cosThetaLookupTable[rot];
+                  double sine_theta = sineThetaLookupTable[rot];
+
+                  // the actual coordinates on the circle
+                  // sin(a + b) = sin(a) cos(b) + cos(a) sin(b)
+                  // cos(a + b) = cos(a) cos(b) - sin(a) sin(b)
+                  patternIterator->x = (float) (scaleRadiusProduct *
+                                                (cosine_theta * cosine_alpha -
+                                                 sine_theta * sine_alpha)); // feature rotation plus angle of the point
+                  patternIterator->y = (float) (scaleRadiusProduct *
+                                                (sine_theta * cosine_alpha + cosine_theta * sine_alpha));
+                  patternIterator->sigma = patternSigma;
+                  // and the gaussian kernel sigma
+                  // increment the iterator
+                  patternIterator += points_;
+              }
+              ++patternIteratorOuter;
+          }
       }
-    }
   }
 
   // now also generate pairings
@@ -506,6 +528,7 @@ BRISK_Impl::smoothedIntensity(const cv::Mat& image, const cv::Mat& integral, con
   // scaling:
   const int scaling = (int)(4194304.0 / area);
   const int scaling2 = int(float(scaling) * area / 1024.0);
+  CV_Assert(scaling2 != 0);
 
   // the integral image is larger:
   const int integralcols = imagecols + 1;
@@ -1235,7 +1258,6 @@ BriskScaleSpace::isMax2D(const int layer, const int x_layer, const int y_layer)
   {
     // in this case, we have to analyze the situation more carefully:
     // the values are gaussian blurred and then we really decide
-    data = scores.ptr() + y_layer * scorescols + x_layer;
     int smoothedcenter = 4 * center + 2 * (s_10 + s10 + s0_1 + s01) + s_1_1 + s1_1 + s_11 + s11;
     for (unsigned int i = 0; i < deltasize; i += 2)
     {
@@ -1311,8 +1333,7 @@ BriskScaleSpace::refine3D(const int layer, const int x_layer, const int y_layer,
       int s_2_2 = l.getAgastScore_5_8(x_layer + 1, y_layer + 1, 1);
       max_below = std::max(s_2_2, max_below);
 
-      max_below_float = subpixel2D(s_0_0, s_0_1, s_0_2, s_1_0, s_1_1, s_1_2, s_2_0, s_2_1, s_2_2, delta_x_below,
-                                   delta_y_below);
+      subpixel2D(s_0_0, s_0_1, s_0_2, s_1_0, s_1_1, s_1_2, s_2_0, s_2_1, s_2_2, delta_x_below, delta_y_below);
       max_below_float = (float)max_below;
     }
     else
@@ -2238,6 +2259,7 @@ BriskLayer::value(const cv::Mat& mat, float xf, float yf, float scale_in) const
   // scaling:
   const int scaling = (int)(4194304.0f / area);
   const int scaling2 = (int)(float(scaling) * area / 1024.0f);
+  CV_Assert(scaling2 != 0);
 
   // calculate borders
   const float x_1 = xf - sigma_half;

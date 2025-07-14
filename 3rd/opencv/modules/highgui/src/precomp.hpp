@@ -58,7 +58,6 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
-#include <assert.h>
 
 #if defined _WIN32 || defined WINCE
     #include <windows.h>
@@ -94,6 +93,11 @@ void cvSetModeWindow_CARBON(const char* name, double prop_value);
 void cvSetModeWindow_COCOA(const char* name, double prop_value);
 void cvSetModeWindow_WinRT(const char* name, double prop_value);
 
+CvRect cvGetWindowRect_W32(const char* name);
+CvRect cvGetWindowRect_GTK(const char* name);
+CvRect cvGetWindowRect_CARBON(const char* name);
+CvRect cvGetWindowRect_COCOA(const char* name);
+
 double cvGetModeWindow_W32(const char* name);
 double cvGetModeWindow_GTK(const char* name);
 double cvGetModeWindow_CARBON(const char* name);
@@ -109,8 +113,17 @@ double cvGetRatioWindow_GTK(const char* name);
 double cvGetOpenGlProp_W32(const char* name);
 double cvGetOpenGlProp_GTK(const char* name);
 
+double cvGetPropVisible_W32(const char* name);
+
+double cvGetPropTopmost_W32(const char* name);
+double cvGetPropTopmost_COCOA(const char* name);
+
+void cvSetPropTopmost_W32(const char* name, const bool topmost);
+void cvSetPropTopmost_COCOA(const char* name, const bool topmost);
+
 //for QT
 #if defined (HAVE_QT)
+CvRect cvGetWindowRect_QT(const char* name);
 double cvGetModeWindow_QT(const char* name);
 void cvSetModeWindow_QT(const char* name, double prop_value);
 

@@ -39,12 +39,9 @@
 // the use of this software, even if advised of the possibility of such damage.
 //
 //M*/
-
 #include "test_precomp.hpp"
-#include <time.h>
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 #define sign(a) a > 0 ? 1 : a == 0 ? 0 : -1
 
@@ -76,7 +73,7 @@ public:
 protected:
 
     bool test_values(const cv::Mat& src);												// complex test for eigen without vectors
-    bool check_full(int type);													// compex test for symmetric matrix
+    bool check_full(int type);													// complex test for symmetric matrix
     virtual void run (int) = 0;													// main testing method
 
 protected:
@@ -177,7 +174,6 @@ bool Core_EigenTest::check_pair_count(const cv::Mat& src, const cv::Mat& evalues
         std::cout << "Number of rows: " << evalues.rows << "   Number of cols: " << evalues.cols << endl;
         std::cout << "Size of src symmetric matrix: " << src.rows << " * " << src.cols << endl; std::cout << endl;
         CV_Error(CORE_EIGEN_ERROR_COUNT, MESSAGE_ERROR_COUNT);
-        return false;
     }
     return true;
 }
@@ -193,7 +189,6 @@ bool Core_EigenTest::check_pair_count(const cv::Mat& src, const cv::Mat& evalues
         std::cout << "Number of rows: " << evectors.rows << "   Number of cols: " << evectors.cols << endl;
         std:: cout << "Size of src symmetric matrix: " << src.rows << " * " << src.cols << endl; std::cout << endl;
         CV_Error (CORE_EIGEN_ERROR_SIZE, MESSAGE_ERROR_SIZE);
-        return false;
     }
 
     if (!(evalues.rows == right_eigen_pair_count && evalues.cols == 1))
@@ -202,7 +197,6 @@ bool Core_EigenTest::check_pair_count(const cv::Mat& src, const cv::Mat& evalues
         std::cout << "Number of rows: " << evalues.rows << "   Number of cols: " << evalues.cols << endl;
         std:: cout << "Size of src symmetric matrix: " << src.rows << " * " << src.cols << endl; std::cout << endl;
         CV_Error (CORE_EIGEN_ERROR_COUNT, MESSAGE_ERROR_COUNT);
-        return false;
     }
 
     return true;
@@ -240,7 +234,6 @@ bool Core_EigenTest::check_orthogonality(const cv::Mat& U)
             std::cout << endl; std::cout << "Checking orthogonality of matrix " << U << ": ";
             print_information(i, U, diff, eps_vec);
             CV_Error(CORE_EIGEN_ERROR_ORTHO, MESSAGE_ERROR_ORTHO);
-            return false;
         }
     }
 
@@ -260,7 +253,6 @@ bool Core_EigenTest::check_pairs_order(const cv::Mat& eigen_values)
                 std::cout << "Pair of indexes with non descending of eigen values: (" << i << ", " << i+1 << ")." << endl;
                 std::cout << endl;
                 CV_Error(CORE_EIGEN_ERROR_ORDER, MESSAGE_ERROR_ORDER);
-                return false;
             }
 
             break;
@@ -275,7 +267,6 @@ bool Core_EigenTest::check_pairs_order(const cv::Mat& eigen_values)
                     std::cout << "Pair of indexes with non descending of eigen values: (" << i << ", " << i+1 << ")." << endl;
                     std::cout << endl;
                     CV_Error(CORE_EIGEN_ERROR_ORDER, "Eigen values are not sorted in descending order.");
-                    return false;
                 }
 
             break;
@@ -334,7 +325,6 @@ bool Core_EigenTest::test_pairs(const cv::Mat& src)
             std::cout << endl; std::cout << "Checking accuracy of eigen vectors computing for matrix " << src << ": ";
             print_information(i, src, diff, eps_vec);
             CV_Error(CORE_EIGEN_ERROR_DIFF, MESSAGE_ERROR_DIFF_2);
-            return false;
         }
     }
 
@@ -363,7 +353,6 @@ bool Core_EigenTest::test_values(const cv::Mat& src)
             std::cout << endl; std::cout << "Checking accuracy of eigen values computing for matrix " << src << ": ";
             print_information(i, src, diff, eps_val);
             CV_Error(CORE_EIGEN_ERROR_DIFF, MESSAGE_ERROR_DIFF_1);
-            return false;
         }
     }
 
@@ -374,7 +363,7 @@ bool Core_EigenTest::check_full(int type)
 {
     const int MAX_DEGREE = 7;
 
-    RNG rng = ::theRNG(); // fix the seed
+    RNG rng = cv::theRNG(); // fix the seed
 
     for (int i = 0; i < ntests; ++i)
     {
@@ -518,3 +507,39 @@ static void testEigen3x3()
 }
 TEST(Core_EigenNonSymmetric, float3x3) { testEigen3x3<float>(); }
 TEST(Core_EigenNonSymmetric, double3x3) { testEigen3x3<double>(); }
+
+typedef testing::TestWithParam<int> Core_EigenZero;
+TEST_P(Core_EigenZero, double)
+{
+    int N = GetParam();
+    Mat_<double> srcZero = Mat_<double>::zeros(N, N);
+    Mat_<double> expected_eigenvalueZero = Mat_<double>::zeros(N, 1);  // 1D Mat
+    testEigen(srcZero, expected_eigenvalueZero);
+    testEigen(srcZero, expected_eigenvalueZero, true);
+}
+INSTANTIATE_TEST_CASE_P(/**/, Core_EigenZero, testing::Values(2, 3, 5));
+
+TEST(Core_EigenNonSymmetric, convergence)
+{
+    Matx33d m(
+        0, -1, 0,
+        1, 0, 1,
+        0, -1, 0);
+    Mat eigenvalues, eigenvectors;
+    // eigen values are complex, algorithm doesn't converge
+    try
+    {
+        cv::eigenNonSymmetric(m, eigenvalues, eigenvectors);
+        std::cout << Mat(eigenvalues.t()) << std::endl;
+    }
+    catch (const cv::Exception& e)
+    {
+        EXPECT_EQ(Error::StsNoConv, e.code) << e.what();
+    }
+    catch (...)
+    {
+        FAIL() << "Unknown exception has been raised";
+    }
+}
+
+}} // namespace

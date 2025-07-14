@@ -409,7 +409,7 @@ bool GdalDecoder::readData( Mat& img ){
             color = 3;
             break;
         default:
-            CV_ErrorNoReturn(cv::Error::StsError, "Invalid/unsupported mode");
+            CV_Error(cv::Error::StsError, "Invalid/unsupported mode");
         }
 
         // make sure the image band has the same dimensions as the image
@@ -469,7 +469,7 @@ bool GdalDecoder::readHeader(){
         return false;
     }
 
-    //extract the driver infomation
+    //extract the driver information
     m_driver = m_dataset->GetDriver();
 
     // if the driver failed, then exit

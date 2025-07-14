@@ -89,7 +89,7 @@ extern int test_loop_times;
 #define EXPECT_MAT_NORM(mat, eps) \
 do \
 { \
-    EXPECT_LE(TestUtils::checkNorm1(mat), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNorm1(mat), eps) \
 } while ((void)0, 0)
 
 #undef EXPECT_MAT_NEAR
@@ -98,7 +98,7 @@ do \
 { \
     ASSERT_EQ(mat1.type(), mat2.type()); \
     ASSERT_EQ(mat1.size(), mat2.size()); \
-    EXPECT_LE(TestUtils::checkNorm2(mat1, mat2), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNorm2(mat1, mat2), eps) \
         << "Size: " << mat1.size() << std::endl; \
 } while ((void)0, 0)
 
@@ -107,7 +107,7 @@ do \
 { \
     ASSERT_EQ((mat1).type(), (mat2).type()); \
     ASSERT_EQ((mat1).size(), (mat2).size()); \
-    EXPECT_LE(TestUtils::checkNormRelative((mat1), (mat2)), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNormRelative((mat1), (mat2)), eps) \
         << "Size: " << (mat1).size() << std::endl; \
 } while ((void)0, 0)
 
@@ -122,12 +122,31 @@ do \
     << "Size: " << mat1.size() << std::endl; \
 } while ((void)0, 0)
 
+#define OCL_EXPECT_MAT_N_DIFF(name, eps) \
+do \
+{ \
+    ASSERT_EQ(name ## _roi.type(), u ## name ## _roi.type()); \
+    ASSERT_EQ(name ## _roi.size(), u ## name ## _roi.size()); \
+    Mat diff, binary, binary_8; \
+    absdiff(name ## _roi, u ## name ## _roi, diff); \
+    Mat mask(diff.size(), CV_8UC(dst.channels()), cv::Scalar::all(255)); \
+    if (mask.cols > 2 && mask.rows > 2) \
+        mask(cv::Rect(1, 1, mask.cols - 2, mask.rows - 2)).setTo(0); \
+    cv::threshold(diff, binary, (double)eps, 255, cv::THRESH_BINARY); \
+    EXPECT_LE(countNonZero(binary.reshape(1)), (int)(binary.cols*binary.rows*5/1000)) \
+        << "Size: " << name ## _roi.size() << std::endl; \
+    binary.convertTo(binary_8, mask.type()); \
+    binary_8 = binary_8 & mask; \
+    EXPECT_LE(countNonZero(binary_8.reshape(1)), (int)((binary_8.cols+binary_8.rows)/100)) \
+        << "Size: " << name ## _roi.size() << std::endl; \
+} while ((void)0, 0)
+
 #define OCL_EXPECT_MATS_NEAR(name, eps) \
 do \
 { \
     ASSERT_EQ(name ## _roi.type(), u ## name ## _roi.type()); \
     ASSERT_EQ(name ## _roi.size(), u ## name ## _roi.size()); \
-    EXPECT_LE(TestUtils::checkNorm2(name ## _roi, u ## name ## _roi), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNorm2(name ## _roi, u ## name ## _roi), eps) \
         << "Size: " << name ## _roi.size() << std::endl; \
     Point _offset; \
     Size _wholeSize; \
@@ -136,7 +155,7 @@ do \
     _mask(Rect(_offset, name ## _roi.size())).setTo(Scalar::all(0)); \
     ASSERT_EQ(name.type(), u ## name.type()); \
     ASSERT_EQ(name.size(), u ## name.size()); \
-    EXPECT_LE(TestUtils::checkNorm2(name, u ## name, _mask), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNorm2(name, u ## name, _mask), eps) \
         << "Size: " << name ## _roi.size() << std::endl; \
 } while ((void)0, 0)
 
@@ -164,7 +183,7 @@ do \
 { \
     ASSERT_EQ(name ## _roi.type(), u ## name ## _roi.type()); \
     ASSERT_EQ(name ## _roi.size(), u ## name ## _roi.size()); \
-    EXPECT_LE(TestUtils::checkNormRelativeSparse(name ## _roi, u ## name ## _roi), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNormRelativeSparse(name ## _roi, u ## name ## _roi), eps) \
         << "Size: " << name ## _roi.size() << std::endl; \
     Point _offset; \
     Size _wholeSize; \
@@ -173,7 +192,7 @@ do \
     _mask(Rect(_offset, name ## _roi.size())).setTo(Scalar::all(0)); \
     ASSERT_EQ(name.type(), u ## name.type()); \
     ASSERT_EQ(name.size(), u ## name.size()); \
-    EXPECT_LE(TestUtils::checkNormRelativeSparse(name, u ## name, _mask), eps) \
+    EXPECT_LE(cvtest::ocl::TestUtils::checkNormRelativeSparse(name, u ## name, _mask), eps) \
         << "Size: " << name ## _roi.size() << std::endl; \
 } while ((void)0, 0)
 
@@ -363,5 +382,10 @@ CV_ENUM(BorderType, BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT, BORDER_WR
     INSTANTIATE_TEST_CASE_P(OCL_ ## prefix, test_case_name, generator)
 
 } } // namespace cvtest::ocl
+
+namespace opencv_test {
+namespace ocl {
+using namespace cvtest::ocl;
+}} // namespace
 
 #endif // OPENCV_TS_OCL_TEST_HPP

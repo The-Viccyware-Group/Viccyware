@@ -41,8 +41,7 @@
 
 #include "test_precomp.hpp"
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 class CV_ImgWarpBaseTest : public cvtest::ArrayTest
 {
@@ -103,7 +102,6 @@ void CV_ImgWarpBaseTest::get_test_array_types_and_sizes( int test_case_idx,
     int cn = cvtest::randInt(rng) % 3 + 1;
     cvtest::ArrayTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
     depth = depth == 0 ? CV_8U : depth == 1 ? CV_16U : CV_32F;
-    cn += cn == 2;
 
     types[INPUT][0] = types[INPUT_OUTPUT][0] = types[REF_INPUT_OUTPUT][0] = CV_MAKETYPE(depth, cn);
     if( test_array[INPUT].size() > 1 )
@@ -170,7 +168,7 @@ int CV_ImgWarpBaseTest::prepare_test_case( int test_case_idx )
             }
             break;
         default:
-            assert(0);
+            CV_Assert(0);
         }
 
         /*switch( depth )
@@ -223,7 +221,7 @@ void CV_ResizeTest::get_test_array_types_and_sizes( int test_case_idx, vector<ve
 {
     RNG& rng = ts->get_rng();
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
-    CvSize sz;
+    Size sz;
 
     sz.width = (cvtest::randInt(rng) % sizes[INPUT][0].width) + 1;
     sz.height = (cvtest::randInt(rng) % sizes[INPUT][0].height) + 1;
@@ -273,7 +271,7 @@ double CV_ResizeTest::get_success_error_level( int /*test_case_idx*/, int /*i*/,
 
 void CV_ResizeTest::prepare_to_validation( int /*test_case_idx*/ )
 {
-    CvMat _src = test_mat[INPUT][0], _dst = test_mat[REF_INPUT_OUTPUT][0];
+    CvMat _src = cvMat(test_mat[INPUT][0]), _dst = cvMat(test_mat[REF_INPUT_OUTPUT][0]);
     CvMat *src = &_src, *dst = &_dst;
     int i, j, k;
     CvMat* x_idx = cvCreateMat( 1, dst->cols, CV_32SC1 );
@@ -347,14 +345,24 @@ protected:
 
 CV_ResizeExactTest::CV_ResizeExactTest() : CV_ResizeTest()
 {
-    max_interpolation = 1;
+    max_interpolation = 2;
 }
 
 
 void CV_ResizeExactTest::get_test_array_types_and_sizes(int test_case_idx, vector<vector<Size> >& sizes, vector<vector<int> >& types)
 {
     CV_ResizeTest::get_test_array_types_and_sizes(test_case_idx, sizes, types);
-    interpolation = INTER_LINEAR_EXACT;
+    switch (interpolation)
+    {
+    case 0:
+        interpolation = INTER_LINEAR_EXACT;
+        break;
+    case 1:
+        interpolation = INTER_NEAREST_EXACT;
+        break;
+    default:
+        CV_Assert(interpolation < max_interpolation);
+    }
     if (CV_MAT_DEPTH(types[INPUT][0]) == CV_32F ||
         CV_MAT_DEPTH(types[INPUT][0]) == CV_64F)
         types[INPUT][0] = types[INPUT_OUTPUT][0] = types[REF_INPUT_OUTPUT][0] = CV_MAKETYPE(CV_8U, CV_MAT_CN(types[INPUT][0]));
@@ -473,7 +481,7 @@ static void test_remap( const Mat& src, Mat& dst, const Mat& mapx, const Mat& ma
                 }
                 break;
             default:
-                assert(0);
+                CV_Assert(0);
             }
         }
     }
@@ -505,17 +513,17 @@ CV_WarpAffineTest::CV_WarpAffineTest() : CV_ImgWarpBaseTest( true )
 void CV_WarpAffineTest::get_test_array_types_and_sizes( int test_case_idx, vector<vector<Size> >& sizes, vector<vector<int> >& types )
 {
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
-    CvSize sz = sizes[INPUT][0];
+    Size sz = sizes[INPUT][0];
     // run for the second time to get output of a different size
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
     sizes[INPUT][0] = sz;
-    sizes[INPUT][1] = cvSize( 3, 2 );
+    sizes[INPUT][1] = Size( 3, 2 );
 }
 
 
 void CV_WarpAffineTest::run_func()
 {
-    CvMat mtx = test_mat[INPUT][1];
+    CvMat mtx = cvMat(test_mat[INPUT][1]);
     cvWarpAffine( test_array[INPUT][0], test_array[INPUT_OUTPUT][0], &mtx, interpolation );
 }
 
@@ -534,7 +542,7 @@ int CV_WarpAffineTest::prepare_test_case( int test_case_idx )
     const Mat& src = test_mat[INPUT][0];
     const Mat& dst = test_mat[INPUT_OUTPUT][0];
     Mat& mat = test_mat[INPUT][1];
-    CvPoint2D32f center;
+    Point2f center;
     double scale, angle;
 
     if( code <= 0 )
@@ -616,17 +624,17 @@ CV_WarpPerspectiveTest::CV_WarpPerspectiveTest() : CV_ImgWarpBaseTest( true )
 void CV_WarpPerspectiveTest::get_test_array_types_and_sizes( int test_case_idx, vector<vector<Size> >& sizes, vector<vector<int> >& types )
 {
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
-    CvSize sz = sizes[INPUT][0];
+    Size sz = sizes[INPUT][0];
     // run for the second time to get output of a different size
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
     sizes[INPUT][0] = sz;
-    sizes[INPUT][1] = cvSize( 3, 3 );
+    sizes[INPUT][1] = Size( 3, 3 );
 }
 
 
 void CV_WarpPerspectiveTest::run_func()
 {
-    CvMat mtx = test_mat[INPUT][1];
+    CvMat mtx = cvMat(test_mat[INPUT][1]);
     cvWarpPerspective( test_array[INPUT][0], test_array[INPUT_OUTPUT][0], &mtx, interpolation );
 }
 
@@ -642,8 +650,8 @@ int CV_WarpPerspectiveTest::prepare_test_case( int test_case_idx )
 {
     RNG& rng = ts->get_rng();
     int code = CV_ImgWarpBaseTest::prepare_test_case( test_case_idx );
-    const CvMat& src = test_mat[INPUT][0];
-    const CvMat& dst = test_mat[INPUT_OUTPUT][0];
+    const CvMat src = cvMat(test_mat[INPUT][0]);
+    const CvMat dst = cvMat(test_mat[INPUT_OUTPUT][0]);
     Mat& mat = test_mat[INPUT][1];
     Point2f s[4], d[4];
     int i;
@@ -881,7 +889,7 @@ void CV_UndistortTest::run_func()
 {
     if (!useCPlus)
     {
-        CvMat a = test_mat[INPUT][1], k = test_mat[INPUT][2];
+        CvMat a = cvMat(test_mat[INPUT][1]), k = cvMat(test_mat[INPUT][2]);
         cvUndistort2( test_array[INPUT][0], test_array[INPUT_OUTPUT][0], &a, &k);
     }
     else
@@ -1025,7 +1033,7 @@ void CV_UndistortMapTest::get_test_array_types_and_sizes( int test_case_idx, vec
     cvtest::ArrayTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
     int depth = cvtest::randInt(rng)%2 ? CV_64F : CV_32F;
 
-    CvSize sz = sizes[OUTPUT][0];
+    Size sz = sizes[OUTPUT][0];
     types[INPUT][0] = types[INPUT][1] = depth;
     dualChannel = cvtest::randInt(rng)%2 == 0;
     types[OUTPUT][0] = types[OUTPUT][1] =
@@ -1049,7 +1057,7 @@ void CV_UndistortMapTest::fill_array( int test_case_idx, int i, int j, Mat& arr 
 
 void CV_UndistortMapTest::run_func()
 {
-    CvMat a = test_mat[INPUT][0], k = test_mat[INPUT][1];
+    CvMat a = cvMat(test_mat[INPUT][0]), k = cvMat(test_mat[INPUT][1]);
 
     if (!dualChannel )
         cvInitUndistortMap( &a, &k, test_array[OUTPUT][0], test_array[OUTPUT][1] );
@@ -1190,7 +1198,7 @@ void CV_GetRectSubPixTest::get_test_array_types_and_sizes( int test_case_idx, ve
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
     int src_depth = cvtest::randInt(rng) % 2, dst_depth;
     int cn = cvtest::randInt(rng) % 2 ? 3 : 1;
-    CvSize src_size, dst_size;
+    Size src_size, dst_size;
 
     dst_depth = src_depth = src_depth == 0 ? CV_8U : CV_32F;
     if( src_depth < CV_32F && cvtest::randInt(rng) % 2 )
@@ -1294,7 +1302,7 @@ void CV_GetQuadSubPixTest::get_test_array_types_and_sizes( int test_case_idx, ve
 {
     int min_size = 4;
     CV_ImgWarpBaseTest::get_test_array_types_and_sizes( test_case_idx, sizes, types );
-    CvSize sz = sizes[INPUT][0], dsz;
+    Size sz = sizes[INPUT][0], dsz;
     RNG& rng = ts->get_rng();
     int msz, src_depth = cvtest::randInt(rng) % 2, dst_depth;
     int cn = cvtest::randInt(rng) % 2 ? 3 : 1;
@@ -1324,7 +1332,7 @@ void CV_GetQuadSubPixTest::get_test_array_types_and_sizes( int test_case_idx, ve
 
 void CV_GetQuadSubPixTest::run_func()
 {
-    CvMat mtx = test_mat[INPUT][1];
+    CvMat mtx = cvMat(test_mat[INPUT][1]);
     cvGetQuadrangleSubPix( test_array[INPUT][0], test_array[INPUT_OUTPUT][0], &mtx );
 }
 
@@ -1344,7 +1352,7 @@ int CV_GetQuadSubPixTest::prepare_test_case( int test_case_idx )
     int code = CV_ImgWarpBaseTest::prepare_test_case( test_case_idx );
     const Mat& src = test_mat[INPUT][0];
     Mat& mat = test_mat[INPUT][1];
-    CvPoint2D32f center;
+    Point2f center;
     double scale, angle;
 
     if( code <= 0 )
@@ -1419,7 +1427,7 @@ static void check_resize_area(const Mat& expected, const Mat& actual, double tol
         for (int dx = 0; dx < dsize.width && next; ++dx)
             if (fabs(static_cast<double>(aD[dx] - eD[dx])) > tolerance)
             {
-                cvtest::TS::ptr()->printf(cvtest::TS::SUMMARY, "Inf norm: %f\n", static_cast<float>(norm(actual, expected, NORM_INF)));
+                cvtest::TS::ptr()->printf(cvtest::TS::SUMMARY, "Inf norm: %f\n", static_cast<float>(cvtest::norm(actual, expected, NORM_INF)));
                 cvtest::TS::ptr()->printf(cvtest::TS::SUMMARY, "Error in : (%d, %d)\n", dx, dy);
 
                 const int radius = 3;
@@ -1434,7 +1442,7 @@ static void check_resize_area(const Mat& expected, const Mat& actual, double tol
             }
     }
 
-    ASSERT_EQ(0, norm(one_channel_diff, cv::NORM_INF));
+    ASSERT_EQ(0, cvtest::norm(one_channel_diff, cv::NORM_INF));
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1709,6 +1717,34 @@ TEST(Resize, Area_half)
     }
 }
 
+TEST(Resize, lanczos4_regression_16192)
+{
+    Size src_size(11, 17);
+    Size dst_size(11, 153);
+    Mat src(src_size, CV_8UC3, Scalar::all(128));
+    Mat dst(dst_size, CV_8UC3, Scalar::all(255));
+
+    cv::resize(src, dst, dst_size, 0, 0, INTER_LANCZOS4);
+
+    Mat expected(dst_size, CV_8UC3, Scalar::all(128));
+    EXPECT_EQ(cvtest::norm(dst, expected, NORM_INF), 0) << dst(Rect(0,0,8,8));
+}
+
+TEST(Resize, nearest_regression_15075)
+{
+    const int C = 5;
+    const int i1 = 5, j1 = 5;
+    Size src_size(12, 12);
+    Size dst_size(11, 11);
+
+    cv::Mat src = cv::Mat::zeros(src_size, CV_8UC(C)), dst;
+    for (int j = 0; j < C; j++)
+        src.col(i1).row(j1).data[j] = 1;
+
+    cv::resize(src, dst, dst_size, 0, 0, INTER_NEAREST);
+    EXPECT_EQ(C, cvtest::norm(dst, NORM_L1)) << src.size;
+}
+
 TEST(Imgproc_Warp, multichannel)
 {
     static const int inter_types[] = {INTER_NEAREST, INTER_AREA, INTER_CUBIC,
@@ -1736,13 +1772,33 @@ TEST(Imgproc_Warp, multichannel)
 
         Mat rot = getRotationMatrix2D(Point2f(0.f, 0.f), 1.0, 1.0);
         warpAffine(src, dst, rot, src.size(), inter, border);
-        ASSERT_EQ(0.0, norm(dst, NORM_INF));
+        ASSERT_EQ(0.0, cvtest::norm(dst, NORM_INF));
         Mat rot2 = Mat::eye(3, 3, rot.type());
         rot.copyTo(rot2.rowRange(0, 2));
         warpPerspective(src, dst, rot2, src.size(), inter, border);
-        ASSERT_EQ(0.0, norm(dst, NORM_INF));
+        ASSERT_EQ(0.0, cvtest::norm(dst, NORM_INF));
     }
 }
+
+
+TEST(Imgproc_Warp, regression_19566)  // valgrind should detect problem if any
+{
+    const Size imgSize(8192, 8);
+
+    Mat inMat = Mat::zeros(imgSize, CV_8UC4);
+    Mat outMat = Mat::zeros(imgSize, CV_8UC4);
+
+    warpAffine(
+        inMat,
+        outMat,
+        getRotationMatrix2D(Point2f(imgSize.width / 2.0f, imgSize.height / 2.0f), 45.0, 1.0),
+        imgSize,
+        INTER_LINEAR,
+        cv::BORDER_CONSTANT,
+        cv::Scalar(0.0, 0.0, 0.0, 255.0)
+    );
+}
+
 
 TEST(Imgproc_GetAffineTransform, singularity)
 {
@@ -1755,7 +1811,7 @@ TEST(Imgproc_GetAffineTransform, singularity)
     B_sample[1] = Point2f(15.0113f, 12.8994f);
     B_sample[2] = Point2f(38.9943f, 9.56297f);
     Mat trans = getAffineTransform(A_sample, B_sample);
-    ASSERT_EQ(0.0, norm(trans, NORM_INF));
+    ASSERT_EQ(0.0, cvtest::norm(trans, NORM_INF));
 }
 
 TEST(Imgproc_Remap, DISABLED_memleak)
@@ -1782,7 +1838,7 @@ TEST(Imgproc_Remap, DISABLED_memleak)
     }
 }
 
-
+//** @deprecated */
 TEST(Imgproc_linearPolar, identity)
 {
     const int N = 33;
@@ -1822,7 +1878,7 @@ TEST(Imgproc_linearPolar, identity)
 #endif
 }
 
-
+//** @deprecated */
 TEST(Imgproc_logPolar, identity)
 {
     const int N = 33;
@@ -1863,5 +1919,52 @@ TEST(Imgproc_logPolar, identity)
 #endif
 }
 
+TEST(Imgproc_warpPolar, identity)
+{
+    const int N = 33;
+    Mat in(N, N, CV_8UC3, Scalar(255, 0, 0));
+    in(cv::Rect(N / 3, N / 3, N / 3, N / 3)).setTo(Scalar::all(255));
+    cv::blur(in, in, Size(5, 5));
+    cv::blur(in, in, Size(5, 5));
 
+    Mat src = in.clone();
+    Mat dst;
+
+    Rect roi = Rect(0, 0, in.cols - ((N + 19) / 20), in.rows);
+    Point2f center = Point2f((N - 1) * 0.5f, (N - 1) * 0.5f);
+    double radius = N * 0.5;
+    int flags = CV_WARP_FILL_OUTLIERS | CV_INTER_LINEAR;
+    // test linearPolar
+    for (int ki = 1; ki <= 5; ki++)
+    {
+        warpPolar(src, dst, src.size(), center, radius, flags + WARP_POLAR_LINEAR + CV_WARP_INVERSE_MAP);
+        warpPolar(dst, src, src.size(), center, radius, flags + WARP_POLAR_LINEAR);
+
+        double psnr = cv::PSNR(in(roi), src(roi));
+        EXPECT_LE(25, psnr) << "iteration=" << ki;
+    }
+    // test logPolar
+    src = in.clone();
+    for (int ki = 1; ki <= 5; ki++)
+    {
+        warpPolar(src, dst, src.size(),center, radius, flags + WARP_POLAR_LOG + CV_WARP_INVERSE_MAP );
+        warpPolar(dst, src, src.size(),center, radius, flags + WARP_POLAR_LOG);
+
+        double psnr = cv::PSNR(in(roi), src(roi));
+        EXPECT_LE(25, psnr) << "iteration=" << ki;
+    }
+
+#if 0
+    Mat all(N*2+2,N*2+2, src.type(), Scalar(0,0,255));
+    in.copyTo(all(Rect(0,0,N,N)));
+    src.copyTo(all(Rect(0,N+1,N,N)));
+    src.copyTo(all(Rect(N+1,0,N,N)));
+    dst.copyTo(all(Rect(N+1,N+1,N,N)));
+    imwrite("linearPolar.png", all);
+    imshow("input", in); imshow("result", dst); imshow("restore", src); imshow("all", all);
+    cv::waitKey();
+#endif
+}
+
+}} // namespace
 /* End of file. */

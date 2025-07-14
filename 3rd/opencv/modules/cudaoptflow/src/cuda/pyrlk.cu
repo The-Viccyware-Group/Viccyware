@@ -89,7 +89,7 @@ namespace pyrlk
     {
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<typename TypeVec<T, cn>::vec_type> I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
 
@@ -112,7 +112,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<ushort>& I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     template <> struct Tex_I<1, int>
@@ -123,7 +123,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<int>& I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     template <> struct Tex_I<1, float>
@@ -146,7 +146,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<uchar3> I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     template <> struct Tex_I<3, ushort>
@@ -157,7 +157,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<ushort3> I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     template <> struct Tex_I<3, int>
@@ -168,7 +168,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<int3> I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     template <> struct Tex_I<3, float>
@@ -179,7 +179,7 @@ namespace pyrlk
         }
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<float3> I)
         {
-            (void)I;
+            CV_UNUSED(I);
         }
     };
     // ****************** 4 channel specializations ************************
@@ -222,7 +222,7 @@ namespace pyrlk
     {
         static __host__ __forceinline__ void bindTexture_(PtrStepSz<typename TypeVec<T,cn>::vec_type>& J)
         {
-            (void)J;
+            CV_UNUSED(J);
         }
     };
     template <> struct Tex_J<1, uchar>
@@ -415,7 +415,7 @@ namespace pyrlk
 
                 I_patch[i][j] = Tex_I<cn, T>::read(x, y);
 
-                // Sharr Deriv
+                // Scharr Deriv
 
                 work_type dIdx = 3.0f * Tex_I<cn,T>::read(x+1, y-1) + 10.0f * Tex_I<cn, T>::read(x+1, y) + 3.0f * Tex_I<cn,T>::read(x+1, y+1) -
                                  (3.0f * Tex_I<cn,T>::read(x-1, y-1) + 10.0f * Tex_I<cn, T>::read(x-1, y) + 3.0f * Tex_I<cn,T>::read(x-1, y+1));
@@ -608,7 +608,7 @@ namespace pyrlk
 
                 I_patch[i][j] = ToFloat<T>(I(y, x));
 
-                // Sharr Deriv
+                // Scharr Deriv
 
                 work_type dIdx = 3.0f * I(y - 1, x + 1) + 10.0f * I(y, x + 1) + 3.0f * I(y + 1, x + 1) -
                     (3.0f * I(y - 1, x - 1) + 10.0f * I(y, x - 1) + 3.0f * I(y + 1 , x - 1));
@@ -757,8 +757,8 @@ namespace pyrlk
             int level, dim3 block, cudaStream_t stream)
         {
             dim3 grid(ptcount);
-            (void)I;
-            (void)J;
+            CV_UNUSED(I);
+            CV_UNUSED(J);
             if (level == 0 && err)
                 sparseKernel<cn, PATCH_X, PATCH_Y, true, T> <<<grid, block, 0, stream >>>(prevPts, nextPts, status, err, level, rows, cols);
             else
@@ -927,7 +927,7 @@ namespace pyrlk
 
                 I_patch[i * patchWidth + j] = tex2D(tex_If, x, y);
 
-                // Sharr Deriv
+                // Scharr Deriv
 
                 dIdx_patch[i * patchWidth + j] = 3 * tex2D(tex_If, x+1, y-1) + 10 * tex2D(tex_If, x+1, y) + 3 * tex2D(tex_If, x+1, y+1) -
                                                 (3 * tex2D(tex_If, x-1, y-1) + 10 * tex2D(tex_If, x-1, y) + 3 * tex2D(tex_If, x-1, y+1));

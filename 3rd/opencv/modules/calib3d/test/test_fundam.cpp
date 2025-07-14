@@ -42,10 +42,9 @@
 #include "test_precomp.hpp"
 #include "opencv2/calib3d/calib3d_c.h"
 
-using namespace cv;
-using namespace std;
+namespace cvtest {
 
-int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
+static int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
 {
     int depth;
     int i;
@@ -57,7 +56,7 @@ int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
 
     if( jacobian )
     {
-        assert( (jacobian->rows == 9 && jacobian->cols == 3) ||
+        CV_Assert( (jacobian->rows == 9 && jacobian->cols == 3) ||
                 (jacobian->rows == 3 && jacobian->cols == 9) );
     }
 
@@ -66,7 +65,7 @@ int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
         double r[3], theta;
         CvMat _r = cvMat( src->rows, src->cols, CV_MAKETYPE(CV_64F,CV_MAT_CN(src->type)), r);
 
-        assert( dst->rows == 3 && dst->cols == 3 );
+        CV_Assert( dst->rows == 3 && dst->cols == 3 );
 
         cvConvert( src, &_r );
 
@@ -321,7 +320,7 @@ int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
     }
     else
     {
-        assert(0);
+        CV_Assert(0);
         return 0;
     }
 
@@ -348,14 +347,18 @@ int cvTsRodrigues( const CvMat* src, CvMat* dst, CvMat* jacobian )
 }
 
 
-void cvtest::Rodrigues(const Mat& src, Mat& dst, Mat* jac)
+/*extern*/ void Rodrigues(const Mat& src, Mat& dst, Mat* jac)
 {
-    CvMat _src = src, _dst = dst, _jac;
+    CV_Assert(src.data != dst.data && "Inplace is not supported");
+    CV_Assert(!dst.empty() && "'dst' must be allocated");
+    CvMat _src = cvMat(src), _dst = cvMat(dst), _jac;
     if( jac )
-        _jac = *jac;
+        _jac = cvMat(*jac);
     cvTsRodrigues(&_src, &_dst, jac ? &_jac : 0);
 }
 
+} // namespace
+namespace opencv_test {
 
 static void test_convertHomogeneous( const Mat& _src, Mat& _dst )
 {
@@ -401,7 +404,7 @@ static void test_convertHomogeneous( const Mat& _src, Mat& _dst )
     }
     else
     {
-        assert( count == dst.cols );
+        CV_Assert( count == dst.cols );
         ddims = dst.channels()*dst.rows;
         if( dst.rows == 1 )
         {
@@ -463,6 +466,7 @@ static void test_convertHomogeneous( const Mat& _src, Mat& _dst )
         dst.convertTo(_dst, _dst.depth());
 }
 
+namespace {
 
 void
 test_projectPoints( const Mat& _3d, const Mat& Rt, const Mat& A, Mat& _2d, RNG* rng, double sigma )
@@ -663,13 +667,13 @@ void CV_RodriguesTest::run_func()
 
     if( calc_jacobians )
     {
-        v2m_jac = test_mat[OUTPUT][1];
-        m2v_jac = test_mat[OUTPUT][3];
+        v2m_jac = cvMat(test_mat[OUTPUT][1]);
+        m2v_jac = cvMat(test_mat[OUTPUT][3]);
     }
 
     if( !test_cpp )
     {
-        CvMat _input = test_mat[INPUT][0], _output = test_mat[OUTPUT][0], _output2 = test_mat[OUTPUT][2];
+        CvMat _input = cvMat(test_mat[INPUT][0]), _output = cvMat(test_mat[OUTPUT][0]), _output2 = cvMat(test_mat[OUTPUT][2]);
         cvRodrigues2( &_input, &_output, calc_jacobians ? &v2m_jac : 0 );
         cvRodrigues2( &_output, &_output2, calc_jacobians ? &m2v_jac : 0 );
     }
@@ -728,7 +732,7 @@ void CV_RodriguesTest::prepare_to_validation( int /*test_case_idx*/ )
     cvtest::Rodrigues( m, vec2, m2v_jac );
     cvtest::copy( vec, vec2 );
 
-    theta0 = norm( vec2, CV_L2 );
+    theta0 = cvtest::norm( vec2, CV_L2 );
     theta1 = fmod( theta0, CV_PI*2 );
 
     if( theta1 > CV_PI )
@@ -976,8 +980,8 @@ int CV_FundamentalMatTest::prepare_test_case( int test_case_idx )
 void CV_FundamentalMatTest::run_func()
 {
     // cvFindFundamentalMat calls cv::findFundamentalMat
-    CvMat _input0 = test_mat[INPUT][0], _input1 = test_mat[INPUT][1];
-    CvMat F = test_mat[TEMP][0], mask = test_mat[TEMP][1];
+    CvMat _input0 = cvMat(test_mat[INPUT][0]), _input1 = cvMat(test_mat[INPUT][1]);
+    CvMat F = cvMat(test_mat[TEMP][0]), mask = cvMat(test_mat[TEMP][1]);
     f_result = cvFindFundamentalMat( &_input0, &_input1, &F, method, MAX(sigma*3, 0.01), 0, &mask );
 }
 
@@ -1067,7 +1071,9 @@ protected:
     void run_func();
     void prepare_to_validation( int );
 
+#if 0
     double sampson_error(const double* f, double x1, double y1, double x2, double y2);
+#endif
 
     int method;
     int img_size;
@@ -1299,6 +1305,7 @@ void CV_EssentialMatTest::run_func()
     mask2.copyTo(test_mat[TEMP][4]);
 }
 
+#if 0
 double CV_EssentialMatTest::sampson_error(const double * f, double x1, double y1, double x2, double y2)
 {
     double Fx1[3] = {
@@ -1316,8 +1323,8 @@ double CV_EssentialMatTest::sampson_error(const double * f, double x1, double y1
     double error = x2tFx1 * x2tFx1 / (Fx1[0] * Fx1[0] + Fx1[1] * Fx1[1] + Ftx2[0] * Ftx2[0] + Ftx2[1] * Ftx2[1]);
     error = sqrt(error);
     return error;
-
 }
+#endif
 
 void CV_EssentialMatTest::prepare_to_validation( int test_case_idx )
 {
@@ -1395,10 +1402,10 @@ void CV_EssentialMatTest::prepare_to_validation( int test_case_idx )
 
     double* pose_prop1 = test_mat[REF_OUTPUT][2].ptr<double>();
     double* pose_prop2 = test_mat[OUTPUT][2].ptr<double>();
-    double terr1 = cvtest::norm(Rt0.col(3) / norm(Rt0.col(3)) + test_mat[TEMP][3], NORM_L2);
-    double terr2 = cvtest::norm(Rt0.col(3) / norm(Rt0.col(3)) - test_mat[TEMP][3], NORM_L2);
-    Mat rvec;
-    Rodrigues(Rt0.colRange(0, 3), rvec);
+    double terr1 = cvtest::norm(Rt0.col(3) / cvtest::norm(Rt0.col(3), NORM_L2) + test_mat[TEMP][3], NORM_L2);
+    double terr2 = cvtest::norm(Rt0.col(3) / cvtest::norm(Rt0.col(3), NORM_L2) - test_mat[TEMP][3], NORM_L2);
+    Mat rvec(3, 1, CV_32F);
+    cvtest::Rodrigues(Rt0.colRange(0, 3), rvec);
     pose_prop1[0] = 0;
     // No check for CV_LMeDS on translation. Since it
     // involves with some degraded problem, when data is exact inliers.
@@ -1536,7 +1543,7 @@ void CV_ConvertHomogeneousTest::fill_array( int /*test_case_idx*/, int /*i*/, in
 
 void CV_ConvertHomogeneousTest::run_func()
 {
-    CvMat _input = test_mat[INPUT][0], _output = test_mat[OUTPUT][0];
+    CvMat _input = cvMat(test_mat[INPUT][0]), _output = cvMat(test_mat[OUTPUT][0]);
     cvConvertPointsHomogeneous( &_input, &_output );
 }
 
@@ -1671,7 +1678,7 @@ void CV_ComputeEpilinesTest::fill_array( int test_case_idx, int i, int j, Mat& a
 
 void CV_ComputeEpilinesTest::run_func()
 {
-    CvMat _points = test_mat[INPUT][0], _F = test_mat[INPUT][1], _lines = test_mat[OUTPUT][0];
+    CvMat _points = cvMat(test_mat[INPUT][0]), _F = cvMat(test_mat[INPUT][1]), _lines = cvMat(test_mat[OUTPUT][0]);
     cvComputeCorrespondEpilines( &_points, which_image, &_F, &_lines );
 }
 
@@ -1726,4 +1733,5 @@ TEST(Calib3d_FindFundamentalMat, correctMatches)
     cout << np2 << endl;
 }
 
+}} // namespace
 /* End of file. */

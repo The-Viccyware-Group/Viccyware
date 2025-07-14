@@ -40,17 +40,26 @@
 //M*/
 
 #include <opencv2/core.hpp>
+#include "cvconfig.h"
+
+#ifndef CV_OCL4DNN
+#define CV_OCL4DNN 0
+#endif
+
+#if CV_OCL4DNN
+#ifndef HAVE_OPENCL
+#error "Configuration error: re-run CMake from clean build directory"
+#endif
+#else
+#undef HAVE_OPENCL
+#endif
 #include <opencv2/core/ocl.hpp>
 #include <opencv2/core/opencl/ocl_defs.hpp>
+
+
 #include <opencv2/core/utils/trace.hpp>
-#include <opencv2/core/softfloat.hpp> // int32_t (MSVS 2010-2013)
-#include "cvconfig.h"
 #include <opencv2/dnn.hpp>
 #include <opencv2/dnn/all_layers.hpp>
+#include <opencv2/dnn/shape_utils.hpp>
 
-namespace cv { namespace dnn {
-CV__DNN_EXPERIMENTAL_NS_BEGIN
-Mutex& getInitializationMutex();
-void initializeLayerFactory();
-CV__DNN_EXPERIMENTAL_NS_END
-}} // namespace
+#include "dnn_common.hpp"

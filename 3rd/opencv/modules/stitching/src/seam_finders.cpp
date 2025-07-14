@@ -203,7 +203,7 @@ void DpSeamFinder::process(
         const Mat &image1, const Mat &image2, Point tl1, Point tl2,
         Mat &mask1, Mat &mask2)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert(image1.size() == mask1.size());
     CV_Assert(image2.size() == mask2.size());
@@ -554,8 +554,8 @@ void DpSeamFinder::computeGradients(const Mat &image1, const Mat &image2)
 bool DpSeamFinder::hasOnlyOneNeighbor(int comp)
 {
     std::set<std::pair<int, int> >::iterator begin, end;
-    begin = lower_bound(edges_.begin(), edges_.end(), std::make_pair(comp, std::numeric_limits<int>::min()));
-    end = upper_bound(edges_.begin(), edges_.end(), std::make_pair(comp, std::numeric_limits<int>::max()));
+    begin = edges_.lower_bound(std::make_pair(comp, std::numeric_limits<int>::min()));
+    end = edges_.upper_bound(std::make_pair(comp, std::numeric_limits<int>::max()));
     return ++begin == end;
 }
 
@@ -745,7 +745,9 @@ void DpSeamFinder::computeCosts(
     {
         for (int x = roi.x; x < roi.br().x+1; ++x)
         {
-            if (labels_(y, x) == l && x > 0 && labels_(y, x-1) == l)
+            if (x > 0 && x < labels_.cols &&
+                labels_(y, x) == l && labels_(y, x-1) == l
+            )
             {
                 float costColor = (diff(image1, y + dy1, x + dx1 - 1, image2, y + dy2, x + dx2) +
                                    diff(image1, y + dy1, x + dx1, image2, y + dy2, x + dx2 - 1)) / 2;
@@ -769,7 +771,9 @@ void DpSeamFinder::computeCosts(
     {
         for (int x = roi.x; x < roi.br().x; ++x)
         {
-            if (labels_(y, x) == l && y > 0 && labels_(y-1, x) == l)
+            if (y > 0 && y < labels_.rows &&
+                labels_(y, x) == l && labels_(y-1, x) == l
+            )
             {
                 float costColor = (diff(image1, y + dy1 - 1, x + dx1, image2, y + dy2, x + dx2) +
                                    diff(image1, y + dy1, x + dx1, image2, y + dy2 - 1, x + dx2)) / 2;
@@ -1068,7 +1072,7 @@ void DpSeamFinder::updateLabelsUsingSeam(
 }
 
 
-class GraphCutSeamFinder::Impl : public PairwiseSeamFinder
+class GraphCutSeamFinder::Impl CV_FINAL : public PairwiseSeamFinder
 {
 public:
     Impl(int cost_type, float terminal_cost, float bad_region_penalty)
@@ -1076,8 +1080,8 @@ public:
 
     ~Impl() {}
 
-    void find(const std::vector<UMat> &src, const std::vector<Point> &corners, std::vector<UMat> &masks);
-    void findInPair(size_t first, size_t second, Rect roi);
+    void find(const std::vector<UMat> &src, const std::vector<Point> &corners, std::vector<UMat> &masks) CV_OVERRIDE;
+    void findInPair(size_t first, size_t second, Rect roi) CV_OVERRIDE;
 
 private:
     void setGraphWeightsColor(const Mat &img1, const Mat &img2,

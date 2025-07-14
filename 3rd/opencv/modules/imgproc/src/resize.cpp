@@ -51,6 +51,7 @@
 #include "opencl_kernels_imgproc.hpp"
 #include "hal_replacement.hpp"
 #include "opencv2/core/hal/intrin.hpp"
+#include "opencv2/core/utils/buffer_area.private.hpp"
 
 #include "opencv2/core/openvx/ovx_defs.hpp"
 #include "resize.hpp"
@@ -345,46 +346,51 @@ void hlineResizeCn<uint8_t, ufixedpoint16, 2, true, 1>(uint8_t* src, int, int *o
 {
     int i = 0;
     ufixedpoint16 src_0(src[0]);
-    v_uint16x8 v_src_0 = v_setall_u16(*((uint16_t*)&src_0));
-    for (; i < dst_min - 7; i += 8, m += 16, dst += 8) // Points that fall left from src image so became equal to leftmost src point
+#if CV_SIMD
+    const int VECSZ = v_uint16::nlanes;
+    v_uint16 v_src_0 = vx_setall_u16(*((uint16_t*)&src_0));
+    for (; i <= dst_min - VECSZ; i += VECSZ, m += 2*VECSZ, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint16_t*)dst, v_src_0);
     }
+#endif
     for (; i < dst_min; i++, m += 2)
     {
         *(dst++) = src_0;
     }
-    for (; i < dst_max - 7 && ofst[i + 7] + 15 <= ofst[dst_width - 1]; i += 8, m += 16, dst += 8)
+#if CV_SIMD
+    for (; i <= dst_max - 2*VECSZ; i += 2*VECSZ, m += 4*VECSZ, dst += 2*VECSZ)
     {
-        v_uint32x4 v_src01 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + ofst[i    ])), v_reinterpret_as_u32(v_load_expand(src + ofst[i + 1])));
-        v_uint32x4 v_src23 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + ofst[i + 2])), v_reinterpret_as_u32(v_load_expand(src + ofst[i + 3])));
-        v_uint32x4 v_src45 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + ofst[i + 4])), v_reinterpret_as_u32(v_load_expand(src + ofst[i + 5])));
-        v_uint32x4 v_src67 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + ofst[i + 6])), v_reinterpret_as_u32(v_load_expand(src + ofst[i + 7])));
-
-        v_uint32x4 v_zip02, v_zip13, v_zip46, v_zip57;
-        v_zip(v_src01, v_src23, v_zip02, v_zip13);
-        v_zip(v_src45, v_src67, v_zip46, v_zip57);
-
-        v_uint32x4 v_src0, v_src1;
-        v_zip(v_combine_low(v_zip02, v_zip46), v_combine_low(v_zip13, v_zip57), v_src0, v_src1);
-
-        v_int16x8 v_mul0 = v_load((int16_t*)m);
-        v_int16x8 v_mul1 = v_load((int16_t*)m + 8);
-        v_uint32x4 v_res0 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), v_mul0));
-        v_uint32x4 v_res1 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), v_mul1));
-        v_store((uint16_t*)dst, v_pack(v_res0, v_res1));
+        v_uint16 v_src0, v_src1;
+        v_expand(vx_lut_pairs(src, ofst + i), v_src0, v_src1);
+        v_store((uint16_t*)dst      , v_pack(v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), vx_load((int16_t*)m))),
+                                             v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), vx_load((int16_t*)m + VECSZ)))));
+        v_expand(vx_lut_pairs(src, ofst + i + VECSZ), v_src0, v_src1);
+        v_store((uint16_t*)dst+VECSZ, v_pack(v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), vx_load((int16_t*)m + 2*VECSZ))),
+                                             v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), vx_load((int16_t*)m + 3*VECSZ)))));
     }
+    if (i <= dst_max - VECSZ)
+    {
+        v_uint16 v_src0, v_src1;
+        v_expand(vx_lut_pairs(src, ofst + i), v_src0, v_src1);
+        v_store((uint16_t*)dst, v_pack(v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), vx_load((int16_t*)m))),
+                                       v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), vx_load((int16_t*)m + VECSZ)))));
+        i += VECSZ; m += 2*VECSZ; dst += VECSZ;
+    }
+#endif
     for (; i < dst_max; i += 1, m += 2)
     {
         uint8_t* px = src + ofst[i];
         *(dst++) = m[0] * px[0] + m[1] * px[1];
     }
     src_0 = (src + ofst[dst_width - 1])[0];
-    v_src_0 = v_setall_u16(*((uint16_t*)&src_0));
-    for (; i < dst_width - 7; i += 8, dst += 8) // Points that fall left from src image so became equal to leftmost src point
+#if CV_SIMD
+    v_src_0 = vx_setall_u16(*((uint16_t*)&src_0));
+    for (; i <= dst_width - VECSZ; i += VECSZ, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint16_t*)dst, v_src_0);
     }
+#endif
     for (; i < dst_width; i++)
     {
         *(dst++) = src_0;
@@ -394,87 +400,182 @@ template <>
 void hlineResizeCn<uint8_t, ufixedpoint16, 2, true, 2>(uint8_t* src, int, int *ofst, ufixedpoint16* m, ufixedpoint16* dst, int dst_min, int dst_max, int dst_width)
 {
     int i = 0;
-    ufixedpoint16 srccn[8] = { src[0], src[1], src[0], src[1], src[0], src[1], src[0], src[1] };
-    v_uint16x8 v_srccn = v_load((uint16_t*)srccn);
-    for (; i < dst_min - 3; i += 4, m += 8, dst += 8) // Points that fall left from src image so became equal to leftmost src point
+    union {
+        uint32_t d;
+        uint16_t w[2];
+    } srccn;
+    ((ufixedpoint16*)(srccn.w))[0] = src[0];
+    ((ufixedpoint16*)(srccn.w))[1] = src[1];
+#if CV_SIMD
+    const int VECSZ = v_uint16::nlanes;
+    v_uint16 v_srccn = v_reinterpret_as_u16(vx_setall_u32(srccn.d));
+    for (; i <= dst_min - VECSZ/2; i += VECSZ/2, m += VECSZ, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint16_t*)dst, v_srccn);
     }
+#endif
     for (; i < dst_min; i++, m += 2)
     {
-        *(dst++) = srccn[0];
-        *(dst++) = srccn[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
     }
-    for (; i < dst_max - 3 && ofst[i + 3] + 7 <= ofst[dst_width - 1]; i += 4, m += 8, dst += 8)
+#if CV_SIMD
+    for (; i <= dst_max - VECSZ/2; i += VECSZ/2, m += VECSZ, dst += VECSZ)
     {
-        v_uint32x4 v_src0 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + 2 * ofst[i    ])), v_reinterpret_as_u32(v_load_expand(src + 2 * ofst[i + 1])));
-        v_uint32x4 v_src1 = v_combine_low(v_reinterpret_as_u32(v_load_expand(src + 2 * ofst[i + 2])), v_reinterpret_as_u32(v_load_expand(src + 2 * ofst[i + 3])));
+        v_uint16 v_src0, v_src1;
+        v_expand(v_interleave_pairs(v_reinterpret_as_u8(vx_lut_pairs((uint16_t*)src, ofst + i))), v_src0, v_src1);
 
-        v_uint32x4 v_zip0, v_zip1;
-        v_zip(v_src0, v_src1, v_zip0, v_zip1);
-        v_zip(v_zip0, v_zip1, v_src0, v_src1);
-
-        v_int16x8 v_src0123, v_src4567;
-        v_zip(v_reinterpret_as_s16(v_src0), v_reinterpret_as_s16(v_src1), v_src0123, v_src4567);
-
-        v_uint32x4 v_mul = v_load((uint32_t*)m);//AaBbCcDd
+        v_uint32 v_mul = vx_load((uint32_t*)m);//AaBbCcDd
+        v_uint32 v_zip0, v_zip1;
         v_zip(v_mul, v_mul, v_zip0, v_zip1);//AaAaBbBb CcCcDdDd
-        v_uint32x4 v_res0 = v_reinterpret_as_u32(v_dotprod(v_src0123, v_reinterpret_as_s16(v_zip0)));
-        v_uint32x4 v_res1 = v_reinterpret_as_u32(v_dotprod(v_src4567, v_reinterpret_as_s16(v_zip1)));
+        v_uint32 v_res0 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), v_reinterpret_as_s16(v_zip0)));
+        v_uint32 v_res1 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), v_reinterpret_as_s16(v_zip1)));
         v_store((uint16_t*)dst, v_pack(v_res0, v_res1));//AB1AB2CD1CD2
     }
+#endif
     for (; i < dst_max; i += 1, m += 2)
     {
         uint8_t* px = src + 2 * ofst[i];
         *(dst++) = m[0] * px[0] + m[1] * px[2];
         *(dst++) = m[0] * px[1] + m[1] * px[3];
     }
-    srccn[0] = (src + 2 * ofst[dst_width - 1])[0]; srccn[1] = (src + 2 * ofst[dst_width - 1])[1]; srccn[2] = (src + 2 * ofst[dst_width - 1])[0]; srccn[3] = (src + 2 * ofst[dst_width - 1])[1];
-    srccn[4] = (src + 2 * ofst[dst_width - 1])[0]; srccn[5] = (src + 2 * ofst[dst_width - 1])[1]; srccn[6] = (src + 2 * ofst[dst_width - 1])[0]; srccn[7] = (src + 2 * ofst[dst_width - 1])[1];
-    v_srccn = v_load((uint16_t*)srccn);
-    for (; i < dst_width - 3; i += 4, dst += 8) // Points that fall left from src image so became equal to leftmost src point
+    ((ufixedpoint16*)(srccn.w))[0] = (src + 2 * ofst[dst_width - 1])[0]; ((ufixedpoint16*)(srccn.w))[1] = (src + 2 * ofst[dst_width - 1])[1];
+#if CV_SIMD
+    v_srccn = v_reinterpret_as_u16(vx_setall_u32(srccn.d));
+    for (; i <= dst_width - VECSZ/2; i += VECSZ/2, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint16_t*)dst, v_srccn);
     }
+#endif
     for (; i < dst_width; i++)
     {
-        *(dst++) = srccn[0];
-        *(dst++) = srccn[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
+    }
+}
+template <>
+void hlineResizeCn<uint8_t, ufixedpoint16, 2, true, 3>(uint8_t* src, int, int *ofst, ufixedpoint16* m, ufixedpoint16* dst, int dst_min, int dst_max, int dst_width)
+{
+    int i = 0;
+    union {
+        uint64_t q;
+        uint16_t w[4];
+    } srccn;
+    ((ufixedpoint16*)(srccn.w))[0] = src[0];
+    ((ufixedpoint16*)(srccn.w))[1] = src[1];
+    ((ufixedpoint16*)(srccn.w))[2] = src[2];
+    ((ufixedpoint16*)(srccn.w))[3] = 0;
+#if CV_SIMD
+    const int VECSZ = v_uint16::nlanes;
+    v_uint16 v_srccn = v_pack_triplets(v_reinterpret_as_u16(vx_setall_u64(srccn.q)));
+    for (; i <= dst_min - (VECSZ+2)/3; i += VECSZ/4, m += VECSZ/2, dst += 3*VECSZ/4) // Points that fall left from src image so became equal to leftmost src point
+    {
+        v_store((uint16_t*)dst, v_srccn);
+    }
+#endif
+    for (; i < dst_min; i++, m += 2)
+    {
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[2];
+    }
+#if CV_SIMD
+    CV_DECL_ALIGNED(CV_SIMD_WIDTH) int ofst3[VECSZ/2];
+    for (; i <= dst_max - (3*VECSZ/4 + (VECSZ+2)/3); i += VECSZ/2, m += VECSZ, dst += 3*VECSZ/2)
+    {
+        v_store(ofst3, vx_load(ofst + i) * vx_setall_s32(3));
+        v_uint8 v_src01, v_src23;
+        v_uint16 v_src0, v_src1, v_src2, v_src3;
+        v_zip(vx_lut_quads(src, ofst3), v_reinterpret_as_u8(v_reinterpret_as_u32(vx_lut_quads(src+2, ofst3)) >> 8), v_src01, v_src23);
+        v_expand(v_src01, v_src0, v_src1);
+        v_expand(v_src23, v_src2, v_src3);
+
+        v_uint32 v_mul0, v_mul1, v_mul2, v_mul3, v_tmp;
+        v_mul0 = vx_load((uint32_t*)m);//AaBbCcDd
+        v_zip(v_mul0, v_mul0, v_mul3, v_tmp );//AaAaBbBb CcCcDdDd
+        v_zip(v_mul3, v_mul3, v_mul0, v_mul1);//AaAaAaAa BbBbBbBb
+        v_zip(v_tmp , v_tmp , v_mul2, v_mul3);//CcCcCcCc DdDdDdDd
+
+        v_uint32 v_res0 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), v_reinterpret_as_s16(v_mul0)));
+        v_uint32 v_res1 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), v_reinterpret_as_s16(v_mul1)));
+        v_uint32 v_res2 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src2), v_reinterpret_as_s16(v_mul2)));
+        v_uint32 v_res3 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src3), v_reinterpret_as_s16(v_mul3)));
+        v_store((uint16_t*)dst            , v_pack_triplets(v_pack(v_res0, v_res1)));
+        v_store((uint16_t*)dst + 3*VECSZ/4, v_pack_triplets(v_pack(v_res2, v_res3)));
+    }
+#endif
+    for (; i < dst_max; i += 1, m += 2)
+    {
+        uint8_t* px = src + 3 * ofst[i];
+        *(dst++) = m[0] * px[0] + m[1] * px[3];
+        *(dst++) = m[0] * px[1] + m[1] * px[4];
+        *(dst++) = m[0] * px[2] + m[1] * px[5];
+    }
+    ((ufixedpoint16*)(srccn.w))[0] = (src + 3*ofst[dst_width - 1])[0];
+    ((ufixedpoint16*)(srccn.w))[1] = (src + 3*ofst[dst_width - 1])[1];
+    ((ufixedpoint16*)(srccn.w))[2] = (src + 3*ofst[dst_width - 1])[2];
+#if CV_SIMD
+    v_srccn = v_pack_triplets(v_reinterpret_as_u16(vx_setall_u64(srccn.q)));
+    for (; i <= dst_width - (VECSZ+2)/3; i += VECSZ/4, dst += 3*VECSZ/4) // Points that fall right from src image so became equal to rightmost src point
+    {
+        v_store((uint16_t*)dst, v_srccn);
+    }
+#endif
+    for (; i < dst_width; i++)
+    {
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[2];
     }
 }
 template <>
 void hlineResizeCn<uint8_t, ufixedpoint16, 2, true, 4>(uint8_t* src, int, int *ofst, ufixedpoint16* m, ufixedpoint16* dst, int dst_min, int dst_max, int dst_width)
 {
     int i = 0;
-    ufixedpoint16 srccn[8] = { src[0], src[1], src[2], src[3], src[0], src[1], src[2], src[3] };
-    v_uint16x8 v_srccn = v_load((uint16_t*)srccn);
-    for (; i < dst_min - 1; i += 2, m += 4, dst += 8) // Points that fall left from src image so became equal to leftmost src point
+    union {
+        uint64_t q;
+        uint16_t w[4];
+    } srccn;
+    ((ufixedpoint16*)(srccn.w))[0] = src[0];
+    ((ufixedpoint16*)(srccn.w))[1] = src[1];
+    ((ufixedpoint16*)(srccn.w))[2] = src[2];
+    ((ufixedpoint16*)(srccn.w))[3] = src[3];
+#if CV_SIMD
+    const int VECSZ = v_uint16::nlanes;
+    v_uint16 v_srccn = v_reinterpret_as_u16(vx_setall_u64(srccn.q));
+    for (; i <= dst_min - VECSZ/4; i += VECSZ/4, m += VECSZ/2, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint16_t*)dst, v_srccn);
     }
-    if (i < dst_min) // Points that fall left from src image so became equal to leftmost src point
+#endif
+    for (; i < dst_min; i++, m += 2)
     {
-        *(dst++) = srccn[0];
-        *(dst++) = srccn[1];
-        *(dst++) = srccn[2];
-        *(dst++) = srccn[3];
-        i++; m += 2;
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[2];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[3];
     }
-    for (; i < dst_max - 1 && ofst[i + 1] + 3 <= ofst[dst_width - 1]; i += 2, m += 4, dst += 8)
+#if CV_SIMD
+    for (; i <= dst_max - VECSZ/2; i += VECSZ/2, m += VECSZ, dst += 2*VECSZ)
     {
-        v_int16x8 v_src01 = v_reinterpret_as_s16(v_load_expand(src + 4 * ofst[i    ]));
-        v_int16x8 v_src23 = v_reinterpret_as_s16(v_load_expand(src + 4 * ofst[i + 1]));
+        v_uint16 v_src0, v_src1, v_src2, v_src3;
+        v_expand(v_interleave_quads(v_reinterpret_as_u8(vx_lut_pairs((uint32_t*)src, ofst + i))), v_src0, v_src1);
+        v_expand(v_interleave_quads(v_reinterpret_as_u8(vx_lut_pairs((uint32_t*)src, ofst + i + VECSZ/4))), v_src2, v_src3);
 
-        v_int16x8 v_tmp0, v_tmp1;
-        v_recombine(v_src01, v_src23, v_tmp0, v_tmp1);
-        v_zip(v_tmp0, v_tmp1, v_src01, v_src23);
+        v_uint32 v_mul0, v_mul1, v_mul2, v_mul3, v_tmp;
+        v_mul0 = vx_load((uint32_t*)m);//AaBbCcDd
+        v_zip(v_mul0, v_mul0, v_mul3, v_tmp );//AaAaBbBb CcCcDdDd
+        v_zip(v_mul3, v_mul3, v_mul0, v_mul1);//AaAaAaAa BbBbBbBb
+        v_zip(v_tmp , v_tmp , v_mul2, v_mul3);//CcCcCcCc DdDdDdDd
 
-        v_int16x8 v_mul01 = v_reinterpret_as_s16(v_setall_u32(((uint32_t*)m)[0]));//AaAaAaAa
-        v_int16x8 v_mul23 = v_reinterpret_as_s16(v_setall_u32(((uint32_t*)m)[1]));//BbBbBbBb
-        v_uint32x4 v_res0 = v_reinterpret_as_u32(v_dotprod(v_src01, v_mul01));
-        v_uint32x4 v_res1 = v_reinterpret_as_u32(v_dotprod(v_src23, v_mul23));
-        v_store((uint16_t*)dst, v_pack(v_res0, v_res1));//AB1AB2CD1CD2
+        v_uint32 v_res0 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src0), v_reinterpret_as_s16(v_mul0)));
+        v_uint32 v_res1 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src1), v_reinterpret_as_s16(v_mul1)));
+        v_uint32 v_res2 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src2), v_reinterpret_as_s16(v_mul2)));
+        v_uint32 v_res3 = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_src3), v_reinterpret_as_s16(v_mul3)));
+        v_store((uint16_t*)dst        , v_pack(v_res0, v_res1));
+        v_store((uint16_t*)dst + VECSZ, v_pack(v_res2, v_res3));
     }
+#endif
     for (; i < dst_max; i += 1, m += 2)
     {
         uint8_t* px = src + 4 * ofst[i];
@@ -483,19 +584,21 @@ void hlineResizeCn<uint8_t, ufixedpoint16, 2, true, 4>(uint8_t* src, int, int *o
         *(dst++) = m[0] * px[2] + m[1] * px[6];
         *(dst++) = m[0] * px[3] + m[1] * px[7];
     }
-    srccn[0] = (src + 4 * ofst[dst_width - 1])[0]; srccn[1] = (src + 4 * ofst[dst_width - 1])[1]; srccn[2] = (src + 4 * ofst[dst_width - 1])[2]; srccn[3] = (src + 4 * ofst[dst_width - 1])[3];
-    srccn[4] = (src + 4 * ofst[dst_width - 1])[0]; srccn[5] = (src + 4 * ofst[dst_width - 1])[1]; srccn[6] = (src + 4 * ofst[dst_width - 1])[2]; srccn[7] = (src + 4 * ofst[dst_width - 1])[3];
-    v_srccn = v_load((uint16_t*)srccn);
-    for (; i < dst_width - 1; i += 2, dst += 8) // Points that fall right from src image so became equal to rightmost src point
+    ((ufixedpoint16*)(srccn.w))[0] = (src + 4 * ofst[dst_width - 1])[0]; ((ufixedpoint16*)(srccn.w))[1] = (src + 4 * ofst[dst_width - 1])[1];
+    ((ufixedpoint16*)(srccn.w))[2] = (src + 4 * ofst[dst_width - 1])[2]; ((ufixedpoint16*)(srccn.w))[3] = (src + 4 * ofst[dst_width - 1])[3];
+#if CV_SIMD
+    v_srccn = v_reinterpret_as_u16(vx_setall_u64(srccn.q));
+    for (; i <= dst_width - VECSZ/4; i += VECSZ/4, dst += VECSZ) // Points that fall right from src image so became equal to rightmost src point
     {
         v_store((uint16_t*)dst, v_srccn);
     }
-    if (i < dst_width)
+#endif
+    for (; i < dst_width; i++)
     {
-        *(dst++) = srccn[0];
-        *(dst++) = srccn[1];
-        *(dst++) = srccn[2];
-        *(dst++) = srccn[3];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[0];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[1];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[2];
+        *(dst++) = ((ufixedpoint16*)(srccn.w))[3];
     }
 }
 template <>
@@ -503,40 +606,43 @@ void hlineResizeCn<uint16_t, ufixedpoint32, 2, true, 1>(uint16_t* src, int, int 
 {
     int i = 0;
     ufixedpoint32 src_0(src[0]);
-    v_uint32x4 v_src_0 = v_setall_u32(*((uint32_t*)&src_0));
-    for (; i < dst_min - 3; i += 4, m += 8, dst += 4) // Points that fall left from src image so became equal to leftmost src point
+#if CV_SIMD
+    const int VECSZ = v_uint32::nlanes;
+    v_uint32 v_src_0 = vx_setall_u32(*((uint32_t*)&src_0));
+    for (; i <= dst_min - VECSZ; i += VECSZ, m += 2*VECSZ, dst += VECSZ) // Points that fall left from src image so became equal to leftmost src point
     {
         v_store((uint32_t*)dst, v_src_0);
     }
+#endif
     for (; i < dst_min; i++, m += 2)
     {
         *(dst++) = src_0;
     }
-    for (; i < dst_max - 3 && ofst[i + 3] + 8 <= ofst[dst_width - 1]; i += 4, m += 8, dst += 4)
+#if CV_SIMD
+    for (; i <= dst_max - VECSZ; i += VECSZ, m += 2*VECSZ, dst += VECSZ)
     {
-        v_uint32x4 v_src0 = v_combine_low(v_load_expand(src + ofst[i]), v_load_expand(src + ofst[i + 1]));
-        v_uint32x4 v_mul0 = v_load((uint32_t*)m);
-        v_uint32x4 v_src1 = v_combine_low(v_load_expand(src + ofst[i + 2]), v_load_expand(src + ofst[i + 3]));
-        v_uint32x4 v_mul1 = v_load((uint32_t*)m + 4);
-        v_uint32x4 v_res0 = v_src0 * v_mul0;//a1a2b1b2
-        v_uint32x4 v_res1 = v_src1 * v_mul1;//c1c2d1d2
-        v_uint32x4 v_tmp0, v_tmp1;
-        v_recombine(v_res0, v_res1, v_tmp0, v_tmp1);//a1a2c1c2 b1b2d1d2
-        v_zip(v_tmp0, v_tmp1, v_res0, v_res1);//a1b1a2b2 c1d1c2d2
-        v_recombine(v_res0, v_res1, v_tmp0, v_tmp1);//a1b1c1d1 a2b2c2d2
-        v_store((uint32_t*)dst, v_tmp0 + v_tmp1);//abcd
+        v_uint32 v_src0, v_src1;
+        v_expand(vx_lut_pairs(src, ofst + i), v_src0, v_src1);
+
+        v_uint64 v_res0 = v_reinterpret_as_u64(v_src0 * vx_load((uint32_t*)m));
+        v_uint64 v_res1 = v_reinterpret_as_u64(v_src1 * vx_load((uint32_t*)m + VECSZ));
+        v_store((uint32_t*)dst, v_pack((v_res0 & vx_setall_u64(0xFFFFFFFF)) + (v_res0 >> 32),
+                                       (v_res1 & vx_setall_u64(0xFFFFFFFF)) + (v_res1 >> 32)));
     }
+#endif
     for (; i < dst_max; i += 1, m += 2)
     {
         uint16_t* px = src + ofst[i];
         *(dst++) = m[0] * px[0] + m[1] * px[1];
     }
     src_0 = (src + ofst[dst_width - 1])[0];
-    v_src_0 = v_setall_u32(*((uint32_t*)&src_0));
-    for (; i < dst_width - 3; i += 4, dst += 4)
+#if CV_SIMD
+    v_src_0 = vx_setall_u32(*((uint32_t*)&src_0));
+    for (; i <= dst_width - VECSZ; i += VECSZ, dst += VECSZ)
     {
         v_store((uint32_t*)dst, v_src_0);
     }
+#endif
     for (; i < dst_width; i++)
     {
         *(dst++) = src_0;
@@ -552,18 +658,21 @@ void vlineSet(FT* src, ET* dst, int dst_width)
 template <>
 void vlineSet<uint8_t, ufixedpoint16>(ufixedpoint16* src, uint8_t* dst, int dst_width)
 {
-    static const v_uint16x8 v_fixedRound = v_setall_u16((uint16_t)((1U << 8) >> 1));
     int i = 0;
-    for (; i < dst_width - 15; i += 16, src += 16, dst += 16)
+#if CV_SIMD
+    const int VECSZ = v_uint8::nlanes;
+    static const v_uint16 v_fixedRound = vx_setall_u16((uint16_t)((1U << 8) >> 1));
+    for (; i <= dst_width - VECSZ; i += VECSZ, src += VECSZ, dst += VECSZ)
     {
-        v_uint16x8 v_src0 = v_load((uint16_t*)src);
-        v_uint16x8 v_src1 = v_load((uint16_t*)src + 8);
+        v_uint16 v_src0 = vx_load((uint16_t*)src);
+        v_uint16 v_src1 = vx_load((uint16_t*)src + VECSZ/2);
 
-        v_uint16x8 v_res0 = (v_src0 + v_fixedRound) >> 8;
-        v_uint16x8 v_res1 = (v_src1 + v_fixedRound) >> 8;
+        v_uint16 v_res0 = (v_src0 + v_fixedRound) >> 8;
+        v_uint16 v_res1 = (v_src1 + v_fixedRound) >> 8;
 
         v_store(dst, v_pack(v_res0, v_res1));
     }
+#endif
     for (; i < dst_width; i++)
         *(dst++) = *(src++);
 }
@@ -582,36 +691,39 @@ void vlineResize(FT* src, size_t src_step, FT* m, ET* dst, int dst_width)
 template <>
 void vlineResize<uint8_t, ufixedpoint16, 2>(ufixedpoint16* src, size_t src_step, ufixedpoint16* m, uint8_t* dst, int dst_width)
 {
-    static const v_int32x4 v_fixedRound = v_setall_s32((int32_t)((1 << 16) >> 1));
-    static const v_int16x8 v_128    = v_reinterpret_as_s16(v_setall_u16((uint16_t)1<<15));
-    static const v_int8x16 v_128_16 = v_reinterpret_as_s8 (v_setall_u8 ((uint8_t) 1<<7));
-
     int i = 0;
     ufixedpoint16* src1 = src + src_step;
-    v_int16x8 v_mul = v_reinterpret_as_s16(v_setall_u32(((uint32_t*)m)[0]));
-    for (; i < dst_width - 15; i += 16, src += 16, src1 += 16, dst += 16)
+#if CV_SIMD
+    const int VECSZ = v_uint8::nlanes;
+    static const v_int32 v_fixedRound = vx_setall_s32((int32_t)((1 << 16) >> 1));
+    static const v_int16 v_128    = v_reinterpret_as_s16(vx_setall_u16((uint16_t)1<<15));
+    static const v_int8  v_128_16 = v_reinterpret_as_s8 (vx_setall_u8 ((uint8_t) 1<<7));
+
+    v_int16 v_mul = v_reinterpret_as_s16(vx_setall_u32(((uint32_t*)m)[0]));
+    for (; i <= dst_width - VECSZ; i += VECSZ, src += VECSZ, src1 += VECSZ, dst += VECSZ)
     {
-        v_int16x8 v_src00 = v_load((int16_t*)src);
-        v_int16x8 v_src10 = v_load((int16_t*)src1);
-        v_int16x8 v_tmp0, v_tmp1;
+        v_int16 v_src00 = vx_load((int16_t*)src);
+        v_int16 v_src10 = vx_load((int16_t*)src1);
+        v_int16 v_tmp0, v_tmp1;
         v_zip(v_add_wrap(v_src00,v_128), v_add_wrap(v_src10,v_128), v_tmp0, v_tmp1);
 
-        v_int32x4 v_res0 = v_dotprod(v_tmp0, v_mul);
-        v_int32x4 v_res1 = v_dotprod(v_tmp1, v_mul);
+        v_int32 v_res0 = v_dotprod(v_tmp0, v_mul);
+        v_int32 v_res1 = v_dotprod(v_tmp1, v_mul);
 
-        v_int16x8 v_src01 = v_load((int16_t*)src + 8);
-        v_int16x8 v_src11 = v_load((int16_t*)src1 + 8);
+        v_int16 v_src01 = vx_load((int16_t*)src + VECSZ/2);
+        v_int16 v_src11 = vx_load((int16_t*)src1 + VECSZ/2);
         v_zip(v_add_wrap(v_src01,v_128), v_add_wrap(v_src11,v_128), v_tmp0, v_tmp1);
-        v_int32x4 v_res2 = v_dotprod(v_tmp0, v_mul);
-        v_int32x4 v_res3 = v_dotprod(v_tmp1, v_mul);
+        v_int32 v_res2 = v_dotprod(v_tmp0, v_mul);
+        v_int32 v_res3 = v_dotprod(v_tmp1, v_mul);
 
-        v_int8x16 v_res = v_pack(v_pack((v_res0 + v_fixedRound) >> 16,
-                                        (v_res1 + v_fixedRound) >> 16),
-                                 v_pack((v_res2 + v_fixedRound) >> 16,
-                                        (v_res3 + v_fixedRound) >> 16));
+        v_int8 v_res = v_pack(v_pack((v_res0 + v_fixedRound) >> 16,
+                                     (v_res1 + v_fixedRound) >> 16),
+                              v_pack((v_res2 + v_fixedRound) >> 16,
+                                     (v_res3 + v_fixedRound) >> 16));
 
         v_store(dst, v_reinterpret_as_u8(v_sub_wrap(v_res, v_128_16)));
     }
+#endif
     for (; i < dst_width; i++)
     {
         *(dst++) = (uint8_t)(*(src++) * m[0] + *(src1++) * m[1]);
@@ -675,7 +787,7 @@ public:
                            cn(_cn), xoffsets(_xoffsets), yoffsets(_yoffsets), xcoeffs(_xcoeffs), ycoeffs(_ycoeffs),
                            min_x(_min_x), max_x(_max_x), min_y(_min_y), max_y(_max_y), hResize(_hResize) {}
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         AutoBuffer<fixedpoint> linebuf(interp_y_len * dst_width * cn);
         int last_eval = - interp_y_len;
@@ -686,18 +798,18 @@ public:
         {
             last_eval = 1 - interp_y_len;
             evalbuf_start = 1;
-            hResize((ET*)src, cn, xoffsets, xcoeffs, (fixedpoint*)linebuf, min_x, max_x, dst_width);
+            hResize((ET*)src, cn, xoffsets, xcoeffs, linebuf.data(), min_x, max_x, dst_width);
         }
         int dy = range.start;
         for (; dy < rmin_y; dy++)
-            vlineSet<ET, FT>((fixedpoint*)linebuf, (ET*)(dst + dst_step * dy), dst_width*cn);
+            vlineSet<ET, FT>(linebuf.data(), (ET*)(dst + dst_step * dy), dst_width*cn);
         for (; dy < rmax_y; dy++)
         {
             int &iy = yoffsets[dy];
 
             int i;
             for (i = max(iy, last_eval + interp_y_len); i < min(iy + interp_y_len, src_height); i++, evalbuf_start = (evalbuf_start + 1) % interp_y_len)
-                hResize((ET*)(src + i * src_step), cn, xoffsets, xcoeffs, (fixedpoint*)linebuf + evalbuf_start*(dst_width * cn), min_x, max_x, dst_width);
+                hResize((ET*)(src + i * src_step), cn, xoffsets, xcoeffs, linebuf.data() + evalbuf_start*(dst_width * cn), min_x, max_x, dst_width);
             evalbuf_start = (evalbuf_start + max(iy, src_height - interp_y_len) - max(last_eval, src_height - interp_y_len)) % interp_y_len;
             last_eval = iy;
 
@@ -707,15 +819,18 @@ public:
             for (; i < interp_y_len; i++)
                 curcoeffs[i] = ycoeffs[ dy*interp_y_len - evalbuf_start + i];
 
-            vlineResize<ET, FT, interp_y_len>((fixedpoint*)linebuf, dst_width*cn, curcoeffs, (ET*)(dst + dst_step * dy), dst_width*cn);
+            vlineResize<ET, FT, interp_y_len>(linebuf.data(), dst_width*cn, curcoeffs, (ET*)(dst + dst_step * dy), dst_width*cn);
         }
-        fixedpoint *endline = (fixedpoint*)linebuf;
+        fixedpoint *endline = linebuf.data();
         if (last_eval + interp_y_len > src_height)
             endline += dst_width*cn*((evalbuf_start + src_height - 1 - last_eval) % interp_y_len);
         else
             hResize((ET*)(src + (src_height - 1) * src_step), cn, xoffsets, xcoeffs, endline, min_x, max_x, dst_width);
         for (; dy < range.end; dy++)
             vlineSet<ET, FT>(endline, (ET*)(dst + dst_step * dy), dst_width*cn);
+#if CV_SIMD
+        vx_cleanup();
+#endif
     }
 
 private:
@@ -757,7 +872,7 @@ void resize_bitExact(const uchar* src, size_t src_step, int src_width, int src_h
                            dst_height * sizeof(int) +
                            dst_width * interp_x.len*sizeof(fixedpoint) +
                            dst_height * interp_y.len * sizeof(fixedpoint) );
-    int* xoffsets = (int*)((uchar*)buf);
+    int* xoffsets = (int*)buf.data();
     int* yoffsets = xoffsets + dst_width;
     fixedpoint* xcoeffs = (fixedpoint*)(yoffsets + dst_height);
     fixedpoint* ycoeffs = xcoeffs + dst_width * interp_x.len;
@@ -806,20 +921,23 @@ static inline void interpolateLanczos4( float x, float* coeffs )
     static const double cs[][2]=
     {{1, 0}, {-s45, -s45}, {0, 1}, {s45, -s45}, {-1, 0}, {s45, s45}, {0, -1}, {-s45, s45}};
 
-    if( x < FLT_EPSILON )
-    {
-        for( int i = 0; i < 8; i++ )
-            coeffs[i] = 0;
-        coeffs[3] = 1;
-        return;
-    }
-
     float sum = 0;
     double y0=-(x+3)*CV_PI*0.25, s0 = std::sin(y0), c0= std::cos(y0);
     for(int i = 0; i < 8; i++ )
     {
-        double y = -(x+3-i)*CV_PI*0.25;
-        coeffs[i] = (float)((cs[i][0]*s0 + cs[i][1]*c0)/(y*y));
+        float y0_ = (x+3-i);
+        if (fabs(y0_) >= 1e-6f)
+        {
+            double y = -y0_*CV_PI*0.25;
+            coeffs[i] = (float)((cs[i][0]*s0 + cs[i][1]*c0)/(y*y));
+        }
+        else
+        {
+            // special handling for 'x' values:
+            // - ~0.0: 0 0 0 1 0 0 0 0
+            // - ~1.0: 0 0 0 0 1 0 0 0
+            coeffs[i] = 1e30f;
+        }
         sum += coeffs[i];
     }
 
@@ -853,13 +971,13 @@ class resizeNNInvoker :
     public ParallelLoopBody
 {
 public:
-    resizeNNInvoker(const Mat& _src, Mat &_dst, int *_x_ofs, int _pix_size4, double _ify) :
-        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs), pix_size4(_pix_size4),
+    resizeNNInvoker(const Mat& _src, Mat &_dst, int *_x_ofs, double _ify) :
+        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs),
         ify(_ify)
     {
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         Size ssize = src.size(), dsize = dst.size();
         int y, x, pix_size = (int)src.elemSize();
@@ -926,19 +1044,18 @@ public:
             default:
                 for( x = 0; x < dsize.width; x++, D += pix_size )
                 {
-                    const int* _tS = (const int*)(S + x_ofs[x]);
-                    int* _tD = (int*)D;
-                    for( int k = 0; k < pix_size4; k++ )
-                        _tD[k] = _tS[k];
+                    const uchar* _tS = S + x_ofs[x];
+                    for (int k = 0; k < pix_size; k++)
+                        D[k] = _tS[k];
                 }
             }
         }
     }
 
 private:
-    const Mat src;
-    Mat dst;
-    int* x_ofs, pix_size4;
+    const Mat& src;
+    Mat& dst;
+    int* x_ofs;
     double ify;
 
     resizeNNInvoker(const resizeNNInvoker&);
@@ -950,9 +1067,8 @@ resizeNN( const Mat& src, Mat& dst, double fx, double fy )
 {
     Size ssize = src.size(), dsize = dst.size();
     AutoBuffer<int> _x_ofs(dsize.width);
-    int* x_ofs = _x_ofs;
+    int* x_ofs = _x_ofs.data();
     int pix_size = (int)src.elemSize();
-    int pix_size4 = (int)(pix_size / sizeof(int));
     double ifx = 1./fx, ify = 1./fy;
     int x;
 
@@ -967,9 +1083,9 @@ resizeNN( const Mat& src, Mat& dst, double fx, double fy )
     if(CV_CPU_HAS_SUPPORT_AVX2 && ((pix_size == 2) || (pix_size == 4)))
     {
         if(pix_size == 2)
-            opt_AVX2::resizeNN2_AVX2(range, src, dst, x_ofs, pix_size4, ify);
+            opt_AVX2::resizeNN2_AVX2(range, src, dst, x_ofs, ify);
         else
-            opt_AVX2::resizeNN4_AVX2(range, src, dst, x_ofs, pix_size4, ify);
+            opt_AVX2::resizeNN4_AVX2(range, src, dst, x_ofs, ify);
     }
     else
 #endif
@@ -977,607 +1093,179 @@ resizeNN( const Mat& src, Mat& dst, double fx, double fy )
     if(CV_CPU_HAS_SUPPORT_SSE4_1 && ((pix_size == 2) || (pix_size == 4)))
     {
         if(pix_size == 2)
-            opt_SSE4_1::resizeNN2_SSE4_1(range, src, dst, x_ofs, pix_size4, ify);
+            opt_SSE4_1::resizeNN2_SSE4_1(range, src, dst, x_ofs, ify);
         else
-            opt_SSE4_1::resizeNN4_SSE4_1(range, src, dst, x_ofs, pix_size4, ify);
+            opt_SSE4_1::resizeNN4_SSE4_1(range, src, dst, x_ofs, ify);
     }
     else
 #endif
     {
-        resizeNNInvoker invoker(src, dst, x_ofs, pix_size4, ify);
+        resizeNNInvoker invoker(src, dst, x_ofs, ify);
         parallel_for_(range, invoker, dst.total()/(double)(1<<16));
     }
 }
 
+class resizeNN_bitexactInvoker : public ParallelLoopBody
+{
+public:
+    resizeNN_bitexactInvoker(const Mat& _src, Mat& _dst, int* _x_ofse, int _ify, int _ify0)
+        : src(_src), dst(_dst), x_ofse(_x_ofse), ify(_ify), ify0(_ify0) {}
+
+    virtual void operator() (const Range& range) const CV_OVERRIDE
+    {
+        Size ssize = src.size(), dsize = dst.size();
+        int pix_size = (int)src.elemSize();
+        for( int y = range.start; y < range.end; y++ )
+        {
+            uchar* D = dst.ptr(y);
+            int _sy = (ify * y + ify0) >> 16;
+            int sy = std::min(_sy, ssize.height-1);
+            const uchar* S = src.ptr(sy);
+
+            int x = 0;
+            switch( pix_size )
+            {
+            case 1:
+#if CV_SIMD
+                for( ; x <= dsize.width - v_uint8::nlanes; x += v_uint8::nlanes )
+                    v_store(D + x, vx_lut(S, x_ofse + x));
+#endif
+                for( ; x < dsize.width; x++ )
+                    D[x] = S[x_ofse[x]];
+                break;
+            case 2:
+#if CV_SIMD
+                for( ; x <= dsize.width - v_uint16::nlanes; x += v_uint16::nlanes )
+                    v_store((ushort*)D + x, vx_lut((ushort*)S, x_ofse + x));
+#endif
+                for( ; x < dsize.width; x++ )
+                    *((ushort*)D + x) = *((ushort*)S + x_ofse[x]);
+                break;
+            case 3:
+                for( ; x < dsize.width; x++, D += 3 )
+                {
+                    const uchar* _tS = S + x_ofse[x] * 3;
+                    D[0] = _tS[0]; D[1] = _tS[1]; D[2] = _tS[2];
+                }
+                break;
+            case 4:
+#if CV_SIMD
+                for( ; x <= dsize.width - v_uint32::nlanes; x += v_uint32::nlanes )
+                    v_store((uint32_t*)D + x, vx_lut((uint32_t*)S, x_ofse + x));
+#endif
+                for( ; x < dsize.width; x++ )
+                    *((uint32_t*)D + x) = *((uint32_t*)S + x_ofse[x]);
+                break;
+            case 6:
+                for( ; x < dsize.width; x++, D += 6 )
+                {
+                    const ushort* _tS = (const ushort*)(S + x_ofse[x]*6);
+                    ushort* _tD = (ushort*)D;
+                    _tD[0] = _tS[0]; _tD[1] = _tS[1]; _tD[2] = _tS[2];
+                }
+                break;
+            case 8:
+#if CV_SIMD
+                for( ; x <= dsize.width - v_uint64::nlanes; x += v_uint64::nlanes )
+                    v_store((uint64_t*)D + x, vx_lut((uint64_t*)S, x_ofse + x));
+#endif
+                for( ; x < dsize.width; x++ )
+                    *((uint64_t*)D + x) = *((uint64_t*)S + x_ofse[x]);
+                break;
+            case 12:
+                for( ; x < dsize.width; x++, D += 12 )
+                {
+                    const int* _tS = (const int*)(S + x_ofse[x]*12);
+                    int* _tD = (int*)D;
+                    _tD[0] = _tS[0]; _tD[1] = _tS[1]; _tD[2] = _tS[2];
+                }
+                break;
+            default:
+                for( x = 0; x < dsize.width; x++, D += pix_size )
+                {
+                    const uchar* _tS = S + x_ofse[x] * pix_size;
+                    for (int k = 0; k < pix_size; k++)
+                        D[k] = _tS[k];
+                }
+            }
+        }
+    }
+private:
+    const Mat& src;
+    Mat& dst;
+    int* x_ofse;
+    const int ify;
+    const int ify0;
+};
+
+static void resizeNN_bitexact( const Mat& src, Mat& dst, double /*fx*/, double /*fy*/ )
+{
+    Size ssize = src.size(), dsize = dst.size();
+    int ifx = ((ssize.width << 16) + dsize.width / 2) / dsize.width; // 16bit fixed-point arithmetic
+    int ifx0 = ifx / 2 - 1;                                     // This method uses center pixel coordinate as Pillow and scikit-images do.
+    int ify = ((ssize.height << 16) + dsize.height / 2) / dsize.height;
+    int ify0 = ify / 2 - 1;
+
+    cv::utils::BufferArea area;
+    int* x_ofse = 0;
+    area.allocate(x_ofse, dsize.width, CV_SIMD_WIDTH);
+    area.commit();
+
+    for( int x = 0; x < dsize.width; x++ )
+    {
+        int sx = (ifx * x + ifx0) >> 16;
+        x_ofse[x] = std::min(sx, ssize.width-1);    // offset in element (not byte)
+    }
+    Range range(0, dsize.height);
+    resizeNN_bitexactInvoker invoker(src, dst, x_ofse, ify, ify0);
+    parallel_for_(range, invoker, dst.total()/(double)(1<<16));
+}
 
 struct VResizeNoVec
 {
-    int operator()(const uchar**, uchar*, const uchar*, int ) const { return 0; }
+    template<typename WT, typename T, typename BT>
+    int operator()(const WT**, T*, const BT*, int ) const
+    {
+        return 0;
+    }
 };
 
 struct HResizeNoVec
 {
-    int operator()(const uchar**, uchar**, int, const int*,
-        const uchar*, int, int, int, int, int) const { return 0; }
+    template<typename T, typename WT, typename AT> inline
+    int operator()(const T**, WT**, int, const int*,
+        const AT*, int, int, int, int, int) const
+    {
+        return 0;
+    }
 };
 
-#if CV_SSE2
+#if CV_SIMD
 
 struct VResizeLinearVec_32s8u
 {
-    int operator()(const uchar** _src, uchar* dst, const uchar* _beta, int width ) const
+    int operator()(const int** src, uchar* dst, const short* beta, int width) const
     {
-        if( !checkHardwareSupport(CV_CPU_SSE2) )
-            return 0;
-
-        const int** src = (const int**)_src;
-        const short* beta = (const short*)_beta;
         const int *S0 = src[0], *S1 = src[1];
         int x = 0;
-        __m128i b0 = _mm_set1_epi16(beta[0]), b1 = _mm_set1_epi16(beta[1]);
-        __m128i delta = _mm_set1_epi16(2);
+        v_int16 b0 = vx_setall_s16(beta[0]), b1 = vx_setall_s16(beta[1]);
 
-        if( (((size_t)S0|(size_t)S1)&15) == 0 )
-            for( ; x <= width - 16; x += 16 )
-            {
-                __m128i x0, x1, x2, y0, y1, y2;
-                x0 = _mm_load_si128((const __m128i*)(S0 + x));
-                x1 = _mm_load_si128((const __m128i*)(S0 + x + 4));
-                y0 = _mm_load_si128((const __m128i*)(S1 + x));
-                y1 = _mm_load_si128((const __m128i*)(S1 + x + 4));
-                x0 = _mm_packs_epi32(_mm_srai_epi32(x0, 4), _mm_srai_epi32(x1, 4));
-                y0 = _mm_packs_epi32(_mm_srai_epi32(y0, 4), _mm_srai_epi32(y1, 4));
-
-                x1 = _mm_load_si128((const __m128i*)(S0 + x + 8));
-                x2 = _mm_load_si128((const __m128i*)(S0 + x + 12));
-                y1 = _mm_load_si128((const __m128i*)(S1 + x + 8));
-                y2 = _mm_load_si128((const __m128i*)(S1 + x + 12));
-                x1 = _mm_packs_epi32(_mm_srai_epi32(x1, 4), _mm_srai_epi32(x2, 4));
-                y1 = _mm_packs_epi32(_mm_srai_epi32(y1, 4), _mm_srai_epi32(y2, 4));
-
-                x0 = _mm_adds_epi16(_mm_mulhi_epi16( x0, b0 ), _mm_mulhi_epi16( y0, b1 ));
-                x1 = _mm_adds_epi16(_mm_mulhi_epi16( x1, b0 ), _mm_mulhi_epi16( y1, b1 ));
-
-                x0 = _mm_srai_epi16(_mm_adds_epi16(x0, delta), 2);
-                x1 = _mm_srai_epi16(_mm_adds_epi16(x1, delta), 2);
-                _mm_storeu_si128( (__m128i*)(dst + x), _mm_packus_epi16(x0, x1));
-            }
+        if( (((size_t)S0|(size_t)S1)&(CV_SIMD_WIDTH - 1)) == 0 )
+            for( ; x <= width - v_uint8::nlanes; x += v_uint8::nlanes)
+                v_store(dst + x, v_rshr_pack_u<2>(v_mul_hi(v_pack(vx_load_aligned(S0 + x                      ) >> 4, vx_load_aligned(S0 + x +     v_int32::nlanes) >> 4), b0) +
+                                                  v_mul_hi(v_pack(vx_load_aligned(S1 + x                      ) >> 4, vx_load_aligned(S1 + x +     v_int32::nlanes) >> 4), b1),
+                                                  v_mul_hi(v_pack(vx_load_aligned(S0 + x + 2 * v_int32::nlanes) >> 4, vx_load_aligned(S0 + x + 3 * v_int32::nlanes) >> 4), b0) +
+                                                  v_mul_hi(v_pack(vx_load_aligned(S1 + x + 2 * v_int32::nlanes) >> 4, vx_load_aligned(S1 + x + 3 * v_int32::nlanes) >> 4), b1)));
         else
-            for( ; x <= width - 16; x += 16 )
-            {
-                __m128i x0, x1, x2, y0, y1, y2;
-                x0 = _mm_loadu_si128((const __m128i*)(S0 + x));
-                x1 = _mm_loadu_si128((const __m128i*)(S0 + x + 4));
-                y0 = _mm_loadu_si128((const __m128i*)(S1 + x));
-                y1 = _mm_loadu_si128((const __m128i*)(S1 + x + 4));
-                x0 = _mm_packs_epi32(_mm_srai_epi32(x0, 4), _mm_srai_epi32(x1, 4));
-                y0 = _mm_packs_epi32(_mm_srai_epi32(y0, 4), _mm_srai_epi32(y1, 4));
-
-                x1 = _mm_loadu_si128((const __m128i*)(S0 + x + 8));
-                x2 = _mm_loadu_si128((const __m128i*)(S0 + x + 12));
-                y1 = _mm_loadu_si128((const __m128i*)(S1 + x + 8));
-                y2 = _mm_loadu_si128((const __m128i*)(S1 + x + 12));
-                x1 = _mm_packs_epi32(_mm_srai_epi32(x1, 4), _mm_srai_epi32(x2, 4));
-                y1 = _mm_packs_epi32(_mm_srai_epi32(y1, 4), _mm_srai_epi32(y2, 4));
-
-                x0 = _mm_adds_epi16(_mm_mulhi_epi16( x0, b0 ), _mm_mulhi_epi16( y0, b1 ));
-                x1 = _mm_adds_epi16(_mm_mulhi_epi16( x1, b0 ), _mm_mulhi_epi16( y1, b1 ));
-
-                x0 = _mm_srai_epi16(_mm_adds_epi16(x0, delta), 2);
-                x1 = _mm_srai_epi16(_mm_adds_epi16(x1, delta), 2);
-                _mm_storeu_si128( (__m128i*)(dst + x), _mm_packus_epi16(x0, x1));
-            }
-
-        for( ; x < width - 4; x += 4 )
-        {
-            __m128i x0, y0;
-            x0 = _mm_srai_epi32(_mm_loadu_si128((const __m128i*)(S0 + x)), 4);
-            y0 = _mm_srai_epi32(_mm_loadu_si128((const __m128i*)(S1 + x)), 4);
-            x0 = _mm_packs_epi32(x0, x0);
-            y0 = _mm_packs_epi32(y0, y0);
-            x0 = _mm_adds_epi16(_mm_mulhi_epi16(x0, b0), _mm_mulhi_epi16(y0, b1));
-            x0 = _mm_srai_epi16(_mm_adds_epi16(x0, delta), 2);
-            x0 = _mm_packus_epi16(x0, x0);
-            *(int*)(dst + x) = _mm_cvtsi128_si32(x0);
-        }
-
-        return x;
-    }
-};
-
-
-template<int shiftval> struct VResizeLinearVec_32f16
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        if( !checkHardwareSupport(CV_CPU_SSE2) )
-            return 0;
-
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1];
-        ushort* dst = (ushort*)_dst;
-        int x = 0;
-
-        __m128 b0 = _mm_set1_ps(beta[0]), b1 = _mm_set1_ps(beta[1]);
-        __m128i preshift = _mm_set1_epi32(shiftval);
-        __m128i postshift = _mm_set1_epi16((short)shiftval);
-
-        if( (((size_t)S0|(size_t)S1)&15) == 0 )
-            for( ; x <= width - 16; x += 16 )
-            {
-                __m128 x0, x1, y0, y1;
-                __m128i t0, t1, t2;
-                x0 = _mm_load_ps(S0 + x);
-                x1 = _mm_load_ps(S0 + x + 4);
-                y0 = _mm_load_ps(S1 + x);
-                y1 = _mm_load_ps(S1 + x + 4);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-                t0 = _mm_add_epi32(_mm_cvtps_epi32(x0), preshift);
-                t2 = _mm_add_epi32(_mm_cvtps_epi32(x1), preshift);
-                t0 = _mm_add_epi16(_mm_packs_epi32(t0, t2), postshift);
-
-                x0 = _mm_load_ps(S0 + x + 8);
-                x1 = _mm_load_ps(S0 + x + 12);
-                y0 = _mm_load_ps(S1 + x + 8);
-                y1 = _mm_load_ps(S1 + x + 12);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-                t1 = _mm_add_epi32(_mm_cvtps_epi32(x0), preshift);
-                t2 = _mm_add_epi32(_mm_cvtps_epi32(x1), preshift);
-                t1 = _mm_add_epi16(_mm_packs_epi32(t1, t2), postshift);
-
-                _mm_storeu_si128( (__m128i*)(dst + x), t0);
-                _mm_storeu_si128( (__m128i*)(dst + x + 8), t1);
-            }
-        else
-            for( ; x <= width - 16; x += 16 )
-            {
-                __m128 x0, x1, y0, y1;
-                __m128i t0, t1, t2;
-                x0 = _mm_loadu_ps(S0 + x);
-                x1 = _mm_loadu_ps(S0 + x + 4);
-                y0 = _mm_loadu_ps(S1 + x);
-                y1 = _mm_loadu_ps(S1 + x + 4);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-                t0 = _mm_add_epi32(_mm_cvtps_epi32(x0), preshift);
-                t2 = _mm_add_epi32(_mm_cvtps_epi32(x1), preshift);
-                t0 = _mm_add_epi16(_mm_packs_epi32(t0, t2), postshift);
-
-                x0 = _mm_loadu_ps(S0 + x + 8);
-                x1 = _mm_loadu_ps(S0 + x + 12);
-                y0 = _mm_loadu_ps(S1 + x + 8);
-                y1 = _mm_loadu_ps(S1 + x + 12);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-                t1 = _mm_add_epi32(_mm_cvtps_epi32(x0), preshift);
-                t2 = _mm_add_epi32(_mm_cvtps_epi32(x1), preshift);
-                t1 = _mm_add_epi16(_mm_packs_epi32(t1, t2), postshift);
-
-                _mm_storeu_si128( (__m128i*)(dst + x), t0);
-                _mm_storeu_si128( (__m128i*)(dst + x + 8), t1);
-            }
-
-        for( ; x < width - 4; x += 4 )
-        {
-            __m128 x0, y0;
-            __m128i t0;
-            x0 = _mm_loadu_ps(S0 + x);
-            y0 = _mm_loadu_ps(S1 + x);
-
-            x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-            t0 = _mm_add_epi32(_mm_cvtps_epi32(x0), preshift);
-            t0 = _mm_add_epi16(_mm_packs_epi32(t0, t0), postshift);
-            _mm_storel_epi64( (__m128i*)(dst + x), t0);
-        }
-
-        return x;
-    }
-};
-
-typedef VResizeLinearVec_32f16<SHRT_MIN> VResizeLinearVec_32f16u;
-typedef VResizeLinearVec_32f16<0> VResizeLinearVec_32f16s;
-
-struct VResizeLinearVec_32f
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        if( !checkHardwareSupport(CV_CPU_SSE) )
-            return 0;
-
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1];
-        float* dst = (float*)_dst;
-        int x = 0;
-
-        __m128 b0 = _mm_set1_ps(beta[0]), b1 = _mm_set1_ps(beta[1]);
-
-        if( (((size_t)S0|(size_t)S1)&15) == 0 )
-            for( ; x <= width - 8; x += 8 )
-            {
-                __m128 x0, x1, y0, y1;
-                x0 = _mm_load_ps(S0 + x);
-                x1 = _mm_load_ps(S0 + x + 4);
-                y0 = _mm_load_ps(S1 + x);
-                y1 = _mm_load_ps(S1 + x + 4);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-
-                _mm_storeu_ps( dst + x, x0);
-                _mm_storeu_ps( dst + x + 4, x1);
-            }
-        else
-            for( ; x <= width - 8; x += 8 )
-            {
-                __m128 x0, x1, y0, y1;
-                x0 = _mm_loadu_ps(S0 + x);
-                x1 = _mm_loadu_ps(S0 + x + 4);
-                y0 = _mm_loadu_ps(S1 + x);
-                y1 = _mm_loadu_ps(S1 + x + 4);
-
-                x0 = _mm_add_ps(_mm_mul_ps(x0, b0), _mm_mul_ps(y0, b1));
-                x1 = _mm_add_ps(_mm_mul_ps(x1, b0), _mm_mul_ps(y1, b1));
-
-                _mm_storeu_ps( dst + x, x0);
-                _mm_storeu_ps( dst + x + 4, x1);
-            }
-
-        return x;
-    }
-};
-
-
-struct VResizeCubicVec_32s8u
-{
-    int operator()(const uchar** _src, uchar* dst, const uchar* _beta, int width ) const
-    {
-        if( !checkHardwareSupport(CV_CPU_SSE2) )
-            return 0;
-
-        const int** src = (const int**)_src;
-        const short* beta = (const short*)_beta;
-        const int *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        int x = 0;
-        float scale = 1.f/(INTER_RESIZE_COEF_SCALE*INTER_RESIZE_COEF_SCALE);
-        __m128 b0 = _mm_set1_ps(beta[0]*scale), b1 = _mm_set1_ps(beta[1]*scale),
-            b2 = _mm_set1_ps(beta[2]*scale), b3 = _mm_set1_ps(beta[3]*scale);
-
-        if( (((size_t)S0|(size_t)S1|(size_t)S2|(size_t)S3)&15) == 0 )
-            for( ; x <= width - 8; x += 8 )
-            {
-                __m128i x0, x1, y0, y1;
-                __m128 s0, s1, f0, f1;
-                x0 = _mm_load_si128((const __m128i*)(S0 + x));
-                x1 = _mm_load_si128((const __m128i*)(S0 + x + 4));
-                y0 = _mm_load_si128((const __m128i*)(S1 + x));
-                y1 = _mm_load_si128((const __m128i*)(S1 + x + 4));
-
-                s0 = _mm_mul_ps(_mm_cvtepi32_ps(x0), b0);
-                s1 = _mm_mul_ps(_mm_cvtepi32_ps(x1), b0);
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(y0), b1);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(y1), b1);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-
-                x0 = _mm_load_si128((const __m128i*)(S2 + x));
-                x1 = _mm_load_si128((const __m128i*)(S2 + x + 4));
-                y0 = _mm_load_si128((const __m128i*)(S3 + x));
-                y1 = _mm_load_si128((const __m128i*)(S3 + x + 4));
-
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(x0), b2);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(x1), b2);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(y0), b3);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(y1), b3);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-
-                x0 = _mm_cvtps_epi32(s0);
-                x1 = _mm_cvtps_epi32(s1);
-
-                x0 = _mm_packs_epi32(x0, x1);
-                _mm_storel_epi64( (__m128i*)(dst + x), _mm_packus_epi16(x0, x0));
-            }
-        else
-            for( ; x <= width - 8; x += 8 )
-            {
-                __m128i x0, x1, y0, y1;
-                __m128 s0, s1, f0, f1;
-                x0 = _mm_loadu_si128((const __m128i*)(S0 + x));
-                x1 = _mm_loadu_si128((const __m128i*)(S0 + x + 4));
-                y0 = _mm_loadu_si128((const __m128i*)(S1 + x));
-                y1 = _mm_loadu_si128((const __m128i*)(S1 + x + 4));
-
-                s0 = _mm_mul_ps(_mm_cvtepi32_ps(x0), b0);
-                s1 = _mm_mul_ps(_mm_cvtepi32_ps(x1), b0);
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(y0), b1);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(y1), b1);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-
-                x0 = _mm_loadu_si128((const __m128i*)(S2 + x));
-                x1 = _mm_loadu_si128((const __m128i*)(S2 + x + 4));
-                y0 = _mm_loadu_si128((const __m128i*)(S3 + x));
-                y1 = _mm_loadu_si128((const __m128i*)(S3 + x + 4));
-
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(x0), b2);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(x1), b2);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-                f0 = _mm_mul_ps(_mm_cvtepi32_ps(y0), b3);
-                f1 = _mm_mul_ps(_mm_cvtepi32_ps(y1), b3);
-                s0 = _mm_add_ps(s0, f0);
-                s1 = _mm_add_ps(s1, f1);
-
-                x0 = _mm_cvtps_epi32(s0);
-                x1 = _mm_cvtps_epi32(s1);
-
-                x0 = _mm_packs_epi32(x0, x1);
-                _mm_storel_epi64( (__m128i*)(dst + x), _mm_packus_epi16(x0, x0));
-            }
-
-        return x;
-    }
-};
-
-
-template<int shiftval> struct VResizeCubicVec_32f16
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        if( !checkHardwareSupport(CV_CPU_SSE2) )
-            return 0;
-
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        ushort* dst = (ushort*)_dst;
-        int x = 0;
-        __m128 b0 = _mm_set1_ps(beta[0]), b1 = _mm_set1_ps(beta[1]),
-            b2 = _mm_set1_ps(beta[2]), b3 = _mm_set1_ps(beta[3]);
-        __m128i preshift = _mm_set1_epi32(shiftval);
-        __m128i postshift = _mm_set1_epi16((short)shiftval);
-
-        for( ; x <= width - 8; x += 8 )
-        {
-            __m128 x0, x1, y0, y1, s0, s1;
-            __m128i t0, t1;
-            x0 = _mm_loadu_ps(S0 + x);
-            x1 = _mm_loadu_ps(S0 + x + 4);
-            y0 = _mm_loadu_ps(S1 + x);
-            y1 = _mm_loadu_ps(S1 + x + 4);
-
-            s0 = _mm_mul_ps(x0, b0);
-            s1 = _mm_mul_ps(x1, b0);
-            y0 = _mm_mul_ps(y0, b1);
-            y1 = _mm_mul_ps(y1, b1);
-            s0 = _mm_add_ps(s0, y0);
-            s1 = _mm_add_ps(s1, y1);
-
-            x0 = _mm_loadu_ps(S2 + x);
-            x1 = _mm_loadu_ps(S2 + x + 4);
-            y0 = _mm_loadu_ps(S3 + x);
-            y1 = _mm_loadu_ps(S3 + x + 4);
-
-            x0 = _mm_mul_ps(x0, b2);
-            x1 = _mm_mul_ps(x1, b2);
-            y0 = _mm_mul_ps(y0, b3);
-            y1 = _mm_mul_ps(y1, b3);
-            s0 = _mm_add_ps(s0, x0);
-            s1 = _mm_add_ps(s1, x1);
-            s0 = _mm_add_ps(s0, y0);
-            s1 = _mm_add_ps(s1, y1);
-
-            t0 = _mm_add_epi32(_mm_cvtps_epi32(s0), preshift);
-            t1 = _mm_add_epi32(_mm_cvtps_epi32(s1), preshift);
-
-            t0 = _mm_add_epi16(_mm_packs_epi32(t0, t1), postshift);
-            _mm_storeu_si128( (__m128i*)(dst + x), t0);
-        }
-
-        return x;
-    }
-};
-
-typedef VResizeCubicVec_32f16<SHRT_MIN> VResizeCubicVec_32f16u;
-typedef VResizeCubicVec_32f16<0> VResizeCubicVec_32f16s;
-
-struct VResizeCubicVec_32f
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        if( !checkHardwareSupport(CV_CPU_SSE) )
-            return 0;
-
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        float* dst = (float*)_dst;
-        int x = 0;
-        __m128 b0 = _mm_set1_ps(beta[0]), b1 = _mm_set1_ps(beta[1]),
-            b2 = _mm_set1_ps(beta[2]), b3 = _mm_set1_ps(beta[3]);
-
-        for( ; x <= width - 8; x += 8 )
-        {
-            __m128 x0, x1, y0, y1, s0, s1;
-            x0 = _mm_loadu_ps(S0 + x);
-            x1 = _mm_loadu_ps(S0 + x + 4);
-            y0 = _mm_loadu_ps(S1 + x);
-            y1 = _mm_loadu_ps(S1 + x + 4);
-
-            s0 = _mm_mul_ps(x0, b0);
-            s1 = _mm_mul_ps(x1, b0);
-            y0 = _mm_mul_ps(y0, b1);
-            y1 = _mm_mul_ps(y1, b1);
-            s0 = _mm_add_ps(s0, y0);
-            s1 = _mm_add_ps(s1, y1);
-
-            x0 = _mm_loadu_ps(S2 + x);
-            x1 = _mm_loadu_ps(S2 + x + 4);
-            y0 = _mm_loadu_ps(S3 + x);
-            y1 = _mm_loadu_ps(S3 + x + 4);
-
-            x0 = _mm_mul_ps(x0, b2);
-            x1 = _mm_mul_ps(x1, b2);
-            y0 = _mm_mul_ps(y0, b3);
-            y1 = _mm_mul_ps(y1, b3);
-            s0 = _mm_add_ps(s0, x0);
-            s1 = _mm_add_ps(s1, x1);
-            s0 = _mm_add_ps(s0, y0);
-            s1 = _mm_add_ps(s1, y1);
-
-            _mm_storeu_ps( dst + x, s0);
-            _mm_storeu_ps( dst + x + 4, s1);
-        }
-
-        return x;
-    }
-};
-
-#if CV_TRY_SSE4_1
-
-struct VResizeLanczos4Vec_32f16u
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        if (CV_CPU_HAS_SUPPORT_SSE4_1) return opt_SSE4_1::VResizeLanczos4Vec_32f16u_SSE41(_src, _dst, _beta, width);
-        else return 0;
-    }
-};
-
-#else
-
-typedef VResizeNoVec VResizeLanczos4Vec_32f16u;
-
-#endif
-
-struct VResizeLanczos4Vec_32f16s
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3],
-                    *S4 = src[4], *S5 = src[5], *S6 = src[6], *S7 = src[7];
-        short * dst = (short*)_dst;
-        int x = 0;
-        __m128 v_b0 = _mm_set1_ps(beta[0]), v_b1 = _mm_set1_ps(beta[1]),
-               v_b2 = _mm_set1_ps(beta[2]), v_b3 = _mm_set1_ps(beta[3]),
-               v_b4 = _mm_set1_ps(beta[4]), v_b5 = _mm_set1_ps(beta[5]),
-               v_b6 = _mm_set1_ps(beta[6]), v_b7 = _mm_set1_ps(beta[7]);
-
-        for( ; x <= width - 8; x += 8 )
-        {
-            __m128 v_dst0 = _mm_mul_ps(v_b0, _mm_loadu_ps(S0 + x));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b1, _mm_loadu_ps(S1 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b2, _mm_loadu_ps(S2 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b3, _mm_loadu_ps(S3 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b4, _mm_loadu_ps(S4 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b5, _mm_loadu_ps(S5 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b6, _mm_loadu_ps(S6 + x)));
-            v_dst0 = _mm_add_ps(v_dst0, _mm_mul_ps(v_b7, _mm_loadu_ps(S7 + x)));
-
-            __m128 v_dst1 = _mm_mul_ps(v_b0, _mm_loadu_ps(S0 + x + 4));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b1, _mm_loadu_ps(S1 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b2, _mm_loadu_ps(S2 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b3, _mm_loadu_ps(S3 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b4, _mm_loadu_ps(S4 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b5, _mm_loadu_ps(S5 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b6, _mm_loadu_ps(S6 + x + 4)));
-            v_dst1 = _mm_add_ps(v_dst1, _mm_mul_ps(v_b7, _mm_loadu_ps(S7 + x + 4)));
-
-            __m128i v_dsti0 = _mm_cvtps_epi32(v_dst0);
-            __m128i v_dsti1 = _mm_cvtps_epi32(v_dst1);
-
-            _mm_storeu_si128((__m128i *)(dst + x), _mm_packs_epi32(v_dsti0, v_dsti1));
-        }
-
-        return x;
-    }
-};
-
-
-struct VResizeLanczos4Vec_32f
-{
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
-    {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
-        const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3],
-                    *S4 = src[4], *S5 = src[5], *S6 = src[6], *S7 = src[7];
-        float* dst = (float*)_dst;
-        int x = 0;
-
-        __m128 v_b0 = _mm_set1_ps(beta[0]), v_b1 = _mm_set1_ps(beta[1]),
-               v_b2 = _mm_set1_ps(beta[2]), v_b3 = _mm_set1_ps(beta[3]),
-               v_b4 = _mm_set1_ps(beta[4]), v_b5 = _mm_set1_ps(beta[5]),
-               v_b6 = _mm_set1_ps(beta[6]), v_b7 = _mm_set1_ps(beta[7]);
-
-        for( ; x <= width - 4; x += 4 )
-        {
-            __m128 v_dst = _mm_mul_ps(v_b0, _mm_loadu_ps(S0 + x));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b1, _mm_loadu_ps(S1 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b2, _mm_loadu_ps(S2 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b3, _mm_loadu_ps(S3 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b4, _mm_loadu_ps(S4 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b5, _mm_loadu_ps(S5 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b6, _mm_loadu_ps(S6 + x)));
-            v_dst = _mm_add_ps(v_dst, _mm_mul_ps(v_b7, _mm_loadu_ps(S7 + x)));
-
-            _mm_storeu_ps(dst + x, v_dst);
-        }
-
-        return x;
-    }
-};
-
-
-#elif CV_NEON
-
-struct VResizeLinearVec_32s8u
-{
-    int operator()(const uchar** _src, uchar* dst, const uchar* _beta, int width ) const
-    {
-        const int** src = (const int**)_src, *S0 = src[0], *S1 = src[1];
-        const short* beta = (const short*)_beta;
-        int x = 0;
-        int16x8_t v_b0 = vdupq_n_s16(beta[0]), v_b1 = vdupq_n_s16(beta[1]), v_delta = vdupq_n_s16(2);
-
-        for( ; x <= width - 16; x += 16)
-        {
-            int32x4_t v_src00 = vshrq_n_s32(vld1q_s32(S0 + x), 4), v_src10 = vshrq_n_s32(vld1q_s32(S1 + x), 4);
-            int32x4_t v_src01 = vshrq_n_s32(vld1q_s32(S0 + x + 4), 4), v_src11 = vshrq_n_s32(vld1q_s32(S1 + x + 4), 4);
-
-            int16x8_t v_src0 = vcombine_s16(vmovn_s32(v_src00), vmovn_s32(v_src01));
-            int16x8_t v_src1 = vcombine_s16(vmovn_s32(v_src10), vmovn_s32(v_src11));
-
-            int16x8_t v_dst0 = vaddq_s16(vshrq_n_s16(vqdmulhq_s16(v_src0, v_b0), 1),
-                                         vshrq_n_s16(vqdmulhq_s16(v_src1, v_b1), 1));
-            v_dst0 = vshrq_n_s16(vaddq_s16(v_dst0, v_delta), 2);
-
-            v_src00 = vshrq_n_s32(vld1q_s32(S0 + x + 8), 4);
-            v_src10 = vshrq_n_s32(vld1q_s32(S1 + x + 8), 4);
-            v_src01 = vshrq_n_s32(vld1q_s32(S0 + x + 12), 4);
-            v_src11 = vshrq_n_s32(vld1q_s32(S1 + x + 12), 4);
-
-            v_src0 = vcombine_s16(vmovn_s32(v_src00), vmovn_s32(v_src01));
-            v_src1 = vcombine_s16(vmovn_s32(v_src10), vmovn_s32(v_src11));
-
-            int16x8_t v_dst1 = vaddq_s16(vshrq_n_s16(vqdmulhq_s16(v_src0, v_b0), 1),
-                                         vshrq_n_s16(vqdmulhq_s16(v_src1, v_b1), 1));
-            v_dst1 = vshrq_n_s16(vaddq_s16(v_dst1, v_delta), 2);
-
-            vst1q_u8(dst + x, vcombine_u8(vqmovun_s16(v_dst0), vqmovun_s16(v_dst1)));
-        }
+            for( ; x <= width - v_uint8::nlanes; x += v_uint8::nlanes)
+                v_store(dst + x, v_rshr_pack_u<2>(v_mul_hi(v_pack(vx_load(S0 + x                      ) >> 4, vx_load(S0 + x +     v_int32::nlanes) >> 4), b0) +
+                                                  v_mul_hi(v_pack(vx_load(S1 + x                      ) >> 4, vx_load(S1 + x +     v_int32::nlanes) >> 4), b1),
+                                                  v_mul_hi(v_pack(vx_load(S0 + x + 2 * v_int32::nlanes) >> 4, vx_load(S0 + x + 3 * v_int32::nlanes) >> 4), b0) +
+                                                  v_mul_hi(v_pack(vx_load(S1 + x + 2 * v_int32::nlanes) >> 4, vx_load(S1 + x + 3 * v_int32::nlanes) >> 4), b1)));
+
+        for( ; x < width - v_int16::nlanes; x += v_int16::nlanes)
+            v_rshr_pack_u_store<2>(dst + x, v_mul_hi(v_pack(vx_load(S0 + x) >> 4, vx_load(S0 + x + v_int32::nlanes) >> 4), b0) +
+                                            v_mul_hi(v_pack(vx_load(S1 + x) >> 4, vx_load(S1 + x + v_int32::nlanes) >> 4), b1));
 
         return x;
     }
@@ -1585,26 +1273,25 @@ struct VResizeLinearVec_32s8u
 
 struct VResizeLinearVec_32f16u
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, ushort* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1];
-        ushort* dst = (ushort*)_dst;
         int x = 0;
 
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]);
 
-        for( ; x <= width - 8; x += 8 )
+        if( (((size_t)S0|(size_t)S1)&(CV_SIMD_WIDTH - 1)) == 0 )
+            for( ; x <= width - v_uint16::nlanes; x += v_uint16::nlanes)
+                v_store(dst + x, v_pack_u(v_round(v_muladd(vx_load_aligned(S0 + x                    ), b0, vx_load_aligned(S1 + x                    ) * b1)),
+                                          v_round(v_muladd(vx_load_aligned(S0 + x + v_float32::nlanes), b0, vx_load_aligned(S1 + x + v_float32::nlanes) * b1))));
+        else
+            for (; x <= width - v_uint16::nlanes; x += v_uint16::nlanes)
+                v_store(dst + x, v_pack_u(v_round(v_muladd(vx_load(S0 + x                    ), b0, vx_load(S1 + x                    ) * b1)),
+                                          v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes), b0, vx_load(S1 + x + v_float32::nlanes) * b1))));
+        for( ; x < width - v_float32::nlanes; x += v_float32::nlanes)
         {
-            float32x4_t v_src00 = vld1q_f32(S0 + x), v_src01 = vld1q_f32(S0 + x + 4);
-            float32x4_t v_src10 = vld1q_f32(S1 + x), v_src11 = vld1q_f32(S1 + x + 4);
-
-            float32x4_t v_dst0 = vmlaq_f32(vmulq_f32(v_src00, v_b0), v_src10, v_b1);
-            float32x4_t v_dst1 = vmlaq_f32(vmulq_f32(v_src01, v_b0), v_src11, v_b1);
-
-            vst1q_u16(dst + x, vcombine_u16(vqmovn_u32(cv_vrndq_u32_f32(v_dst0)),
-                                            vqmovn_u32(cv_vrndq_u32_f32(v_dst1))));
+            v_int32 t0 = v_round(v_muladd(vx_load(S0 + x), b0, vx_load(S1 + x) * b1));
+            v_store_low(dst + x, v_pack_u(t0, t0));
         }
 
         return x;
@@ -1613,26 +1300,25 @@ struct VResizeLinearVec_32f16u
 
 struct VResizeLinearVec_32f16s
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, short* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1];
-        short* dst = (short*)_dst;
         int x = 0;
 
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]);
 
-        for( ; x <= width - 8; x += 8 )
+        if( (((size_t)S0|(size_t)S1)&(CV_SIMD_WIDTH - 1)) == 0 )
+            for( ; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+                v_store(dst + x, v_pack(v_round(v_muladd(vx_load_aligned(S0 + x                    ), b0, vx_load_aligned(S1 + x                    ) * b1)),
+                                        v_round(v_muladd(vx_load_aligned(S0 + x + v_float32::nlanes), b0, vx_load_aligned(S1 + x + v_float32::nlanes) * b1))));
+        else
+            for (; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+                v_store(dst + x, v_pack(v_round(v_muladd(vx_load(S0 + x                    ), b0, vx_load(S1 + x                    ) * b1)),
+                                        v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes), b0, vx_load(S1 + x + v_float32::nlanes) * b1))));
+        for( ; x < width - v_float32::nlanes; x += v_float32::nlanes)
         {
-            float32x4_t v_src00 = vld1q_f32(S0 + x), v_src01 = vld1q_f32(S0 + x + 4);
-            float32x4_t v_src10 = vld1q_f32(S1 + x), v_src11 = vld1q_f32(S1 + x + 4);
-
-            float32x4_t v_dst0 = vmlaq_f32(vmulq_f32(v_src00, v_b0), v_src10, v_b1);
-            float32x4_t v_dst1 = vmlaq_f32(vmulq_f32(v_src01, v_b0), v_src11, v_b1);
-
-            vst1q_s16(dst + x, vcombine_s16(vqmovn_s32(cv_vrndq_s32_f32(v_dst0)),
-                                            vqmovn_s32(cv_vrndq_s32_f32(v_dst1))));
+            v_int32 t0 = v_round(v_muladd(vx_load(S0 + x), b0, vx_load(S1 + x) * b1));
+            v_store_low(dst + x, v_pack(t0, t0));
         }
 
         return x;
@@ -1641,57 +1327,78 @@ struct VResizeLinearVec_32f16s
 
 struct VResizeLinearVec_32f
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, float* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1];
-        float* dst = (float*)_dst;
         int x = 0;
 
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            float32x4_t v_src00 = vld1q_f32(S0 + x), v_src01 = vld1q_f32(S0 + x + 4);
-            float32x4_t v_src10 = vld1q_f32(S1 + x), v_src11 = vld1q_f32(S1 + x + 4);
-
-            vst1q_f32(dst + x, vmlaq_f32(vmulq_f32(v_src00, v_b0), v_src10, v_b1));
-            vst1q_f32(dst + x + 4, vmlaq_f32(vmulq_f32(v_src01, v_b0), v_src11, v_b1));
-        }
+        if( (((size_t)S0|(size_t)S1)&(CV_SIMD_WIDTH - 1)) == 0 )
+            for( ; x <= width - v_float32::nlanes; x += v_float32::nlanes)
+                v_store(dst + x, v_muladd(vx_load_aligned(S0 + x), b0, vx_load_aligned(S1 + x) * b1));
+        else
+            for( ; x <= width - v_float32::nlanes; x += v_float32::nlanes)
+                v_store(dst + x, v_muladd(vx_load(S0 + x), b0, vx_load(S1 + x) * b1));
 
         return x;
     }
 };
 
-typedef VResizeNoVec VResizeCubicVec_32s8u;
+
+struct VResizeCubicVec_32s8u
+{
+    int operator()(const int** src, uchar* dst, const short* beta, int width) const
+    {
+        const int *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
+        int x = 0;
+        float scale = 1.f/(INTER_RESIZE_COEF_SCALE*INTER_RESIZE_COEF_SCALE);
+
+        v_float32 b0 = vx_setall_f32(beta[0] * scale), b1 = vx_setall_f32(beta[1] * scale),
+                  b2 = vx_setall_f32(beta[2] * scale), b3 = vx_setall_f32(beta[3] * scale);
+
+        if( (((size_t)S0|(size_t)S1|(size_t)S2|(size_t)S3)&(CV_SIMD_WIDTH - 1)) == 0 )
+            for( ; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+                v_pack_u_store(dst + x, v_pack(v_round(v_muladd(v_cvt_f32(vx_load_aligned(S0 + x                    )),  b0,
+                                                       v_muladd(v_cvt_f32(vx_load_aligned(S1 + x                    )),  b1,
+                                                       v_muladd(v_cvt_f32(vx_load_aligned(S2 + x                    )),  b2,
+                                                                v_cvt_f32(vx_load_aligned(S3 + x                    )) * b3)))),
+                                               v_round(v_muladd(v_cvt_f32(vx_load_aligned(S0 + x + v_float32::nlanes)),  b0,
+                                                       v_muladd(v_cvt_f32(vx_load_aligned(S1 + x + v_float32::nlanes)),  b1,
+                                                       v_muladd(v_cvt_f32(vx_load_aligned(S2 + x + v_float32::nlanes)),  b2,
+                                                                v_cvt_f32(vx_load_aligned(S3 + x + v_float32::nlanes)) * b3))))));
+        else
+            for( ; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+                v_pack_u_store(dst + x, v_pack(v_round(v_muladd(v_cvt_f32(vx_load(S0 + x                    )),  b0,
+                                                       v_muladd(v_cvt_f32(vx_load(S1 + x                    )),  b1,
+                                                       v_muladd(v_cvt_f32(vx_load(S2 + x                    )),  b2,
+                                                                v_cvt_f32(vx_load(S3 + x                    )) * b3)))),
+                                               v_round(v_muladd(v_cvt_f32(vx_load(S0 + x + v_float32::nlanes)),  b0,
+                                                       v_muladd(v_cvt_f32(vx_load(S1 + x + v_float32::nlanes)),  b1,
+                                                       v_muladd(v_cvt_f32(vx_load(S2 + x + v_float32::nlanes)),  b2,
+                                                                v_cvt_f32(vx_load(S3 + x + v_float32::nlanes)) * b3))))));
+        return x;
+    }
+};
 
 struct VResizeCubicVec_32f16u
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, ushort* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        ushort* dst = (ushort*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            float32x4_t v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                         v_b1, vld1q_f32(S1 + x)),
-                                                                         v_b2, vld1q_f32(S2 + x)),
-                                                                         v_b3, vld1q_f32(S3 + x));
-            float32x4_t v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x + 4)),
-                                                                         v_b1, vld1q_f32(S1 + x + 4)),
-                                                                         v_b2, vld1q_f32(S2 + x + 4)),
-                                                                         v_b3, vld1q_f32(S3 + x + 4));
-
-            vst1q_u16(dst + x, vcombine_u16(vqmovn_u32(cv_vrndq_u32_f32(v_dst0)),
-                                            vqmovn_u32(cv_vrndq_u32_f32(v_dst1))));
-        }
+        for (; x <= width - v_uint16::nlanes; x += v_uint16::nlanes)
+            v_store(dst + x, v_pack_u(v_round(v_muladd(vx_load(S0 + x                    ),  b0,
+                                              v_muladd(vx_load(S1 + x                    ),  b1,
+                                              v_muladd(vx_load(S2 + x                    ),  b2,
+                                                       vx_load(S3 + x                    ) * b3)))),
+                                      v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes),  b0,
+                                              v_muladd(vx_load(S1 + x + v_float32::nlanes),  b1,
+                                              v_muladd(vx_load(S2 + x + v_float32::nlanes),  b2,
+                                                       vx_load(S3 + x + v_float32::nlanes) * b3))))));
 
         return x;
     }
@@ -1699,30 +1406,22 @@ struct VResizeCubicVec_32f16u
 
 struct VResizeCubicVec_32f16s
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, short* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        short* dst = (short*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            float32x4_t v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                         v_b1, vld1q_f32(S1 + x)),
-                                                                         v_b2, vld1q_f32(S2 + x)),
-                                                                         v_b3, vld1q_f32(S3 + x));
-            float32x4_t v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x + 4)),
-                                                                         v_b1, vld1q_f32(S1 + x + 4)),
-                                                                         v_b2, vld1q_f32(S2 + x + 4)),
-                                                                         v_b3, vld1q_f32(S3 + x + 4));
-
-            vst1q_s16(dst + x, vcombine_s16(vqmovn_s32(cv_vrndq_s32_f32(v_dst0)),
-                                            vqmovn_s32(cv_vrndq_s32_f32(v_dst1))));
-        }
+        for (; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+            v_store(dst + x, v_pack(v_round(v_muladd(vx_load(S0 + x                    ),  b0,
+                                            v_muladd(vx_load(S1 + x                    ),  b1,
+                                            v_muladd(vx_load(S2 + x                    ),  b2,
+                                                     vx_load(S3 + x                    ) * b3)))),
+                                    v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes),  b0,
+                                            v_muladd(vx_load(S1 + x + v_float32::nlanes),  b1,
+                                            v_muladd(vx_load(S2 + x + v_float32::nlanes),  b2,
+                                                     vx_load(S3 + x + v_float32::nlanes) * b3))))));
 
         return x;
     }
@@ -1730,117 +1429,104 @@ struct VResizeCubicVec_32f16s
 
 struct VResizeCubicVec_32f
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, float* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3];
-        float* dst = (float*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            vst1q_f32(dst + x, vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                       v_b1, vld1q_f32(S1 + x)),
-                                                                       v_b2, vld1q_f32(S2 + x)),
-                                                                       v_b3, vld1q_f32(S3 + x)));
-            vst1q_f32(dst + x + 4, vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x + 4)),
-                                                                          v_b1, vld1q_f32(S1 + x + 4)),
-                                                                          v_b2, vld1q_f32(S2 + x + 4)),
-                                                                          v_b3, vld1q_f32(S3 + x + 4)));
-        }
+        for( ; x <= width - v_float32::nlanes; x += v_float32::nlanes)
+            v_store(dst + x, v_muladd(vx_load(S0 + x),  b0,
+                             v_muladd(vx_load(S1 + x),  b1,
+                             v_muladd(vx_load(S2 + x),  b2,
+                                      vx_load(S3 + x) * b3))));
 
         return x;
     }
 };
+
+
+#if CV_TRY_SSE4_1
 
 struct VResizeLanczos4Vec_32f16u
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, ushort* dst, const float* beta, int width) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
+        if (CV_CPU_HAS_SUPPORT_SSE4_1)
+            return opt_SSE4_1::VResizeLanczos4Vec_32f16u_SSE41(src, dst, beta, width);
+        else
+            return 0;
+    }
+};
+
+#else
+
+struct VResizeLanczos4Vec_32f16u
+{
+    int operator()(const float** src, ushort* dst, const float* beta, int width ) const
+    {
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3],
                     *S4 = src[4], *S5 = src[5], *S6 = src[6], *S7 = src[7];
-        ushort * dst = (ushort*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]),
-                    v_b4 = vdupq_n_f32(beta[4]), v_b5 = vdupq_n_f32(beta[5]),
-                    v_b6 = vdupq_n_f32(beta[6]), v_b7 = vdupq_n_f32(beta[7]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]),
+                  b4 = vx_setall_f32(beta[4]), b5 = vx_setall_f32(beta[5]),
+                  b6 = vx_setall_f32(beta[6]), b7 = vx_setall_f32(beta[7]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            float32x4_t v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                         v_b1, vld1q_f32(S1 + x)),
-                                                                         v_b2, vld1q_f32(S2 + x)),
-                                                                         v_b3, vld1q_f32(S3 + x));
-            float32x4_t v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b4, vld1q_f32(S4 + x)),
-                                                                         v_b5, vld1q_f32(S5 + x)),
-                                                                         v_b6, vld1q_f32(S6 + x)),
-                                                                         v_b7, vld1q_f32(S7 + x));
-            float32x4_t v_dst = vaddq_f32(v_dst0, v_dst1);
-
-            v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x + 4)),
-                                                             v_b1, vld1q_f32(S1 + x + 4)),
-                                                             v_b2, vld1q_f32(S2 + x + 4)),
-                                                             v_b3, vld1q_f32(S3 + x + 4));
-            v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b4, vld1q_f32(S4 + x + 4)),
-                                                             v_b5, vld1q_f32(S5 + x + 4)),
-                                                             v_b6, vld1q_f32(S6 + x + 4)),
-                                                             v_b7, vld1q_f32(S7 + x + 4));
-            v_dst1 = vaddq_f32(v_dst0, v_dst1);
-
-            vst1q_u16(dst + x, vcombine_u16(vqmovn_u32(cv_vrndq_u32_f32(v_dst)),
-                                            vqmovn_u32(cv_vrndq_u32_f32(v_dst1))));
-        }
+        for( ; x <= width - v_uint16::nlanes; x += v_uint16::nlanes)
+            v_store(dst + x, v_pack_u(v_round(v_muladd(vx_load(S0 + x                    ),  b0,
+                                              v_muladd(vx_load(S1 + x                    ),  b1,
+                                              v_muladd(vx_load(S2 + x                    ),  b2,
+                                              v_muladd(vx_load(S3 + x                    ),  b3,
+                                              v_muladd(vx_load(S4 + x                    ),  b4,
+                                              v_muladd(vx_load(S5 + x                    ),  b5,
+                                              v_muladd(vx_load(S6 + x                    ),  b6,
+                                                       vx_load(S7 + x                    ) * b7)))))))),
+                                      v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes),  b0,
+                                              v_muladd(vx_load(S1 + x + v_float32::nlanes),  b1,
+                                              v_muladd(vx_load(S2 + x + v_float32::nlanes),  b2,
+                                              v_muladd(vx_load(S3 + x + v_float32::nlanes),  b3,
+                                              v_muladd(vx_load(S4 + x + v_float32::nlanes),  b4,
+                                              v_muladd(vx_load(S5 + x + v_float32::nlanes),  b5,
+                                              v_muladd(vx_load(S6 + x + v_float32::nlanes),  b6,
+                                                       vx_load(S7 + x + v_float32::nlanes) * b7))))))))));
 
         return x;
     }
 };
 
+#endif
+
 struct VResizeLanczos4Vec_32f16s
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, short* dst, const float* beta, int width ) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3],
                     *S4 = src[4], *S5 = src[5], *S6 = src[6], *S7 = src[7];
-        short * dst = (short*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]),
-                    v_b4 = vdupq_n_f32(beta[4]), v_b5 = vdupq_n_f32(beta[5]),
-                    v_b6 = vdupq_n_f32(beta[6]), v_b7 = vdupq_n_f32(beta[7]);
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]),
+                  b4 = vx_setall_f32(beta[4]), b5 = vx_setall_f32(beta[5]),
+                  b6 = vx_setall_f32(beta[6]), b7 = vx_setall_f32(beta[7]);
 
-        for( ; x <= width - 8; x += 8 )
-        {
-            float32x4_t v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                         v_b1, vld1q_f32(S1 + x)),
-                                                                         v_b2, vld1q_f32(S2 + x)),
-                                                                         v_b3, vld1q_f32(S3 + x));
-            float32x4_t v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b4, vld1q_f32(S4 + x)),
-                                                                         v_b5, vld1q_f32(S5 + x)),
-                                                                         v_b6, vld1q_f32(S6 + x)),
-                                                                         v_b7, vld1q_f32(S7 + x));
-            float32x4_t v_dst = vaddq_f32(v_dst0, v_dst1);
-
-            v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x + 4)),
-                                                             v_b1, vld1q_f32(S1 + x + 4)),
-                                                             v_b2, vld1q_f32(S2 + x + 4)),
-                                                             v_b3, vld1q_f32(S3 + x + 4));
-            v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b4, vld1q_f32(S4 + x + 4)),
-                                                             v_b5, vld1q_f32(S5 + x + 4)),
-                                                             v_b6, vld1q_f32(S6 + x + 4)),
-                                                             v_b7, vld1q_f32(S7 + x + 4));
-            v_dst1 = vaddq_f32(v_dst0, v_dst1);
-
-            vst1q_s16(dst + x, vcombine_s16(vqmovn_s32(cv_vrndq_s32_f32(v_dst)),
-                                            vqmovn_s32(cv_vrndq_s32_f32(v_dst1))));
-        }
+        for( ; x <= width - v_int16::nlanes; x += v_int16::nlanes)
+            v_store(dst + x, v_pack(v_round(v_muladd(vx_load(S0 + x                    ),  b0,
+                                            v_muladd(vx_load(S1 + x                    ),  b1,
+                                            v_muladd(vx_load(S2 + x                    ),  b2,
+                                            v_muladd(vx_load(S3 + x                    ),  b3,
+                                            v_muladd(vx_load(S4 + x                    ),  b4,
+                                            v_muladd(vx_load(S5 + x                    ),  b5,
+                                            v_muladd(vx_load(S6 + x                    ),  b6,
+                                                     vx_load(S7 + x                    ) * b7)))))))),
+                                    v_round(v_muladd(vx_load(S0 + x + v_float32::nlanes),  b0,
+                                            v_muladd(vx_load(S1 + x + v_float32::nlanes),  b1,
+                                            v_muladd(vx_load(S2 + x + v_float32::nlanes),  b2,
+                                            v_muladd(vx_load(S3 + x + v_float32::nlanes),  b3,
+                                            v_muladd(vx_load(S4 + x + v_float32::nlanes),  b4,
+                                            v_muladd(vx_load(S5 + x + v_float32::nlanes),  b5,
+                                            v_muladd(vx_load(S6 + x + v_float32::nlanes),  b6,
+                                                     vx_load(S7 + x + v_float32::nlanes) * b7))))))))));
 
         return x;
     }
@@ -1848,31 +1534,26 @@ struct VResizeLanczos4Vec_32f16s
 
 struct VResizeLanczos4Vec_32f
 {
-    int operator()(const uchar** _src, uchar* _dst, const uchar* _beta, int width ) const
+    int operator()(const float** src, float* dst, const float* beta, int width ) const
     {
-        const float** src = (const float**)_src;
-        const float* beta = (const float*)_beta;
         const float *S0 = src[0], *S1 = src[1], *S2 = src[2], *S3 = src[3],
                     *S4 = src[4], *S5 = src[5], *S6 = src[6], *S7 = src[7];
-        float* dst = (float*)_dst;
         int x = 0;
-        float32x4_t v_b0 = vdupq_n_f32(beta[0]), v_b1 = vdupq_n_f32(beta[1]),
-                    v_b2 = vdupq_n_f32(beta[2]), v_b3 = vdupq_n_f32(beta[3]),
-                    v_b4 = vdupq_n_f32(beta[4]), v_b5 = vdupq_n_f32(beta[5]),
-                    v_b6 = vdupq_n_f32(beta[6]), v_b7 = vdupq_n_f32(beta[7]);
 
-        for( ; x <= width - 4; x += 4 )
-        {
-            float32x4_t v_dst0 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b0, vld1q_f32(S0 + x)),
-                                                                         v_b1, vld1q_f32(S1 + x)),
-                                                                         v_b2, vld1q_f32(S2 + x)),
-                                                                         v_b3, vld1q_f32(S3 + x));
-            float32x4_t v_dst1 = vmlaq_f32(vmlaq_f32(vmlaq_f32(vmulq_f32(v_b4, vld1q_f32(S4 + x)),
-                                                                         v_b5, vld1q_f32(S5 + x)),
-                                                                         v_b6, vld1q_f32(S6 + x)),
-                                                                         v_b7, vld1q_f32(S7 + x));
-            vst1q_f32(dst + x, vaddq_f32(v_dst0, v_dst1));
-        }
+        v_float32 b0 = vx_setall_f32(beta[0]), b1 = vx_setall_f32(beta[1]),
+                  b2 = vx_setall_f32(beta[2]), b3 = vx_setall_f32(beta[3]),
+                  b4 = vx_setall_f32(beta[4]), b5 = vx_setall_f32(beta[5]),
+                  b6 = vx_setall_f32(beta[6]), b7 = vx_setall_f32(beta[7]);
+
+        for( ; x <= width - v_float32::nlanes; x += v_float32::nlanes)
+            v_store(dst + x, v_muladd(vx_load(S0 + x),  b0,
+                             v_muladd(vx_load(S1 + x),  b1,
+                             v_muladd(vx_load(S2 + x),  b2,
+                             v_muladd(vx_load(S3 + x),  b3,
+                             v_muladd(vx_load(S4 + x),  b4,
+                             v_muladd(vx_load(S5 + x),  b5,
+                             v_muladd(vx_load(S6 + x),  b6,
+                                      vx_load(S7 + x) * b7))))))));
 
         return x;
     }
@@ -1896,10 +1577,239 @@ typedef VResizeNoVec VResizeLanczos4Vec_32f;
 
 #endif
 
+#if CV_SIMD128
+
+template<typename ST, typename DT, typename AT, typename DVT>
+struct HResizeLinearVec_X4
+{
+    int operator()(const ST** src, DT** dst, int count, const int* xofs,
+        const AT* alpha, int, int, int cn, int, int xmax) const
+    {
+        const int nlanes = 4;
+        const int len0 = xmax & -nlanes;
+        int dx = 0, k = 0;
+
+        for( ; k <= (count - 2); k+=2 )
+        {
+            const ST *S0 = src[k];
+            DT *D0 = dst[k];
+            const ST *S1 = src[k+1];
+            DT *D1 = dst[k+1];
+
+            for( dx = 0; dx < len0; dx += nlanes )
+            {
+                int sx0 = xofs[dx+0];
+                int sx1 = xofs[dx+1];
+                int sx2 = xofs[dx+2];
+                int sx3 = xofs[dx+3];
+                DVT a_even;
+                DVT a_odd;
+
+                v_load_deinterleave(&alpha[dx*2], a_even, a_odd);
+                DVT s0(S0[sx0], S0[sx1], S0[sx2], S0[sx3]);
+                DVT s1(S0[sx0+cn], S0[sx1+cn], S0[sx2+cn], S0[sx3+cn]);
+                DVT s0_u(S1[sx0], S1[sx1], S1[sx2], S1[sx3]);
+                DVT s1_u(S1[sx0+cn], S1[sx1+cn], S1[sx2+cn], S1[sx3+cn]);
+                v_store(&D1[dx], s0_u * a_even + s1_u * a_odd);
+                v_store(&D0[dx], s0 * a_even + s1 * a_odd);
+            }
+        }
+        for( ; k < count; k++ )
+        {
+            const ST *S = src[k];
+            DT *D = dst[k];
+            for( dx = 0; dx < len0; dx += nlanes )
+            {
+                int sx0 = xofs[dx+0];
+                int sx1 = xofs[dx+1];
+                int sx2 = xofs[dx+2];
+                int sx3 = xofs[dx+3];
+                DVT a_even;
+                DVT a_odd;
+
+                v_load_deinterleave(&alpha[dx*2], a_even, a_odd);
+                DVT s0(S[sx0], S[sx1], S[sx2], S[sx3]);
+                DVT s1(S[sx0+cn], S[sx1+cn], S[sx2+cn], S[sx3+cn]);
+                v_store(&D[dx], s0 * a_even + s1 * a_odd);
+            }
+        }
+        return dx;
+    }
+};
+
+struct HResizeLinearVecU8_X4
+{
+    int operator()(const uchar** src, int** dst, int count, const int* xofs,
+        const short* alpha/*[xmax]*/, int /*smax*/, int dmax, int cn, int /*xmin*/, int xmax) const
+    {
+        int dx = 0, k = 0;
+
+        if(cn == 1)
+        {
+            const int step = 8;
+            const int len0 = xmax & -step;
+            for( ; k <= (count - 2); k+=2 )
+            {
+                const uchar *S0 = src[k];
+                int *D0 = dst[k];
+                const uchar *S1 = src[k+1];
+                int *D1 = dst[k+1];
+
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    v_int16x8 al = v_load(alpha+dx*2);
+                    v_int16x8 ah = v_load(alpha+dx*2+8);
+                    v_uint16x8 sl, sh;
+                    v_expand(v_lut_pairs(S0, xofs+dx), sl, sh);
+                    v_store(&D0[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D0[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                    v_expand(v_lut_pairs(S1, xofs+dx), sl, sh);
+                    v_store(&D1[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D1[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                }
+            }
+            for( ; k < count; k++ )
+            {
+                const uchar *S = src[k];
+                int *D = dst[k];
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    v_int16x8 al = v_load(alpha+dx*2);
+                    v_int16x8 ah = v_load(alpha+dx*2+8);
+                    v_uint16x8 sl, sh;
+                    v_expand(v_lut_pairs(S, xofs+dx), sl, sh);
+                    v_store(&D[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                }
+            }
+        }
+        else if(cn == 2)
+        {
+            const int step = 8;
+            const int len0 = xmax & -step;
+            for( ; k <= (count - 2); k+=2 )
+            {
+                const uchar *S0 = src[k];
+                int *D0 = dst[k];
+                const uchar *S1 = src[k+1];
+                int *D1 = dst[k+1];
+
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    int ofs[4] = { xofs[dx], xofs[dx + 2], xofs[dx + 4], xofs[dx + 6] };
+                    v_int16x8 al = v_load(alpha+dx*2);
+                    v_int16x8 ah = v_load(alpha+dx*2+8);
+                    v_uint16x8 sl, sh;
+                    v_expand(v_interleave_pairs(v_lut_quads(S0, ofs)), sl, sh);
+                    v_store(&D0[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D0[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                    v_expand(v_interleave_pairs(v_lut_quads(S1, ofs)), sl, sh);
+                    v_store(&D1[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D1[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                }
+            }
+            for( ; k < count; k++ )
+            {
+                const uchar *S = src[k];
+                int *D = dst[k];
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    int ofs[4] = { xofs[dx], xofs[dx + 2], xofs[dx + 4], xofs[dx + 6] };
+                    v_int16x8 al = v_load(alpha+dx*2);
+                    v_int16x8 ah = v_load(alpha+dx*2+8);
+                    v_uint16x8 sl, sh;
+                    v_expand(v_interleave_pairs(v_lut_quads(S, ofs)), sl, sh);
+                    v_store(&D[dx], v_dotprod(v_reinterpret_as_s16(sl), al));
+                    v_store(&D[dx+4], v_dotprod(v_reinterpret_as_s16(sh), ah));
+                }
+            }
+        }
+        else if(cn == 3)
+        {
+            /* Peek at the last x offset to find the maximal s offset.  We know the loop
+               will terminate prior to value which may be 1 or more elements prior to the
+               final valid offset. xofs[] is constucted to be an array of increasingly
+               large offsets (i.e xofs[x] <= xofs[x+1] for x < xmax). */
+            int smax = xofs[dmax-cn];
+
+            for( ; k <= (count - 2); k+=2 )
+            {
+                const uchar *S0 = src[k];
+                int *D0 = dst[k];
+                const uchar *S1 = src[k+1];
+                int *D1 = dst[k+1];
+
+                for( dx = 0; (xofs[dx] + cn) < smax; dx += cn )
+                {
+                    v_int16x8 a = v_load(alpha+dx*2);
+                    v_store(&D0[dx], v_dotprod(v_reinterpret_as_s16(v_load_expand_q(S0+xofs[dx]) | (v_load_expand_q(S0+xofs[dx]+cn)<<16)), a));
+                    v_store(&D1[dx], v_dotprod(v_reinterpret_as_s16(v_load_expand_q(S1+xofs[dx]) | (v_load_expand_q(S1+xofs[dx]+cn)<<16)), a));
+                }
+            }
+            for( ; k < count; k++ )
+            {
+                const uchar *S = src[k];
+                int *D = dst[k];
+                for( dx = 0; (xofs[dx] + cn) < smax; dx += cn )
+                {
+                    v_int16x8 a = v_load(alpha+dx*2);
+                    v_store(&D[dx], v_dotprod(v_reinterpret_as_s16(v_load_expand_q(S+xofs[dx]) | (v_load_expand_q(S+xofs[dx]+cn)<<16)), a));
+                }
+            }
+            /* Debug check to ensure truthiness that we never vector the final value. */
+            CV_DbgAssert(dx < dmax);
+        }
+        else if(cn == 4)
+        {
+            const int step = 4;
+            const int len0 = xmax & -step;
+            for( ; k <= (count - 2); k+=2 )
+            {
+                const uchar *S0 = src[k];
+                int *D0 = dst[k];
+                const uchar *S1 = src[k+1];
+                int *D1 = dst[k+1];
+
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    v_int16x8 a = v_load(alpha+dx*2);
+                    v_store(&D0[dx], v_dotprod(v_reinterpret_as_s16(v_interleave_quads(v_load_expand(S0+xofs[dx]))), a));
+                    v_store(&D1[dx], v_dotprod(v_reinterpret_as_s16(v_interleave_quads(v_load_expand(S1+xofs[dx]))), a));
+                }
+            }
+            for( ; k < count; k++ )
+            {
+                const uchar *S = src[k];
+                int *D = dst[k];
+                for( dx = 0; dx < len0; dx += step )
+                {
+                    v_int16x8 a = v_load(alpha+dx*2);
+                    v_store(&D[dx], v_dotprod(v_reinterpret_as_s16(v_interleave_quads(v_load_expand(S+xofs[dx]))), a));
+                }
+            }
+        }
+        else
+        {
+            return 0;  // images with channels >4 are out of optimization scope
+        }
+        return dx;
+    }
+};
+
+typedef HResizeLinearVec_X4<float,float,float,v_float32x4> HResizeLinearVec_32f;
+typedef HResizeLinearVec_X4<ushort,float,float,v_float32x4> HResizeLinearVec_16u32f;
+typedef HResizeLinearVec_X4<short,float,float,v_float32x4> HResizeLinearVec_16s32f;
+typedef HResizeLinearVecU8_X4 HResizeLinearVec_8u32s;
+
+#else
+
 typedef HResizeNoVec HResizeLinearVec_8u32s;
 typedef HResizeNoVec HResizeLinearVec_16u32f;
 typedef HResizeNoVec HResizeLinearVec_16s32f;
 typedef HResizeNoVec HResizeLinearVec_32f;
+
+#endif
+
 typedef HResizeNoVec HResizeLinearVec_64f;
 
 
@@ -1917,10 +1827,10 @@ struct HResizeLinear
         int dx, k;
         VecOp vecOp;
 
-        int dx0 = vecOp((const uchar**)src, (uchar**)dst, count,
-            xofs, (const uchar*)alpha, swidth, dwidth, cn, xmin, xmax );
+        int dx0 = vecOp(src, dst, count,
+            xofs, alpha, swidth, dwidth, cn, xmin, xmax );
 
-        for( k = 0; k <= count - 2; k++ )
+        for( k = 0; k <= count - 2; k+=2 )
         {
             const T *S0 = src[k], *S1 = src[k+1];
             WT *D0 = dst[k], *D1 = dst[k+1];
@@ -1944,7 +1854,7 @@ struct HResizeLinear
         {
             const T *S = src[k];
             WT *D = dst[k];
-            for( dx = 0; dx < xmax; dx++ )
+            for( dx = dx0; dx < xmax; dx++ )
             {
                 int sx = xofs[dx];
                 D[dx] = S[sx]*alpha[dx*2] + S[sx+cn]*alpha[dx*2+1];
@@ -1971,7 +1881,7 @@ struct VResizeLinear
         CastOp castOp;
         VecOp vecOp;
 
-        int x = vecOp((const uchar**)src, (uchar*)dst, (const uchar*)beta, width);
+        int x = vecOp(src, dst, beta, width);
         #if CV_ENABLE_UNROLLED
         for( ; x <= width - 4; x += 4 )
         {
@@ -2002,7 +1912,7 @@ struct VResizeLinear<uchar, int, short, FixedPtCast<int, uchar, INTER_RESIZE_COE
         const buf_type *S0 = src[0], *S1 = src[1];
         VResizeLinearVec_32s8u vecOp;
 
-        int x = vecOp((const uchar**)src, (uchar*)dst, (const uchar*)beta, width);
+        int x = vecOp(src, dst, beta, width);
         #if CV_ENABLE_UNROLLED
         for( ; x <= width - 4; x += 4 )
         {
@@ -2084,7 +1994,7 @@ struct VResizeCubic
         CastOp castOp;
         VecOp vecOp;
 
-        int x = vecOp((const uchar**)src, (uchar*)dst, (const uchar*)beta, width);
+        int x = vecOp(src, dst, beta, width);
         for( ; x < width; x++ )
             dst[x] = castOp(S0[x]*b0 + S1[x]*b1 + S2[x]*b2 + S3[x]*b3);
     }
@@ -2156,7 +2066,7 @@ struct VResizeLanczos4
     {
         CastOp castOp;
         VecOp vecOp;
-        int x = vecOp((const uchar**)src, (uchar*)dst, (const uchar*)beta, width);
+        int x = vecOp(src, dst, beta, width);
         #if CV_ENABLE_UNROLLED
         for( ; x <= width - 4; x += 4 )
         {
@@ -2211,7 +2121,7 @@ public:
         CV_Assert(ksize <= MAX_ESIZE);
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         int dy, cn = src.channels();
         HResize hresize;
@@ -2226,7 +2136,7 @@ public:
         for(int k = 0; k < ksize; k++ )
         {
             prev_sy[k] = -1;
-            rows[k] = (WT*)_buffer + bufstep*k;
+            rows[k] = _buffer.data() + bufstep*k;
         }
 
         const AT* beta = _beta + ksize * range.start;
@@ -2515,95 +2425,96 @@ private:
     int step;
 };
 
-#elif CV_SSE2
+#elif CV_SIMD
 
 class ResizeAreaFastVec_SIMD_8u
 {
 public:
     ResizeAreaFastVec_SIMD_8u(int _cn, int _step) :
-        cn(_cn), step(_step)
-    {
-        use_simd = checkHardwareSupport(CV_CPU_SSE2);
-    }
+        cn(_cn), step(_step) {}
 
     int operator() (const uchar* S, uchar* D, int w) const
     {
-        if (!use_simd)
-            return 0;
-
         int dx = 0;
         const uchar* S0 = S;
         const uchar* S1 = S0 + step;
-        __m128i zero = _mm_setzero_si128();
-        __m128i delta2 = _mm_set1_epi16(2);
 
         if (cn == 1)
         {
-            __m128i masklow = _mm_set1_epi16(0x00ff);
-            for ( ; dx <= w - 8; dx += 8, S0 += 16, S1 += 16, D += 8)
+            v_uint16 masklow = vx_setall_u16(0x00ff);
+            for ( ; dx <= w - v_uint16::nlanes; dx += v_uint16::nlanes, S0 += v_uint8::nlanes, S1 += v_uint8::nlanes, D += v_uint16::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i s0 = _mm_add_epi16(_mm_srli_epi16(r0, 8), _mm_and_si128(r0, masklow));
-                __m128i s1 = _mm_add_epi16(_mm_srli_epi16(r1, 8), _mm_and_si128(r1, masklow));
-                s0 = _mm_add_epi16(_mm_add_epi16(s0, s1), delta2);
-                s0 = _mm_packus_epi16(_mm_srli_epi16(s0, 2), zero);
-
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_uint16 r0 = v_reinterpret_as_u16(vx_load(S0));
+                v_uint16 r1 = v_reinterpret_as_u16(vx_load(S1));
+                v_rshr_pack_store<2>(D, (r0 >> 8) + (r0 & masklow) + (r1 >> 8) + (r1 & masklow));
             }
         }
         else if (cn == 3)
-            for ( ; dx <= w - 11; dx += 6, S0 += 12, S1 += 12, D += 6)
+        {
+            if (CV_SIMD_WIDTH > 64)
+                return 0;
+            for ( ; dx <= w - 3*v_uint8::nlanes; dx += 3*v_uint8::nlanes, S0 += 6*v_uint8::nlanes, S1 += 6*v_uint8::nlanes, D += 3*v_uint8::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i r0_16l = _mm_unpacklo_epi8(r0, zero);
-                __m128i r0_16h = _mm_unpacklo_epi8(_mm_srli_si128(r0, 6), zero);
-                __m128i r1_16l = _mm_unpacklo_epi8(r1, zero);
-                __m128i r1_16h = _mm_unpacklo_epi8(_mm_srli_si128(r1, 6), zero);
-
-                __m128i s0 = _mm_add_epi16(r0_16l, _mm_srli_si128(r0_16l, 6));
-                __m128i s1 = _mm_add_epi16(r1_16l, _mm_srli_si128(r1_16l, 6));
-                s0 = _mm_add_epi16(s1, _mm_add_epi16(s0, delta2));
-                s0 = _mm_packus_epi16(_mm_srli_epi16(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)D, s0);
-
-                s0 = _mm_add_epi16(r0_16h, _mm_srli_si128(r0_16h, 6));
-                s1 = _mm_add_epi16(r1_16h, _mm_srli_si128(r1_16h, 6));
-                s0 = _mm_add_epi16(s1, _mm_add_epi16(s0, delta2));
-                s0 = _mm_packus_epi16(_mm_srli_epi16(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)(D+3), s0);
+                v_uint16 t0, t1, t2, t3, t4, t5;
+                v_uint16 s0, s1, s2, s3, s4, s5;
+                s0 = vx_load_expand(S0                     ) + vx_load_expand(S1                     );
+                s1 = vx_load_expand(S0 +   v_uint16::nlanes) + vx_load_expand(S1 +   v_uint16::nlanes);
+                s2 = vx_load_expand(S0 + 2*v_uint16::nlanes) + vx_load_expand(S1 + 2*v_uint16::nlanes);
+                s3 = vx_load_expand(S0 + 3*v_uint16::nlanes) + vx_load_expand(S1 + 3*v_uint16::nlanes);
+                s4 = vx_load_expand(S0 + 4*v_uint16::nlanes) + vx_load_expand(S1 + 4*v_uint16::nlanes);
+                s5 = vx_load_expand(S0 + 5*v_uint16::nlanes) + vx_load_expand(S1 + 5*v_uint16::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_uint16 bl, gl, rl;
+#if CV_SIMD_WIDTH == 16
+                bl = t0 + t3; gl = t1 + t4; rl = t2 + t5;
+#elif CV_SIMD_WIDTH == 32
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bl = s0 + s3; gl = s1 + s4; rl = s2 + s5;
+#elif CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                bl = t0 + t3; gl = t1 + t4; rl = t2 + t5;
+#endif
+                s0 = vx_load_expand(S0 + 6*v_uint16::nlanes) + vx_load_expand(S1 + 6*v_uint16::nlanes);
+                s1 = vx_load_expand(S0 + 7*v_uint16::nlanes) + vx_load_expand(S1 + 7*v_uint16::nlanes);
+                s2 = vx_load_expand(S0 + 8*v_uint16::nlanes) + vx_load_expand(S1 + 8*v_uint16::nlanes);
+                s3 = vx_load_expand(S0 + 9*v_uint16::nlanes) + vx_load_expand(S1 + 9*v_uint16::nlanes);
+                s4 = vx_load_expand(S0 +10*v_uint16::nlanes) + vx_load_expand(S1 +10*v_uint16::nlanes);
+                s5 = vx_load_expand(S0 +11*v_uint16::nlanes) + vx_load_expand(S1 +11*v_uint16::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_uint16 bh, gh, rh;
+#if CV_SIMD_WIDTH == 16
+                bh = t0 + t3; gh = t1 + t4; rh = t2 + t5;
+#elif CV_SIMD_WIDTH == 32
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bh = s0 + s3; gh = s1 + s4; rh = s2 + s5;
+#elif CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                bh = t0 + t3; gh = t1 + t4; rh = t2 + t5;
+#endif
+                v_store_interleave(D, v_rshr_pack<2>(bl, bh), v_rshr_pack<2>(gl, gh), v_rshr_pack<2>(rl, rh));
             }
+        }
         else
         {
             CV_Assert(cn == 4);
-            int v[] = { 0, 0, -1, -1 };
-            __m128i mask = _mm_loadu_si128((const __m128i*)v);
-
-            for ( ; dx <= w - 8; dx += 8, S0 += 16, S1 += 16, D += 8)
+            for ( ; dx <= w - v_uint8::nlanes; dx += v_uint8::nlanes, S0 += 2*v_uint8::nlanes, S1 += 2*v_uint8::nlanes, D += v_uint8::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
+                v_uint32 r00, r01, r10, r11;
+                v_load_deinterleave((uint32_t*)S0, r00, r01);
+                v_load_deinterleave((uint32_t*)S1, r10, r11);
 
-                __m128i r0_16l = _mm_unpacklo_epi8(r0, zero);
-                __m128i r0_16h = _mm_unpackhi_epi8(r0, zero);
-                __m128i r1_16l = _mm_unpacklo_epi8(r1, zero);
-                __m128i r1_16h = _mm_unpackhi_epi8(r1, zero);
-
-                __m128i s0 = _mm_add_epi16(r0_16l, _mm_srli_si128(r0_16l, 8));
-                __m128i s1 = _mm_add_epi16(r1_16l, _mm_srli_si128(r1_16l, 8));
-                s0 = _mm_add_epi16(s1, _mm_add_epi16(s0, delta2));
-                __m128i res0 = _mm_srli_epi16(s0, 2);
-
-                s0 = _mm_add_epi16(r0_16h, _mm_srli_si128(r0_16h, 8));
-                s1 = _mm_add_epi16(r1_16h, _mm_srli_si128(r1_16h, 8));
-                s0 = _mm_add_epi16(s1, _mm_add_epi16(s0, delta2));
-                __m128i res1 = _mm_srli_epi16(s0, 2);
-                s0 = _mm_packus_epi16(_mm_or_si128(_mm_andnot_si128(mask, res0),
-                                                   _mm_and_si128(mask, _mm_slli_si128(res1, 8))), zero);
-                _mm_storel_epi64((__m128i*)(D), s0);
+                v_uint16 r00l, r01l, r10l, r11l, r00h, r01h, r10h, r11h;
+                v_expand(v_reinterpret_as_u8(r00), r00l, r00h);
+                v_expand(v_reinterpret_as_u8(r01), r01l, r01h);
+                v_expand(v_reinterpret_as_u8(r10), r10l, r10h);
+                v_expand(v_reinterpret_as_u8(r11), r11l, r11h);
+                v_store(D, v_rshr_pack<2>(r00l + r01l + r10l + r11l, r00h + r01h + r10h + r11h));
             }
         }
 
@@ -2612,7 +2523,6 @@ public:
 
 private:
     int cn;
-    bool use_simd;
     int step;
 };
 
@@ -2620,80 +2530,133 @@ class ResizeAreaFastVec_SIMD_16u
 {
 public:
     ResizeAreaFastVec_SIMD_16u(int _cn, int _step) :
-        cn(_cn), step(_step)
-    {
-        use_simd = checkHardwareSupport(CV_CPU_SSE2);
-    }
+        cn(_cn), step(_step) {}
 
     int operator() (const ushort* S, ushort* D, int w) const
     {
-        if (!use_simd)
-            return 0;
-
         int dx = 0;
         const ushort* S0 = (const ushort*)S;
         const ushort* S1 = (const ushort*)((const uchar*)(S) + step);
-        __m128i masklow = _mm_set1_epi32(0x0000ffff);
-        __m128i zero = _mm_setzero_si128();
-        __m128i delta2 = _mm_set1_epi32(2);
-
-#define _mm_packus_epi32(a, zero) _mm_packs_epi32(_mm_srai_epi32(_mm_slli_epi32(a, 16), 16), zero)
 
         if (cn == 1)
         {
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+            v_uint32 masklow = vx_setall_u32(0x0000ffff);
+            for (; dx <= w - v_uint32::nlanes; dx += v_uint32::nlanes, S0 += v_uint16::nlanes, S1 += v_uint16::nlanes, D += v_uint32::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i s0 = _mm_add_epi32(_mm_srli_epi32(r0, 16), _mm_and_si128(r0, masklow));
-                __m128i s1 = _mm_add_epi32(_mm_srli_epi32(r1, 16), _mm_and_si128(r1, masklow));
-                s0 = _mm_add_epi32(_mm_add_epi32(s0, s1), delta2);
-                s0 = _mm_srli_epi32(s0, 2);
-                s0 = _mm_packus_epi32(s0, zero);
-
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_uint32 r0 = v_reinterpret_as_u32(vx_load(S0));
+                v_uint32 r1 = v_reinterpret_as_u32(vx_load(S1));
+                v_rshr_pack_store<2>(D, (r0 >> 16) + (r0 & masklow) + (r1 >> 16) + (r1 & masklow));
             }
         }
         else if (cn == 3)
+        {
+#if CV_SIMD_WIDTH == 16
             for ( ; dx <= w - 4; dx += 3, S0 += 6, S1 += 6, D += 3)
+#if CV_SSE4_1
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i r0_16l = _mm_unpacklo_epi16(r0, zero);
-                __m128i r0_16h = _mm_unpacklo_epi16(_mm_srli_si128(r0, 6), zero);
-                __m128i r1_16l = _mm_unpacklo_epi16(r1, zero);
-                __m128i r1_16h = _mm_unpacklo_epi16(_mm_srli_si128(r1, 6), zero);
-
-                __m128i s0 = _mm_add_epi32(r0_16l, r0_16h);
-                __m128i s1 = _mm_add_epi32(r1_16l, r1_16h);
-                s0 = _mm_add_epi32(delta2, _mm_add_epi32(s0, s1));
-                s0 = _mm_packus_epi32(_mm_srli_epi32(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_uint32 r0, r1, r2, r3;
+                v_expand(vx_load(S0), r0, r1);
+                v_expand(vx_load(S1), r2, r3);
+                r0 += r2; r1 += r3;
+                v_rshr_pack_store<2>(D, r0 + v_rotate_left<1>(r1, r0));
             }
+#else
+                v_rshr_pack_store<2>(D, v_load_expand(S0) + v_load_expand(S0 + 3) + v_load_expand(S1) + v_load_expand(S1 + 3));
+#endif
+#elif CV_SIMD_WIDTH == 32 || CV_SIMD_WIDTH == 64
+            for ( ; dx <= w - 3*v_uint16::nlanes; dx += 3*v_uint16::nlanes, S0 += 6*v_uint16::nlanes, S1 += 6*v_uint16::nlanes, D += 3*v_uint16::nlanes)
+            {
+                v_uint32 t0, t1, t2, t3, t4, t5;
+                v_uint32 s0, s1, s2, s3, s4, s5;
+                s0 = vx_load_expand(S0                     ) + vx_load_expand(S1                     );
+                s1 = vx_load_expand(S0 +   v_uint32::nlanes) + vx_load_expand(S1 +   v_uint32::nlanes);
+                s2 = vx_load_expand(S0 + 2*v_uint32::nlanes) + vx_load_expand(S1 + 2*v_uint32::nlanes);
+                s3 = vx_load_expand(S0 + 3*v_uint32::nlanes) + vx_load_expand(S1 + 3*v_uint32::nlanes);
+                s4 = vx_load_expand(S0 + 4*v_uint32::nlanes) + vx_load_expand(S1 + 4*v_uint32::nlanes);
+                s5 = vx_load_expand(S0 + 5*v_uint32::nlanes) + vx_load_expand(S1 + 5*v_uint32::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_uint32 bl, gl, rl;
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+#if CV_SIMD_WIDTH == 32
+                bl = t0 + t3; gl = t1 + t4; rl = t2 + t5;
+#else //CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bl = s0 + s3; gl = s1 + s4; rl = s2 + s5;
+#endif
+                s0 = vx_load_expand(S0 + 6*v_uint32::nlanes) + vx_load_expand(S1 + 6*v_uint32::nlanes);
+                s1 = vx_load_expand(S0 + 7*v_uint32::nlanes) + vx_load_expand(S1 + 7*v_uint32::nlanes);
+                s2 = vx_load_expand(S0 + 8*v_uint32::nlanes) + vx_load_expand(S1 + 8*v_uint32::nlanes);
+                s3 = vx_load_expand(S0 + 9*v_uint32::nlanes) + vx_load_expand(S1 + 9*v_uint32::nlanes);
+                s4 = vx_load_expand(S0 +10*v_uint32::nlanes) + vx_load_expand(S1 +10*v_uint32::nlanes);
+                s5 = vx_load_expand(S0 +11*v_uint32::nlanes) + vx_load_expand(S1 +11*v_uint32::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_uint32 bh, gh, rh;
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+#if CV_SIMD_WIDTH == 32
+                bh = t0 + t3; gh = t1 + t4; rh = t2 + t5;
+#else //CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bh = s0 + s3; gh = s1 + s4; rh = s2 + s5;
+#endif
+                v_store_interleave(D, v_rshr_pack<2>(bl, bh), v_rshr_pack<2>(gl, gh), v_rshr_pack<2>(rl, rh));
+            }
+#elif CV_SIMD_WIDTH >= 64
+            v_uint32 masklow = vx_setall_u32(0x0000ffff);
+            for ( ; dx <= w - 3*v_uint16::nlanes; dx += 3*v_uint16::nlanes, S0 += 6*v_uint16::nlanes, S1 += 6*v_uint16::nlanes, D += 3*v_uint16::nlanes)
+            {
+                v_uint16 b0, g0, r0, b1, g1, r1;
+                v_load_deinterleave(S0, b0, g0, r0);
+                v_load_deinterleave(S1, b1, g1, r1);
+                v_uint32 bl = (v_reinterpret_as_u32(b0) >> 16) + (v_reinterpret_as_u32(b0) & masklow) + (v_reinterpret_as_u32(b1) >> 16) + (v_reinterpret_as_u32(b1) & masklow);
+                v_uint32 gl = (v_reinterpret_as_u32(g0) >> 16) + (v_reinterpret_as_u32(g0) & masklow) + (v_reinterpret_as_u32(g1) >> 16) + (v_reinterpret_as_u32(g1) & masklow);
+                v_uint32 rl = (v_reinterpret_as_u32(r0) >> 16) + (v_reinterpret_as_u32(r0) & masklow) + (v_reinterpret_as_u32(r1) >> 16) + (v_reinterpret_as_u32(r1) & masklow);
+                v_load_deinterleave(S0 + 3*v_uint16::nlanes, b0, g0, r0);
+                v_load_deinterleave(S1 + 3*v_uint16::nlanes, b1, g1, r1);
+                v_uint32 bh = (v_reinterpret_as_u32(b0) >> 16) + (v_reinterpret_as_u32(b0) & masklow) + (v_reinterpret_as_u32(b1) >> 16) + (v_reinterpret_as_u32(b1) & masklow);
+                v_uint32 gh = (v_reinterpret_as_u32(g0) >> 16) + (v_reinterpret_as_u32(g0) & masklow) + (v_reinterpret_as_u32(g1) >> 16) + (v_reinterpret_as_u32(g1) & masklow);
+                v_uint32 rh = (v_reinterpret_as_u32(r0) >> 16) + (v_reinterpret_as_u32(r0) & masklow) + (v_reinterpret_as_u32(r1) >> 16) + (v_reinterpret_as_u32(r1) & masklow);
+                v_store_interleave(D, v_rshr_pack<2>(bl, bh), v_rshr_pack<2>(gl, gh), v_rshr_pack<2>(rl, rh));
+            }
+#endif
+        }
         else
         {
             CV_Assert(cn == 4);
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+#if CV_SIMD_WIDTH >= 64
+            for ( ; dx <= w - v_uint16::nlanes; dx += v_uint16::nlanes, S0 += 2*v_uint16::nlanes, S1 += 2*v_uint16::nlanes, D += v_uint16::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
+                v_uint64 r00, r01, r10, r11;
+                v_load_deinterleave((uint64_t*)S0, r00, r01);
+                v_load_deinterleave((uint64_t*)S1, r10, r11);
 
-                __m128i r0_32l = _mm_unpacklo_epi16(r0, zero);
-                __m128i r0_32h = _mm_unpackhi_epi16(r0, zero);
-                __m128i r1_32l = _mm_unpacklo_epi16(r1, zero);
-                __m128i r1_32h = _mm_unpackhi_epi16(r1, zero);
-
-                __m128i s0 = _mm_add_epi32(r0_32l, r0_32h);
-                __m128i s1 = _mm_add_epi32(r1_32l, r1_32h);
-                s0 = _mm_add_epi32(s1, _mm_add_epi32(s0, delta2));
-                s0 = _mm_packus_epi32(_mm_srli_epi32(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_uint32 r00l, r01l, r10l, r11l, r00h, r01h, r10h, r11h;
+                v_expand(v_reinterpret_as_u16(r00), r00l, r00h);
+                v_expand(v_reinterpret_as_u16(r01), r01l, r01h);
+                v_expand(v_reinterpret_as_u16(r10), r10l, r10h);
+                v_expand(v_reinterpret_as_u16(r11), r11l, r11h);
+                v_store(D, v_rshr_pack<2>(r00l + r01l + r10l + r11l, r00h + r01h + r10h + r11h));
             }
+#else
+            for ( ; dx <= w - v_uint32::nlanes; dx += v_uint32::nlanes, S0 += v_uint16::nlanes, S1 += v_uint16::nlanes, D += v_uint32::nlanes)
+            {
+                v_uint32 r0, r1, r2, r3;
+                v_expand(vx_load(S0), r0, r1);
+                v_expand(vx_load(S1), r2, r3);
+                r0 += r2; r1 += r3;
+                v_uint32 v_d;
+#if CV_SIMD_WIDTH == 16
+                v_d = r0 + r1;
+#elif CV_SIMD_WIDTH == 32
+                v_uint32 t0, t1;
+                v_recombine(r0, r1, t0, t1);
+                v_d = t0 + t1;
+#endif
+                v_rshr_pack_store<2>(D, v_d);
+            }
+#endif
         }
-
-#undef _mm_packus_epi32
 
         return dx;
     }
@@ -2701,83 +2664,124 @@ public:
 private:
     int cn;
     int step;
-    bool use_simd;
 };
 
 class ResizeAreaFastVec_SIMD_16s
 {
 public:
     ResizeAreaFastVec_SIMD_16s(int _cn, int _step) :
-        cn(_cn), step(_step)
-    {
-        use_simd = checkHardwareSupport(CV_CPU_SSE2);
-    }
+        cn(_cn), step(_step) {}
 
     int operator() (const short* S, short* D, int w) const
     {
-        if (!use_simd)
-            return 0;
-
         int dx = 0;
         const short* S0 = (const short*)S;
         const short* S1 = (const short*)((const uchar*)(S) + step);
-        __m128i masklow = _mm_set1_epi32(0x0000ffff);
-        __m128i zero = _mm_setzero_si128();
-        __m128i delta2 = _mm_set1_epi32(2);
 
         if (cn == 1)
         {
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+            v_int32 masklow = vx_setall_s32(0x0000ffff);
+            for (; dx <= w - v_int32::nlanes; dx += v_int32::nlanes, S0 += v_int16::nlanes, S1 += v_int16::nlanes, D += v_int32::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i s0 = _mm_add_epi32(_mm_srai_epi32(r0, 16),
-                    _mm_srai_epi32(_mm_slli_epi32(_mm_and_si128(r0, masklow), 16), 16));
-                __m128i s1 = _mm_add_epi32(_mm_srai_epi32(r1, 16),
-                    _mm_srai_epi32(_mm_slli_epi32(_mm_and_si128(r1, masklow), 16), 16));
-                s0 = _mm_add_epi32(_mm_add_epi32(s0, s1), delta2);
-                s0 = _mm_srai_epi32(s0, 2);
-                s0 = _mm_packs_epi32(s0, zero);
-
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_int32 r0 = v_reinterpret_as_s32(vx_load(S0));
+                v_int32 r1 = v_reinterpret_as_s32(vx_load(S1));
+                v_rshr_pack_store<2>(D, (r0 >> 16) + (((r0 & masklow)<<16)>>16) + (r1 >> 16) + (((r1 & masklow)<<16)>>16));
             }
         }
         else if (cn == 3)
+        {
+#if CV_SIMD_WIDTH == 16
             for ( ; dx <= w - 4; dx += 3, S0 += 6, S1 += 6, D += 3)
+                v_rshr_pack_store<2>(D, v_load_expand(S0) + v_load_expand(S0 + 3) + v_load_expand(S1) + v_load_expand(S1 + 3));
+#elif CV_SIMD_WIDTH == 32 || CV_SIMD_WIDTH == 64
+            for ( ; dx <= w - 3*v_int16::nlanes; dx += 3*v_int16::nlanes, S0 += 6*v_int16::nlanes, S1 += 6*v_int16::nlanes, D += 3*v_int16::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
-
-                __m128i r0_16l = _mm_srai_epi32(_mm_unpacklo_epi16(zero, r0), 16);
-                __m128i r0_16h = _mm_srai_epi32(_mm_unpacklo_epi16(zero, _mm_srli_si128(r0, 6)), 16);
-                __m128i r1_16l = _mm_srai_epi32(_mm_unpacklo_epi16(zero, r1), 16);
-                __m128i r1_16h = _mm_srai_epi32(_mm_unpacklo_epi16(zero, _mm_srli_si128(r1, 6)), 16);
-
-                __m128i s0 = _mm_add_epi32(r0_16l, r0_16h);
-                __m128i s1 = _mm_add_epi32(r1_16l, r1_16h);
-                s0 = _mm_add_epi32(delta2, _mm_add_epi32(s0, s1));
-                s0 = _mm_packs_epi32(_mm_srai_epi32(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_int32 t0, t1, t2, t3, t4, t5;
+                v_int32 s0, s1, s2, s3, s4, s5;
+                s0 = vx_load_expand(S0                    ) + vx_load_expand(S1                    );
+                s1 = vx_load_expand(S0 +   v_int32::nlanes) + vx_load_expand(S1 +   v_int32::nlanes);
+                s2 = vx_load_expand(S0 + 2*v_int32::nlanes) + vx_load_expand(S1 + 2*v_int32::nlanes);
+                s3 = vx_load_expand(S0 + 3*v_int32::nlanes) + vx_load_expand(S1 + 3*v_int32::nlanes);
+                s4 = vx_load_expand(S0 + 4*v_int32::nlanes) + vx_load_expand(S1 + 4*v_int32::nlanes);
+                s5 = vx_load_expand(S0 + 5*v_int32::nlanes) + vx_load_expand(S1 + 5*v_int32::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_int32 bl, gl, rl;
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+#if CV_SIMD_WIDTH == 32
+                bl = t0 + t3; gl = t1 + t4; rl = t2 + t5;
+#else //CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bl = s0 + s3; gl = s1 + s4; rl = s2 + s5;
+#endif
+                s0 = vx_load_expand(S0 + 6*v_int32::nlanes) + vx_load_expand(S1 + 6*v_int32::nlanes);
+                s1 = vx_load_expand(S0 + 7*v_int32::nlanes) + vx_load_expand(S1 + 7*v_int32::nlanes);
+                s2 = vx_load_expand(S0 + 8*v_int32::nlanes) + vx_load_expand(S1 + 8*v_int32::nlanes);
+                s3 = vx_load_expand(S0 + 9*v_int32::nlanes) + vx_load_expand(S1 + 9*v_int32::nlanes);
+                s4 = vx_load_expand(S0 +10*v_int32::nlanes) + vx_load_expand(S1 +10*v_int32::nlanes);
+                s5 = vx_load_expand(S0 +11*v_int32::nlanes) + vx_load_expand(S1 +11*v_int32::nlanes);
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                v_int32 bh, gh, rh;
+                v_zip(s0, s3, t0, t1); v_zip(s1, s4, t2, t3); v_zip(s2, s5, t4, t5);
+#if CV_SIMD_WIDTH == 32
+                bh = t0 + t3; gh = t1 + t4; rh = t2 + t5;
+#else //CV_SIMD_WIDTH == 64
+                v_zip(t0, t3, s0, s1); v_zip(t1, t4, s2, s3); v_zip(t2, t5, s4, s5);
+                bh = s0 + s3; gh = s1 + s4; rh = s2 + s5;
+#endif
+                v_store_interleave(D, v_rshr_pack<2>(bl, bh), v_rshr_pack<2>(gl, gh), v_rshr_pack<2>(rl, rh));
             }
+#elif CV_SIMD_WIDTH >= 64
+            for ( ; dx <= w - 3*v_int16::nlanes; dx += 3*v_int16::nlanes, S0 += 6*v_int16::nlanes, S1 += 6*v_int16::nlanes, D += 3*v_int16::nlanes)
+            {
+                v_int16 b0, g0, r0, b1, g1, r1;
+                v_load_deinterleave(S0, b0, g0, r0);
+                v_load_deinterleave(S1, b1, g1, r1);
+                v_int32 bl = (v_reinterpret_as_s32(b0) >> 16) + ((v_reinterpret_as_s32(b0) << 16) >> 16) + (v_reinterpret_as_s32(b1) >> 16) + ((v_reinterpret_as_s32(b1) << 16) >> 16);
+                v_int32 gl = (v_reinterpret_as_s32(g0) >> 16) + ((v_reinterpret_as_s32(g0) << 16) >> 16) + (v_reinterpret_as_s32(g1) >> 16) + ((v_reinterpret_as_s32(g1) << 16) >> 16);
+                v_int32 rl = (v_reinterpret_as_s32(r0) >> 16) + ((v_reinterpret_as_s32(r0) << 16) >> 16) + (v_reinterpret_as_s32(r1) >> 16) + ((v_reinterpret_as_s32(r1) << 16) >> 16);
+                v_load_deinterleave(S0 + 3*v_int16::nlanes, b0, g0, r0);
+                v_load_deinterleave(S1 + 3*v_int16::nlanes, b1, g1, r1);
+                v_int32 bh = (v_reinterpret_as_s32(b0) >> 16) + ((v_reinterpret_as_s32(b0) << 16) >> 16) + (v_reinterpret_as_s32(b1) >> 16) + ((v_reinterpret_as_s32(b1) << 16) >> 16);
+                v_int32 gh = (v_reinterpret_as_s32(g0) >> 16) + ((v_reinterpret_as_s32(g0) << 16) >> 16) + (v_reinterpret_as_s32(g1) >> 16) + ((v_reinterpret_as_s32(g1) << 16) >> 16);
+                v_int32 rh = (v_reinterpret_as_s32(r0) >> 16) + ((v_reinterpret_as_s32(r0) << 16) >> 16) + (v_reinterpret_as_s32(r1) >> 16) + ((v_reinterpret_as_s32(r1) << 16) >> 16);
+                v_store_interleave(D, v_rshr_pack<2>(bl, bh), v_rshr_pack<2>(gl, gh), v_rshr_pack<2>(rl, rh));
+            }
+#endif
+        }
         else
         {
             CV_Assert(cn == 4);
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+            for (; dx <= w - v_int16::nlanes; dx += v_int16::nlanes, S0 += 2 * v_int16::nlanes, S1 += 2 * v_int16::nlanes, D += v_int16::nlanes)
             {
-                __m128i r0 = _mm_loadu_si128((const __m128i*)S0);
-                __m128i r1 = _mm_loadu_si128((const __m128i*)S1);
+#if CV_SIMD_WIDTH >= 64
+                v_int64 r00, r01, r10, r11;
+                v_load_deinterleave((int64_t*)S0, r00, r01);
+                v_load_deinterleave((int64_t*)S1, r10, r11);
 
-                __m128i r0_32l = _mm_srai_epi32(_mm_unpacklo_epi16(zero, r0), 16);
-                __m128i r0_32h = _mm_srai_epi32(_mm_unpackhi_epi16(zero, r0), 16);
-                __m128i r1_32l = _mm_srai_epi32(_mm_unpacklo_epi16(zero, r1), 16);
-                __m128i r1_32h = _mm_srai_epi32(_mm_unpackhi_epi16(zero, r1), 16);
-
-                __m128i s0 = _mm_add_epi32(r0_32l, r0_32h);
-                __m128i s1 = _mm_add_epi32(r1_32l, r1_32h);
-                s0 = _mm_add_epi32(s1, _mm_add_epi32(s0, delta2));
-                s0 = _mm_packs_epi32(_mm_srai_epi32(s0, 2), zero);
-                _mm_storel_epi64((__m128i*)D, s0);
+                v_int32 r00l, r01l, r10l, r11l, r00h, r01h, r10h, r11h;
+                v_expand(v_reinterpret_as_s16(r00), r00l, r00h);
+                v_expand(v_reinterpret_as_s16(r01), r01l, r01h);
+                v_expand(v_reinterpret_as_s16(r10), r10l, r10h);
+                v_expand(v_reinterpret_as_s16(r11), r11l, r11h);
+                v_store(D, v_rshr_pack<2>(r00l + r01l + r10l + r11l, r00h + r01h + r10h + r11h));
+#else
+                v_int32 r0, r1, r2, r3;
+                r0 = vx_load_expand(S0                    ) + vx_load_expand(S1                    );
+                r1 = vx_load_expand(S0 +   v_int32::nlanes) + vx_load_expand(S1 +   v_int32::nlanes);
+                r2 = vx_load_expand(S0 + 2*v_int32::nlanes) + vx_load_expand(S1 + 2*v_int32::nlanes);
+                r3 = vx_load_expand(S0 + 3*v_int32::nlanes) + vx_load_expand(S1 + 3*v_int32::nlanes);
+                v_int32 dl, dh;
+#if CV_SIMD_WIDTH == 16
+                dl = r0 + r1; dh = r2 + r3;
+#elif CV_SIMD_WIDTH == 32
+                v_int32 t0, t1, t2, t3;
+                v_recombine(r0, r1, t0, t1); v_recombine(r2, r3, t2, t3);
+                dl = t0 + t1; dh = t2 + t3;
+#endif
+                v_store(D, v_rshr_pack<2>(dl, dh));
+#endif
             }
         }
 
@@ -2787,7 +2791,6 @@ public:
 private:
     int cn;
     int step;
-    bool use_simd;
 };
 
 struct ResizeAreaFastVec_SIMD_32f
@@ -2796,7 +2799,6 @@ struct ResizeAreaFastVec_SIMD_32f
         cn(_cn), step(_step)
     {
         fast_mode = _scale_x == 2 && _scale_y == 2 && (cn == 1 || cn == 4);
-        fast_mode = fast_mode && checkHardwareSupport(CV_CPU_SSE2);
     }
 
     int operator() (const float * S, float * D, int w) const
@@ -2807,33 +2809,32 @@ struct ResizeAreaFastVec_SIMD_32f
         const float * S0 = S, * S1 = (const float *)((const uchar *)(S0) + step);
         int dx = 0;
 
-        __m128 v_025 = _mm_set1_ps(0.25f);
-
         if (cn == 1)
         {
-            const int shuffle_lo = _MM_SHUFFLE(2, 0, 2, 0), shuffle_hi = _MM_SHUFFLE(3, 1, 3, 1);
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+            v_float32 v_025 = vx_setall_f32(0.25f);
+            for ( ; dx <= w - v_float32::nlanes; dx += v_float32::nlanes, S0 += 2*v_float32::nlanes, S1 += 2*v_float32::nlanes, D += v_float32::nlanes)
             {
-                __m128 v_row00 = _mm_loadu_ps(S0), v_row01 = _mm_loadu_ps(S0 + 4),
-                       v_row10 = _mm_loadu_ps(S1), v_row11 = _mm_loadu_ps(S1 + 4);
-
-                __m128 v_dst0 = _mm_add_ps(_mm_shuffle_ps(v_row00, v_row01, shuffle_lo),
-                                           _mm_shuffle_ps(v_row00, v_row01, shuffle_hi));
-                __m128 v_dst1 = _mm_add_ps(_mm_shuffle_ps(v_row10, v_row11, shuffle_lo),
-                                           _mm_shuffle_ps(v_row10, v_row11, shuffle_hi));
-
-                _mm_storeu_ps(D, _mm_mul_ps(_mm_add_ps(v_dst0, v_dst1), v_025));
+                v_float32 v_row00, v_row01, v_row10, v_row11;
+                v_load_deinterleave(S0, v_row00, v_row01);
+                v_load_deinterleave(S1, v_row10, v_row11);
+                v_store(D, ((v_row00 + v_row01) + (v_row10 + v_row11)) * v_025);
             }
         }
         else if (cn == 4)
         {
-            for ( ; dx <= w - 4; dx += 4, S0 += 8, S1 += 8, D += 4)
+#if CV_SIMD_WIDTH == 16
+            v_float32 v_025 = vx_setall_f32(0.25f);
+            for (; dx <= w - v_float32::nlanes; dx += v_float32::nlanes, S0 += 2*v_float32::nlanes, S1 += 2*v_float32::nlanes, D += v_float32::nlanes)
+                v_store(D, ((vx_load(S0) + vx_load(S0 + v_float32::nlanes)) + (vx_load(S1) + vx_load(S1 + v_float32::nlanes))) * v_025);
+#elif CV_SIMD256
+            v_float32x8 v_025 = v256_setall_f32(0.25f);
+            for (; dx <= w - v_float32x8::nlanes; dx += v_float32x8::nlanes, S0 += 2*v_float32x8::nlanes, S1 += 2*v_float32x8::nlanes, D += v_float32x8::nlanes)
             {
-                __m128 v_dst0 = _mm_add_ps(_mm_loadu_ps(S0), _mm_loadu_ps(S0 + 4));
-                __m128 v_dst1 = _mm_add_ps(_mm_loadu_ps(S1), _mm_loadu_ps(S1 + 4));
-
-                _mm_storeu_ps(D, _mm_mul_ps(_mm_add_ps(v_dst0, v_dst1), v_025));
+                v_float32x8 dst0, dst1;
+                v_recombine(v256_load(S0) + v256_load(S1), v256_load(S0 + v_float32x8::nlanes) + v256_load(S1 + v_float32x8::nlanes), dst0, dst1);
+                v_store(D, (dst0 + dst1) * v_025);
             }
+#endif
         }
 
         return dx;
@@ -2921,7 +2922,7 @@ public:
     {
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         Size ssize = src.size(), dsize = dst.size();
         int cn = src.channels();
@@ -3031,7 +3032,7 @@ public:
         tabofs = _tabofs;
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         Size dsize = dst->size();
         int cn = dst->channels();
@@ -3039,7 +3040,7 @@ public:
         AutoBuffer<WT> _buffer(dsize.width*2);
         const DecimateAlpha* xtab = xtab0;
         int xtab_size = xtab_size0;
-        WT *buf = _buffer, *sum = buf + dsize.width;
+        WT *buf = _buffer.data(), *sum = buf + dsize.width;
         int j_start = tabofs[range.start], j_end = tabofs[range.end], j, k, dx, prev_dy = ytab[j_start].di;
 
         for( dx = 0; dx < dsize.width; dx++ )
@@ -3190,7 +3191,7 @@ static int computeResizeAreaTab( int ssize, int dsize, int cn, double scale, Dec
 
         if( sx1 - fsx1 > 1e-3 )
         {
-            assert( k < ssize*2 );
+            CV_Assert( k < ssize*2 );
             tab[k].di = dx * cn;
             tab[k].si = (sx1 - 1) * cn;
             tab[k++].alpha = (float)((sx1 - fsx1) / cellWidth);
@@ -3198,7 +3199,7 @@ static int computeResizeAreaTab( int ssize, int dsize, int cn, double scale, Dec
 
         for(int sx = sx1; sx < sx2; sx++ )
         {
-            assert( k < ssize*2 );
+            CV_Assert( k < ssize*2 );
             tab[k].di = dx * cn;
             tab[k].si = sx * cn;
             tab[k++].alpha = float(1.0 / cellWidth);
@@ -3206,7 +3207,7 @@ static int computeResizeAreaTab( int ssize, int dsize, int cn, double scale, Dec
 
         if( fsx2 - sx2 > 1e-3 )
         {
-            assert( k < ssize*2 );
+            CV_Assert( k < ssize*2 );
             tab[k].di = dx * cn;
             tab[k].si = sx2 * cn;
             tab[k++].alpha = (float)(std::min(std::min(fsx2 - sx2, 1.), cellWidth) / cellWidth);
@@ -3268,7 +3269,7 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
     // in case of scale_x && scale_y is equal to 2
     // INTER_AREA (fast) also is equal to INTER_LINEAR
     if( interpolation == INTER_LINEAR && is_area_fast && iscale_x == 2 && iscale_y == 2 )
-        /*interpolation = INTER_AREA*/(void)0; // INTER_AREA is slower
+        /*interpolation = INTER_AREA*/CV_UNUSED(0); // INTER_AREA is slower
 
     if( !(cn <= 4 &&
            (interpolation == INTER_NEAREST || interpolation == INTER_LINEAR ||
@@ -3322,7 +3323,7 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
         if (depth == CV_8U && ((void)0, 0))
         {
             AutoBuffer<uchar> _buffer((dsize.width + dsize.height)*(sizeof(int) + sizeof(short)*2));
-            int* xofs = (int*)(uchar*)_buffer, * yofs = xofs + dsize.width;
+            int* xofs = (int*)_buffer.data(), * yofs = xofs + dsize.width;
             short* ialpha = (short*)(yofs + dsize.height), * ibeta = ialpha + dsize.width*2;
             float fxx, fyy;
             int sx, sy;
@@ -3357,7 +3358,7 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
 
             int wdepth = std::max(depth, CV_32S), wtype = CV_MAKETYPE(wdepth, cn);
             UMat coeffs;
-            Mat(1, static_cast<int>(_buffer.size()), CV_8UC1, (uchar *)_buffer).copyTo(coeffs);
+            Mat(1, static_cast<int>(_buffer.size()), CV_8UC1, _buffer.data()).copyTo(coeffs);
 
             k.create("resizeLN", ocl::imgproc::resize_oclsrc,
                      format("-D INTER_LINEAR_INTEGER -D depth=%d -D T=%s -D T1=%s "
@@ -3375,7 +3376,8 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
         }
         else
         {
-            int wdepth = std::max(depth, CV_32S), wtype = CV_MAKETYPE(wdepth, cn);
+            int wdepth = depth <= CV_8S ? CV_32S : std::max(depth, CV_32F);
+            int wtype = CV_MAKETYPE(wdepth, cn);
             k.create("resizeLN", ocl::imgproc::resize_oclsrc,
                      format("-D INTER_LINEAR -D depth=%d -D T=%s -D T1=%s "
                             "-D WT=%s -D convertToWT=%s -D convertToDT=%s -D cn=%d "
@@ -3440,17 +3442,17 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
 
             AutoBuffer<int> _xymap_tab(xytab_size), _xyofs_tab(tabofs_size);
             AutoBuffer<float> _xyalpha_tab(xytab_size);
-            int * xmap_tab = _xymap_tab, * ymap_tab = _xymap_tab + (ssize.width << 1);
-            float * xalpha_tab = _xyalpha_tab, * yalpha_tab = _xyalpha_tab + (ssize.width << 1);
-            int * xofs_tab = _xyofs_tab, * yofs_tab = _xyofs_tab + dsize.width + 1;
+            int * xmap_tab = _xymap_tab.data(), * ymap_tab = _xymap_tab.data() + (ssize.width << 1);
+            float * xalpha_tab = _xyalpha_tab.data(), * yalpha_tab = _xyalpha_tab.data() + (ssize.width << 1);
+            int * xofs_tab = _xyofs_tab.data(), * yofs_tab = _xyofs_tab.data() + dsize.width + 1;
 
             ocl_computeResizeAreaTabs(ssize.width, dsize.width, inv_fx, xmap_tab, xalpha_tab, xofs_tab);
             ocl_computeResizeAreaTabs(ssize.height, dsize.height, inv_fy, ymap_tab, yalpha_tab, yofs_tab);
 
             // loading precomputed arrays to GPU
-            Mat(1, xytab_size, CV_32FC1, (void *)_xyalpha_tab).copyTo(alphaOcl);
-            Mat(1, xytab_size, CV_32SC1, (void *)_xymap_tab).copyTo(mapOcl);
-            Mat(1, tabofs_size, CV_32SC1, (void *)_xyofs_tab).copyTo(tabofsOcl);
+            Mat(1, xytab_size, CV_32FC1, _xyalpha_tab.data()).copyTo(alphaOcl);
+            Mat(1, xytab_size, CV_32SC1, _xymap_tab.data()).copyTo(mapOcl);
+            Mat(1, tabofs_size, CV_32SC1, _xyofs_tab.data()).copyTo(tabofsOcl);
         }
 
         ocl::KernelArg srcarg = ocl::KernelArg::ReadOnly(src), dstarg = ocl::KernelArg::WriteOnly(dst);
@@ -3489,9 +3491,9 @@ public:
         m_ok = true;
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
-        CV_INSTRUMENT_REGION_IPP()
+        CV_INSTRUMENT_REGION_IPP();
 
         if(!m_ok)
             return;
@@ -3501,7 +3503,7 @@ public:
             ::ipp::IwiTile tile = ::ipp::IwiRoi(0, range.start, m_dst.m_size.width, range.end - range.start);
             CV_INSTRUMENT_FUN_IPP(iwiResize, m_src, m_dst, ippBorderRepl, tile);
         }
-        catch(::ipp::IwException)
+        catch(const ::ipp::IwException &)
         {
             m_ok = false;
             return;
@@ -3539,9 +3541,9 @@ public:
         m_ok = true;
     }
 
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
-        CV_INSTRUMENT_REGION_IPP()
+        CV_INSTRUMENT_REGION_IPP();
 
         if(!m_ok)
             return;
@@ -3551,7 +3553,7 @@ public:
             ::ipp::IwiTile tile = ::ipp::IwiRoi(0, range.start, m_dst.m_size.width, range.end - range.start);
             CV_INSTRUMENT_FUN_IPP(iwiWarpAffine, m_src, m_dst, tile);
         }
-        catch(::ipp::IwException)
+        catch(const ::ipp::IwException &)
         {
             m_ok = false;
             return;
@@ -3573,15 +3575,15 @@ static bool ipp_resize(const uchar * src_data, size_t src_step, int src_width, i
             int depth, int channels, int interpolation)
 {
 #ifdef HAVE_IPP_IW
-    CV_INSTRUMENT_REGION_IPP()
+    CV_INSTRUMENT_REGION_IPP();
 
     IppDataType           ippDataType = ippiGetDataType(depth);
     IppiInterpolationType ippInter    = ippiGetInterpolation(interpolation);
-    if(ippInter < 0)
+    if((int)ippInter < 0)
         return false;
 
     // Resize which doesn't match OpenCV exactly
-    if (!cv::ipp::useIPP_NE())
+    if (!cv::ipp::useIPP_NotExact())
     {
         if (ippInter == ippNearest || ippInter == ippSuper || (ippDataType == ipp8u && ippInter == ippLinear))
             return false;
@@ -3647,7 +3649,7 @@ static bool ipp_resize(const uchar * src_data, size_t src_step, int src_width, i
         if(!ok)
             return false;
     }
-    catch(::ipp::IwException)
+    catch(const ::ipp::IwException &)
     {
         return false;
     }
@@ -3670,9 +3672,9 @@ void resize(int src_type,
             uchar * dst_data, size_t dst_step, int dst_width, int dst_height,
             double inv_scale_x, double inv_scale_y, int interpolation)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
-    CV_Assert((dst_width * dst_height > 0) || (inv_scale_x > 0 && inv_scale_y > 0));
+    CV_Assert((dst_width > 0 && dst_height > 0) || (inv_scale_x > 0 && inv_scale_y > 0));
     if (inv_scale_x < DBL_EPSILON || inv_scale_y < DBL_EPSILON)
     {
         inv_scale_x = static_cast<double>(dst_width) / src_width;
@@ -3684,7 +3686,7 @@ void resize(int src_type,
     int  depth = CV_MAT_DEPTH(src_type), cn = CV_MAT_CN(src_type);
     Size dsize = Size(saturate_cast<int>(src_width*inv_scale_x),
                         saturate_cast<int>(src_height*inv_scale_y));
-    CV_Assert( dsize.area() > 0 );
+    CV_Assert( !dsize.empty() );
 
     CV_IPP_RUN_FAST(ipp_resize(src_data, src_step, src_width, src_height, dst_data, dst_step, dsize.width, dsize.height, inv_scale_x, inv_scale_y, depth, cn, interpolation))
 
@@ -3838,6 +3840,12 @@ void resize(int src_type,
         return;
     }
 
+    if( interpolation == INTER_NEAREST_EXACT )
+    {
+        resizeNN_bitexact( src, dst, inv_scale_x, inv_scale_y );
+        return;
+    }
+
     int k, sx, sy, dx, dy;
 
 
@@ -3847,7 +3855,7 @@ void resize(int src_type,
         if( interpolation == INTER_LINEAR && is_area_fast && iscale_x == 2 && iscale_y == 2 )
             interpolation = INTER_AREA;
 
-        // true "area" interpolation is only implemented for the case (scale_x <= 1 && scale_y <= 1).
+        // true "area" interpolation is only implemented for the case (scale_x >= 1 && scale_y >= 1).
         // In other cases it is emulated using some variant of bilinear interpolation
         if( interpolation == INTER_AREA && scale_x >= 1 && scale_y >= 1 )
         {
@@ -3856,7 +3864,7 @@ void resize(int src_type,
                 int area = iscale_x*iscale_y;
                 size_t srcstep = src_step / src.elemSize1();
                 AutoBuffer<int> _ofs(area + dsize.width*cn);
-                int* ofs = _ofs;
+                int* ofs = _ofs.data();
                 int* xofs = ofs + area;
                 ResizeAreaFastFunc func = areafast_tab[depth];
                 CV_Assert( func != 0 );
@@ -3881,18 +3889,18 @@ void resize(int src_type,
             CV_Assert( func != 0 && cn <= 4 );
 
             AutoBuffer<DecimateAlpha> _xytab((src_width + src_height)*2);
-            DecimateAlpha* xtab = _xytab, *ytab = xtab + src_width*2;
+            DecimateAlpha* xtab = _xytab.data(), *ytab = xtab + src_width*2;
 
             int xtab_size = computeResizeAreaTab(src_width, dsize.width, cn, scale_x, xtab);
             int ytab_size = computeResizeAreaTab(src_height, dsize.height, 1, scale_y, ytab);
 
             AutoBuffer<int> _tabofs(dsize.height + 1);
-            int* tabofs = _tabofs;
+            int* tabofs = _tabofs.data();
             for( k = 0, dy = 0; k < ytab_size; k++ )
             {
                 if( k == 0 || ytab[k].di != ytab[k-1].di )
                 {
-                    assert( ytab[k].di == dy );
+                    CV_Assert( ytab[k].di == dy );
                     tabofs[dy++] = k;
                 }
             }
@@ -3922,7 +3930,7 @@ void resize(int src_type,
     CV_Assert( func != 0 );
 
     AutoBuffer<uchar> _buffer((width + dsize.height)*(sizeof(int) + sizeof(float)*ksize));
-    int* xofs = (int*)(uchar*)_buffer;
+    int* xofs = (int*)_buffer.data();
     int* yofs = xofs + width;
     float* alpha = (float*)(yofs + dsize.height);
     short* ialpha = (short*)alpha;
@@ -4037,22 +4045,23 @@ void resize(int src_type,
 void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
                  double inv_scale_x, double inv_scale_y, int interpolation )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Size ssize = _src.size();
 
-    CV_Assert( ssize.width > 0 && ssize.height > 0 );
-    CV_Assert( dsize.area() > 0 || (inv_scale_x > 0 && inv_scale_y > 0) );
-    if( dsize.area() == 0 )
+    CV_Assert( !ssize.empty() );
+    if( dsize.empty() )
     {
+        CV_Assert(inv_scale_x > 0); CV_Assert(inv_scale_y > 0);
         dsize = Size(saturate_cast<int>(ssize.width*inv_scale_x),
                      saturate_cast<int>(ssize.height*inv_scale_y));
-        CV_Assert( dsize.area() > 0 );
+        CV_Assert( !dsize.empty() );
     }
     else
     {
         inv_scale_x = (double)dsize.width/ssize.width;
         inv_scale_y = (double)dsize.height/ssize.height;
+        CV_Assert(inv_scale_x > 0); CV_Assert(inv_scale_y > 0);
     }
 
     if (interpolation == INTER_LINEAR_EXACT && (_src.depth() == CV_32F || _src.depth() == CV_64F))
@@ -4060,6 +4069,11 @@ void cv::resize( InputArray _src, OutputArray _dst, Size dsize,
 
     CV_OCL_RUN(_src.dims() <= 2 && _dst.isUMat() && _src.cols() > 10 && _src.rows() > 10,
                ocl_resize(_src, _dst, dsize, inv_scale_x, inv_scale_y, interpolation))
+
+    // Fake reference to source. Resolves issue 13577 in case of src == dst.
+    UMat srcUMat;
+    if (_src.isUMat())
+        srcUMat = _src.getUMat();
 
     Mat src = _src.getMat();
     _dst.create(dsize, src.type());

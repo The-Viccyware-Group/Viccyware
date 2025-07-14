@@ -42,13 +42,24 @@
 
 #include "../precomp.hpp"
 #include "layers_common.hpp"
-#include "op_halide.hpp"
+#include "../op_halide.hpp"
+#include "../op_inf_engine.hpp"
+#include "../ie_ngraph.hpp"
+
+#include <opencv2/core/utils/configuration.private.hpp>
+#include <opencv2/core/utils/logger.hpp>
+
 #include "opencv2/core/hal/hal.hpp"
 #include "opencv2/core/hal/intrin.hpp"
 #include <iostream>
+#include <numeric>
 
 #ifdef HAVE_OPENCL
+#include "opencl_kernels_dnn.hpp"
 using namespace cv::dnn::ocl4dnn;
+#endif
+#ifdef HAVE_TENGINE
+#include "../tengine4dnn/include/tengine_graph_convolution.hpp"
 #endif
 
 namespace cv
@@ -59,33 +70,90 @@ namespace dnn
 class BaseConvolutionLayerImpl : public ConvolutionLayer
 {
 public:
-    BaseConvolutionLayerImpl() {}
-
-    virtual bool supportBackend(int backendId)
+    bool fusedWeights, fusedBias;
+    std::vector<double> weightsMultipliers;
+    BaseConvolutionLayerImpl(const LayerParams &params)
     {
-        return backendId == DNN_BACKEND_DEFAULT ||
-               backendId == DNN_BACKEND_HALIDE && haveHalide();
-    }
+        setParamsFrom(params);
+        getConvolutionKernelParams(params, kernel_size, pads_begin, pads_end, strides, dilations, padMode, adjust_pads);
 
-    void finalize(const std::vector<Mat*> &inputs, std::vector<Mat> &outputs)
-    {
-        CV_Assert(inputs.size() > 0);
+        numOutput = params.get<int>("num_output");
+        int ngroups = params.get<int>("group", 1);
+        CV_Assert(numOutput % ngroups == 0);
 
-        CV_Assert(blobs.size() >= 1 && blobs.size() <= 2);
-        CV_Assert(blobs[0].dims == 4 && blobs[0].size[3] == kernel.width && blobs[0].size[2] == kernel.height);
+        if (kernel_size.size() == 2) {
+            kernel = Size(kernel_size[1], kernel_size[0]);
+            stride = Size(strides[1], strides[0]);
+            for (int i = 0; i < pads_begin.size(); i++) {
+                if (pads_begin[i] != pads_end[i])
+                    CV_Error(Error::StsNotImplemented, "Unsupported asymmetric padding in convolution layer");
+            }
+            pad = Size(pads_begin[1], pads_begin[0]);
+            dilation = Size(dilations[1], dilations[0]);
 
-        const Mat &input = *inputs[0];
-        CV_Assert(input.dims == 4 && (input.type() == CV_32F || input.type() == CV_64F));
-        for (size_t i = 0; i < inputs.size(); i++)
-        {
-            CV_Assert(inputs[i]->type() == input.type());
-            CV_Assert(inputs[i]->dims == 4 && inputs[i]->size[1] == input.size[1]);
-            CV_Assert(inputs[i]->size[2] == input.size[2] && inputs[i]->size[3] == input.size[3]);
+            adjustPad.height = adjust_pads[0];
+            adjustPad.width = adjust_pads[1];
         }
 
-        Size outSize = Size(outputs[0].size[3], outputs[0].size[2]);
-        getConvPoolPaddings(Size(input.size[3], input.size[2]), outSize,
-                kernel, stride, padMode, dilation, pad);
+        for (int i = 0; i < adjust_pads.size(); i++) {
+            CV_Assert(adjust_pads[i] < strides[i]);
+        }
+
+        fusedWeights = false;
+        fusedBias = false;
+    }
+
+    virtual void finalize(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr) CV_OVERRIDE
+    {
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
+
+        CV_Assert((inputs.size() > outputs.size() && blobs.empty()) ||
+                  (!inputs.empty() && (blobs.size() == 1 || blobs.size() == 2)));
+        MatSize weightShape = blobs.empty() ? inputs[1].size : blobs[0].size;
+
+        CV_Assert(inputs[0].dims == outputs[0].dims);
+        if (weightShape.dims() == 3)
+        {
+            kernel_size.assign(1, kernel_size[0]);
+            strides.assign(1, strides[0]);
+            dilations.assign(1, dilations[0]);
+            pads_begin.assign(1, pads_begin[0]);
+            pads_end.assign(1, pads_end[0]);
+        }
+        CV_Assert(weightShape.dims() == kernel_size.size() + 2);
+        for (int i = 0; i < kernel_size.size(); i++) {
+            CV_Assert(weightShape[i + 2] == kernel_size[i]);
+        }
+
+        const Mat &input = inputs[0];
+        CV_Assert(((input.dims == 3 && kernel_size.size() == 1) || input.dims == 4 || input.dims == 5) && (input.type() == CV_32F || input.type() == CV_16S));
+        for (size_t i = 0; i < outputs.size(); i++)
+        {
+            CV_Assert(inputs[i].type() == input.type());
+            CV_Assert(((input.dims == 3 && kernel_size.size() == 1) || inputs[i].dims == 4 || inputs[i].dims == 5) && inputs[i].size[1] == input.size[1]);
+            for (int j = 0; j < inputs[i].dims; j++) {
+                CV_Assert(inputs[i].size[j] == input.size[j]);
+            }
+        }
+
+        std::vector<int> inpShape;
+        std::vector<int> outShape;
+        for (int i = 2; i < inputs[0].dims; i++) {
+            inpShape.push_back(inputs[0].size[i]);
+            outShape.push_back(outputs[0].size[i]);
+        }
+        getConvPoolPaddings(inpShape, kernel_size, strides, padMode, pads_begin, pads_end);
+        if (pads_begin.size() == 2) {
+            for (int i = 0; i < pads_begin.size(); i++) {
+                if (pads_begin[i] != pads_end[i])
+                    CV_Error(Error::StsNotImplemented, "Unsupported asymmetric padding in convolution layer");
+            }
+            pad = Size(pads_begin[1], pads_begin[0]);
+        }
+        fusedWeights = false;
+        fusedBias = false;
     }
 
     bool hasBias() const
@@ -97,14 +165,30 @@ public:
     bool is1x1() const
     {
         return (kernel.height == 1 && kernel.width == 1) &&
-        (stride.height == 1 && stride.width == 1) &&
-        (dilation.height == 1 && dilation.width == 1);
+               (stride.height == 1 && stride.width == 1) &&
+               (dilation.height == 1 && dilation.width == 1);
     }
+
+    virtual bool tryFuse(Ptr<Layer>& top) CV_OVERRIDE
+    {
+        Mat w, b;
+        top->getScaleShift(w, b);
+        if (!w.empty() || !b.empty())
+        {
+            fuseWeights(w, b);
+            fusedWeights = fusedWeights || !w.empty();
+            fusedBias = fusedBias || (hasBias() && !w.empty()) || !b.empty();
+            return true;
+        }
+        return false;
+    }
+
+    virtual void fuseWeights(const Mat& w_, const Mat& b_) = 0;
 
     virtual void applyHalideScheduler(Ptr<BackendNode>& node,
                                       const std::vector<Mat*> &inputs,
                                       const std::vector<Mat> &outputs,
-                                      int targetId) const
+                                      int targetId) const CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         if (targetId != DNN_TARGET_CPU)
@@ -146,7 +230,7 @@ public:
 #define IS_POWER_LAYER(layer) \
             (!layer.empty() && !layer->type.compare("Power"))
 //TODO: simultaneously convolution and bias addition for cache optimization
-class ConvolutionLayerImpl : public BaseConvolutionLayerImpl
+class ConvolutionLayerImpl CV_FINAL : public BaseConvolutionLayerImpl
 {
 public:
     enum { VEC_ALIGN = 8, DFT_TYPE = CV_32F };
@@ -154,76 +238,160 @@ public:
     std::vector<float> biasvec;
     std::vector<float> reluslope;
     Ptr<ActivationLayer> activ;
-    Ptr<BatchNormLayer> bnorm;
-    Ptr<ScaleLayer> scaleLayer;
 
 #ifdef HAVE_OPENCL
     Ptr<OCL4DNNConvSpatial<float> > convolutionOp;
     std::vector<UMat> umat_blobs;
-    bool fusedBias;
-    bool newWeightAndBias;
     bool newActiv;
     ocl4dnnFusedActiv_t activType;
     float power;
 #endif
-    ConvolutionLayerImpl()
+    ConvolutionLayerImpl(const LayerParams &params) : BaseConvolutionLayerImpl(params)
     {
 #ifdef HAVE_OPENCL
-        fusedBias = false;
-        newWeightAndBias = false;
         newActiv = false;
         activType = OCL4DNN_CONV_FUSED_ACTIV_NONE;
         power = 0.f;
 #endif
     }
 
-    MatShape computeColRowShape(const MatShape &inpShape, const MatShape &outShape) const
+    MatShape computeColRowShape(const MatShape &inpShape, const MatShape &outShape) const CV_OVERRIDE
     {
-        Size out(outShape[3], outShape[2]);
+        CV_Assert(!blobs.empty());
+        int dims = inpShape.size();
+        int inpD = dims == 5 ? inpShape[2] : 1;
+        int inpH = inpShape[dims - 2];
+        int inpW = inpShape.back();
         int inpGroupCn = blobs[0].size[1];
-        int ksize = inpGroupCn * kernel.height * kernel.width;
-        return shape(out.area(), ksize);
+        int ksize = inpGroupCn * std::accumulate(kernel_size.begin(), kernel_size.end(),
+                                                 1, std::multiplies<size_t>());
+        return shape(inpD * inpH * inpW, ksize);
+    }
+
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
+    {
+        size_t ksize = kernel_size.size();
+#ifdef HAVE_INF_ENGINE
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+        {
+            bool isArmTarget = preferableTarget == DNN_TARGET_CPU && isArmComputePlugin();
+            if (isArmTarget && blobs.empty())
+                return false;
+            if (ksize == 1)
+                return isArmTarget;
+            if (ksize == 3)
+                return preferableTarget != DNN_TARGET_MYRIAD && !isArmTarget;
+            bool isMyriad = preferableTarget == DNN_TARGET_MYRIAD;
+            if (!isMyriad && blobs.empty())
+                return false;
+            return (preferableTarget != DNN_TARGET_MYRIAD || dilation.width == dilation.height);
+        }
+#endif
+        if (backendId == DNN_BACKEND_OPENCV)
+            return ksize >= 1 && ksize <= 3;
+#ifdef HAVE_HALIDE
+        if (backendId == DNN_BACKEND_HALIDE)
+            return ksize == 2 && !blobs.empty();
+#endif
+        return false;
     }
 
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
                          const int requiredOutputs,
                          std::vector<MatShape> &outputs,
-                         std::vector<MatShape> &internals) const
+                         std::vector<MatShape> &internals) const CV_OVERRIDE
     {
-        CV_Assert(blobs.size() != 0);
-        CV_Assert(!hasBias() || blobs[1].total() == (size_t)blobs[0].size[0]);
-        CV_Assert(inputs.size() == (size_t)1);
+        CV_Assert(!blobs.empty() || inputs.size() > 1);
+        const int* weightShape = blobs.empty() ? &inputs[1][0] : blobs[0].size.p;
+        CV_Assert(!hasBias() || blobs[1].total() == (size_t)weightShape[0]);
 
         internals.clear();
 
+        CV_Assert(inputs.size() != 0);
+        std::vector<int> inpShape(inputs[0].begin() + 2, inputs[0].end());
+
+        int outCn = weightShape[0];
+        std::vector<int> outShape;
+        outShape.push_back(inputs[0][0]);
+        outShape.push_back(outCn);
+
         int inpCn = inputs[0][1];
-        int inpH = inputs[0][2];
-        int inpW = inputs[0][3];
-
-        int outCn = blobs[0].size[0];
-        Size out;
-
         if (padMode.empty())
         {
-            out.height = (inpH + 2 * pad.height - (dilation.height * (kernel.height - 1) + 1)) / stride.height + 1;
-            out.width = (inpW + 2 * pad.width - (dilation.width * (kernel.width - 1) + 1)) / stride.width + 1;
+            for (int i = 0; i < inpShape.size(); i++)
+                outShape.push_back((inpShape[i] + pads_begin[i] + pads_end[i] - dilations[i] * (kernel_size[i] - 1) - 1) / strides[i] + 1);
         }
         else
         {
-            getConvPoolOutParams(Size(inpW, inpH), kernel, stride, padMode, dilation, out);
+            getConvPoolOutParams(inpShape, kernel_size, strides, padMode, dilations, outShape);
         }
 
-        int ngroups = inpCn / blobs[0].size[1];
+        int ngroups = inpCn / weightShape[1];
+        if (ngroups == 0 || ngroups * weightShape[1] != inpCn)
+            CV_Error(Error::StsError, format("Number of input channels should "
+                     "be multiple of %d but got %d", weightShape[1], inpCn));
         CV_Assert(ngroups > 0 && inpCn % ngroups == 0 && outCn % ngroups == 0);
 
-        int dims[] = {inputs[0][0], outCn, out.height, out.width};
-        outputs.resize(inputs.size(), shape(dims));
+        outputs.resize(1, outShape);
 
         return false;
     }
 
-    bool setActivation(const Ptr<ActivationLayer>& layer)
+    virtual void finalize(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr) CV_OVERRIDE
     {
+        BaseConvolutionLayerImpl::finalize(inputs_arr, outputs_arr);
+
+        std::vector<Mat> inputs;
+        inputs_arr.getMatVector(inputs);
+        // prepare weightsMat where each row is aligned and has enough zero padding on the right to
+        // use vectorized (i.e. with intrinsics) loops without tail processing
+        if (!blobs.empty())
+        {
+            Mat wm = blobs[0].reshape(1, numOutput);
+            if ((wm.step1() % VEC_ALIGN != 0) ||
+                !isAligned<VEC_ALIGN * sizeof(float)>(wm.data)
+            )
+            {
+                int newcols = (int)alignSize(wm.step1(), VEC_ALIGN);
+                Mat wm_buffer = Mat(numOutput, newcols, wm.type());
+                Mat wm_padding = wm_buffer.colRange(wm.cols, newcols);
+                wm_padding.setTo(Scalar::all(0.));
+                Mat wm_aligned = wm_buffer.colRange(0, wm.cols);
+                wm.copyTo(wm_aligned);
+                wm = wm_aligned;
+            }
+            weightsMat = wm;
+        }
+        else
+        {
+            // initialized in .forward()
+            weightsMat.release();
+        }
+
+        weightsMultipliers.assign(numOutput, 1.0);
+
+        Mat biasMat = hasBias() ? blobs[1].reshape(1, numOutput) : Mat();
+        biasvec.resize(numOutput+2);
+        if( biasMat.empty() )
+        {
+            for(int i = 0; i < numOutput; i++ )
+                biasvec[i] = 0.f;
+        }
+        else
+        {
+            for(int i = 0; i < numOutput; i++ )
+                biasvec[i] = biasMat.at<float>(i);
+        }
+#ifdef HAVE_OPENCL
+        convolutionOp.release();
+#endif
+    }
+
+    bool setActivation(const Ptr<ActivationLayer>& layer) CV_OVERRIDE
+    {
+        if ((!activ.empty() && !layer.empty()) || blobs.empty())
+            return false;
+
         activ = layer;
         if (activ.empty())
             reluslope.clear();
@@ -231,55 +399,75 @@ public:
         newActiv = true;
         activType = OCL4DNN_CONV_FUSED_ACTIV_NONE;
 
-        if (preferableTarget == DNN_TARGET_OPENCL)
+        if (IS_DNN_OPENCL_TARGET(preferableTarget))
         {
             Ptr<PowerLayer> activ_power = activ.dynamicCast<PowerLayer>();
             if (!activ_power.empty())
             {
+                if (activ_power->scale != 1.0f)  // not supported well by implementation, #17964
+                {
+                    // FIXIT no way to check number of blobs (like, eltwise input)
+                    CV_LOG_DEBUG(NULL, "DNN/OpenCL: can't configure Power activation (scale != 1.0f)");
+                    activ.release();
+                    newActiv = false;
+                    return false;
+                }
                 if (activ_power->scale != 1.f || activ_power->shift != 0.f)
-                    newWeightAndBias = true;
-
-                if (activ_power->scale != 1.f)
-                    weightsMat.release();
+                {
+                    const int outCh = blobs[0].size[0];
+                    fuseWeights(Mat(1, outCh, CV_32F, Scalar(activ_power->scale)),
+                                Mat(1, outCh, CV_32F, Scalar(activ_power->shift)));
+                }
 
                 power = activ_power->power;
                 activType = OCL4DNN_CONV_FUSED_ACTIV_POWER;
+            }
+            Ptr<TanHLayer> activ_tanh = activ.dynamicCast<TanHLayer>();
+            if (!activ_tanh.empty())
+            {
+                activType = OCL4DNN_CONV_FUSED_ACTIV_TANH;
             }
         }
 #endif
         return !activ.empty();
     }
 
-    bool setBatchNorm(const Ptr<BatchNormLayer>& layer )
+    void fuseWeights(const Mat& w_, const Mat& b_) CV_OVERRIDE
     {
-        // for now the scale layer followed by the batch norm cannot be fused, only vice versa.
-        if( !scaleLayer.empty() )
-            return false;
-        bnorm = layer;
-        // we will need to re-compute the weights with the batch
-        // norm coefficients taken into account
-        weightsMat.release();
-#ifdef HAVE_OPENCL
-        newWeightAndBias = true;
-        fusedBias = false;
-#endif
-        return !bnorm.empty();
+        // Convolution weights have OIHW data layout. Parameters fusion in case of
+        // (conv(I) + b1 ) * w + b2
+        // means to replace convolution's weights to [w*conv(I)] and bias to [b1 * w + b2]
+        const int outCn = weightsMat.size[0];
+        Mat w = w_.total() == 1 ? Mat(1, outCn, CV_32F, Scalar(w_.at<float>(0))) : w_;
+        Mat b = b_.total() == 1 ? Mat(1, outCn, CV_32F, Scalar(b_.at<float>(0))) : b_;
+        CV_Assert_N(!weightsMat.empty(), biasvec.size() == outCn + 2,
+                    w.empty() || outCn == w.total(), b.empty() || outCn == b.total());
+
+        if (!w.empty())
+        {
+            // Keep origin weights unchanged.
+            if (weightsMat.data == blobs[0].data)
+                weightsMat = weightsMat.clone();
+
+            Mat originWeights = blobs[0].reshape(1, outCn);
+            for (int i = 0; i < outCn; ++i)
+            {
+                double wi = w.at<float>(i);
+                weightsMultipliers[i] *= wi;
+                cv::multiply(originWeights.row(i), weightsMultipliers[i], weightsMat.row(i));
+                biasvec[i] *= wi;
+            }
+        }
+
+        if (!b.empty())
+        {
+            for (int i = 0; i < outCn; ++i)
+                biasvec[i] += b.at<float>(i);
+        }
+        biasvec[outCn] = biasvec[outCn+1] = biasvec[outCn-1];
     }
 
-    bool setScale(const Ptr<ScaleLayer>& layer)
-    {
-        scaleLayer = layer;
-        // we will need to re-compute the weights with the scaling
-        // coefficients taken into account
-        weightsMat.release();
-#ifdef HAVE_OPENCL
-        newWeightAndBias = true;
-        fusedBias = false;
-#endif
-        return !scaleLayer.empty();
-    }
-
-    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs)
+    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs) CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         Halide::Buffer<float> inputBuffer = halideBuffer(inputs[0]);
@@ -327,6 +515,101 @@ public:
         return Ptr<BackendNode>();
     }
 
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> > &inputs,
+                                        const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
+    {
+        CV_Assert_N(inputs.size() >= 1, nodes.size() >= 1);
+        auto& ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+        std::vector<size_t> dims = ieInpNode->get_shape();
+        CV_Check(dims.size(), dims.size() >= 3 && dims.size() <= 5, "");
+        std::shared_ptr<ngraph::Node> ieWeights = nodes.size() > 1 ? nodes[1].dynamicCast<InfEngineNgraphNode>()->node : nullptr;
+        if (nodes.size() > 1)
+            CV_Assert(ieWeights);  // dynamic_cast should not fail
+        const int inpCn = dims[1];
+        const int inpGroupCn = nodes.size() > 1 ? ieWeights->get_shape()[1] : blobs[0].size[1];
+        const int group = inpCn / inpGroupCn;
+
+        std::vector<size_t> kernel_shape;
+        if (group != 1)
+        {
+            kernel_shape.push_back(group);
+        }
+        kernel_shape.push_back(numOutput / group);
+        kernel_shape.push_back(inpCn / group);
+        std::copy(kernel_size.begin(), kernel_size.end(), back_inserter(kernel_shape));
+
+        if (nodes.size() == 1)
+        {
+            ieWeights = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, kernel_shape, blobs[0].data);
+            if (fusedWeights)
+            {
+                if (weightsMat.isContinuous())
+                {
+                    ieWeights = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, kernel_shape, weightsMat.data);
+                }
+                else
+                {
+                    Mat newWeights;
+                    Mat cvWeights = weightsMat.colRange(0, blobs[0].total() / numOutput);
+                    cvWeights.copyTo(newWeights);
+                    ieWeights = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, kernel_shape, newWeights.data);
+                }
+            }
+        }
+        else
+        {
+            auto shape = std::make_shared<ngraph::op::Constant>(ngraph::element::i64,
+                             ngraph::Shape{kernel_shape.size()}, std::vector<int64_t>(kernel_shape.begin(), kernel_shape.end()));
+            ieWeights  = std::make_shared<ngraph::op::v1::Reshape>(ieWeights, shape, true);
+        }
+
+        ngraph::op::PadType pad_type = ngraph::op::PadType::EXPLICIT;
+        if (!padMode.empty())
+            pad_type = padMode == "VALID" ? ngraph::op::PadType::VALID : ngraph::op::PadType::SAME_UPPER;
+
+        std::shared_ptr<ngraph::Node> conv_node;
+        if (group != 1) {
+            conv_node = std::make_shared<ngraph::op::v1::GroupConvolution>(
+                                ieInpNode, ieWeights,
+                                ngraph::Strides(strides),
+                                ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(pads_begin.begin(), pads_begin.end())),
+                                ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(pads_end.begin(),   pads_end.end())),
+                                ngraph::Strides(dilations),
+                                pad_type);
+        } else {
+            conv_node = std::make_shared<ngraph::op::v1::Convolution>(
+                                ieInpNode, ieWeights,
+                                ngraph::Strides(strides),
+                                ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(pads_begin.begin(), pads_begin.end())),
+                                ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(pads_end.begin(), pads_end.end())),
+                                ngraph::Strides(dilations),
+                                pad_type);
+        }
+
+        if (hasBias() || fusedBias || nodes.size() == 3)
+        {
+            std::vector<size_t> shape(conv_node->get_shape().size(), 1);
+            shape[1] = conv_node->get_shape()[1];
+            std::shared_ptr<ngraph::Node> bias;
+            if (nodes.size() == 3)
+            {
+                auto bias_shape = std::make_shared<ngraph::op::Constant>(ngraph::element::i64,
+                                    ngraph::Shape{shape.size()}, std::vector<int64_t>(shape.begin(), shape.end()));
+                bias = std::make_shared<ngraph::op::v1::Reshape>(nodes[2].dynamicCast<InfEngineNgraphNode>()->node, bias_shape, true);
+            }
+            else
+            {
+                bias = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, ngraph::Shape(shape), biasvec.data());
+            }
+            auto conv_bias = std::make_shared<ngraph::op::v1::Add>(conv_node, bias, ngraph::op::AutoBroadcastType::NUMPY);
+            return Ptr<BackendNode>(new InfEngineNgraphNode(conv_bias));
+        }
+        return Ptr<BackendNode>(new InfEngineNgraphNode(conv_node));
+    }
+#endif  // HAVE_DNN_NGRAPH
+
     class ParallelConv : public cv::ParallelLoopBody
     {
     public:
@@ -335,8 +618,8 @@ public:
         const Mat* input_;
         const Mat* weights_;
         Mat* output_;
-        int outShape[4];
-        Size kernel_, pad_, stride_, dilation_;
+        int outShape[4]; // used only for conv2d
+        std::vector<size_t> kernel_size, pads_begin, pads_end, strides, dilations;
         int ngroups_, nstripes_;
         std::vector<int> ofstab_;
         const std::vector<float>* biasvec_;
@@ -345,54 +628,111 @@ public:
         bool is1x1_;
         bool useAVX;
         bool useAVX2;
+        bool useAVX512;
+        int blk_size_cn;
 
         ParallelConv()
             : input_(0), weights_(0), output_(0), ngroups_(0), nstripes_(0),
-              biasvec_(0), reluslope_(0), activ_(0), is1x1_(false), useAVX(false), useAVX2(false)
+              biasvec_(0), reluslope_(0), activ_(0), is1x1_(false), useAVX(false), useAVX2(false), useAVX512(false)
+            , blk_size_cn(0)
         {}
 
         static void run( const Mat& input, Mat& output, const Mat& weights,
                          const std::vector<float>& biasvec,
                          const std::vector<float>& reluslope,
-                         Size kernel, Size pad, Size stride, Size dilation,
+                         const std::vector<size_t>& kernel_size, const std::vector<size_t>& strides,
+                         const std::vector<size_t>& pads_begin, const std::vector<size_t>& pads_end,
+                         const std::vector<size_t>& dilations,
                          const ActivationLayer* activ, int ngroups, int nstripes )
         {
-            CV_Assert( input.dims == 4 && output.dims == 4,
+            size_t karea = std::accumulate(kernel_size.begin(), kernel_size.end(),
+                                           1, std::multiplies<size_t>());
+            bool isConv1D = input.dims == 3;
+            bool isConv2D = input.dims == 4;
+            bool isConv3D = input.dims == 5;
+            CV_CheckEQ(static_cast<int>(kernel_size.size()), input.dims - 2, "");
+            CV_Assert_N(input.dims == output.dims,
                        input.size[0] == output.size[0],
                        weights.rows == output.size[1],
-                       weights.cols == (input.size[1]/ngroups)*kernel.width*kernel.height,
+                       weights.cols == (input.size[1]/ngroups)*karea,
                        input.type() == output.type(),
                        input.type() == weights.type(),
-                       input.type() == CV_32F,
+                       input.type() == CV_32FC1,
                        input.isContinuous(),
                        output.isContinuous(),
                        biasvec.size() == (size_t)output.size[1]+2);
+            CV_Check(weights.step1(), weights.step1() % VEC_ALIGN == 0, "");
+            CV_CheckType(weights.type(), CV_32FC1, "");
             ParallelConv p;
 
             p.input_ = &input;
             p.weights_ = &weights;
             p.output_ = &output;
-            for( int i = 0; i < 4; i++ ) p.outShape[i] = output.size[i];
+            int max_ind = isConv1D? 3: 4;
+            for( int i = 0; i < max_ind; i++ ) p.outShape[i] = output.size[i];
             p.outShape[1] /= ngroups;
-            p.kernel_ = kernel; p.pad_ = pad; p.stride_ = stride; p.dilation_ = dilation;
+
+            p.kernel_size = kernel_size; p.strides = strides; p.dilations = dilations;
+            p.pads_begin = pads_begin; p.pads_end = pads_end;
+
             p.ngroups_ = ngroups;
             p.nstripes_ = nstripes;
 
-            int inpCnAll = input.size[1], width = input.size[3], height = input.size[2];
+            int inpCnAll = input.size[1];
+            int depth = (input.dims == 5) ? input.size[2] : 1;
+            int width = input.size[input.dims - 1];
+            int height = isConv1D? 1 : input.size[input.dims - 2];
             int inpCn = inpCnAll / ngroups;
-            p.is1x1_ = kernel == Size(0,0) && pad == Size(0, 0);
-            p.useAVX = checkHardwareSupport(CPU_AVX);
-            p.useAVX2 = checkHardwareSupport(CPU_AVX2);
 
-            int ncn = std::min(inpCn, (int)BLK_SIZE_CN);
-            p.ofstab_.resize(kernel.width*kernel.height*ncn);
+            p.is1x1_ = (isConv2D && kernel_size[0] == 1 && kernel_size[1] == 1 &&
+                       pads_begin[0] == 0  && pads_begin[1] == 0) ||
+                       (isConv1D && pads_begin[0] == 0 && kernel_size[0] == 1);
+
+            p.useAVX    = checkHardwareSupport(CPU_AVX)  && isConv2D;
+            p.useAVX2   = checkHardwareSupport(CPU_AVX2) && isConv2D;
+            p.useAVX512 = CV_CPU_HAS_SUPPORT_AVX512_SKX  && isConv2D;
+
+            int kernel_d = isConv3D? kernel_size[0] : 1;
+            int kernel_h = isConv1D? 1 : kernel_size[kernel_size.size() - 2];
+            int kernel_w = kernel_size.back();
+
+            int blk_size_cn0 = cvCeil(800./(kernel_w*kernel_h));
+            int ncn = 16;
+            while (ncn*2 < blk_size_cn0 && ncn < inpCn)
+                ncn *= 2;
+            ncn = std::min(ncn, inpCn);
+            p.blk_size_cn = ncn;
+
+            int dil_d = isConv3D? dilations[0] : 1;
+            int dil_h = isConv1D? 1 : dilations[dilations.size() - 2];
+            int dil_w = dilations.back();
+
+            p.ofstab_.resize(karea * ncn);
             int* ofstab = &p.ofstab_[0];
 
-            for( int k = 0; k < ncn; k++ )
-                for( int k_r = 0; k_r < kernel.height; k_r++ )
-                    for( int k_c = 0; k_c < kernel.width; k_c++ )
-                        ofstab[(k*kernel.height + k_r)*kernel.width + k_c] =
-                        (k*height + k_r*dilation.height)*width + k_c*dilation.width;
+            if (isConv1D)
+            {
+                for( int k = 0; k < ncn; k++ )
+                    for( int k_c = 0; k_c < kernel_w; k_c++ )
+                        ofstab[k*kernel_w + k_c] = k*width + k_c*dil_w;
+            }
+            else if (isConv2D)
+            {
+                for( int k = 0; k < ncn; k++ )
+                    for( int k_r = 0; k_r < kernel_h; k_r++ )
+                        for( int k_c = 0; k_c < kernel_w; k_c++ )
+                            ofstab[(k*kernel_h + k_r)*kernel_w + k_c] =
+                                   (k*height + k_r*dil_h)*width + k_c*dil_w;
+            }
+            else
+            {
+                for( int k = 0; k < ncn; k++ )
+                    for (int k_d = 0; k_d < kernel_d; k_d++)
+                        for( int k_r = 0; k_r < kernel_h; k_r++ )
+                            for( int k_c = 0; k_c < kernel_w; k_c++ )
+                                ofstab[(k*kernel_d*kernel_h + k_d*kernel_h + k_r)*kernel_w + k_c] =
+                                       (k*depth*height + k_d*dil_d*height + k_r*dil_h)*width + k_c*dil_w;
+            }
 
             p.biasvec_ = &biasvec;
             p.reluslope_ = &reluslope;
@@ -401,31 +741,63 @@ public:
             parallel_for_(Range(0, nstripes), p, nstripes);
         }
 
-        virtual void operator ()(const Range &r0) const
+        virtual void operator ()(const Range &r0) const CV_OVERRIDE
         {
             const int valign = ConvolutionLayerImpl::VEC_ALIGN;
             int ngroups = ngroups_, batchSize = input_->size[0]*ngroups;
-            int outW = output_->size[3], outH = output_->size[2], outCn = output_->size[1]/ngroups;
-            int width = input_->size[3], height = input_->size[2], inpCn = input_->size[1]/ngroups;
-            int nstripes = nstripes_;
-            int kernel_w = kernel_.width, kernel_h = kernel_.height;
-            int pad_w = pad_.width, pad_h = pad_.height;
-            int stride_w = stride_.width, stride_h = stride_.height;
-            int dilation_w = dilation_.width, dilation_h = dilation_.height;
-            int karea = kernel_w*kernel_h;
-            int i, j, k;
-            size_t inpPlaneSize = width*height;
-            size_t outPlaneSize = outW*outH;
+            bool isConv1D = input_->dims == 3;
+            bool isConv2D = input_->dims == 4;
+            bool isConv3D = input_->dims == 5;
+
+            int outW = output_->size[output_->dims - 1];
+            int outH = isConv1D? 1 : output_->size[output_->dims - 2];
+            int outCn = output_->size[1]/ngroups;
+
+            int depth = isConv3D? input_->size[2] : 1;
+            int height = isConv1D? 1 : input_->size[input_->dims - 2];
+            int width = input_->size[input_->dims - 1];
+            int inpCn = input_->size[1]/ngroups;
+
+            const int nstripes = nstripes_;
+
+            int kernel_d = isConv3D? kernel_size[0] : 1;
+            int kernel_h = isConv1D? 1 : kernel_size[kernel_size.size() - 2];
+            int kernel_w = kernel_size.back();
+            int karea = kernel_w*kernel_h*kernel_d;
+
+            int pad_d = isConv3D? pads_begin[0] : 0;
+            int pad_t = isConv1D? 0 : pads_begin[pads_begin.size() - 2];
+            int pad_l = pads_begin.back();
+
+            int stride_d = isConv3D? strides[0] : 0;
+            int stride_h = isConv1D? 0 : strides[strides.size() - 2];
+            int stride_w = strides.back();
+
+            int dilation_d = isConv3D? dilations[0] : 1;
+            int dilation_h = isConv1D? 1 : dilations[dilations.size() - 2];
+            int dilation_w = dilations.back();
+
+            int i, j, k, d;
+            int inpPlaneSize = (int)input_->total(2);
+            int outPlaneSize = (int)output_->total(2);
             bool is1x1 = is1x1_;
 
             int stripesPerSample;
-            size_t stripeSize;
+            int stripeSize;
             Range r = r0;
+            bool depthWiseConvolution = !is1x1 && isConv2D && ngroups > 1 && inpCn == 1 &&
+                outCn == 1 && kernel_d == 1 && dilation_d == 1 && stride_d == 0 && pad_d == 0 &&
+                width >= 16 + dilation_w*(kernel_w - 1);
+            // for now only 3x3 depth-wise convolutions are supported
+            depthWiseConvolution = depthWiseConvolution && kernel_w == 3 && kernel_h == 3 &&
+                // computing at most 1 pixel from each side can involve padding
+                max(stride_w, dilation_w) >= pad_l && max(stride_h, dilation_h) >= pad_t &&
+                pad_l <= 1 && pad_t <= 1;
 
-            if( nstripes >= batchSize*2 )
+            if( !depthWiseConvolution && nstripes >= batchSize*2 )
             {
                 stripesPerSample = nstripes/batchSize;
-                stripeSize = alignSize((outPlaneSize + stripesPerSample - 1)/stripesPerSample, valign);
+                stripeSize = (int)alignSize((outPlaneSize + stripesPerSample - 1)/stripesPerSample, valign);
                 stripeSize = std::min(stripeSize, outPlaneSize);
             }
             else
@@ -434,7 +806,6 @@ public:
                 int samplesPerStripe = std::max((batchSize + nstripes - 1)/nstripes, 1);
                 r.start *= samplesPerStripe;
                 r.end *= samplesPerStripe;
-                nstripes *= samplesPerStripe;
                 stripeSize = outPlaneSize;
             }
 
@@ -445,20 +816,29 @@ public:
             const float* biasptr_ = &biasvec_->at(0);
             const float* reluptr_ = reluslope_->empty() ? 0 : &reluslope_->at(0);
             float* data_out0_ = output_->ptr<float>();
-            size_t rowbufsz = (size_t)karea*BLK_SIZE_CN*BLK_SIZE;
-            AutoBuffer<float> rowbuf0_(rowbufsz + valign);
-            float* rowbuf0 = alignPtr((float*)rowbuf0_, (int)(valign*sizeof(float)));
+            AutoBuffer<float> rowbuf0_;
+            float* rowbuf0 = 0;
+            bool use_rowbuf = !depthWiseConvolution;
+            int blk_size = depthWiseConvolution ? outPlaneSize : min((int)BLK_SIZE, stripeSize);
 
-            // we clear the buffer once; ultimately, it lets us to avoid
-            // tail processing after running the unrolled/vectorized loop.
-            // the main idea is to make sure that the tail (a.k.a. padding) of each row
-            // (i.e. the elements with indices between vsz=karea*ncn and vsz_a)
-            // does not contain NaNs or Infs. Because the padding in the weights
-            // matrix is explicitly initialized with 0's, we handle all other
-            // cases nicely, i.e. we can skip expliciting re-initialization
-            // of the padding - we just retain elements from the previous iteration
-            // of the loop over channels (cn0).
-            memset(rowbuf0, 0, rowbufsz*sizeof(rowbuf0[0]) );
+            // im2row buffer is not used for depth-wise convolution
+            if(use_rowbuf)
+            {
+                size_t rowbufsz = alignSize(karea*blk_size_cn, valign)*min((int)BLK_SIZE, blk_size);
+                //printf("karea=%d, blk_size_cn=%d, rowbufsz=%d, stripeSize=%d\n", karea, blk_size_cn, (int)rowbufsz, stripeSize);
+                rowbuf0_.allocate(rowbufsz + valign);
+                rowbuf0 = alignPtr(rowbuf0_.data(), (int)(valign*sizeof(float)));
+                // we clear the buffer once; ultimately, it lets us to avoid
+                // tail processing after running the unrolled/vectorized loop.
+                // the main idea is to make sure that the tail (a.k.a. padding) of each row
+                // (i.e. the elements with indices between vsz=karea*ncn and vsz_a)
+                // does not contain NaNs or Infs. Because the padding in the weights
+                // matrix is explicitly initialized with 0's, we handle all other
+                // cases nicely, i.e. we can skip expliciting re-initialization
+                // of the padding - we just retain elements from the previous iteration
+                // of the loop over channels (cn0).
+                memset(rowbuf0, 0, rowbufsz*sizeof(rowbuf0[0]) );
+            }
 
             for( int stripe = r.start; stripe < r.end; stripe++ )
             {
@@ -473,84 +853,224 @@ public:
                 const float* wptr_orig = wptr_orig_ + wstep*startOutCn;
                 const float* biasptr = biasptr_ + startOutCn;
 
-                for( int cn0 = 0; cn0 < inpCn; cn0 += BLK_SIZE_CN )
+                for( int cn0 = 0; cn0 < inpCn; cn0 += blk_size_cn )
                 {
-                    int cn1 = std::min(cn0 + BLK_SIZE_CN, inpCn);
+                    int cn1 = std::min(cn0 + blk_size_cn, inpCn);
                     int ncn = cn1 - cn0, vsz = karea*ncn;
                     int vsz_a = (int)alignSize(vsz, valign);
                     const float* wptr = wptr_orig + cn0*karea;
                     // we apply [Channels][P]ReLU (if any) during the final pass only.
                     const float* relu = cn1 == inpCn && reluptr_ ? reluptr_ + startOutCn : 0;
 
-                    for( int ofs0 = stripeStart; ofs0 < stripeEnd; ofs0 += BLK_SIZE )
+                    for( int ofs0 = stripeStart; ofs0 < stripeEnd; ofs0 += blk_size )
                     {
-                        int ofs, ofs1 = std::min(ofs0 + BLK_SIZE, stripeEnd);
-                        int out_i = ofs0 / outW;
-                        int out_j = ofs0 - out_i * outW;
+                        int ofs, ofs1 = std::min(ofs0 + blk_size, stripeEnd);
+                        int bsz = ofs1 - ofs0;
+
+                        int out_d = ofs0 / (outH * outW);
+                        int out_i = (ofs0 - out_d * outH * outW) / outW;
+                        int out_j = ofs0 % outW;
+
+                        if (depthWiseConvolution)
+                        {
+                            CV_Assert(out_i == 0 && out_j == 0);
+                            int in_d = out_d * stride_d - pad_d;
+                            const float* inptr_ = data_inp0 + (cn0*depth*height + in_d*height)*width;
+                            float* outptr_ = data_out0 + ofs0;
+
+                        #if CV_TRY_AVX2
+                            if(useAVX2)
+                                opt_AVX2::fastDepthwiseConv(wptr, kernel_h, kernel_w,
+                                    stride_h, stride_w, dilation_h, dilation_w, pad_t, pad_l,
+                                    biasptr, relu, inptr_, height, width, outptr_, out_d, outH, outW);
+                            else
+                        #endif
+                        #if CV_TRY_AVX
+                            if(useAVX)
+                                opt_AVX::fastDepthwiseConv(wptr, kernel_h, kernel_w,
+                                    stride_h, stride_w, dilation_h, dilation_w, pad_t, pad_l,
+                                    biasptr, relu, inptr_, height, width, outptr_, out_d, outH, outW);
+                            else
+                        #endif
+                            {
+                                const float w00_ = wptr[0], w01_ = wptr[1], w02_ = wptr[2],
+                                            w10 = wptr[3], w11 = wptr[4], w12 = wptr[5],
+                                            w20_ = wptr[6], w21_ = wptr[7], w22_ = wptr[8];
+                                int outW1 = min(outW, (width - dilation_w*(kernel_w - 1) + pad_l)/stride_w);
+                                float relu_coeff = relu ? relu[out_d] : 1.f, bias = biasptr[out_d];
+
+                                for (int out_i = 0; out_i < outH; out_i++)
+                                {
+                                    int in_i = out_i * stride_h - pad_t, out_j = 0;
+                                    const float* imgptr0 = inptr_ + in_i*width;
+                                    const float* imgptr1 = imgptr0 + dilation_h*width;
+                                    const float* imgptr2 = imgptr0 + (dilation_h*2)*width;
+                                    float out, w00 = w00_, w01 = w01_, w02 = w02_;
+                                    float w20 = w20_, w21 = w21_, w22 = w22_;
+                                    if (in_i < 0)
+                                    {
+                                        w00 = w01 = w02 = 0.f;
+                                        imgptr0 = imgptr1;
+                                    }
+                                    else if (in_i + dilation_h*(kernel_h-1) >= height)
+                                    {
+                                        w20 = w21 = w22 = 0.f;
+                                        imgptr2 = imgptr1;
+                                    }
+                                    float* outptr = outptr_ + out_i*outW;
+                                    if (pad_l > 0)
+                                    {
+                                        out = imgptr0[0]*w01 + imgptr0[dilation_w]*w02 +
+                                              imgptr1[0]*w11 + imgptr1[dilation_w]*w12 +
+                                              imgptr2[0]*w21 + imgptr2[dilation_w]*w22 + bias;
+                                        if (relu)
+                                            out = out > 0.f ? out : out*relu_coeff;
+                                        outptr[0] = out;
+                                        out_j = 1;
+                                    }
+
+                                #if CV_SIMD
+                                    // maybe with AVX or AVX512 strided depthwise convolution
+                                    // can be accelerated with vector code, but with 4xfloat vectors
+                                    // it's hardly the case
+                                    if( stride_w == 1 )
+                                    {
+                                        const int VECSZ = v_float32::nlanes;
+                                        const int out_delta = VECSZ/stride_w;
+                                        v_float32 vw00 = vx_setall_f32(w00), vw01 = vx_setall_f32(w01), vw02 = vx_setall_f32(w02),
+                                                  vw10 = vx_setall_f32(w10), vw11 = vx_setall_f32(w11), vw12 = vx_setall_f32(w12),
+                                                  vw20 = vx_setall_f32(w20), vw21 = vx_setall_f32(w21), vw22 = vx_setall_f32(w22);
+                                        v_float32 z = vx_setzero_f32(), vbias = vx_setall_f32(bias), vrc = vx_setall_f32(relu_coeff);
+                                        for( ; out_j < outW1; out_j += out_delta )
+                                        {
+                                            if (out_j + out_delta > outW1)
+                                            {
+                                                if (out_j <= pad_l)
+                                                    break;
+                                                out_j = outW1 - out_delta;
+                                            }
+                                            int in_j = out_j * stride_w - pad_l;
+                                            v_float32 v00 = vx_load(imgptr0 + in_j),
+                                                      v01 = vx_load(imgptr0 + in_j + dilation_w),
+                                                      v02 = vx_load(imgptr0 + in_j + dilation_w*2),
+                                                      v10 = vx_load(imgptr1 + in_j),
+                                                      v11 = vx_load(imgptr1 + in_j + dilation_w),
+                                                      v12 = vx_load(imgptr1 + in_j + dilation_w*2),
+                                                      v20 = vx_load(imgptr2 + in_j),
+                                                      v21 = vx_load(imgptr2 + in_j + dilation_w),
+                                                      v22 = vx_load(imgptr2 + in_j + dilation_w*2);
+
+                                            v_float32 vout = v00*vw00 + v01*vw01 + v02*vw02 +
+                                                             v10*vw10 + v11*vw11 + v12*vw12 +
+                                                             v20*vw20 + v21*vw21 + v22*vw22 + vbias;
+                                            if (relu)
+                                                vout = v_select(vout > z, vout, vout*vrc);
+                                            v_store(outptr + out_j, vout);
+                                        }
+                                    }
+                                #endif
+                                    for (; out_j < outW1; out_j++)
+                                    {
+                                        int in_j = out_j * stride_w - pad_l;
+                                        out = imgptr0[in_j]*w00 + imgptr0[in_j + dilation_w]*w01 + imgptr0[in_j + dilation_w*2]*w02 +
+                                              imgptr1[in_j]*w10 + imgptr1[in_j + dilation_w]*w11 + imgptr1[in_j + dilation_w*2]*w12 +
+                                              imgptr2[in_j]*w20 + imgptr2[in_j + dilation_w]*w21 + imgptr2[in_j + dilation_w*2]*w22 + bias;
+                                        if (relu)
+                                            out = out > 0.f ? out : out*relu_coeff;
+                                        outptr[out_j] = out;
+                                    }
+
+                                    for (; out_j < outW; out_j++ )
+                                    {
+                                        int in_j0 = out_j * stride_w - pad_l, in_j1 = in_j0 + dilation_w, in_j2 = in_j0 + dilation_w*2;
+                                        float s0 = 1.f, s1 = 1.f, s2 = 1.f;
+                                        if (in_j0 >= width)
+                                        {
+                                            in_j0 = 0;
+                                            s0 = 0.f;
+                                        }
+                                        if (in_j1 >= width)
+                                        {
+                                            in_j1 = 0;
+                                            s1 = 0.f;
+                                        }
+                                        if (in_j2 >= width)
+                                        {
+                                            in_j2 = 0;
+                                            s2 = 0.f;
+                                        }
+                                        out = imgptr0[in_j0]*w00*s0 + imgptr0[in_j1]*w01*s1 + imgptr0[in_j2]*w02*s2 +
+                                              imgptr1[in_j0]*w10*s0 + imgptr1[in_j1]*w11*s1 + imgptr1[in_j2]*w12*s2 +
+                                              imgptr2[in_j0]*w20*s0 + imgptr2[in_j1]*w21*s1 + imgptr2[in_j2]*w22*s2 + bias;
+                                        if (relu)
+                                            out = out > 0.f ? out : out*relu_coeff;
+                                        outptr[out_j] = out;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
 
                         // do im2row for a part of input tensor
                         float* rowbuf = rowbuf0;
-                        for( ofs = ofs0; ofs < ofs1; out_j = 0, ++out_i )
+
+                        if (isConv1D)
                         {
-                            int delta = std::min(ofs1 - ofs, outW - out_j);
-                            int out_j1 = out_j + delta;
-                            int in_i = out_i * stride_h - pad_h;
-                            int in_j = out_j * stride_w - pad_w;
-                            const float* imgptr = data_inp0 + (cn0*height + in_i)*width + in_j;
-                            ofs += delta;
-
-                            // do im2row for a part of input tensor
-                            if( is1x1 )
+                            for( ofs = ofs0; ofs < ofs1; out_j = 0, ++out_i )
                             {
-                                for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w )
-                                {
-                                    for( k = 0; k < vsz; k++ )
-                                        rowbuf[k] = imgptr[k*inpPlaneSize];
-                                }
-                            }
-                            else
-                            {
-                                bool ok_i = 0 <= in_i && in_i < height - (kernel_h-1)*dilation_h;
-                                int i0 = std::max(0, (-in_i + dilation_h-1)/dilation_h);
-                                int i1 = std::min(kernel_h, (height - in_i + dilation_h-1)/dilation_h);
+                                int delta = std::min(ofs1 - ofs, outW - out_j);
+                                int out_j1 = out_j + delta;
 
-                                for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w, in_j += stride_w )
+                                int in_j = out_j * stride_w - pad_l;
+                                const float* imgptr = data_inp0 + cn0*width + in_j;
+                                ofs += delta;
+
+                                // do im2row for a part of input tensor
+                                if( is1x1 )
                                 {
-                                    // this condition should be true for most of the tensor elements, i.e.
-                                    // most of the time the kernel aperture is inside the tensor X-Y plane.
-                                    if( ok_i && out_j + 2 <= out_j1 && 0 <= in_j && in_j + stride_w*2 <= width - (kernel_w-1)*dilation_w )
+                                    for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w )
                                     {
                                         for( k = 0; k < vsz; k++ )
-                                        {
-                                            int k1 = ofstab[k];
-                                            float v0 = imgptr[k1];
-                                            float v1 = imgptr[k1 + stride_w];
-                                            rowbuf[k] = v0;
-                                            rowbuf[k+vsz_a] = v1;
-                                        }
-                                        out_j++;
-                                        rowbuf += vsz_a;
-                                        imgptr += stride_w;
-                                        in_j += stride_w;
+                                            rowbuf[k] = imgptr[k*inpPlaneSize];
                                     }
-                                    else
+                                }
+                                else
+                                {
+                                    for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w, in_j += stride_w )
                                     {
-                                        int j0 = std::max(0, (-in_j + dilation_w-1)/dilation_w);
-                                        int j1 = std::min(kernel_w, (width - in_j + dilation_w-1)/dilation_w);
-
-                                        // here some non-continous sub-row of the row will not be
-                                        // filled from the tensor; we need to make sure that the uncovered
-                                        // elements are explicitly set to 0's. the easiest way is to
-                                        // set all the elements to 0's before the loop.
-                                        memset(rowbuf, 0, vsz*sizeof(rowbuf[0]));
-                                        for( k = 0; k < ncn; k++ )
+                                        // this condition should be true for most of the tensor elements, i.e.
+                                        // most of the time the kernel aperture is inside the tensor X-Y plane.
+                                        if( out_j + 2 <= out_j1 && 0 <= in_j && in_j + stride_w*2 <= width - (kernel_w-1)*dilation_w )
                                         {
-                                            for( i = i0; i < i1; i++ )
+                                            for( k = 0; k < vsz; k++ )
                                             {
-                                                for( j = j0; j < j1; j++ )
+                                                int k1 = ofstab[k];
+                                                float v0 = imgptr[k1];
+                                                float v1 = imgptr[k1 + stride_w];
+                                                rowbuf[k] = v0;
+                                                rowbuf[k+vsz_a] = v1;
+                                            }
+                                            out_j++;
+                                            rowbuf += vsz_a;
+                                            imgptr += stride_w;
+                                            in_j += stride_w;
+                                        }
+                                        else
+                                        {
+                                            int i0 = std::max(0, (-in_j + dilation_w-1)/dilation_w);
+                                            int i1 = std::min(kernel_w, (width - in_j + dilation_w-1)/dilation_w);
+
+                                            // here some non-continuous sub-row of the row will not be
+                                            // filled from the tensor; we need to make sure that the uncovered
+                                            // elements are explicitly set to 0's. the easiest way is to
+                                            // set all the elements to 0's before the loop.
+                                            memset(rowbuf, 0, vsz*sizeof(rowbuf[0]));
+                                            for( k = 0; k < ncn; k++ )
+                                            {
+                                                for( i = i0; i < i1; i++ )
                                                 {
-                                                    int imgofs = k*(width*height) + i*(dilation_h*width) + j*dilation_w;
-                                                    rowbuf[(k*kernel_h + i)*kernel_w + j] = imgptr[imgofs];
+                                                    int imgofs = k*width + i*dilation_w;
+                                                    rowbuf[k*kernel_w + i] = imgptr[imgofs];
                                                 }
                                             }
                                         }
@@ -558,10 +1078,177 @@ public:
                                 }
                             }
                         }
+                        else if (isConv2D)
+                        {
+                            if( is1x1 && stride_w == 1 && stride_h == 1 )
+                            {
+                                const float* imgptr = data_inp0 + (cn0*height + out_i)*width + out_j;
+                                for( int j = 0; j < bsz; j++, rowbuf += vsz_a )
+                                {
+                                    if( j + 4 <= bsz )
+                                    {
+                                        k = 0;
+                                    #if CV_SIMD128
+                                        for( ; k <= vsz - 4; k += 4 )
+                                        {
+                                            const float* inp = imgptr + j + k*inpPlaneSize;
+                                            v_float32x4 p0 = v_load(inp), p1 = v_load(inp + inpPlaneSize);
+                                            v_float32x4 p2 = v_load(inp + inpPlaneSize*2), p3 = v_load(inp + inpPlaneSize*3);
+                                            v_float32x4 r0, r1, r2, r3;
+                                            v_transpose4x4(p0, p1, p2, p3, r0, r1, r2, r3);
+                                            v_store(rowbuf + k, r0);
+                                            v_store(rowbuf + k + vsz_a, r1);
+                                            v_store(rowbuf + k + vsz_a*2, r2);
+                                            v_store(rowbuf + k + vsz_a*3, r3);
+                                        }
+                                    #endif
+                                        for( ; k < vsz; k++ )
+                                        {
+                                            const float* inp = imgptr + j + k*inpPlaneSize;
+                                            float v0 = inp[0], v1 = inp[1], v2 = inp[2], v3 = inp[3];
+                                            rowbuf[k] = v0;
+                                            rowbuf[k + vsz_a] = v1;
+                                            rowbuf[k + vsz_a*2] = v2;
+                                            rowbuf[k + vsz_a*3] = v3;
+                                        }
+                                        j += 3;
+                                        rowbuf += vsz_a*3;
+                                    }
+                                    else
+                                    {
+                                        for( k = 0; k < vsz; k++ )
+                                        {
+                                            rowbuf[k] = imgptr[j + k*inpPlaneSize];
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            for( ofs = ofs0; ofs < ofs1; out_j = 0, ++out_i )
+                            {
+                                int delta = std::min(ofs1 - ofs, outW - out_j);
+                                int out_j1 = out_j + delta;
 
+                                int in_i = out_i * stride_h - pad_t;
+                                int in_j = out_j * stride_w - pad_l;
+                                const float* imgptr = data_inp0 + (cn0*height + in_i)*width + in_j;
+                                ofs += delta;
+
+                                // do im2row for a part of input tensor
+                                if( is1x1 )
+                                {
+                                    for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w )
+                                    {
+                                        for( k = 0; k < vsz; k++ )
+                                            rowbuf[k] = imgptr[k*inpPlaneSize];
+                                    }
+                                }
+                                else
+                                {
+                                    bool ok_i = 0 <= in_i && in_i < height - (kernel_h-1)*dilation_h;
+                                    int i0 = std::max(0, (-in_i + dilation_h-1)/dilation_h);
+                                    int i1 = std::min(kernel_h, (height - in_i + dilation_h-1)/dilation_h);
+
+                                    for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w, in_j += stride_w )
+                                    {
+                                        // this condition should be true for most of the tensor elements, i.e.
+                                        // most of the time the kernel aperture is inside the tensor X-Y plane.
+                                        if( ok_i && out_j + 2 <= out_j1 && 0 <= in_j && in_j + stride_w*2 <= width - (kernel_w-1)*dilation_w )
+                                        {
+                                            for( k = 0; k < vsz; k++ )
+                                            {
+                                                int k1 = ofstab[k];
+                                                float v0 = imgptr[k1];
+                                                float v1 = imgptr[k1 + stride_w];
+                                                rowbuf[k] = v0;
+                                                rowbuf[k+vsz_a] = v1;
+                                            }
+                                            out_j++;
+                                            rowbuf += vsz_a;
+                                            imgptr += stride_w;
+                                            in_j += stride_w;
+                                        }
+                                        else
+                                        {
+                                            int j0 = std::max(0, (-in_j + dilation_w-1)/dilation_w);
+                                            int j1 = std::min(kernel_w, (width - in_j + dilation_w-1)/dilation_w);
+
+                                            // here some non-continuous sub-row of the row will not be
+                                            // filled from the tensor; we need to make sure that the uncovered
+                                            // elements are explicitly set to 0's. the easiest way is to
+                                            // set all the elements to 0's before the loop.
+                                            memset(rowbuf, 0, vsz*sizeof(rowbuf[0]));
+                                            for( k = 0; k < ncn; k++ )
+                                            {
+                                                for( i = i0; i < i1; i++ )
+                                                {
+                                                    for( j = j0; j < j1; j++ )
+                                                    {
+                                                        int imgofs = k*(width*height) + i*(dilation_h*width) + j*dilation_w;
+                                                        rowbuf[(k*kernel_h + i)*kernel_w + j] = imgptr[imgofs];
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            for( ofs = ofs0; ofs < ofs1; out_d += (out_i + 1) / outH, out_i = (out_i + 1) % outH, out_j = 0 )
+                            {
+                                int delta = std::min(ofs1 - ofs, outW - out_j);
+                                int out_j1 = out_j + delta;
+
+                                int in_d = out_d * stride_d - pad_d;
+                                int in_i = out_i * stride_h - pad_t;
+                                int in_j = out_j * stride_w - pad_l;
+                                const float* imgptr = data_inp0 + (cn0*depth*height + in_d*height + in_i)*width + in_j;
+                                ofs += delta;
+
+                                int d0 = std::max(0, (-in_d + dilation_d - 1) / dilation_d);
+                                int d1 = std::min(kernel_d, (depth - in_d + dilation_d - 1) / dilation_d);
+
+                                int i0 = std::max(0, (-in_i + dilation_h-1)/dilation_h);
+                                int i1 = std::min(kernel_h, (height - in_i + dilation_h-1)/dilation_h);
+
+                                for( ; out_j < out_j1; out_j++, rowbuf += vsz_a, imgptr += stride_w, in_j += stride_w )
+                                {
+                                    int j0 = std::max(0, (-in_j + dilation_w-1)/dilation_w);
+                                    int j1 = std::min(kernel_w, (width - in_j + dilation_w-1)/dilation_w);
+
+                                    // here some non-continuous sub-row of the row will not be
+                                    // filled from the tensor; we need to make sure that the uncovered
+                                    // elements are explicitly set to 0's. the easiest way is to
+                                    // set all the elements to 0's before the loop.
+                                    memset(rowbuf, 0, vsz*sizeof(rowbuf[0]));
+                                    for( k = 0; k < ncn; k++ )
+                                    {
+                                        for ( d = d0; d < d1; d++)
+                                        {
+                                            for( i = i0; i < i1; i++ )
+                                            {
+                                                for( j = j0; j < j1; j++ )
+                                                {
+                                                    int imgofs = k*(depth*width*height) + d*dilation_d*width*height + i*(dilation_h*width) + j*dilation_w;
+                                                    rowbuf[(k*kernel_d*kernel_h + d*kernel_h + i)*kernel_w + j] = imgptr[imgofs];
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         // now compute dot product of the weights
                         // and im2row-transformed part of the tensor
-                        int bsz = ofs1 - ofs0;
+                    #if CV_TRY_AVX512_SKX
+                        /* AVX512 convolution requires an alignment of 16, and ROI is only there for larger vector sizes */
+                        if(useAVX512)
+                            opt_AVX512_SKX::fastConv(wptr, wstep, biasptr, rowbuf0, data_out0 + ofs0,
+                                          outShape, bsz, vsz, vsz_a, relu, cn0 == 0);
+                        else
+                    #endif
                     #if CV_TRY_AVX2
                         if(useAVX2)
                             opt_AVX2::fastConv(wptr, wstep, biasptr, rowbuf0, data_out0 + ofs0,
@@ -592,8 +1279,9 @@ public:
 
                             if( relu )
                             {
-                                r0 = relu[i];
-                                r1 = relu[i+1];
+                                r0 = relu[i]; r1 = relu[i+1];
+                                if( i+1 >= outCn )
+                                    r1 = r0;
                             }
 
                             int j = 0;
@@ -622,19 +1310,22 @@ public:
                                             vs12 = v_setzero_f32(), vs13 = v_setzero_f32();
                                 for( k = 0; k < vsz; k += 4, rptr += 4 )
                                 {
-                                    v_float32x4 w0 = v_load_aligned(wptr0 + k), w1 = v_load_aligned(wptr1 + k);
-                                    v_float32x4 r0 = v_load_aligned(rptr), r1 = v_load_aligned(rptr + vsz_a),
-                                                r2 = v_load_aligned(rptr + vsz_a*2), r3 = v_load_aligned(rptr + vsz_a*3);
+                                    v_float32x4 w0 = v_load_aligned(wptr0 + k);
+                                    v_float32x4 w1 = v_load_aligned(wptr1 + k);
+                                    v_float32x4 r0 = v_load_aligned(rptr);
+                                    v_float32x4 r1 = v_load_aligned(rptr + vsz_a);
+                                    v_float32x4 r2 = v_load_aligned(rptr + vsz_a*2);
+                                    v_float32x4 r3 = v_load_aligned(rptr + vsz_a*3);
 
-                                    vs00 += w0*r0;
-                                    vs01 += w0*r1;
-                                    vs02 += w0*r2;
-                                    vs03 += w0*r3;
+                                    vs00 = v_fma(w0, r0, vs00);
+                                    vs01 = v_fma(w0, r1, vs01);
+                                    vs02 = v_fma(w0, r2, vs02);
+                                    vs03 = v_fma(w0, r3, vs03);
 
-                                    vs10 += w1*r0;
-                                    vs11 += w1*r1;
-                                    vs12 += w1*r2;
-                                    vs13 += w1*r3;
+                                    vs10 = v_fma(w1, r0, vs10);
+                                    vs11 = v_fma(w1, r1, vs11);
+                                    vs12 = v_fma(w1, r2, vs12);
+                                    vs13 = v_fma(w1, r3, vs13);
                                 }
                                 s0 += v_reduce_sum4(vs00, vs01, vs02, vs03);
                                 s1 += v_reduce_sum4(vs10, vs11, vs12, vs13);
@@ -694,15 +1385,48 @@ public:
 #ifdef HAVE_OPENCL
     bool forward_ocl(InputArrayOfArrays inps, OutputArrayOfArrays outs, OutputArrayOfArrays internals)
     {
+        if (kernel_size.size() != 2)
+        {
+            // no OpenCL optimizations, see .supportedBacked()
+            return false;
+        }
+
         std::vector<UMat> inputs;
         std::vector<UMat> outputs;
 
+        bool use_half = (inps.depth() == CV_16S);
         inps.getUMatVector(inputs);
         outs.getUMatVector(outputs);
 
-        int group = inputs[0].size[1] / umat_blobs[0].size[1];
+        CV_Assert(outputs.size() == 1);
+        for (int i = 0; i < inputs.size(); ++i)
+            CV_Assert(inputs[i].u != outputs[0].u);
 
-        if (convolutionOp.empty())
+        if (blobs.empty())
+        {
+            size_t n = inputs.size() - 1;
+            umat_blobs.resize(n);
+            for (size_t i = 0; i < n; i++)
+            {
+                inputs[i + 1].copyTo(umat_blobs[i]);
+            }
+            inputs.resize(1);
+        }
+
+        if (umat_blobs.empty())
+        {
+            size_t n = blobs.size();
+            umat_blobs.resize(n);
+            for (size_t i = 0; i < n; i++)
+            {
+                if (use_half)
+                    convertFp16(blobs[i], umat_blobs[i]);
+                else
+                    blobs[i].copyTo(umat_blobs[i]);
+            }
+        }
+
+        if (convolutionOp.empty() || blobs.empty())
         {
             OCL4DNNConvConfig config;
             config.in_shape = shape(inputs[0]);
@@ -711,103 +1435,33 @@ public:
             config.pad = pad;
             config.stride = stride;
             config.dilation = dilation;
-            config.group = group;
-            config.bias_term = (hasBias()) ? true : false;
+            if (inputs[0].dims != 4 && inputs[0].dims != umat_blobs[0].dims)
+            {
+                static bool bypassCheck = utils::getConfigurationParameterBool("OPENCV_OCL4DNN_CONVOLUTION_IGNORE_INPUT_DIMS_4_CHECK", false);
+                if (!bypassCheck)
+                {
+                    CV_LOG_ERROR(NULL, "DNN/OpenCL: Unsupported configuration: inputs[0].dims=" << inputs[0].dims << "  umat_blobs[0].dims=" << umat_blobs[0].dims
+                        << ". Consider reporting complete reproducer to https://github.com/opencv/opencv/issues/20833."
+                        << " You can skip this check temporary through OPENCV_OCL4DNN_CONVOLUTION_IGNORE_INPUT_DIMS_4_CHECK=1"
+                    );
+                    return false;
+                }
+            }
+            config.group = inputs[0].size[1] / umat_blobs[0].size[1];
+            if (config.group < 1)  // config.group == 0 causes div by zero in ocl4dnn code
+            {
+                CV_LOG_WARNING(NULL, "DNN/OpenCL: Unsupported config.group=" << config.group
+                    << ". Consider reporting complete reproducer to https://github.com/opencv/opencv/issues/20833"
+                );
+                return false;
+            }
+            config.bias_term = umat_blobs.size() == 2;
+            config.use_half = use_half;
 
             convolutionOp = Ptr<OCL4DNNConvSpatial<float> >(new OCL4DNNConvSpatial<float>(config));
         }
 
-        int k, outCn = umat_blobs[0].size[0];
-        if( weightsMat.empty() )
-        {
-            // prepare weightsMat where each row is aligned and has enough zero padding on the right to
-            // use vectorized (i.e. with intrinsics) loops without tail processing
-            Mat wm = blobs[0].reshape(1, outCn).clone();
-            if( wm.step1() % VEC_ALIGN != 0 )
-            {
-                int newcols = (int)alignSize(wm.step1(), VEC_ALIGN);
-                Mat wm_buffer = Mat(outCn, newcols, wm.type());
-                Mat wm_padding = wm_buffer.colRange(wm.cols, newcols);
-                wm_padding.setTo(Scalar::all(0.));
-                Mat wm_aligned = wm_buffer.colRange(0, wm.cols);
-                wm.copyTo(wm_aligned);
-                wm = wm_aligned;
-            }
-            weightsMat = wm;
-
-            Mat biasMat = hasBias() ? blobs[1].reshape(1, outCn) : Mat();
-            biasvec.resize(outCn+2);
-            if( biasMat.empty() )
-            {
-                for( k = 0; k < outCn; k++ )
-                    biasvec[k] = 0.f;
-            }
-            else
-            {
-                for( k = 0; k < outCn; k++ )
-                    biasvec[k] = biasMat.at<float>(k);
-            }
-
-            if( !bnorm.empty() || !scaleLayer.empty() || IS_POWER_LAYER(activ))
-            {
-                Mat scale, shift, scale2, shift2;
-                const float *scaleptr = 0, *shiftptr = 0;
-                const float *scaleptr2 = 0, *shiftptr2 = 0;
-                float a = 1.f, b = 0.f;
-
-                if( !bnorm.empty() )
-                {
-                    bnorm->getScaleShift(scale, shift);
-                    CV_Assert( scale.isContinuous() && shift.isContinuous() &&
-                               scale.type() == CV_32F && shift.type() == CV_32F &&
-                               scale.total() == (size_t)outCn &&
-                               shift.total() == (size_t)outCn );
-                    scaleptr = scale.ptr<float>();
-                    shiftptr = shift.ptr<float>();
-                }
-                if( !scaleLayer.empty() )
-                {
-                    scale2 = scaleLayer->blobs[0];
-                    CV_Assert( scale2.isContinuous() && scale2.type() == CV_32F &&
-                               scale2.total() == (size_t)outCn );
-                    scaleptr2 = scale2.ptr<float>();
-                    if( scaleLayer->hasBias )
-                    {
-                        shift2 = scaleLayer->blobs[1];
-                        CV_Assert( shift2.isContinuous() && shift2.type() == CV_32F &&
-                                   shift2.total() == (size_t)outCn );
-                        shiftptr2 = shift2.ptr<float>();
-                    }
-                }
-
-                if( IS_POWER_LAYER(activ) )
-                {
-                    Ptr<PowerLayer> activ_power = activ.dynamicCast<PowerLayer>();
-                    CV_Assert(activ_power);
-                    a = activ_power->scale;
-                    b = activ_power->shift;
-                }
-
-                if (shiftptr || shiftptr2 || b != 0.f)
-                    fusedBias = true;
-
-                for( int i = 0; i < outCn; i++ )
-                {
-                    float s1 = scaleptr ? scaleptr[i] : 1.f;
-                    float delta1 = shiftptr ? shiftptr[i] : 0.f;
-                    float s2 = scaleptr2 ? scaleptr2[i] : 1.f;
-                    float delta2 = shiftptr2 ? shiftptr2[i] : 0.f;
-                    float* w_i = weightsMat.ptr<float>(i);
-                    int j, wcols = weightsMat.cols;
-
-                    for( j = 0; j < wcols; j++ )
-                        w_i[j] *= (s1*s2*a);
-
-                    biasvec[i] = biasvec[i]*(s1*s2*a) + (delta1*s2*a + delta2*a + b);
-                }
-            }
-            biasvec[outCn] = biasvec[outCn+1] = biasvec[outCn-1];
-        }
+        int outCn = umat_blobs[0].size[0];
 
         reluslope.clear();
         if( activ )
@@ -817,6 +1471,15 @@ public:
             {
                 reluslope.assign(outCn+2, activ_relu->negativeSlope);
                 activType = OCL4DNN_CONV_FUSED_ACTIV_RELU;
+            }
+
+            Ptr<ReLU6Layer> activ_relu6 = activ.dynamicCast<ReLU6Layer>();
+            if( !activ_relu6.empty() )
+            {
+                reluslope.resize(2);
+                reluslope[0] = activ_relu6->minValue;
+                reluslope[1] = activ_relu6->maxValue;
+                activType = OCL4DNN_CONV_FUSED_ACTIV_RELU6;
             }
 
             Ptr<ChannelsPReLULayer> activ_chprelu = activ.dynamicCast<ChannelsPReLULayer>();
@@ -832,17 +1495,24 @@ public:
             }
         }
 
-        if ( newWeightAndBias )
+        if (fusedWeights)
         {
-            weightsMat.copyTo(umat_blobs[0]);
-            if ( fusedBias )
-            {
-                if ( umat_blobs.size() < 2 )
-                    umat_blobs.resize(2);
-                umat_blobs[1] = UMat(biasvec, true);
-            }
-            convolutionOp->setBias(fusedBias || hasBias());
-            newWeightAndBias = false;
+            if (use_half)
+                convertFp16(weightsMat, umat_blobs[0]);
+            else
+                weightsMat.copyTo(umat_blobs[0]);
+            fusedWeights = false;
+        }
+        if (fusedBias)
+        {
+            if ( umat_blobs.size() < 2 )
+                umat_blobs.resize(2);
+            if (use_half)
+                convertFp16(Mat(biasvec, true), umat_blobs[1]);
+            else
+                Mat(biasvec, true).copyTo(umat_blobs[1]);
+            convolutionOp->setBias(true);
+            fusedBias = false;
         }
 
         if ( newActiv )
@@ -861,11 +1531,21 @@ public:
             {
                 convolutionOp->setActivPower(true, power);
             }
+            else if ( activType == OCL4DNN_CONV_FUSED_ACTIV_TANH)
+            {
+                convolutionOp->setActivTanh(true);
+            }
+            else if ( activType == OCL4DNN_CONV_FUSED_ACTIV_RELU6)
+            {
+                convolutionOp->setActivReLU6(true, reluslope[0], reluslope[1]);
+            }
             else
             {
                 convolutionOp->setActivReLU(false, 0);
                 convolutionOp->setActivPReLU(false, reluslope);
                 convolutionOp->setActivPower(false, 1.f);
+                convolutionOp->setActivTanh(false);
+                convolutionOp->setActivReLU6(false, 0, 0);
             }
             newActiv = false;
         }
@@ -877,116 +1557,70 @@ public:
         return convolutionOp->Forward(inpMat,
                                       inputs.size() == 2 ? inputs[1] : UMat(),
                                       umat_blobs[0],
-                                      (hasBias() || fusedBias) ? umat_blobs[1] : UMat(),
+                                      umat_blobs.size() > 1 ? umat_blobs[1] : UMat(),
                                       outMat,
                                       batch_size);
     }
 #endif
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
     {
         CV_TRACE_FUNCTION();
         CV_TRACE_ARG_VALUE(name, "name", name.c_str());
 
-        CV_OCL_RUN((preferableTarget == DNN_TARGET_OPENCL) &&
-                   OCL_PERFORMANCE_CHECK(ocl::Device::getDefault().isIntel()),
+        CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
                    forward_ocl(inputs_arr, outputs_arr, internals_arr))
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
-
-    void forward(std::vector<Mat*> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
-
-        /*printf("conv %s: input (%d x %d x %d x %d), kernel (%d x %d), pad (%d x %d), stride (%d x %d), dilation (%d x %d)\n",
-               name.c_str(), inputs[0]->size[0], inputs[0]->size[1], inputs[0]->size[2], inputs[0]->size[3],
-               kernel.width, kernel.height, pad.width, pad.height,
-               stride.width, stride.height, dilation.width, dilation.height);*/
-        CV_Assert(inputs.size() == (size_t)1 && inputs[0]->size[1] % blobs[0].size[1] == 0);
-        int ngroups = inputs[0]->size[1]/blobs[0].size[1];
-        CV_Assert(outputs[0].size[1] % ngroups == 0);
-        int k, outCn = blobs[0].size[0];
-
-        if( weightsMat.empty() )
+        if (inputs_arr.depth() == CV_16S)
         {
-            // prepare weightsMat where each row is aligned and has enough zero padding on the right to
-            // use vectorized (i.e. with intrinsics) loops without tail processing
-            Mat wm = blobs[0].reshape(1, outCn).clone();
-            if( wm.step1() % VEC_ALIGN != 0 )
+            forward_fallback(inputs_arr, outputs_arr, internals_arr);
+            return;
+        }
+
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
+
+        int outCn = blobs.empty() ? inputs[1].size[0] : blobs[0].size[0];
+        // Need to align non-const blobs
+        if (blobs.empty())
+        {
+            Mat wm = inputs[1].reshape(1, outCn);
+            if (wm.data != weightsMat.data)
             {
                 int newcols = (int)alignSize(wm.step1(), VEC_ALIGN);
-                Mat wm_buffer = Mat(outCn, newcols, wm.type());
+                Mat wm_buffer = Mat(numOutput, newcols, wm.type());
                 Mat wm_padding = wm_buffer.colRange(wm.cols, newcols);
                 wm_padding.setTo(Scalar::all(0.));
-                Mat wm_aligned = wm_buffer.colRange(0, wm.cols);
-                wm.copyTo(wm_aligned);
-                wm = wm_aligned;
-            }
-            weightsMat = wm;
+                weightsMat = wm_buffer.colRange(0, wm.cols);
 
-            Mat biasMat = hasBias() ? blobs[1].reshape(1, outCn) : Mat();
-            biasvec.resize(outCn+2);
-            if( biasMat.empty() )
-            {
-                for( k = 0; k < outCn; k++ )
-                    biasvec[k] = 0.f;
-            }
-            else
-            {
-                for( k = 0; k < outCn; k++ )
-                    biasvec[k] = biasMat.at<float>(k);
-            }
-
-            if( !bnorm.empty() || !scaleLayer.empty() )
-            {
-                Mat scale, shift, scale2, shift2;
-                const float *scaleptr = 0, *shiftptr = 0;
-                const float *scaleptr2 = 0, *shiftptr2 = 0;
-
-                if( !bnorm.empty() )
+                wm.copyTo((const Mat&)weightsMat);
+                if (inputs.size() > 2)
                 {
-                    bnorm->getScaleShift(scale, shift);
-                    CV_Assert( scale.isContinuous() && shift.isContinuous() &&
-                               scale.type() == CV_32F && shift.type() == CV_32F &&
-                               scale.total() == (size_t)outCn &&
-                               shift.total() == (size_t)outCn );
-                    scaleptr = scale.ptr<float>();
-                    shiftptr = shift.ptr<float>();
+                    Mat biasMat = inputs[2].reshape(1, outCn);
+                    biasMat.col(0).copyTo(biasvec);
                 }
-                if( !scaleLayer.empty() )
-                {
-                    scale2 = scaleLayer->blobs[0];
-                    CV_Assert( scale2.isContinuous() && scale2.type() == CV_32F &&
-                               scale2.total() == (size_t)outCn );
-                    scaleptr2 = scale2.ptr<float>();
-                    if( scaleLayer->hasBias )
-                    {
-                        shift2 = scaleLayer->blobs[1];
-                        CV_Assert( shift2.isContinuous() && shift2.type() == CV_32F &&
-                                   shift2.total() == (size_t)outCn );
-                        shiftptr2 = shift2.ptr<float>();
-                    }
-                }
-
-                for( int i = 0; i < outCn; i++ )
-                {
-                    float s1 = scaleptr ? scaleptr[i] : 1.f;
-                    float delta1 = shiftptr ? shiftptr[i] : 0.f;
-                    float s2 = scaleptr2 ? scaleptr2[i] : 1.f;
-                    float delta2 = shiftptr2 ? shiftptr2[i] : 0.f;
-                    float* w_i = weightsMat.ptr<float>(i);
-                    int j, wcols = weightsMat.cols;
-
-                    for( j = 0; j < wcols; j++ )
-                        w_i[j] *= (s1*s2);
-
-                    biasvec[i] = biasvec[i]*(s1*s2) + (delta1*s2 + delta2);
-                }
+                biasvec.resize(outCn + 2, 0);
             }
-            biasvec[outCn] = biasvec[outCn+1] = biasvec[outCn-1];
         }
+        /*if (inputs[0].dims > 3) {
+            printf("conv %s: input (%d x %d x %d x %d), kernel (%d x %d), pad (%d x %d), stride (%d x %d), dilation (%d x %d)\n",
+                   name.c_str(), inputs[0].size[0], inputs[0].size[1], inputs[0].size[2], inputs[0].size[3],
+                   kernel.width, kernel.height, pad.width, pad.height,
+                   stride.width, stride.height, dilation.width, dilation.height);
+        }
+        else {
+            printf("conv %s: input (%d x %d x %d), kernel (%d x %d), pad (%d x %d), stride (%d x %d), dilation (%d x %d)\n",
+                   name.c_str(), inputs[0].size[0], inputs[0].size[1], inputs[0].size[2],
+                   kernel.width, kernel.height, pad.width, pad.height,
+                   stride.width, stride.height, dilation.width, dilation.height);
+        }*/
+        int inpGroupCn = blobs.empty() ? inputs[1].size[1] : blobs[0].size[1];
+        CV_Assert_N(inputs.size() >= (size_t)1, inputs[0].size[1] % inpGroupCn == 0,
+                    outputs.size() == 1, inputs[0].data != outputs[0].data);
+
+        int ngroups = inputs[0].size[1] / inpGroupCn;
+        CV_Assert(outputs[0].size[1] % ngroups == 0);
 
         reluslope.clear();
         if( activ )
@@ -1009,77 +1643,204 @@ public:
             }
         }
 
-        int nstripes = std::max(getNumThreads(), 1);
+#ifdef HAVE_TENGINE
+        int inch = inputs[0].size[1]; 		// inch
+        int in_h = inputs[0].size[2]; 		// in_h
+        int in_w = inputs[0].size[3]; 		// in_w
 
-        ParallelConv::run(*inputs[0], outputs[0], weightsMat, biasvec, reluslope,
-                          kernel, pad, stride, dilation, activ.get(), ngroups, nstripes);
+        int out_b = outputs[0].size[0];     // out batch size
+        int outch = outputs[0].size[1]; 	// outch
+        int out_h = outputs[0].size[2]; 	// out_h
+        int out_w = outputs[0].size[3]; 	// out_w
+
+        float *input_  = inputs[0].ptr<float>();
+        float *output_ = outputs[0].ptr<float>();
+        float *kernel_ = weightsMat.ptr<float>();
+        float *teg_bias = &biasvec[0];
+
+        bool tengine_ret = tengine_forward(input_, inch, ngroups, in_h, in_w,
+                                    output_, out_b, outch, out_h, out_w,
+                                    kernel_, kernel_size.size(), kernel.height, kernel.width,
+                                    teg_bias, stride.height, stride.width,
+                                    pad.height,  pad.width, dilation.height, dilation.width,
+                                    weightsMat.step1(), padMode);
+        /* activation */
+        if((true == tengine_ret) && activ )
+        {
+            int out_cstep = out_h * out_w;	    // out_cstep
+
+            ActivationLayer* activ_ = activ.get();
+            activ_->forwardSlice(output_, output_, out_cstep, out_cstep, 0, outch);
+        }
+        if(false == tengine_ret)
+#endif
+        {
+            int nstripes = std::max(getNumThreads(), 1);
+
+            ParallelConv::run(inputs[0], outputs[0], weightsMat, biasvec, reluslope,
+                            kernel_size, strides, pads_begin, pads_end, dilations, activ.get(), ngroups, nstripes);
+        }
     }
 
     virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
-                           const std::vector<MatShape> &outputs) const
+                           const std::vector<MatShape> &outputs) const CV_OVERRIDE
     {
-        CV_Assert(inputs.size() == outputs.size());
+        CV_Assert(inputs.size() == outputs.size() || inputs.size() == outputs.size() + blobs.size());
 
         int64 flops = 0;
-        for (int i = 0; i < inputs.size(); i++)
+        int karea = std::accumulate(kernel_size.begin(), kernel_size.end(), 1, std::multiplies<size_t>());
+        for (int i = 0; i < outputs.size(); i++)
         {
-            flops += total(outputs[i])*(CV_BIG_INT(2)*kernel.area()*inputs[i][1] + 1);
+            flops += total(outputs[i])*(CV_BIG_INT(2)*karea*inputs[i][1] + 1);
         }
 
         return flops;
     }
 };
 
-class DeConvolutionLayerImpl : public BaseConvolutionLayerImpl
+class DeConvolutionLayerImpl CV_FINAL : public BaseConvolutionLayerImpl
 {
 public:
     Mat weightsMat, biasesMat;
+    UMat umat_weights;
+    UMat umat_biases;
 
-    MatShape computeColRowShape(const MatShape &inpShape, const MatShape &outShape) const
+    DeConvolutionLayerImpl(const LayerParams& params) : BaseConvolutionLayerImpl(params) {}
+
+    MatShape computeColRowShape(const MatShape &inpShape, const MatShape &outShape) const CV_OVERRIDE
     {
+        int dims = inpShape.size();
         int inpCn = inpShape[1];
-        int inpH = inpShape[2];
-        int inpW = inpShape[3];
+        int inpD = dims == 5 ? inpShape[2] : 1;
+        int inpH = inpShape[dims - 2];
+        int inpW = inpShape.back();
         int outCn = outShape[1];
         int ngroups = inpCn / blobs[0].size[0];
         int outGroupCn = outCn / ngroups;
-        int ksize = outGroupCn * kernel.height * kernel.width;
-        return shape(ksize, inpH * inpW);
+        int ksize = outGroupCn * std::accumulate(kernel_size.begin(), kernel_size.end(),
+                                                 1, std::multiplies<size_t>());
+        return shape(ksize, inpD * inpH * inpW);
+    }
+
+    virtual bool supportBackend(int backendId) CV_OVERRIDE
+    {
+#ifdef HAVE_INF_ENGINE
+        const int outGroupCn = blobs[0].size[1];  // Weights are in IOHW or IODHW layout
+        const int group = numOutput / outGroupCn;
+
+        if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH) {
+            return group == 1;
+        }
+#endif  // HAVE_INF_ENGINE
+        {
+            return kernel_size.size() == 2 && (backendId == DNN_BACKEND_OPENCV || backendId == DNN_BACKEND_HALIDE);
+        }
     }
 
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
                          const int requiredOutputs,
                          std::vector<MatShape> &outputs,
-                         std::vector<MatShape> &internals) const
+                         std::vector<MatShape> &internals) const CV_OVERRIDE
     {
         CV_Assert(!hasBias() || blobs[1].total() == (size_t)numOutput);
         CV_Assert(inputs.size() != 0);
 
-        int inpCn = inputs[0][1];
-        int inpH = inputs[0][2];
-        int inpW = inputs[0][3];
-
-        int outH = stride.height * (inpH - 1) + kernel.height - 2 * pad.height + adjustPad.height;
-        int outW = stride.width * (inpW - 1) + kernel.width - 2 * pad.width + adjustPad.width;
         int outCn = numOutput;
+        std::vector<int> outShape;
+        outShape.push_back(inputs[0][0]);  // batch
+        outShape.push_back(outCn);
+        if (padMode.empty())
+        {
+            for (int i = 0; i < kernel_size.size(); i++)
+                outShape.push_back(strides[i] * (inputs[0][2 + i] - 1) + kernel_size[i] - pads_begin[i] - pads_end[i] + adjust_pads[i]);
+        }
+        else if (padMode == "VALID")
+        {
+            for (int i = 0; i < kernel_size.size(); i++)
+                outShape.push_back(strides[i] * (inputs[0][2 + i] - 1) + kernel_size[i] + adjust_pads[i]);
+        }
+        else if (padMode == "SAME")
+        {
+            for (int i = 0; i < kernel_size.size(); i++)
+                outShape.push_back(strides[i] * (inputs[0][2 + i] - 1) + 1 + adjust_pads[i]);
+        }
+        else
+            CV_Error(Error::StsError, "Unsupported padding mode " + padMode);
 
         CV_Assert(outCn % blobs[0].size[1] == 0);
         int ngroups = outCn / blobs[0].size[1];
 
+        int inpCn = inputs[0][1];
         CV_Assert(inpCn % ngroups == 0 && outCn % ngroups == 0);
         CV_Assert(blobs[0].size[0] == inpCn);
 
-        int dims[] = {inputs[0][0], outCn, outH, outW};
-        outputs.resize(inputs.size(), shape(dims));
+        outputs.resize(1, outShape);
 
-        internals.push_back(MatShape());
         if (!is1x1())
-            internals[0] = computeColRowShape(inputs[0], outputs[0]);
-
-        if (hasBias())
-            internals.push_back(shape(1, outH*outW));
+            internals.push_back(computeColRowShape(inputs[0], outputs[0]));
 
         return false;
+    }
+
+    void finalize(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr) CV_OVERRIDE
+    {
+        BaseConvolutionLayerImpl::finalize(inputs_arr, outputs_arr);
+
+        std::vector<Mat> inputs, outputs;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
+
+        std::vector<int> inpShape;
+        std::vector<int> outShape;
+        for (int i = 2; i < inputs[0].dims; i++) {
+            inpShape.push_back(inputs[0].size[i]);
+            outShape.push_back(outputs[0].size[i]);
+        }
+        getConvPoolPaddings(outShape, kernel_size, strides, padMode, pads_begin, pads_end);
+        if (pads_begin.size() == 2) {
+            for (int i = 0; i < pads_begin.size(); i++) {
+                if (pads_begin[i] != pads_end[i])
+                    CV_Error(Error::StsNotImplemented, "Unsupported asymmetric padding in deconvolution layer");
+            }
+            pad = Size(pads_begin[1], pads_begin[0]);
+        }
+
+        weightsMultipliers.assign(numOutput, 1.0);
+        if (weightsMat.empty())
+        {
+            transpose(blobs[0].reshape(1, blobs[0].size[0]), weightsMat);
+            biasesMat = hasBias() ? blobs[1].reshape(1, numOutput)
+                                  : Mat::zeros(numOutput, 1, CV_32F);
+        }
+    }
+
+    void fuseWeights(const Mat& w_, const Mat& b_) CV_OVERRIDE
+    {
+        Mat w = w_.total() == 1 ? Mat(1, numOutput, CV_32F, Scalar(w_.at<float>(0))) : w_;
+        Mat b = b_.total() == 1 ? Mat(1, numOutput, CV_32F, Scalar(b_.at<float>(0))) : b_;
+
+        CV_Assert_N(!weightsMat.empty(),
+                     w.empty() || numOutput == w.total(),
+                     b.empty() || numOutput == b.total());
+
+        if (!w.empty())
+        {
+            transpose(blobs[0].reshape(1, blobs[0].size[0]), weightsMat);
+            weightsMat = weightsMat.reshape(1, numOutput);
+            for (int i = 0; i < numOutput; ++i)
+            {
+                double wi = w.at<float>(i);
+                weightsMultipliers[i] *= wi;
+                cv::multiply(weightsMat.row(i), weightsMultipliers[i], weightsMat.row(i));
+                biasesMat.at<float>(i) *= wi;
+            }
+            weightsMat = weightsMat.reshape(1, weightsMat.total() / blobs[0].size[0]);
+        }
+
+        if (!b.empty())
+        {
+            cv::add(biasesMat, b.reshape(1, numOutput), biasesMat);
+        }
     }
 
     class MatMulInvoker : public ParallelLoopBody
@@ -1093,9 +1854,10 @@ public:
             nstripes_ = nstripes;
             useAVX = checkHardwareSupport(CPU_AVX);
             useAVX2 = checkHardwareSupport(CPU_AVX2);
+            useAVX512 = CV_CPU_HAS_SUPPORT_AVX512_SKX;
         }
 
-        void operator()(const Range& range_) const
+        void operator()(const Range& range_) const CV_OVERRIDE
         {
             int stripeSize = (int)alignSize((b_->cols + nstripes_ - 1)/nstripes_, 16);
             Range range(range_.start*stripeSize, std::min(range_.end*stripeSize, b_->cols));
@@ -1110,6 +1872,11 @@ public:
             size_t bstep = b_->step1();
             size_t cstep = c_->step1();
 
+        #if CV_TRY_AVX512_SKX
+            if( useAVX512 )
+                opt_AVX512_SKX::fastGEMM( aptr, astep, bptr, bstep, cptr, cstep, mmax, kmax, nmax );
+            else
+        #endif
         #if CV_TRY_AVX2
             if( useAVX2 )
                 opt_AVX2::fastGEMM( aptr, astep, bptr, bstep, cptr, cstep, mmax, kmax, nmax );
@@ -1177,20 +1944,21 @@ public:
 
                     for( ; n <= nmax - 4; n += 4 )
                     {
+                        v_float32x4 d0 = v_load(dst0 + n);
+                        v_float32x4 d1 = v_load(dst1 + n);
                         v_float32x4 b0 = v_load(bptr0 + n);
                         v_float32x4 b1 = v_load(bptr1 + n);
                         v_float32x4 b2 = v_load(bptr2 + n);
                         v_float32x4 b3 = v_load(bptr3 + n);
-                        v_float32x4 d0 = v_load(dst0 + n);
-                        v_float32x4 d1 = v_load(dst1 + n);
-                        d0 += b0*a00;
-                        d1 += b0*a01;
-                        d0 += b1*a10;
-                        d1 += b1*a11;
-                        d0 += b2*a20;
-                        d1 += b2*a21;
-                        d0 += b3*a30;
-                        d1 += b3*a31;
+                        // TODO try to improve pipeline width
+                        d0 = v_fma(b0, a00, d0);
+                        d1 = v_fma(b0, a01, d1);
+                        d0 = v_fma(b1, a10, d0);
+                        d1 = v_fma(b1, a11, d1);
+                        d0 = v_fma(b2, a20, d0);
+                        d1 = v_fma(b2, a21, d1);
+                        d0 = v_fma(b3, a30, d0);
+                        d1 = v_fma(b3, a31, d1);
                         v_store(dst0 + n, d0);
                         v_store(dst1 + n, d1);
                     }
@@ -1198,8 +1966,10 @@ public:
 
                     for( ; n < nmax; n++ )
                     {
-                        float b0 = bptr0[n], b1 = bptr1[n];
-                        float b2 = bptr2[n], b3 = bptr3[n];
+                        float b0 = bptr0[n];
+                        float b1 = bptr1[n];
+                        float b2 = bptr2[n];
+                        float b3 = bptr3[n];
                         float d0 = dst0[n] + alpha00*b0 + alpha10*b1 + alpha20*b2 + alpha30*b3;
                         float d1 = dst1[n] + alpha01*b0 + alpha11*b1 + alpha21*b2 + alpha31*b3;
                         dst0[n] = d0;
@@ -1214,6 +1984,7 @@ public:
         int nstripes_;
         bool useAVX;
         bool useAVX2;
+        bool useAVX512;
     };
 
     class Col2ImInvoker : public cv::ParallelLoopBody
@@ -1241,6 +2012,7 @@ public:
                         int kernel_h, int kernel_w,
                         int pad_h, int pad_w,
                         int stride_h, int stride_w,
+                        int height_col, int width_col,
                         float* data_im,
                         const float* biasvec,
                         bool is1x1)
@@ -1254,8 +2026,8 @@ public:
             t.kernel_h = kernel_h; t.kernel_w = kernel_w;
             t.pad_h = pad_h; t.pad_w = pad_w;
             t.stride_h = stride_h; t.stride_w = stride_w;
-            t.height_col = (height + 2 * pad_h - kernel_h) / stride_h + 1;
-            t.width_col = (width + 2 * pad_w - kernel_w) / stride_w + 1;
+            t.height_col = height_col;
+            t.width_col = width_col;
             t.nstripes = nstripes;
             t.is1x1 = is1x1;
             t.biasvec = biasvec;
@@ -1263,7 +2035,7 @@ public:
             parallel_for_(Range(0, nstripes), t, nstripes);
         }
 
-        virtual void operator ()(const Range &r) const
+        virtual void operator ()(const Range &r) const CV_OVERRIDE
         {
             const float* data_col_ = data_col;
             float* data_im_ = data_im;
@@ -1317,21 +2089,133 @@ public:
         }
     };
 
-    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr)
+#ifdef HAVE_OPENCL
+    bool forward_ocl(InputArrayOfArrays inputs_, OutputArrayOfArrays outputs_, OutputArrayOfArrays internals_)
     {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        std::vector<UMat> inputs;
+        std::vector<UMat> outputs;
+        std::vector<UMat> internals;
 
-        Layer::forward_fallback(inputs_arr, outputs_arr, internals_arr);
-    }
+        if (inputs_.depth() == CV_16S)
+            return false;
 
-    void forward(std::vector<Mat *> &inputs, std::vector<Mat> &outputs, std::vector<Mat> &internals)
-    {
-        CV_TRACE_FUNCTION();
-        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+        inputs_.getUMatVector(inputs);
+        outputs_.getUMatVector(outputs);
+        internals_.getUMatVector(internals);
 
         int outCn = numOutput;
-        int inpCn = inputs[0]->size[1];
+        int inpCn = inputs[0].size[1];
+
+        if (is1x1())
+            return false;
+
+        if (umat_weights.empty())
+        {
+            if (fusedWeights)
+                weightsMat.copyTo(umat_weights);
+            else
+                transpose(blobs[0].reshape(1, inpCn), umat_weights);
+
+            if (fusedBias)
+                biasesMat.copyTo(umat_biases);
+            else
+            {
+                if (hasBias())
+                    blobs[1].reshape(1, outCn).copyTo(umat_biases);
+                else
+                    umat_biases = UMat::zeros(outCn, 1, CV_32F);
+            }
+        }
+
+        String buildopt = format("-DT=%s ", ocl::typeToStr(inputs[0].type()));
+        buildopt += format("-DPAD_H=%d -DPAD_W=%d -DKERNEL_H=%d -DKERNEL_W=%d -DSTRIDE_H=%d -DSTRIDE_W=%d ",
+                           pad.height, pad.width, kernel.height, kernel.width, stride.height, stride.width);
+
+        for (size_t ii = 0; ii < outputs.size(); ii++)
+        {
+            int ngroups = outCn / blobs[0].size[1];
+            int inpGroupCn = inpCn / ngroups;
+            int outGroupCn = blobs[0].size[1];
+            const UMat& inp = inputs[ii];
+            UMat& out = outputs[ii];
+            int numImg = inp.size[0];
+            int inpH = inp.size[2], inpW = inp.size[3];
+            int outH = out.size[2], outW = out.size[3];
+
+            MatShape inpshape = shape(numImg*inpCn, inpH*inpW);
+            MatShape outshape = shape(numImg*outCn, outH*outW);
+            UMat convBlob = inputs[ii].reshape(1, inpshape.size(), &inpshape[0]);
+            UMat decnBlob = out.reshape(1, outshape.size(), &outshape[0]);
+            int rows = internals[0].rows / ngroups;
+
+            for (int n = 0; n < numImg; n++)
+            {
+                for (int g = 0; g < ngroups; g++)
+                {
+                    UMat colMat = internals[0].rowRange(_Range(g * rows, rows));
+                    UMat convMat = convBlob.rowRange(_Range((g + n * ngroups) * inpGroupCn, inpGroupCn));
+                    UMat wghtMat = umat_weights.colRange(_Range(g * inpGroupCn, inpGroupCn));
+                    gemm(wghtMat, convMat, 1, noArray(), 0, colMat, 0);
+                }
+
+                for (int g = 0; g < ngroups; g++)
+                {
+                    int total = outGroupCn * decnBlob.cols;
+                    int index = 0;
+                    int height_col = inpH;
+                    int width_col = inpW;
+                    int coeff_h = (1 - stride.height * kernel.width * height_col) * width_col;
+                    int coeff_w = (1 - stride.width * height_col * width_col);
+
+                    ocl::Kernel k("col2im", ocl::dnn::col2im_oclsrc, buildopt);
+                    k.set(index++, total);
+                    k.set(index++, ocl::KernelArg::PtrReadOnly(internals[0]));
+                    k.set(index++, (int)(g * rows * internals[0].cols));
+                    k.set(index++, outGroupCn);
+                    k.set(index++, outH);
+                    k.set(index++, outW);
+                    k.set(index++, height_col);
+                    k.set(index++, width_col);
+                    k.set(index++, coeff_h);
+                    k.set(index++, coeff_w);
+                    k.set(index++, ocl::KernelArg::PtrReadOnly(umat_biases));
+                    k.set(index++, (int)(g * outGroupCn * umat_biases.cols));
+                    k.set(index++, ocl::KernelArg::PtrWriteOnly(decnBlob));
+                    k.set(index++, (int)((g + n * ngroups) * outGroupCn * decnBlob.cols));
+
+                    size_t global[] = { (size_t)total };
+                    bool ret = k.run(1, global, NULL, false);
+                    if (!ret)
+                        return false;
+                }
+            }
+        }
+
+        return true;
+    }
+#endif
+
+    void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays internals_arr) CV_OVERRIDE
+    {
+        CV_TRACE_FUNCTION();
+        CV_TRACE_ARG_VALUE(name, "name", name.c_str());
+
+        CV_OCL_RUN(IS_DNN_OPENCL_TARGET(preferableTarget),
+                   forward_ocl(inputs_arr, outputs_arr, internals_arr));
+
+        if (inputs_arr.depth() == CV_16S)
+        {
+            forward_fallback(inputs_arr, outputs_arr, internals_arr);
+            return;
+        }
+
+        std::vector<Mat> inputs, outputs, internals;
+        inputs_arr.getMatVector(inputs);
+        outputs_arr.getMatVector(outputs);
+        internals_arr.getMatVector(internals);
+
+        int outCn = numOutput;
+        int inpCn = inputs[0].size[1];
         bool is1x1flag = is1x1();
         int nstripes = getNumThreads();
 
@@ -1346,12 +2230,13 @@ public:
             int ngroups = outCn / blobs[0].size[1];
             int inpGroupCn = inpCn / ngroups;
             int outGroupCn = blobs[0].size[1];
-            const Mat& inp = *inputs[ii];
+            const Mat& inp = inputs[ii];
             Mat& out = outputs[ii];
             int numImg = inp.size[0];
+            int inpH = inp.size[2], inpW = inp.size[3];
             int outH = out.size[2], outW = out.size[3];
 
-            Mat convBlob = inputs[ii]->reshape(1, numImg*inpCn);
+            Mat convBlob = inputs[ii].reshape(1, numImg*inpCn);
             Mat decnBlob = out.reshape(1, numImg*outCn);
 
             for (int n = 0; n < numImg; n++)
@@ -1371,14 +2256,14 @@ public:
 
                     Col2ImInvoker::run(colMat.ptr<float>(), outGroupCn, outH, outW,
                                        kernel.height, kernel.width, pad.height, pad.width,
-                                       stride.height, stride.width, dstMat.ptr<float>(),
+                                       stride.height, stride.width, inpH, inpW, dstMat.ptr<float>(),
                                        curBiasMat.ptr<float>(), is1x1flag);
                 }
             }
         }
     }
 
-    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs)
+    virtual Ptr<BackendNode> initHalide(const std::vector<Ptr<BackendWrapper> > &inputs) CV_OVERRIDE
     {
 #ifdef HAVE_HALIDE
         Halide::Buffer<float> inputBuffer = halideBuffer(inputs[0]);
@@ -1431,64 +2316,89 @@ public:
         return Ptr<BackendNode>();
     }
 
+
+#ifdef HAVE_DNN_NGRAPH
+    virtual Ptr<BackendNode> initNgraph(const std::vector<Ptr<BackendWrapper> > &inputs,
+                                        const std::vector<Ptr<BackendNode> >& nodes) CV_OVERRIDE
+    {
+       const int outGroupCn = blobs[0].size[1];
+       const int group = numOutput / outGroupCn;
+       CV_Assert(group == 1);
+
+       auto& ieInpNode = nodes[0].dynamicCast<InfEngineNgraphNode>()->node;
+       std::vector<size_t> kernel_shape = getShape<size_t>(blobs[0]);
+       auto ieWeights = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, kernel_shape, blobs[0].data);
+
+        if (fusedWeights)
+        {
+            Mat newWeights;
+            transpose(weightsMat, newWeights);
+            ieWeights = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, kernel_shape, newWeights.data);
+        }
+        std::vector<size_t> paddings_end;
+        if (padMode == "SAME")
+        {
+            for (int i = 0; i < pads_begin.size(); i++) {
+                paddings_end.push_back(kernel_size[i] - pads_begin[i] - 1 - adjust_pads[i]);
+            }
+            adjust_pads = std::vector<size_t>(pads_begin.size(), 0);
+        } else {
+            paddings_end = pads_end;
+        }
+        ngraph::op::PadType pad_type = padMode == "VALID" ? ngraph::op::PadType::VALID : ngraph::op::PadType::EXPLICIT;
+
+        auto deconv = std::make_shared<ngraph::op::v1::ConvolutionBackpropData>(
+                          ieInpNode,
+                          ieWeights,
+                          ngraph::Strides(strides),
+                          ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(pads_begin.begin(), pads_begin.end())),
+                          ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(paddings_end.begin(), paddings_end.end())),
+                          ngraph::Strides(dilations),
+                          pad_type,
+                          ngraph::CoordinateDiff(std::vector<std::ptrdiff_t>(adjust_pads.begin(), adjust_pads.end())));
+
+        if (hasBias() || fusedBias)
+        {
+            std::vector<size_t> shape(deconv->get_shape().size(), 1);
+            shape[1] = numOutput;
+            auto bias = std::make_shared<ngraph::op::Constant>(ngraph::element::f32, ngraph::Shape(shape), blobs[1].data);
+            auto deconv_bias = std::make_shared<ngraph::op::v1::Add>(deconv, bias, ngraph::op::AutoBroadcastType::NUMPY);
+            return Ptr<BackendNode>(new InfEngineNgraphNode(deconv_bias));
+        }
+
+
+        return Ptr<BackendNode>(new InfEngineNgraphNode(deconv));
+    }
+#endif  // HAVE_DNN_NGRAPH
+
     virtual int64 getFLOPS(const std::vector<MatShape> &inputs,
-                           const std::vector<MatShape> &outputs) const
+                           const std::vector<MatShape> &outputs) const CV_OVERRIDE
     {
         CV_Assert(inputs.size() == outputs.size());
 
         float flops = 0;
         int outChannels = blobs[0].size[0];
+        size_t karea = std::accumulate(kernel_size.begin(), kernel_size.end(),
+                                       1, std::multiplies<size_t>());
 
         for (int i = 0; i < inputs.size(); i++)
         {
-            flops += CV_BIG_INT(2)*outChannels*kernel.area()*total(inputs[i]);
+            flops += CV_BIG_INT(2)*outChannels*karea*total(inputs[i]);
         }
 
         return flops;
     }
 };
 
-//Convolution and Deconvolution
-static void initConvDeconvLayerFromCaffe(Ptr<BaseConvolutionLayer> l, const LayerParams &params)
-{
-    l->setParamsFrom(params);
-    getConvolutionKernelParams(params, l->kernel.height, l->kernel.width, l->pad.height,
-                               l->pad.width, l->stride.height, l->stride.width, l->dilation.height,
-                               l->dilation.width, l->padMode);
-
-    l->numOutput = params.get<int>("num_output");
-    int ngroups = params.get<int>("group", 1);
-
-    l->adjustPad.height = params.get<int>("adj_h", 0);
-    l->adjustPad.width = params.get<int>("adj_w", 0);
-
-    CV_Assert(l->numOutput % ngroups == 0);
-    CV_Assert(l->adjustPad.width < l->stride.width &&
-              l->adjustPad.height < l->stride.height);
-}
-
 Ptr<BaseConvolutionLayer> ConvolutionLayer::create(const LayerParams &params)
 {
-    ConvolutionLayerImpl* conv_ptr = new ConvolutionLayerImpl;
-    Ptr<BaseConvolutionLayer> l(conv_ptr);
-    initConvDeconvLayerFromCaffe(l, params);
-
-#ifdef HAVE_OPENCL
-    size_t n = params.blobs.size();
-    conv_ptr->umat_blobs.resize(n);
-    for (int i = 0; i < n; i++)
-        conv_ptr->umat_blobs[i] = params.blobs[i].getUMat(ACCESS_READ);
-#endif
-
+    Ptr<ConvolutionLayerImpl> l(new ConvolutionLayerImpl(params));
     return l;
 }
 
 Ptr<BaseConvolutionLayer> DeconvolutionLayer::create(const LayerParams &params)
 {
-    Ptr<BaseConvolutionLayer> l(new DeConvolutionLayerImpl);
-    initConvDeconvLayerFromCaffe(l, params);
-
-    return l;
+    return Ptr<BaseConvolutionLayer>(new DeConvolutionLayerImpl(params));
 }
 
 }

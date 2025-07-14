@@ -336,7 +336,7 @@ static int icvInitEMD( const float* signature1, int size1,
     char *buffer, *buffer_end;
 
     memset( state, 0, sizeof( *state ));
-    assert( cost_step % sizeof(float) == 0 );
+    CV_Assert( cost_step % sizeof(float) == 0 );
     cost_step /= sizeof(float);
 
     /* calculate buffer size */
@@ -359,7 +359,7 @@ static int icvInitEMD( const float* signature1, int size1,
     /* allocate buffers */
     _buffer.allocate(buffer_size);
 
-    state->buffer = buffer = _buffer;
+    state->buffer = buffer = _buffer.data();
     buffer_end = buffer + buffer_size;
 
     state->idx1 = (int*) buffer;
@@ -510,7 +510,7 @@ static int icvInitEMD( const float* signature1, int size1,
                     }
                     else
                     {
-                        assert( cost );
+                        CV_Assert( cost );
                         val = cost[cost_step*ci + cj];
                     }
                     state->cost[i][j] = val;
@@ -552,7 +552,7 @@ static int icvInitEMD( const float* signature1, int size1,
         buffer += dsize;
     }
 
-    assert( buffer <= buffer_end );
+    CV_Assert( buffer <= buffer_end );
 
     icvRussel( state );
 
@@ -1151,20 +1151,20 @@ float cv::EMD( InputArray _signature1, InputArray _signature2,
                int distType, InputArray _cost,
                float* lowerBound, OutputArray _flow )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat signature1 = _signature1.getMat(), signature2 = _signature2.getMat();
     Mat cost = _cost.getMat(), flow;
 
-    CvMat _csignature1 = signature1;
-    CvMat _csignature2 = signature2;
-    CvMat _ccost = cost, _cflow;
+    CvMat _csignature1 = cvMat(signature1);
+    CvMat _csignature2 = cvMat(signature2);
+    CvMat _ccost = cvMat(cost), _cflow;
     if( _flow.needed() )
     {
         _flow.create(signature1.rows, signature2.rows, CV_32F);
         flow = _flow.getMat();
         flow = Scalar::all(0);
-        _cflow = flow;
+        _cflow = cvMat(flow);
     }
 
     return cvCalcEMD2( &_csignature1, &_csignature2, distType, 0, cost.empty() ? 0 : &_ccost,

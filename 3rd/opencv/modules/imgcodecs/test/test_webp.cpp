@@ -1,8 +1,9 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html
 #include "test_precomp.hpp"
 
-using namespace cv;
-using namespace std;
-using namespace std::tr1;
+namespace opencv_test { namespace {
 
 #ifdef HAVE_WEBP
 
@@ -95,12 +96,19 @@ TEST(Imgcodecs_WebP, encode_decode_with_alpha_webp)
     string output = cv::tempfile(".webp");
 
     EXPECT_NO_THROW(cv::imwrite(output, img));
-    cv::Mat img_webp = cv::imread(output);
+    cv::Mat img_webp = cv::imread(output, IMREAD_UNCHANGED);
+    cv::Mat img_webp_bgr = cv::imread(output); // IMREAD_COLOR by default
     EXPECT_EQ(0, remove(output.c_str()));
     EXPECT_FALSE(img_webp.empty());
     EXPECT_EQ(4,   img_webp.channels());
     EXPECT_EQ(512, img_webp.cols);
     EXPECT_EQ(512, img_webp.rows);
+    EXPECT_FALSE(img_webp_bgr.empty());
+    EXPECT_EQ(3,   img_webp_bgr.channels());
+    EXPECT_EQ(512, img_webp_bgr.cols);
+    EXPECT_EQ(512, img_webp_bgr.rows);
 }
 
 #endif // HAVE_WEBP
+
+}} // namespace

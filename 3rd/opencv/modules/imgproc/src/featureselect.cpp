@@ -52,8 +52,11 @@
 namespace cv
 {
 
-struct greaterThanPtr :
-        public std::binary_function<const float *, const float *, bool>
+#ifdef CV_CXX11
+struct greaterThanPtr
+#else
+struct greaterThanPtr : public std::binary_function<const float *, const float *, bool>
+#endif
 {
     bool operator () (const float * a, const float * b) const
     // Ensure a fully deterministic result of the sort
@@ -339,11 +342,11 @@ static bool openvx_harris(Mat image, OutputArray _corners,
         ovxImage.swapHandle();
 #endif
     }
-    catch (RuntimeError & e)
+    catch (const RuntimeError & e)
     {
         VX_DbgThrow(e.what());
     }
-    catch (WrapperError & e)
+    catch (const WrapperError & e)
     {
         VX_DbgThrow(e.what());
     }
@@ -360,7 +363,7 @@ void cv::goodFeaturesToTrack( InputArray _image, OutputArray _corners,
                               InputArray _mask, int blockSize, int gradientSize,
                               bool useHarrisDetector, double harrisK )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     CV_Assert( qualityLevel > 0 && minDistance >= 0 && maxCorners >= 0 );
     CV_Assert( _mask.empty() || (_mask.type() == CV_8UC1 && _mask.sameSize(_image)) );
@@ -531,7 +534,7 @@ cvGoodFeaturesToTrack( const void* _image, void*, void*,
 
     size_t i, ncorners = corners.size();
     for( i = 0; i < ncorners; i++ )
-        _corners[i] = corners[i];
+        _corners[i] = cvPoint2D32f(corners[i]);
     *_corner_count = (int)ncorners;
 }
 

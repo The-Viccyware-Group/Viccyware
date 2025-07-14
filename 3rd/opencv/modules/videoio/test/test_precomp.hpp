@@ -1,22 +1,30 @@
-#ifdef __GNUC__
-#  pragma GCC diagnostic ignored "-Wmissing-declarations"
-#  if defined __clang__ || defined __APPLE__
-#    pragma GCC diagnostic ignored "-Wmissing-prototypes"
-#    pragma GCC diagnostic ignored "-Wextra"
-#  endif
-#endif
-
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
 #ifndef __OPENCV_TEST_PRECOMP_HPP__
 #define __OPENCV_TEST_PRECOMP_HPP__
 
-#include <iostream>
 #include "opencv2/ts.hpp"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "opencv2/videoio.hpp"
+#include "opencv2/videoio/registry.hpp"
 #include "opencv2/imgproc/imgproc_c.h"
 
 #include "opencv2/core/private.hpp"
+
+namespace cv {
+
+inline std::ostream &operator<<(std::ostream &out, const VideoCaptureAPIs& api)
+{
+    out << cv::videoio_registry::getBackendName(api); return out;
+}
+
+static inline void PrintTo(const cv::VideoCaptureAPIs& api, std::ostream* os)
+{
+    *os << cv::videoio_registry::getBackendName(api);
+}
+
+} // namespace
+
 
 inline std::string fourccToString(int fourcc)
 {
@@ -47,6 +55,31 @@ inline void generateFrame(int i, int FRAME_COUNT, cv::Mat & frame)
     imshow("frame", frame);
     waitKey();
 #endif
+}
+
+class BunnyParameters
+{
+public:
+    inline static int    getWidth()  { return 672; };
+    inline static int    getHeight() { return 384; };
+    inline static int    getFps()    { return 24; };
+    inline static double getTime()   { return 5.21; };
+    inline static int    getCount()  { return cvRound(getFps() * getTime()); };
+    inline static std::string getFilename(const std::string &ext)
+    {
+        return cvtest::TS::ptr()->get_data_path() + "video/big_buck_bunny" + ext;
+    }
+};
+
+
+static inline bool isBackendAvailable(cv::VideoCaptureAPIs api, const std::vector<cv::VideoCaptureAPIs>& api_list)
+{
+    for (size_t i = 0; i < api_list.size(); i++)
+    {
+        if (api_list[i] == api)
+            return true;
+    }
+    return false;
 }
 
 #endif

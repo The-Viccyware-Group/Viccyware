@@ -45,7 +45,8 @@ namespace cv
 {
 
 static const int DIST_SHIFT = 16;
-static const int INIT_DIST0 = (INT_MAX >> 2);
+static const int INIT_DIST0 = INT_MAX;
+static const int DIST_MAX   = (INT_MAX >> 2);
 #define  CV_FLT_TO_FIX(x,n)  cvRound((x)*(1<<(n)))
 
 static void
@@ -71,8 +72,8 @@ distanceTransform_3x3( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
 {
     const int BORDER = 1;
     int i, j;
-    const int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
-    const int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
+    const unsigned int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
+    const unsigned int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
     const float scale = 1.f/(1 << DIST_SHIFT);
 
     const uchar* src = _src.ptr();
@@ -89,7 +90,7 @@ distanceTransform_3x3( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
     for( i = 0; i < size.height; i++ )
     {
         const uchar* s = src + i*srcstep;
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
 
         for( j = 0; j < BORDER; j++ )
             tmp[-j-1] = tmp[size.width + j] = INIT_DIST0;
@@ -100,8 +101,8 @@ distanceTransform_3x3( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
                 tmp[j] = 0;
             else
             {
-                int t0 = tmp[j-step-1] + DIAG_DIST;
-                int t = tmp[j-step] + HV_DIST;
+                unsigned int t0 = tmp[j-step-1] + DIAG_DIST;
+                unsigned int t = tmp[j-step] + HV_DIST;
                 if( t0 > t ) t0 = t;
                 t = tmp[j-step+1] + DIAG_DIST;
                 if( t0 > t ) t0 = t;
@@ -116,14 +117,14 @@ distanceTransform_3x3( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
     for( i = size.height - 1; i >= 0; i-- )
     {
         float* d = (float*)(dist + i*dststep);
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
 
         for( j = size.width - 1; j >= 0; j-- )
         {
-            int t0 = tmp[j];
+            unsigned int t0 = tmp[j];
             if( t0 > HV_DIST )
             {
-                int t = tmp[j+step+1] + DIAG_DIST;
+                unsigned int t = tmp[j+step+1] + DIAG_DIST;
                 if( t0 > t ) t0 = t;
                 t = tmp[j+step] + HV_DIST;
                 if( t0 > t ) t0 = t;
@@ -133,6 +134,7 @@ distanceTransform_3x3( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
                 if( t0 > t ) t0 = t;
                 tmp[j] = t0;
             }
+            t0 = (t0 > DIST_MAX) ? DIST_MAX : t0;
             d[j] = (float)(t0 * scale);
         }
     }
@@ -144,9 +146,9 @@ distanceTransform_5x5( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
 {
     const int BORDER = 2;
     int i, j;
-    const int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
-    const int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
-    const int LONG_DIST = CV_FLT_TO_FIX( metrics[2], DIST_SHIFT );
+    const unsigned int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
+    const unsigned int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
+    const unsigned int LONG_DIST = CV_FLT_TO_FIX( metrics[2], DIST_SHIFT );
     const float scale = 1.f/(1 << DIST_SHIFT);
 
     const uchar* src = _src.ptr();
@@ -163,7 +165,7 @@ distanceTransform_5x5( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
     for( i = 0; i < size.height; i++ )
     {
         const uchar* s = src + i*srcstep;
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
 
         for( j = 0; j < BORDER; j++ )
             tmp[-j-1] = tmp[size.width + j] = INIT_DIST0;
@@ -174,8 +176,8 @@ distanceTransform_5x5( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
                 tmp[j] = 0;
             else
             {
-                int t0 = tmp[j-step*2-1] + LONG_DIST;
-                int t = tmp[j-step*2+1] + LONG_DIST;
+                unsigned int t0 = tmp[j-step*2-1] + LONG_DIST;
+                unsigned int t = tmp[j-step*2+1] + LONG_DIST;
                 if( t0 > t ) t0 = t;
                 t = tmp[j-step-2] + LONG_DIST;
                 if( t0 > t ) t0 = t;
@@ -198,14 +200,14 @@ distanceTransform_5x5( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
     for( i = size.height - 1; i >= 0; i-- )
     {
         float* d = (float*)(dist + i*dststep);
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
 
         for( j = size.width - 1; j >= 0; j-- )
         {
-            int t0 = tmp[j];
+            unsigned int t0 = tmp[j];
             if( t0 > HV_DIST )
             {
-                int t = tmp[j+step*2+1] + LONG_DIST;
+                unsigned int t = tmp[j+step*2+1] + LONG_DIST;
                 if( t0 > t ) t0 = t;
                 t = tmp[j+step*2-1] + LONG_DIST;
                 if( t0 > t ) t0 = t;
@@ -223,6 +225,7 @@ distanceTransform_5x5( const Mat& _src, Mat& _temp, Mat& _dist, const float* met
                 if( t0 > t ) t0 = t;
                 tmp[j] = t0;
             }
+            t0 = (t0 > DIST_MAX) ? DIST_MAX : t0;
             d[j] = (float)(t0 * scale);
         }
     }
@@ -235,9 +238,9 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
     const int BORDER = 2;
 
     int i, j;
-    const int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
-    const int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
-    const int LONG_DIST = CV_FLT_TO_FIX( metrics[2], DIST_SHIFT );
+    const unsigned int HV_DIST = CV_FLT_TO_FIX( metrics[0], DIST_SHIFT );
+    const unsigned int DIAG_DIST = CV_FLT_TO_FIX( metrics[1], DIST_SHIFT );
+    const unsigned int LONG_DIST = CV_FLT_TO_FIX( metrics[2], DIST_SHIFT );
     const float scale = 1.f/(1 << DIST_SHIFT);
 
     const uchar* src = _src.ptr();
@@ -247,7 +250,7 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
     int srcstep = (int)(_src.step/sizeof(src[0]));
     int step = (int)(_temp.step/sizeof(temp[0]));
     int dststep = (int)(_dist.step/sizeof(dist[0]));
-    int lstep = (int)(_labels.step/sizeof(dist[0]));
+    int lstep = (int)(_labels.step/sizeof(labels[0]));
     Size size = _src.size();
 
     initTopBottom( _temp, BORDER );
@@ -256,7 +259,7 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
     for( i = 0; i < size.height; i++ )
     {
         const uchar* s = src + i*srcstep;
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
         int* lls = (int*)(labels + i*lstep);
 
         for( j = 0; j < BORDER; j++ )
@@ -271,7 +274,7 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
             }
             else
             {
-                int t0 = INIT_DIST0, t;
+                unsigned int t0 = INIT_DIST0, t;
                 int l0 = 0;
 
                 t = tmp[j-step*2-1] + LONG_DIST;
@@ -333,16 +336,16 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
     for( i = size.height - 1; i >= 0; i-- )
     {
         float* d = (float*)(dist + i*dststep);
-        int* tmp = (int*)(temp + (i+BORDER)*step) + BORDER;
+        unsigned int* tmp = (unsigned int*)(temp + (i+BORDER)*step) + BORDER;
         int* lls = (int*)(labels + i*lstep);
 
         for( j = size.width - 1; j >= 0; j-- )
         {
-            int t0 = tmp[j];
+            unsigned int t0 = tmp[j];
             int l0 = lls[j];
             if( t0 > HV_DIST )
             {
-                int t = tmp[j+step*2+1] + LONG_DIST;
+                unsigned int t = tmp[j+step*2+1] + LONG_DIST;
                 if( t0 > t )
                 {
                     t0 = t;
@@ -393,6 +396,7 @@ distanceTransformEx_5x5( const Mat& _src, Mat& _temp, Mat& _dist, Mat& _labels, 
                 tmp[j] = t0;
                 lls[j] = l0;
             }
+            t0 = (t0 > DIST_MAX) ? DIST_MAX : t0;
             d[j] = (float)(t0 * scale);
         }
     }
@@ -444,7 +448,7 @@ static void getDistanceTransformMask( int maskType, float *metrics )
 
 struct DTColumnInvoker : ParallelLoopBody
 {
-    DTColumnInvoker( const Mat* _src, Mat* _dst, const int* _sat_tab, const float* _sqr_tab)
+    DTColumnInvoker( const Mat* _src, Mat* _dst, const int* _sat_tab, const int* _sqr_tab)
     {
         src = _src;
         dst = _dst;
@@ -452,13 +456,13 @@ struct DTColumnInvoker : ParallelLoopBody
         sqr_tab = _sqr_tab;
     }
 
-    void operator()( const Range& range ) const
+    void operator()(const Range& range) const CV_OVERRIDE
     {
         int i, i1 = range.start, i2 = range.end;
         int m = src->rows;
         size_t sstep = src->step, dstep = dst->step/sizeof(float);
         AutoBuffer<int> _d(m);
-        int* d = _d;
+        int* d = _d.data();
 
         for( i = i1; i < i2; i++ )
         {
@@ -477,7 +481,7 @@ struct DTColumnInvoker : ParallelLoopBody
             {
                 dist = dist + 1 - sat_tab[dist - d[j]];
                 d[j] = dist;
-                dptr[0] = sqr_tab[dist];
+                dptr[0] = (float)sqr_tab[dist];
             }
         }
     }
@@ -485,25 +489,25 @@ struct DTColumnInvoker : ParallelLoopBody
     const Mat* src;
     Mat* dst;
     const int* sat_tab;
-    const float* sqr_tab;
+    const int* sqr_tab;
 };
 
 struct DTRowInvoker : ParallelLoopBody
 {
-    DTRowInvoker( Mat* _dst, const float* _sqr_tab, const float* _inv_tab )
+    DTRowInvoker( Mat* _dst, const int* _sqr_tab, const float* _inv_tab )
     {
         dst = _dst;
         sqr_tab = _sqr_tab;
         inv_tab = _inv_tab;
     }
 
-    void operator()( const Range& range ) const
+    void operator()(const Range& range) const CV_OVERRIDE
     {
         const float inf = 1e15f;
         int i, i1 = range.start, i2 = range.end;
         int n = dst->cols;
         AutoBuffer<uchar> _buf((n+2)*2*sizeof(float) + (n+2)*sizeof(int));
-        float* f = (float*)(uchar*)_buf;
+        float* f = (float*)_buf.data();
         float* z = f + n;
         int* v = alignPtr((int*)(z + n + 1), sizeof(int));
 
@@ -525,7 +529,7 @@ struct DTRowInvoker : ParallelLoopBody
                 for(;;k--)
                 {
                     p = v[k];
-                    float s = (fq + sqr_tab[q] - d[p] - sqr_tab[p])*inv_tab[q - p];
+                    float s = (fq - d[p] + (sqr_tab[q]-sqr_tab[p]))*inv_tab[q - p];
                     if( s > z[k] )
                     {
                         k++;
@@ -548,28 +552,28 @@ struct DTRowInvoker : ParallelLoopBody
     }
 
     Mat* dst;
-    const float* sqr_tab;
+    const int* sqr_tab;
     const float* inv_tab;
 };
 
 static void
 trueDistTrans( const Mat& src, Mat& dst )
 {
-    const float inf = 1e15f;
+    const int inf = INT_MAX;
 
     CV_Assert( src.size() == dst.size() );
 
     CV_Assert( src.type() == CV_8UC1 && dst.type() == CV_32FC1 );
     int i, m = src.rows, n = src.cols;
 
-    cv::AutoBuffer<uchar> _buf(std::max(m*2*sizeof(float) + (m*3+1)*sizeof(int), n*2*sizeof(float)));
+    cv::AutoBuffer<uchar> _buf(std::max(m*2*sizeof(int) + (m*3+1)*sizeof(int), n*2*sizeof(float)));
     // stage 1: compute 1d distance transform of each column
-    float* sqr_tab = (float*)(uchar*)_buf;
+    int* sqr_tab = (int*)_buf.data();
     int* sat_tab = cv::alignPtr((int*)(sqr_tab + m*2), sizeof(int));
     int shift = m*2;
 
     for( i = 0; i < m; i++ )
-        sqr_tab[i] = (float)(i*i);
+        sqr_tab[i] = i*i;
     for( i = m; i < m*2; i++ )
         sqr_tab[i] = inf;
     for( i = 0; i < shift; i++ )
@@ -580,13 +584,14 @@ trueDistTrans( const Mat& src, Mat& dst )
     cv::parallel_for_(cv::Range(0, n), cv::DTColumnInvoker(&src, &dst, sat_tab, sqr_tab), src.total()/(double)(1<<16));
 
     // stage 2: compute modified distance transform for each row
-    float* inv_tab = sqr_tab + n;
+    float* inv_tab = (float*)sqr_tab + n;
 
-    inv_tab[0] = sqr_tab[0] = 0.f;
+    inv_tab[0] = 0.f;
+    sqr_tab[0] = 0;
     for( i = 1; i < n; i++ )
     {
         inv_tab[i] = (float)(0.5/i);
-        sqr_tab[i] = (float)(i*i);
+        sqr_tab[i] = i*i;
     }
 
     cv::parallel_for_(cv::Range(0, m), cv::DTRowInvoker(&dst, sqr_tab, inv_tab));
@@ -681,7 +686,7 @@ namespace cv
 {
 static void distanceTransform_L1_8U(InputArray _src, OutputArray _dst)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat src = _src.getMat();
 
@@ -712,7 +717,7 @@ static void distanceTransform_L1_8U(InputArray _src, OutputArray _dst)
 void cv::distanceTransform( InputArray _src, OutputArray _dst, OutputArray _labels,
                             int distType, int maskSize, int labelType )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat src = _src.getMat(), labels;
     bool need_labels = _labels.needed();
@@ -748,7 +753,9 @@ void cv::distanceTransform( InputArray _src, OutputArray _dst, OutputArray _labe
         CV_IPP_CHECK()
         {
 #if IPP_DISABLE_PERF_TRUE_DIST_MT
-            if(cv::getNumThreads()<=1 || (src.total()<(int)(1<<14)))
+            // IPP uses floats, but 4097 cannot be squared into a float
+            if((cv::getNumThreads()<=1 || (src.total()<(int)(1<<14))) &&
+                src.rows < 4097 && src.cols < 4097)
 #endif
             {
                 IppStatus status;
@@ -791,7 +798,7 @@ void cv::distanceTransform( InputArray _src, OutputArray _dst, OutputArray _labe
     {
         if( maskSize == CV_DIST_MASK_3 )
         {
-#if defined (HAVE_IPP) && (IPP_VERSION_X100 >= 700)
+#if defined (HAVE_IPP) && (IPP_VERSION_X100 >= 700) && 0  // disabled: https://github.com/opencv/opencv/issues/15904
             CV_IPP_CHECK()
             {
                 IppiSize roi = { src.cols, src.rows };
@@ -854,7 +861,7 @@ void cv::distanceTransform( InputArray _src, OutputArray _dst, OutputArray _labe
 void cv::distanceTransform( InputArray _src, OutputArray _dst,
                             int distanceType, int maskSize, int dstType)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     if (distanceType == CV_DIST_L1 && dstType==CV_8U)
         distanceTransform_L1_8U(_src, _dst);

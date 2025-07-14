@@ -350,18 +350,77 @@ namespace Vision {
 // "Register" our RGB/RGBA pixels as DataTypes with OpenCV
 namespace cv {
 
-  template<> class DataDepth<Anki::Vision::PixelRGB_<u8>  >     : public DataDepth<DataType<Vec<u8, 3> > >  { };
-  template<> class DataDepth<Anki::Vision::PixelRGB_<s16> >     : public DataDepth<DataType<Vec<s16,3> > >  { };
-  template<> class DataDepth<Anki::Vision::PixelRGB_<f32> >     : public DataDepth<DataType<Vec<f32,3> > >  { };
-  template<> class DataDepth<Anki::Vision::PixelRGBA>           : public DataDepth<DataType<Vec<u8, 4> > >  { };
-  template<> class DataDepth<Anki::Vision::PixelRGB565>         : public DataDepth<DataType<Vec<u8, 2> > >  { };
-  
-  template<> class DataType<Anki::Vision::PixelRGB_<u8>  >      : public DataType<Vec<u8, 3> > { };
-  template<> class DataType<Anki::Vision::PixelRGB_<s16> >      : public DataType<Vec<s16,3> > { };
-  template<> class DataType<Anki::Vision::PixelRGB_<f32> >      : public DataType<Vec<f32,3> > { };
-  template<> class DataType<Anki::Vision::PixelRGBA>            : public DataType<Vec<u8, 4> > { };
-  template<> class DataType<Anki::Vision::PixelRGB565>          : public DataType<Vec<u8, 2> > { };
-  
+  template<>
+  struct DataType< Anki::Vision::PixelRGB_<u8> > {
+    using value_type   = Anki::Vision::PixelRGB_<u8>;
+    using work_type    = Anki::Vision::PixelRGB_<u8>;
+    using channel_type = uchar;
+    using vec_type     = value_type;   // <-- needed for Mat_::operator=
+    enum {
+      depth    = DataDepth<uchar>::value,   // CV_8U
+      channels = 3,
+      fmt      = (channels - 1)*256 + DataDepth<uchar>::fmt,
+      type     = CV_MAKETYPE(depth, channels)
+    };
+  };
+
+  template<>
+  struct DataType< Anki::Vision::PixelRGB_<s16> > {
+    using value_type   = Anki::Vision::PixelRGB_<s16>;
+    using work_type    = Anki::Vision::PixelRGB_<s16>;
+    using channel_type = short;
+    using vec_type     = value_type;
+    enum {
+      depth    = DataDepth<short>::value,   // CV_16S
+      channels = 3,
+      fmt      = (channels - 1)*256 + DataDepth<short>::fmt,
+      type     = CV_MAKETYPE(depth, channels)
+    };
+  };
+
+  // 3-channel f32 RGB
+  template<>
+  struct DataType< Anki::Vision::PixelRGB_<f32> > {
+    using value_type   = Anki::Vision::PixelRGB_<f32>;
+    using work_type    = Anki::Vision::PixelRGB_<f32>;
+    using channel_type = float;
+    using vec_type     = value_type;
+    enum {
+      depth    = DataDepth<float>::value,   // CV_32F
+      channels = 3,
+      fmt      = (channels - 1)*256 + DataDepth<float>::fmt,
+      type     = CV_MAKETYPE(depth, channels)
+    };
+  };
+
+  template<>
+  struct DataType< Anki::Vision::PixelRGBA > {
+    using value_type   = Anki::Vision::PixelRGBA;
+    using work_type    = Anki::Vision::PixelRGBA;
+    using channel_type = uchar;
+    using vec_type     = value_type;
+    enum {
+      depth    = DataDepth<uchar>::value,   // CV_8U
+      channels = 4,
+      fmt      = (channels - 1)*256 + DataDepth<uchar>::fmt,
+      type     = CV_MAKETYPE(depth, channels)
+    };
+  };
+
+  template<>
+  struct DataType< Anki::Vision::PixelRGB565 > {
+    using value_type   = Anki::Vision::PixelRGB565;
+    using work_type    = Anki::Vision::PixelRGB565;
+    using channel_type = uchar;
+    using vec_type     = value_type;
+    enum {
+      depth    = DataDepth<uchar>::value,
+      channels = 2,
+      fmt      = (channels - 1)*256 + DataDepth<uchar>::fmt,
+      type     = CV_MAKETYPE(depth, channels)
+    };
+  };
+
 } // namespace cv
 
 #endif // __Anki_Coretech_Vision_Basestation_RGBPixel_H__

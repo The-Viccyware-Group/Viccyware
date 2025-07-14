@@ -1,8 +1,9 @@
+// This file is part of OpenCV project.
+// It is subject to the license terms in the LICENSE file found in the top-level directory
+// of this distribution and at http://opencv.org/license.html.
 #include "test_precomp.hpp"
-#include <string>
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 class CV_UndistortTest : public cvtest::BaseTest
 {
@@ -29,7 +30,7 @@ CV_UndistortTest::~CV_UndistortTest() {}
 
 void CV_UndistortTest::generate3DPointCloud(vector<Point3f>& points, Point3f pmin, Point3f pmax)
 {
-    RNG rng_Point = ::theRNG(); // fix the seed to use "fixed" input 3D points
+    RNG rng_Point = cv::theRNG(); // fix the seed to use "fixed" input 3D points
     for (size_t i = 0; i < points.size(); i++)
     {
         float _x = rng_Point.uniform(pmin.x, pmax.x);
@@ -117,3 +118,31 @@ TEST(Calib3d_Undistort, stop_criteria)
 
     ASSERT_LE(obtainedError, maxError);
 }
+
+TEST(undistortPoints, regression_14583)
+{
+    const int col = 720;
+    // const int row = 540;
+    float camera_matrix_value[] = {
+        437.8995f, 0.0f, 342.9241f,
+        0.0f, 438.8216f, 273.7163f,
+        0.0f, 0.0f,      1.0f
+    };
+    cv::Mat camera_interior(3, 3, CV_32F, camera_matrix_value);
+
+    float camera_distort_value[] = {-0.34329f, 0.11431f, 0.0f, 0.0f, -0.017375f};
+    cv::Mat camera_distort(1, 5, CV_32F, camera_distort_value);
+
+    float distort_points_value[] = {col, 0.};
+    cv::Mat distort_pt(1, 1, CV_32FC2, distort_points_value);
+
+    cv::Mat undistort_pt;
+    cv::undistortPoints(distort_pt, undistort_pt, camera_interior,
+                        camera_distort, cv::Mat(), camera_interior);
+
+    EXPECT_NEAR(distort_pt.at<Vec2f>(0)[0], undistort_pt.at<Vec2f>(0)[0], col / 2)
+        << "distort point: " << distort_pt << std::endl
+        << "undistort point: " << undistort_pt;
+}
+
+}} // namespace

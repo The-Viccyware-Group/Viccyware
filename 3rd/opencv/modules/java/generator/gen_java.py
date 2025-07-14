@@ -1,15 +1,42 @@
 #!/usr/bin/env python
 
-import sys, re, os.path
+import sys, re, os.path, errno, fnmatch
 import json
 import logging
+import codecs
+from shutil import copyfile
 from pprint import pformat
 from string import Template
 
 if sys.version_info[0] >= 3:
     from io import StringIO
 else:
-    from cStringIO import StringIO
+    import io
+    class StringIO(io.StringIO):
+        def write(self, s):
+            if isinstance(s, str):
+                s = unicode(s)  # noqa: F821
+            return super(StringIO, self).write(s)
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# list of modules + files remap
+config = None
+ROOT_DIR = None
+FILES_REMAP = {}
+def checkFileRemap(path):
+    path = os.path.realpath(path)
+    if path in FILES_REMAP:
+        return FILES_REMAP[path]
+    assert path[-3:] != '.in', path
+    return path
+
+total_files = 0
+updated_files = 0
+
+module_imports = []
+module_j_code = None
+module_jn_code = None
 
 # list of class names, which should be skipped by wrapper generator
 # the list is loaded from misc/java/gen_dict.json defined for the module and its dependencies
@@ -46,158 +73,56 @@ type_dict = {
     "double[]": { "j_type" : "double[]", "jn_type" : "double[]", "jni_type" : "jdoubleArray", "suffix" : "_3D" }
 }
 
+# Defines a rule to add extra prefixes for names from specific namespaces.
+# In example, cv::fisheye::stereoRectify from namespace fisheye is wrapped as fisheye_stereoRectify
+namespaces_dict = {}
+
 # { class : { func : {j_code, jn_code, cpp_code} } }
 ManualFuncs = {}
 
 # { class : { func : { arg_name : {"ctype" : ctype, "attrib" : [attrib]} } } }
 func_arg_fix = {}
 
-def getLibVersion(version_hpp_path):
-    version_file = open(version_hpp_path, "rt").read()
-    major = re.search("^W*#\W*define\W+CV_VERSION_MAJOR\W+(\d+)\W*$", version_file, re.MULTILINE).group(1)
-    minor = re.search("^W*#\W*define\W+CV_VERSION_MINOR\W+(\d+)\W*$", version_file, re.MULTILINE).group(1)
-    revision = re.search("^W*#\W*define\W+CV_VERSION_REVISION\W+(\d+)\W*$", version_file, re.MULTILINE).group(1)
-    status = re.search("^W*#\W*define\W+CV_VERSION_STATUS\W+\"(.*?)\"\W*$", version_file, re.MULTILINE).group(1)
-    return (major, minor, revision, status)
+def read_contents(fname):
+    with open(fname, 'r') as f:
+        data = f.read()
+    return data
 
-def libVersionBlock():
-    (major, minor, revision, status) = getLibVersion(
-    (os.path.dirname(__file__) or '.') + '/../../core/include/opencv2/core/version.hpp')
-    version_str    = '.'.join( (major, minor, revision) ) + status
-    version_suffix =  ''.join( (major, minor, revision) )
-    return """
-    // these constants are wrapped inside functions to prevent inlining
-    private static String getVersion() { return "%(v)s"; }
-    private static String getNativeLibraryName() { return "opencv_java%(vs)s"; }
-    private static int getVersionMajor() { return %(ma)s; }
-    private static int getVersionMinor() { return %(mi)s; }
-    private static int getVersionRevision() { return %(re)s; }
-    private static String getVersionStatus() { return "%(st)s"; }
+def mkdir_p(path):
+    ''' mkdir -p '''
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
-    public static final String VERSION = getVersion();
-    public static final String NATIVE_LIBRARY_NAME = getNativeLibraryName();
-    public static final int VERSION_MAJOR = getVersionMajor();
-    public static final int VERSION_MINOR = getVersionMinor();
-    public static final int VERSION_REVISION = getVersionRevision();
-    public static final String VERSION_STATUS = getVersionStatus();
-""" % { 'v' : version_str, 'vs' : version_suffix, 'ma' : major, 'mi' : minor, 're' : revision, 'st': status }
-
-
-T_JAVA_START_INHERITED = """
-//
-// This file is auto-generated. Please don't modify it!
-//
-package org.opencv.$module;
-
-$imports
-
-$docs
-$annotation
-public class $jname extends $base {
-
-    protected $jname(long addr) { super(addr); }
-
-"""
-
-T_JAVA_START_ORPHAN = """
-//
-// This file is auto-generated. Please don't modify it!
-//
-package org.opencv.$module;
-
-$imports
-
-$docs
-$annotation
-public class $jname {
-
-    protected final long nativeObj;
-    protected $jname(long addr) { nativeObj = addr; }
-
-    public long getNativeObjAddr() { return nativeObj; }
-"""
-
-T_JAVA_START_MODULE = """
-//
-// This file is auto-generated. Please don't modify it!
-//
-package org.opencv.$module;
-
-$imports
-
-$docs
-$annotation
-public class $jname {
-"""
-
-T_CPP_MODULE = """
-//
-// This file is auto-generated, please don't edit!
-//
-
-#define LOG_TAG "org.opencv.$m"
-
-#include "common.h"
-
-#include "opencv2/opencv_modules.hpp"
-#ifdef HAVE_OPENCV_$M
-
-#include <string>
-
-#include "opencv2/$m.hpp"
-
-$includes
-
-using namespace cv;
-
-/// throw java exception
-static void throwJavaException(JNIEnv *env, const std::exception *e, const char *method) {
-  std::string what = "unknown exception";
-  jclass je = 0;
-
-  if(e) {
-    std::string exception_type = "std::exception";
-
-    if(dynamic_cast<const cv::Exception*>(e)) {
-      exception_type = "cv::Exception";
-      je = env->FindClass("org/opencv/core/CvException");
-    }
-
-    what = exception_type + ": " + e->what();
-  }
-
-  if(!je) je = env->FindClass("java/lang/Exception");
-  env->ThrowNew(je, what.c_str());
-
-  LOGE("%s caught %s", method, what.c_str());
-  (void)method;        // avoid "unused" warning
-}
-
-
-extern "C" {
-
-$code
-
-} // extern "C"
-
-#endif // HAVE_OPENCV_$M
-"""
+T_JAVA_START_INHERITED = read_contents(os.path.join(SCRIPT_DIR, 'templates/java_class_inherited.prolog'))
+T_JAVA_START_ORPHAN = read_contents(os.path.join(SCRIPT_DIR, 'templates/java_class.prolog'))
+T_JAVA_START_MODULE = read_contents(os.path.join(SCRIPT_DIR, 'templates/java_module.prolog'))
+T_CPP_MODULE = Template(read_contents(os.path.join(SCRIPT_DIR, 'templates/cpp_module.template')))
 
 class GeneralInfo():
     def __init__(self, type, decl, namespaces):
-        self.namespace, self.classpath, self.classname, self.name = self.parseName(decl[0], namespaces)
+        self.symbol_id, self.namespace, self.classpath, self.classname, self.name = self.parseName(decl[0], namespaces)
 
         # parse doxygen comments
         self.params={}
         self.annotation=[]
         if type == "class":
-            docstring="// C++: class " + self.name + "\n//javadoc: " + self.name
+            docstring="// C++: class " + self.name + "\n"
         else:
             docstring=""
+
         if len(decl)>5 and decl[5]:
-            logging.info('docstring: %s', decl[5])
-            if re.search("(@|\\\\)deprecated", decl[5]):
+            doc = decl[5]
+
+            #logging.info('docstring: %s', doc)
+            if re.search("(@|\\\\)deprecated", doc):
                 self.annotation.append("@Deprecated")
+
+            docstring += sanitize_java_documentation_string(doc, type)
 
         self.docstring = docstring
 
@@ -216,28 +141,31 @@ class GeneralInfo():
                 break
         pieces = localName.split(".")
         if len(pieces) > 2: # <class>.<class>.<class>.<name>
-            return spaceName, ".".join(pieces[:-1]), pieces[-2], pieces[-1]
+            return name, spaceName, ".".join(pieces[:-1]), pieces[-2], pieces[-1]
         elif len(pieces) == 2: # <class>.<name>
-            return spaceName, pieces[0], pieces[0], pieces[1]
+            return name, spaceName, pieces[0], pieces[0], pieces[1]
         elif len(pieces) == 1: # <name>
-            return spaceName, "", "", pieces[0]
+            return name, spaceName, "", "", pieces[0]
         else:
-            return spaceName, "", "" # error?!
+            return name, spaceName, "", "" # error?!
 
     def fullName(self, isCPP=False):
         result = ".".join([self.fullClass(), self.name])
-        return result if not isCPP else result.replace(".", "::")
+        return result if not isCPP else get_cname(result)
 
     def fullClass(self, isCPP=False):
         result = ".".join([f for f in [self.namespace] + self.classpath.split(".") if len(f)>0])
-        return result if not isCPP else result.replace(".", "::")
+        return result if not isCPP else get_cname(result)
 
 class ConstInfo(GeneralInfo):
-    def __init__(self, decl, addedManually=False, namespaces=[]):
+    def __init__(self, decl, addedManually=False, namespaces=[], enumType=None):
         GeneralInfo.__init__(self, "const", decl, namespaces)
-        self.cname = self.name.replace(".", "::")
+        self.cname = get_cname(self.name)
         self.value = decl[1]
+        self.enumType = enumType
         self.addedManually = addedManually
+        if self.namespace in namespaces_dict:
+            self.name = '%s_%s' % (namespaces_dict[self.namespace], self.name)
 
     def __repr__(self):
         return Template("CONST $name=$value$manual").substitute(name=self.name,
@@ -249,6 +177,25 @@ class ConstInfo(GeneralInfo):
             if re.match(c, self.name):
                 return True
         return False
+
+def normalize_field_name(name):
+    return name.replace(".","_").replace("[","").replace("]","").replace("_getNativeObjAddr()","_nativeObj")
+
+def normalize_class_name(name):
+    return re.sub(r"^cv\.", "", name).replace(".", "_")
+
+def get_cname(name):
+    return name.replace(".", "::")
+
+def cast_from(t):
+    if t in type_dict and "cast_from" in type_dict[t]:
+        return type_dict[t]["cast_from"]
+    return t
+
+def cast_to(t):
+    if t in type_dict and "cast_to" in type_dict[t]:
+        return type_dict[t]["cast_to"]
+    return t
 
 class ClassPropInfo():
     def __init__(self, decl): # [f_ctype, f_name, '', '/RW']
@@ -262,10 +209,10 @@ class ClassPropInfo():
 class ClassInfo(GeneralInfo):
     def __init__(self, decl, namespaces=[]): # [ 'class/struct cname', ': base', [modlist] ]
         GeneralInfo.__init__(self, "class", decl, namespaces)
-        self.cname = self.name.replace(".", "::")
+        self.cname = get_cname(self.name)
         self.methods = []
         self.methods_suffixes = {}
-        self.consts = [] # using a list to save the occurence order
+        self.consts = [] # using a list to save the occurrence order
         self.private_consts = []
         self.imports = set()
         self.props= []
@@ -277,6 +224,9 @@ class ClassInfo(GeneralInfo):
         for m in decl[2]:
             if m.startswith("="):
                 self.jname = m[1:]
+            if m == '/Simple':
+                self.smart = False
+
         self.base = ''
         if decl[1]:
             #self.base = re.sub(r"\b"+self.jname+r"\b", "", decl[1].replace(":", "")).strip()
@@ -286,7 +236,8 @@ class ClassInfo(GeneralInfo):
         return Template("CLASS $namespace::$classpath.$name : $base").substitute(**self.__dict__)
 
     def getAllImports(self, module):
-        return ["import %s;" % c for c in sorted(self.imports) if not c.startswith('org.opencv.'+module)]
+        return ["import %s;" % c for c in sorted(self.imports) if not c.startswith('org.opencv.'+module)
+            and (not c.startswith('java.lang.') or c.count('.') != 2)]
 
     def addImports(self, ctype):
         if ctype in type_dict:
@@ -301,8 +252,8 @@ class ClassInfo(GeneralInfo):
 
     def getAllMethods(self):
         result = []
-        result.extend([fi for fi in sorted(self.methods) if fi.isconstructor])
-        result.extend([fi for fi in sorted(self.methods) if not fi.isconstructor])
+        result += [fi for fi in self.methods if fi.isconstructor]
+        result += [fi for fi in self.methods if not fi.isconstructor]
         return result
 
     def addMethod(self, fi):
@@ -326,7 +277,7 @@ class ClassInfo(GeneralInfo):
     def initCodeStreams(self, Module):
         self.j_code = StringIO()
         self.jn_code = StringIO()
-        self.cpp_code = StringIO();
+        self.cpp_code = StringIO()
         if self.base:
             self.j_code.write(T_JAVA_START_INHERITED)
         else:
@@ -335,9 +286,13 @@ class ClassInfo(GeneralInfo):
             else:
                 self.j_code.write(T_JAVA_START_MODULE)
         # misc handling
-        if self.name == 'Core':
-            self.imports.add("java.lang.String")
-            self.j_code.write(libVersionBlock())
+        if self.name == Module:
+          for i in module_imports or []:
+              self.imports.add(i)
+          if module_j_code:
+              self.j_code.write(module_j_code)
+          if module_jn_code:
+              self.jn_code.write(module_jn_code)
 
     def cleanupCodeStreams(self):
         self.j_code.close()
@@ -345,14 +300,14 @@ class ClassInfo(GeneralInfo):
         self.cpp_code.close()
 
     def generateJavaCode(self, m, M):
-        return Template(self.j_code.getvalue() + "\n\n" + \
-                         self.jn_code.getvalue() + "\n}\n").substitute(\
+        return Template(self.j_code.getvalue() + "\n\n" +
+                         self.jn_code.getvalue() + "\n}\n").substitute(
                             module = m,
                             name = self.name,
                             jname = self.jname,
                             imports = "\n".join(self.getAllImports(M)),
                             docs = self.docstring,
-                            annotation = "\n".join(self.annotation),
+                            annotation = "\n" + "\n".join(self.annotation) if self.annotation else "",
                             base = self.base)
 
     def generateCppCode(self):
@@ -383,11 +338,13 @@ class ArgInfo():
 class FuncInfo(GeneralInfo):
     def __init__(self, decl, namespaces=[]): # [ funcname, return_ctype, [modifiers], [args] ]
         GeneralInfo.__init__(self, "func", decl, namespaces)
-        self.cname = self.name.replace(".", "::")
+        self.cname = get_cname(decl[0])
         self.jname = self.name
         self.isconstructor = self.name == self.classname
         if "[" in self.name:
             self.jname = "getelem"
+        if self.namespace in namespaces_dict:
+            self.jname = '%s_%s' % (namespaces_dict[self.namespace], self.jname)
         for m in decl[2]:
             if m.startswith("="):
                 self.jname = m[1:]
@@ -411,11 +368,12 @@ class FuncInfo(GeneralInfo):
 
 class JavaWrapperGenerator(object):
     def __init__(self):
+        self.cpp_files = []
         self.clear()
 
     def clear(self):
-        self.namespaces = set(["cv"])
-        self.classes = { "Mat" : ClassInfo([ 'class Mat', '', [], [] ], self.namespaces) }
+        self.namespaces = ["cv"]
+        self.classes = { "Mat" : ClassInfo([ 'class Mat', '', ['/Simple'], [] ], self.namespaces) }
         self.module = ""
         self.Module = ""
         self.ported_func_list = []
@@ -435,16 +393,28 @@ class JavaWrapperGenerator(object):
         if name in type_dict and not classinfo.base:
             logging.warning('duplicated: %s', classinfo)
             return
-        type_dict[name] = \
+        if self.isSmartClass(classinfo):
+            jni_name = "*((*(Ptr<"+classinfo.fullName(isCPP=True)+">*)%(n)s_nativeObj).get())"
+        else:
+            jni_name = "(*("+classinfo.fullName(isCPP=True)+"*)%(n)s_nativeObj)"
+        type_dict.setdefault(name, {}).update(
             { "j_type" : classinfo.jname,
               "jn_type" : "long", "jn_args" : (("__int64", ".nativeObj"),),
-              "jni_name" : "(*("+classinfo.fullName(isCPP=True)+"*)%(n)s_nativeObj)", "jni_type" : "jlong",
-              "suffix" : "J" }
-        type_dict[name+'*'] = \
+              "jni_name" : jni_name,
+              "jni_type" : "jlong",
+              "suffix" : "J",
+              "j_import" : "org.opencv.%s.%s" % (self.module, classinfo.jname)
+            }
+        )
+        type_dict.setdefault(name+'*', {}).update(
             { "j_type" : classinfo.jname,
               "jn_type" : "long", "jn_args" : (("__int64", ".nativeObj"),),
-              "jni_name" : "("+classinfo.fullName(isCPP=True)+"*)%(n)s_nativeObj", "jni_type" : "jlong",
-              "suffix" : "J" }
+              "jni_name" : "&("+jni_name+")",
+              "jni_type" : "jlong",
+              "suffix" : "J",
+              "j_import" : "org.opencv.%s.%s" % (self.module, classinfo.jname)
+            }
+        )
 
         # missing_consts { Module : { public : [[name, val],...], private : [[]...] } }
         if name in missing_consts:
@@ -464,20 +434,26 @@ class JavaWrapperGenerator(object):
 
         if classinfo.base:
             classinfo.addImports(classinfo.base)
-        type_dict["Ptr_"+name] = \
+        type_dict.setdefault("Ptr_"+name, {}).update(
             { "j_type" : classinfo.jname,
               "jn_type" : "long", "jn_args" : (("__int64", ".getNativeObjAddr()"),),
               "jni_name" : "*((Ptr<"+classinfo.fullName(isCPP=True)+">*)%(n)s_nativeObj)", "jni_type" : "jlong",
-              "suffix" : "J" }
+              "suffix" : "J",
+              "j_import" : "org.opencv.%s.%s" % (self.module, classinfo.jname)
+            }
+        )
         logging.info('ok: class %s, name: %s, base: %s', classinfo, name, classinfo.base)
 
-    def add_const(self, decl): # [ "const cname", val, [], [] ]
-        constinfo = ConstInfo(decl, namespaces=self.namespaces)
+    def add_const(self, decl, enumType=None): # [ "const cname", val, [], [] ]
+        constinfo = ConstInfo(decl, namespaces=self.namespaces, enumType=enumType)
         if constinfo.isIgnored():
             logging.info('ignored: %s', constinfo)
-        elif not self.isWrapped(constinfo.classname):
-            logging.info('class not found: %s', constinfo)
         else:
+            if not self.isWrapped(constinfo.classname):
+                logging.info('class not found: %s', constinfo)
+                constinfo.name = constinfo.classname + '_' + constinfo.name
+                constinfo.classname = ''
+
             ci = self.getClass(constinfo.classname)
             duplicate = ci.getConst(constinfo.name)
             if duplicate:
@@ -488,6 +464,18 @@ class JavaWrapperGenerator(object):
             else:
                 ci.addConst(constinfo)
                 logging.info('ok: %s', constinfo)
+
+    def add_enum(self, decl): # [ "enum cname", "", [], [] ]
+        enumType = decl[0].rsplit(" ", 1)[1]
+        if enumType.endswith("<unnamed>"):
+            enumType = None
+        else:
+            ctype = normalize_class_name(enumType)
+            type_dict[ctype] = { "cast_from" : "int", "cast_to" : get_cname(enumType), "j_type" : "int", "jn_type" : "int", "jni_type" : "jint", "suffix" : "I" }
+        const_decls = decl[3]
+
+        for decl in const_decls:
+            self.add_const(decl, enumType)
 
     def add_func(self, decl):
         fi = FuncInfo(decl, namespaces=self.namespaces)
@@ -506,11 +494,18 @@ class JavaWrapperGenerator(object):
             self.def_args_hist[cnt] = self.def_args_hist.get(cnt, 0) + 1
 
     def save(self, path, buf):
-        f = open(path, "wt")
-        f.write(buf)
-        f.close()
+        global total_files, updated_files
+        total_files += 1
+        if os.path.exists(path):
+            with open(path, "rt") as f:
+                content = f.read()
+                if content == buf:
+                    return
+        with codecs.open(path, "w", "utf-8") as f:
+            f.write(buf)
+        updated_files += 1
 
-    def gen(self, srcfiles, module, output_path, common_headers):
+    def gen(self, srcfiles, module, output_path, output_jni_path, output_java_path, common_headers):
         self.clear()
         self.module = module
         self.Module = module.capitalize()
@@ -520,42 +515,49 @@ class JavaWrapperGenerator(object):
         self.add_class( ['class ' + self.Module, '', [], []] ) # [ 'class/struct cname', ':bases', [modlist] [props] ]
 
         # scan the headers and build more descriptive maps of classes, consts, functions
-        includes = [];
+        includes = []
         for hdr in common_headers:
             logging.info("\n===== Common header : %s =====", hdr)
             includes.append('#include "' + hdr + '"')
         for hdr in srcfiles:
             decls = parser.parse(hdr)
-            self.namespaces = parser.namespaces
+            self.namespaces = sorted(parser.namespaces)
             logging.info("\n\n===== Header: %s =====", hdr)
-            logging.info("Namespaces: %s", parser.namespaces)
+            logging.info("Namespaces: %s", sorted(parser.namespaces))
             if decls:
                 includes.append('#include "' + hdr + '"')
             else:
                 logging.info("Ignore header: %s", hdr)
             for decl in decls:
-                logging.info("\n--- Incoming ---\n%s", pformat(decl, 4))
+                logging.info("\n--- Incoming ---\n%s", pformat(decl[:5], 4)) # without docstring
                 name = decl[0]
                 if name.startswith("struct") or name.startswith("class"):
                     self.add_class(decl)
                 elif name.startswith("const"):
                     self.add_const(decl)
+                elif name.startswith("enum"):
+                    # enum
+                    self.add_enum(decl)
                 else: # function
                     self.add_func(decl)
 
         logging.info("\n\n===== Generating... =====")
         moduleCppCode = StringIO()
-        for ci in self.classes.values():
+        package_path = os.path.join(output_java_path, module)
+        mkdir_p(package_path)
+        for ci in sorted(self.classes.values(), key=lambda x: x.symbol_id):
             if ci.name == "Mat":
                 continue
             ci.initCodeStreams(self.Module)
             self.gen_class(ci)
             classJavaCode = ci.generateJavaCode(self.module, self.Module)
-            self.save("%s/%s+%s.java" % (output_path, module, ci.jname), classJavaCode)
+            self.save("%s/%s/%s.java" % (output_java_path, module, ci.jname), classJavaCode)
             moduleCppCode.write(ci.generateCppCode())
             ci.cleanupCodeStreams()
-        self.save(output_path+"/"+module+".cpp", Template(T_CPP_MODULE).substitute(m = module, M = module.upper(), code = moduleCppCode.getvalue(), includes = "\n".join(includes)))
-        self.save(output_path+"/"+module+".txt", self.makeReport())
+        cpp_file = os.path.abspath(os.path.join(output_jni_path, module + ".inl.hpp"))
+        self.cpp_files.append(cpp_file)
+        self.save(cpp_file, T_CPP_MODULE.substitute(m = module, M = module.upper(), code = moduleCppCode.getvalue(), includes = "\n".join(includes)))
+        self.save(os.path.join(output_path, module+".txt"), self.makeReport())
 
     def makeReport(self):
         '''
@@ -567,7 +569,7 @@ class JavaWrapperGenerator(object):
         report.write("\n".join(self.ported_func_list))
         report.write("\n\nSKIPPED FUNCs LIST (%i of %i):\n\n" % (len(self.skipped_func_list), total_count))
         report.write("".join(self.skipped_func_list))
-        for i in self.def_args_hist.keys():
+        for i in sorted(self.def_args_hist.keys()):
             report.write("\n%i def args - %i funcs" % (i, self.def_args_hist[i]))
         return report.getvalue()
 
@@ -575,7 +577,7 @@ class JavaWrapperGenerator(object):
         if self.isWrapped(t):
             return self.getClass(t).fullName(isCPP=True)
         else:
-            return t
+            return cast_from(t)
 
     def gen_func(self, ci, fi, prop_name=''):
         logging.info("%s", fi)
@@ -608,7 +610,7 @@ class JavaWrapperGenerator(object):
             msg = "// Return type '%s' is not supported, skipping the function\n\n" % fi.ctype
             self.skipped_func_list.append(c_decl + "\n" + msg)
             j_code.write( " "*4 + msg )
-            logging.warning("SKIP:" + c_decl.strip() + "\t due to RET type" + fi.ctype)
+            logging.warning("SKIP:" + c_decl.strip() + "\t due to RET type " + fi.ctype)
             return
         for a in fi.args:
             if a.ctype not in type_dict:
@@ -620,7 +622,7 @@ class JavaWrapperGenerator(object):
                 msg = "// Unknown type '%s' (%s), skipping the function\n\n" % (a.ctype, a.out or "I")
                 self.skipped_func_list.append(c_decl + "\n" + msg)
                 j_code.write( " "*4 + msg )
-                logging.warning("SKIP:" + c_decl.strip() + "\t due to ARG type" + a.ctype + "/" + (a.out or "I"))
+                logging.warning("SKIP:" + c_decl.strip() + "\t due to ARG type " + a.ctype + "/" + (a.out or "I"))
                 return
 
         self.ported_func_list.append(c_decl)
@@ -699,12 +701,12 @@ class JavaWrapperGenerator(object):
                     if "I" in a.out or not a.out or self.isWrapped(a.ctype): # input arg, pass by primitive fields
                         for f in fields:
                             jn_args.append ( ArgInfo([ f[0], a.name + f[1], "", [], "" ]) )
-                            jni_args.append( ArgInfo([ f[0], a.name + f[1].replace(".","_").replace("[","").replace("]","").replace("_getNativeObjAddr()","_nativeObj"), "", [], "" ]) )
+                            jni_args.append( ArgInfo([ f[0], a.name + normalize_field_name(f[1]), "", [], "" ]) )
                     if "O" in a.out and not self.isWrapped(a.ctype): # out arg, pass as double[]
                         jn_args.append ( ArgInfo([ "double[]", "%s_out" % a.name, "", [], "" ]) )
                         jni_args.append ( ArgInfo([ "double[]", "%s_out" % a.name, "", [], "" ]) )
                         j_prologue.append( "double[] %s_out = new double[%i];" % (a.name, len(fields)) )
-                        c_epilogue.append( \
+                        c_epilogue.append(
                             "jdouble tmp_%(n)s[%(cnt)i] = {%(args)s}; env->SetDoubleArrayRegion(%(n)s_out, 0, %(cnt)i, tmp_%(n)s);" %
                             { "n" : a.name, "cnt" : len(fields), "args" : ", ".join(["(jdouble)" + a.name + f[1] for f in fields]) } )
                         if type_dict[a.ctype]["j_type"] in ('bool', 'int', 'long', 'float', 'double'):
@@ -732,9 +734,9 @@ class JavaWrapperGenerator(object):
                 fi.jname + "(" + ", ".join(j_args) + ")"
             logging.info("java: " + j_signature)
 
-            if(j_signature in j_signatures):
+            if j_signature in j_signatures:
                 if args:
-                    pop(args)
+                    args.pop()
                     continue
                 else:
                     break
@@ -743,25 +745,57 @@ class JavaWrapperGenerator(object):
             # private java NATIVE method decl
             # e.g.
             # private static native void add_0(long src1, long src2, long dst, long mask, int dtype);
-            jn_code.write( Template(\
-                "    private static native $type $name($args);\n").substitute(\
-                type = type_dict[fi.ctype].get("jn_type", "double[]"), \
-                name = fi.jname + '_' + str(suffix_counter), \
-                args = ", ".join(["%s %s" % (type_dict[a.ctype]["jn_type"], a.name.replace(".","_").replace("[","").replace("]","").replace("_getNativeObjAddr()","_nativeObj")) for a in jn_args])
-            ) );
+            jn_code.write( Template(
+                "    private static native $type $name($args);\n").substitute(
+                type = type_dict[fi.ctype].get("jn_type", "double[]"),
+                name = fi.jname + '_' + str(suffix_counter),
+                args = ", ".join(["%s %s" % (type_dict[a.ctype]["jn_type"], normalize_field_name(a.name)) for a in jn_args])
+            ) )
 
             # java part:
 
             #java doc comment
-            f_name = fi.name
-            if fi.classname:
-                f_name = fi.classname + "::" + fi.name
-            java_doc = "//javadoc: " + f_name + "(%s)" % ", ".join([a.name for a in args if a.ctype])
-            j_code.write(" "*4 + java_doc + "\n")
-
             if fi.docstring:
-                lines = StringIO(fi.docstring)
-                for line in lines:
+                lines = fi.docstring.splitlines()
+                returnTag = False
+                javadocParams = []
+                toWrite = []
+                inCode = False
+                for index, line in enumerate(lines):
+                    p0 = line.find("@param")
+                    if p0 != -1:
+                        p0 += 7
+                        p1 = line.find(' ', p0)
+                        p1 = len(line) if p1 == -1 else p1
+                        name = line[p0:p1]
+                        javadocParams.append(name)
+                        for arg in j_args:
+                            if arg.endswith(" " + name):
+                                toWrite.append(line);
+                                break
+                    else:
+                        if "<code>" in line:
+                            inCode = True
+                        if "</code>" in line:
+                            inCode = False
+                        line = line.replace('@result ', '@return ')  # @result is valid in Doxygen, but invalid in Javadoc
+                        if "@return " in line:
+                            returnTag = True
+
+                        if (not inCode and toWrite and not toWrite[-1] and
+                                line and not line.startswith("\\") and not line.startswith("<ul>") and not line.startswith("@param")):
+                                toWrite.append("<p>");
+
+                        if index == len(lines) - 1:
+                            for arg in j_args:
+                                name = arg[arg.rfind(' ') + 1:]
+                                if not name in javadocParams:
+                                    toWrite.append(" * @param " + name + " automatically generated");
+                            if type_dict[fi.ctype]["j_type"] and not returnTag and fi.ctype != "void":
+                                toWrite.append(" * @return automatically generated");
+                        toWrite.append(line);
+
+                for line in toWrite:
                     j_code.write(" "*4 + line + "\n")
             if fi.annotation:
                 j_code.write(" "*4 + "\n".join(fi.annotation) + "\n")
@@ -773,9 +807,9 @@ class JavaWrapperGenerator(object):
             ret_type = fi.ctype
             if fi.ctype.endswith('*'):
                 ret_type = ret_type[:-1]
-            ret_val = type_dict[ret_type]["j_type"] + " retVal = "
+            ret_val = type_dict[ret_type]["j_type"] + " retVal = " if j_epilogue else "return "
             tail = ""
-            ret = "return retVal;"
+            ret = "return retVal;" if j_epilogue else ""
             if "v_type" in type_dict[ret_type]:
                 j_type = type_dict[ret_type]["j_type"]
                 if type_dict[ret_type]["v_type"] in ("Mat", "vector_Mat"):
@@ -786,75 +820,91 @@ class JavaWrapperGenerator(object):
                         ret_val = "Mat retValMat = new Mat("
                         j_prologue.append( j_type + ' retVal = new Array' + j_type+'();')
                         j_epilogue.append('Converters.Mat_to_' + ret_type + '(retValMat, retVal);')
+                        ret = "return retVal;"
             elif ret_type.startswith("Ptr_"):
-                ret_val = type_dict[fi.ctype]["j_type"] + " retVal = new " + type_dict[ret_type]["j_type"] + "("
+                constructor = type_dict[ret_type]["j_type"] + ".__fromPtr__("
+                if j_epilogue:
+                    ret_val = type_dict[fi.ctype]["j_type"] + " retVal = " + constructor
+                else:
+                    ret_val = "return " + constructor
                 tail = ")"
             elif ret_type == "void":
                 ret_val = ""
-                ret = "return;"
+                ret = ""
             elif ret_type == "": # c-tor
                 if fi.classname and ci.base:
-                    ret_val = "super( "
-                    tail = " )"
+                    ret_val = "super("
+                    tail = ")"
                 else:
                     ret_val = "nativeObj = "
-                ret = "return;"
+                ret = ""
             elif self.isWrapped(ret_type): # wrapped class
-                ret_val = type_dict[ret_type]["j_type"] + " retVal = new " + self.getClass(ret_type).jname + "("
+                constructor = self.getClass(ret_type).jname + "("
+                if j_epilogue:
+                    ret_val = type_dict[ret_type]["j_type"] + " retVal = new " + constructor
+                else:
+                    ret_val = "return new " + constructor
                 tail = ")"
             elif "jn_type" not in type_dict[ret_type]:
-                ret_val = type_dict[fi.ctype]["j_type"] + " retVal = new " + type_dict[ret_type]["j_type"] + "("
+                constructor = type_dict[ret_type]["j_type"] + "("
+                if j_epilogue:
+                    ret_val = type_dict[fi.ctype]["j_type"] + " retVal = new " + constructor
+                else:
+                    ret_val = "return new " + constructor
                 tail = ")"
 
             static = "static"
             if fi.classname:
                 static = fi.static
 
-            j_code.write( Template(\
-"""    public $static $j_type $j_name($j_args)
-    {
-        $prologue
-        $ret_val$jn_name($jn_args_call)$tail;
-        $epilogue
-        $ret
+            j_code.write( Template(
+"""    public $static$j_type$j_name($j_args) {$prologue
+        $ret_val$jn_name($jn_args_call)$tail;$epilogue$ret
     }
 
 """
-                ).substitute(\
-                    ret = ret, \
-                    ret_val = ret_val, \
-                    tail = tail, \
-                    prologue = "\n        ".join(j_prologue), \
-                    epilogue = "\n        ".join(j_epilogue), \
-                    static=static, \
-                    j_type=type_dict[fi.ctype]["j_type"], \
-                    j_name=fi.jname, \
-                    j_args=", ".join(j_args), \
-                    jn_name=fi.jname + '_' + str(suffix_counter), \
-                    jn_args_call=", ".join( [a.name for a in jn_args] ),\
+                ).substitute(
+                    ret = "\n        " + ret if ret else "",
+                    ret_val = ret_val,
+                    tail = tail,
+                    prologue = "\n        " + "\n        ".join(j_prologue) if j_prologue else "",
+                    epilogue = "\n        " + "\n        ".join(j_epilogue) if j_epilogue else "",
+                    static = static + " " if static else "",
+                    j_type=type_dict[fi.ctype]["j_type"] + " " if type_dict[fi.ctype]["j_type"] else "",
+                    j_name=fi.jname,
+                    j_args=", ".join(j_args),
+                    jn_name=fi.jname + '_' + str(suffix_counter),
+                    jn_args_call=", ".join( [a.name for a in jn_args] ),
                 )
             )
 
 
             # cpp part:
             # jni_func(..) { _retval_ = cv_func(..); return _retval_; }
-            ret = "return _retval_;"
+            ret = "return _retval_;" if c_epilogue else ""
             default = "return 0;"
             if fi.ctype == "void":
-                ret = "return;"
-                default = "return;"
+                ret = ""
+                default = ""
             elif not fi.ctype: # c-tor
-                ret = "return (jlong) _retval_;"
+                if self.isSmartClass(ci):
+                    ret = "return (jlong)(new Ptr<%(ctype)s>(_retval_));" % { 'ctype': fi.fullClass(isCPP=True) }
+                else:
+                    ret = "return (jlong) _retval_;"
             elif "v_type" in type_dict[fi.ctype]: # c-tor
                 if type_dict[fi.ctype]["v_type"] in ("Mat", "vector_Mat"):
                     ret = "return (jlong) _retval_;"
-                else: # returned as jobject
-                    ret = "return _retval_;"
             elif fi.ctype == "String":
                 ret = "return env->NewStringUTF(_retval_.c_str());"
                 default = 'return env->NewStringUTF("");'
             elif self.isWrapped(fi.ctype): # wrapped class:
-                ret = "return (jlong) new %s(_retval_);" % self.fullTypeName(fi.ctype)
+                ret = None
+                if fi.ctype in self.classes:
+                    ret_ci = self.classes[fi.ctype]
+                    if self.isSmartClass(ret_ci):
+                        ret = "return (jlong)(new Ptr<%(ctype)s>(new %(ctype)s(_retval_)));" % { 'ctype': self.fullTypeName(fi.ctype) }
+                if ret is None:
+                    ret = "return (jlong) new %s(_retval_);" % self.fullTypeName(fi.ctype)
             elif fi.ctype.startswith('Ptr_'):
                 c_prologue.append("typedef Ptr<%s> %s;" % (self.fullTypeName(fi.ctype[4:]), fi.ctype))
                 ret = "return (jlong)(new %(ctype)s(_retval_));" % { 'ctype':fi.ctype }
@@ -872,29 +922,36 @@ class JavaWrapperGenerator(object):
                     name = prop_name + ";//"
 
             cvname = fi.fullName(isCPP=True)
-            retval = self.fullTypeName(fi.ctype) + " _retval_ = "
+            retval = self.fullTypeName(fi.ctype) + " _retval_ = " if ret else "return "
             if fi.ctype == "void":
                 retval = ""
             elif fi.ctype == "String":
-                retval = "cv::" + retval
+                retval = "cv::" + self.fullTypeName(fi.ctype) + " _retval_ = "
             elif "v_type" in type_dict[fi.ctype]: # vector is returned
                 retval = type_dict[fi.ctype]['jni_var'] % {"n" : '_ret_val_vector_'} + " = "
                 if type_dict[fi.ctype]["v_type"] in ("Mat", "vector_Mat"):
                     c_epilogue.append("Mat* _retval_ = new Mat();")
                     c_epilogue.append(fi.ctype+"_to_Mat(_ret_val_vector_, *_retval_);")
                 else:
-                    c_epilogue.append("jobject _retval_ = " + fi.ctype + "_to_List(env, _ret_val_vector_);")
-            if len(fi.classname)>0:
+                    if ret:
+                        c_epilogue.append("jobject _retval_ = " + fi.ctype + "_to_List(env, _ret_val_vector_);")
+                    else:
+                        c_epilogue.append("return " + fi.ctype + "_to_List(env, _ret_val_vector_);")
+            if fi.classname:
                 if not fi.ctype: # c-tor
-                    retval = fi.fullClass(isCPP=True) + "* _retval_ = "
-                    cvname = "new " + fi.fullClass(isCPP=True)
+                    if self.isSmartClass(ci):
+                        retval = self.smartWrap(ci, fi.fullClass(isCPP=True)) + " _retval_ = "
+                        cvname = "makePtr<" + fi.fullClass(isCPP=True) +">"
+                    else:
+                        retval = fi.fullClass(isCPP=True) + "* _retval_ = "
+                        cvname = "new " + fi.fullClass(isCPP=True)
                 elif fi.static:
                     cvname = fi.fullName(isCPP=True)
                 else:
                     cvname = ("me->" if  not self.isSmartClass(ci) else "(*me)->") + name
-                    c_prologue.append(\
-                        "%(cls)s* me = (%(cls)s*) self; //TODO: check for NULL" \
-                            % { "cls" : self.smartWrap(ci, fi.fullClass(isCPP=True))} \
+                    c_prologue.append(
+                        "%(cls)s* me = (%(cls)s*) self; //TODO: check for NULL"
+                            % { "cls" : self.smartWrap(ci, fi.fullClass(isCPP=True))}
                     )
             cvargs = []
             for a in args:
@@ -905,7 +962,7 @@ class JavaWrapperGenerator(object):
                     if not a.out and not "jni_var" in type_dict[a.ctype]:
                         # explicit cast to C type to avoid ambiguous call error on platforms (mingw)
                         # where jni types are different from native types (e.g. jint is not the same as int)
-                        jni_name  = "(%s)%s" % (a.ctype, jni_name)
+                        jni_name  = "(%s)%s" % (cast_to(a.ctype), jni_name)
                 if not a.ctype: # hidden
                     jni_name = a.defval
                 cvargs.append( type_dict[a.ctype].get("jni_name", jni_name) % {"n" : a.name})
@@ -917,7 +974,7 @@ class JavaWrapperGenerator(object):
 
             rtype = type_dict[fi.ctype].get("jni_type", "jdoubleArray")
             clazz = ci.jname
-            cpp_code.write ( Template( \
+            cpp_code.write ( Template(
 """
 ${namespace}
 
@@ -928,65 +985,92 @@ JNIEXPORT $rtype JNICALL Java_org_opencv_${module}_${clazz}_$fname
 {
     static const char method_name[] = "$module::$fname()";
     try {
-        LOGD("%s", method_name);
-        $prologue
-        $retval$cvname( $cvargs );
-        $epilogue$ret
+        LOGD("%s", method_name);$prologue
+        $retval$cvname($cvargs);$epilogue$ret
     } catch(const std::exception &e) {
         throwJavaException(env, &e, method_name);
     } catch (...) {
         throwJavaException(env, 0, method_name);
-    }
-    $default
+    }$default
 }
 
 
-""" ).substitute( \
-        rtype = rtype, \
-        module = self.module.replace('_', '_1'), \
-        clazz = clazz.replace('_', '_1'), \
-        fname = (fi.jname + '_' + str(suffix_counter)).replace('_', '_1'), \
-        args  = ", ".join(["%s %s" % (type_dict[a.ctype].get("jni_type"), a.name) for a in jni_args]), \
-        argst = ", ".join([type_dict[a.ctype].get("jni_type") for a in jni_args]), \
-        prologue = "\n        ".join(c_prologue), \
-        epilogue = "  ".join(c_epilogue) + ("\n        " if c_epilogue else ""), \
-        ret = ret, \
-        cvname = cvname, \
-        cvargs = ", ".join(cvargs), \
-        default = default, \
-        retval = retval, \
+""" ).substitute(
+        rtype = rtype,
+        module = self.module.replace('_', '_1'),
+        clazz = clazz.replace('_', '_1'),
+        fname = (fi.jname + '_' + str(suffix_counter)).replace('_', '_1'),
+        args  = ", ".join(["%s %s" % (type_dict[a.ctype].get("jni_type"), a.name) for a in jni_args]),
+        argst = ", ".join([type_dict[a.ctype].get("jni_type") for a in jni_args]),
+        prologue = "\n        " + "\n        ".join(c_prologue) if c_prologue else "",
+        epilogue = "\n        " + "\n        ".join(c_epilogue) if c_epilogue else "",
+        ret = "\n        " + ret if ret else "",
+        cvname = cvname,
+        cvargs = " " + ", ".join(cvargs) + " " if cvargs else "",
+        default = "\n    " + default if default else "",
+        retval = retval,
         namespace = ('using namespace ' + ci.namespace.replace('.', '::') + ';') if ci.namespace else ''
     ) )
 
-            # adding method signature to dictionarry
+            # adding method signature to dictionary
             j_signatures.append(j_signature)
 
             # processing args with default values
-            if not args or not args[-1].defval:
+            if args and args[-1].defval:
+                args.pop()
+            else:
                 break
-            while args and args[-1].defval:
-                # 'smart' overloads filtering
-                a = args.pop()
-                if a.name in ('mask', 'dtype', 'ddepth', 'lineType', 'borderType', 'borderMode', 'criteria'):
-                    break
 
 
 
     def gen_class(self, ci):
         logging.info("%s", ci)
         # constants
+        consts_map = {c.name: c for c in ci.private_consts}
+        consts_map.update({c.name: c for c in ci.consts})
+        def const_value(v):
+            if v in consts_map:
+                target = consts_map[v]
+                assert target.value != v
+                return const_value(target.value)
+            return v
         if ci.private_consts:
             logging.info("%s", ci.private_consts)
             ci.j_code.write("""
     private static final int
-            %s;\n\n""" % (",\n"+" "*12).join(["%s = %s" % (c.name, c.value) for c in ci.private_consts])
+            %s;\n\n""" % (",\n"+" "*12).join(["%s = %s" % (c.name, const_value(c.value)) for c in ci.private_consts])
             )
         if ci.consts:
-            logging.info("%s", ci.consts)
-            ci.j_code.write("""
+            enumTypes = set(map(lambda c: c.enumType, ci.consts))
+            grouped_consts = {enumType: [c for c in ci.consts if c.enumType == enumType] for enumType in enumTypes}
+            for typeName in sorted(grouped_consts.keys(), key=lambda x: str(x) if x is not None else ""):
+                consts = grouped_consts[typeName]
+                logging.info("%s", consts)
+                if typeName:
+                    typeNameShort = typeName.rsplit(".", 1)[-1]
+###################### Utilize Java enums ######################
+#                    ci.j_code.write("""
+#    public enum {1} {{
+#        {0};
+#
+#        private final int id;
+#        {1}(int id) {{ this.id = id; }}
+#        {1}({1} _this) {{ this.id = _this.id; }}
+#        public int getValue() {{ return id; }}
+#    }}\n\n""".format((",\n"+" "*8).join(["%s(%s)" % (c.name, const_value(c.value)) for c in consts]), typeName)
+#                    )
+################################################################
+                    ci.j_code.write("""
+    // C++: enum {1} ({2})
     public static final int
-            %s;\n\n""" % (",\n"+" "*12).join(["%s = %s" % (c.name, c.value) for c in ci.consts])
-            )
+            {0};\n\n""".format((",\n"+" "*12).join(["%s = %s" % (c.name, const_value(c.value)) for c in consts]), typeNameShort, typeName)
+                    )
+                else:
+                    ci.j_code.write("""
+    // C++: enum <unnamed>
+    public static final int
+            {0};\n\n""".format((",\n"+" "*12).join(["%s = %s" % (c.name, const_value(c.value)) for c in consts]))
+                    )
         # methods
         for fi in ci.getAllMethods():
             self.gen_func(ci, fi)
@@ -1004,10 +1088,12 @@ JNIEXPORT $rtype JNICALL Java_org_opencv_${module}_${clazz}_$fname
 
         # manual ports
         if ci.name in ManualFuncs:
-            for func in ManualFuncs[ci.name].keys():
-                ci.j_code.write ( "\n".join(ManualFuncs[ci.name][func]["j_code"]) )
-                ci.jn_code.write( "\n".join(ManualFuncs[ci.name][func]["jn_code"]) )
-                ci.cpp_code.write( "\n".join(ManualFuncs[ci.name][func]["cpp_code"]) )
+            for func in sorted(ManualFuncs[ci.name].keys()):
+                logging.info("manual function: %s", func)
+                fn = ManualFuncs[ci.name][func]
+                ci.j_code.write("\n".join(fn["j_code"]))
+                ci.jn_code.write("\n".join(fn["jn_code"]))
+                ci.cpp_code.write("\n".join(fn["cpp_code"]))
 
         if ci.name != self.Module or ci.base:
             # finalize()
@@ -1026,7 +1112,7 @@ JNIEXPORT $rtype JNICALL Java_org_opencv_${module}_${clazz}_$fname
 """ )
 
             # native support for java finalize()
-            ci.cpp_code.write( \
+            ci.cpp_code.write(
 """
 //
 //  native support for java finalize()
@@ -1057,17 +1143,7 @@ JNIEXPORT void JNICALL Java_org_opencv_%(module)s_%(j_cls)s_delete
         if ci.smart != None:
             return ci.smart
 
-        # if parents are smart (we hope) then children are!
-        # if not we believe the class is smart if it has "create" method
-        ci.smart = False
-        if ci.base or ci.name == 'Algorithm':
-            ci.smart = True
-        else:
-            for fi in ci.methods:
-                if fi.name == "create":
-                    ci.smart = True
-                    break
-
+        ci.smart = True  # smart class is not properly handled in case of base/derived classes
         return ci.smart
 
     def smartWrap(self, ci, fullname):
@@ -1078,17 +1154,171 @@ JNIEXPORT void JNICALL Java_org_opencv_%(module)s_%(j_cls)s_delete
             return "Ptr<" + fullname + ">"
         return fullname
 
+    def finalize(self, output_jni_path):
+        list_file = os.path.join(output_jni_path, "opencv_jni.hpp")
+        self.save(list_file, '\n'.join(['#include "%s"' % f for f in self.cpp_files]))
+
+
+def copy_java_files(java_files_dir, java_base_path, default_package_path='org/opencv/'):
+    global total_files, updated_files
+    java_files = []
+    re_filter = re.compile(r'^.+\.(java|aidl)(.in)?$')
+    for root, dirnames, filenames in os.walk(java_files_dir):
+       java_files += [os.path.join(root, filename) for filename in filenames if re_filter.match(filename)]
+    java_files = [f.replace('\\', '/') for f in java_files]
+
+    re_package = re.compile(r'^package +(.+);')
+    re_prefix = re.compile(r'^.+[\+/]([^\+]+).(java|aidl)(.in)?$')
+    for java_file in java_files:
+        src = checkFileRemap(java_file)
+        with open(src, 'r') as f:
+            package_line = f.readline()
+        m = re_prefix.match(java_file)
+        target_fname = (m.group(1) + '.' + m.group(2)) if m else os.path.basename(java_file)
+        m = re_package.match(package_line)
+        if m:
+            package = m.group(1)
+            package_path = package.replace('.', '/')
+        else:
+            package_path = default_package_path
+        #print(java_file, package_path, target_fname)
+        dest = os.path.join(java_base_path, os.path.join(package_path, target_fname))
+        assert dest[-3:] != '.in', dest + ' | ' + target_fname
+        mkdir_p(os.path.dirname(dest))
+        total_files += 1
+        if (not os.path.exists(dest)) or (os.stat(src).st_mtime - os.stat(dest).st_mtime > 1):
+            copyfile(src, dest)
+            updated_files += 1
+
+def sanitize_java_documentation_string(doc, type):
+    if type == "class":
+        doc = doc.replace("@param ", "")
+
+    doc = re.sub(re.compile('\\\\f\\$(.*?)\\\\f\\$', re.DOTALL), '\\(' + r'\1' + '\\)', doc)
+    doc = re.sub(re.compile('\\\\f\\[(.*?)\\\\f\\]', re.DOTALL), '\\(' + r'\1' + '\\)', doc)
+    doc = re.sub(re.compile('\\\\f\\{(.*?)\\\\f\\}', re.DOTALL), '\\(' + r'\1' + '\\)', doc)
+
+    doc = doc.replace("&", "&amp;") \
+        .replace("\\<", "&lt;") \
+        .replace("\\>", "&gt;") \
+        .replace("<", "&lt;") \
+        .replace(">", "&gt;") \
+        .replace("$", "$$") \
+        .replace("@anchor", "") \
+        .replace("@brief ", "").replace("\\brief ", "") \
+        .replace("@cite", "CITE:") \
+        .replace("@code{.cpp}", "<code>") \
+        .replace("@code{.txt}", "<code>") \
+        .replace("@code", "<code>") \
+        .replace("@copydoc", "") \
+        .replace("@copybrief", "") \
+        .replace("@date", "") \
+        .replace("@defgroup", "") \
+        .replace("@details ", "") \
+        .replace("@endcode", "</code>") \
+        .replace("@endinternal", "") \
+        .replace("@file", "") \
+        .replace("@include", "INCLUDE:") \
+        .replace("@ingroup", "") \
+        .replace("@internal", "") \
+        .replace("@overload", "") \
+        .replace("@param[in]", "@param") \
+        .replace("@param[out]", "@param") \
+        .replace("@ref", "REF:") \
+        .replace("@returns", "@return") \
+        .replace("@sa", "SEE:") \
+        .replace("@see", "SEE:") \
+        .replace("@snippet", "SNIPPET:") \
+        .replace("@todo", "TODO:") \
+        .replace("@warning ", "WARNING: ")
+
+    doc = re.sub(re.compile('\\*\\*([^\\*]+?)\\*\\*', re.DOTALL), '<b>' + r'\1' + '</b>', doc)
+
+    lines = doc.splitlines()
+
+    lines = list(map(lambda x: x[x.find('*'):].strip() if x.lstrip().startswith("*") else x, lines))
+
+    listInd = [];
+    indexDiff = 0;
+    for index, line in enumerate(lines[:]):
+        if line.strip().startswith("-"):
+            i = line.find("-")
+            if not listInd or i > listInd[-1]:
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<ul>")
+                indexDiff += 1
+                listInd.append(i);
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<li>")
+                indexDiff += 1
+            elif i == listInd[-1]:
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</li>")
+                indexDiff += 1
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<li>")
+                indexDiff += 1
+            elif len(listInd) > 1 and i == listInd[-2]:
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</li>")
+                indexDiff += 1
+                del listInd[-1]
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</ul>")
+                indexDiff += 1
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<li>")
+                indexDiff += 1
+            else:
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</li>")
+                indexDiff += 1
+                del listInd[-1]
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</ul>")
+                indexDiff += 1
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<ul>")
+                indexDiff += 1
+                listInd.append(i);
+                lines.insert(index + indexDiff, "  "*len(listInd) + "<li>")
+                indexDiff += 1
+            lines[index + indexDiff] = lines[index + indexDiff][0:i] + lines[index + indexDiff][i + 1:]
+        else:
+            if listInd and (not line or line == "*" or line.startswith("@note")):
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</li>")
+                indexDiff += 1
+                del listInd[-1]
+                lines.insert(index + indexDiff, "  "*len(listInd) + "</ul>")
+                indexDiff += 1
+
+    i = len(listInd) - 1
+    for value in enumerate(listInd):
+        lines.append("  "*i + "  </li>")
+        lines.append("  "*i + "</ul>")
+        i -= 1;
+
+    lines = list(map(lambda x: "* " + x[1:].strip() if x.startswith("*") and x != "*" else x, lines))
+    lines = list(map(lambda x: x if x.startswith("*") else "* " + x if x and x != "*" else "*", lines))
+
+    lines = list(map(lambda x: x
+        .replace("@note", "<b>Note:</b>")
+    , lines))
+
+    lines = list(map(lambda x: re.sub('@b ([\\w:]+?)\\b', '<b>' + r'\1' + '</b>', x), lines))
+    lines = list(map(lambda x: re.sub('@c ([\\w:]+?)\\b', '<tt>' + r'\1' + '</tt>', x), lines))
+    lines = list(map(lambda x: re.sub('`(.*?)`', "{@code " + r'\1' + '}', x), lines))
+    lines = list(map(lambda x: re.sub('@p ([\\w:]+?)\\b', '{@code ' + r'\1' + '}', x), lines))
+
+    hasValues = False
+    for line in lines:
+        if line != "*":
+            hasValues = True
+            break
+    return "/**\n " + "\n ".join(lines) + "\n */" if hasValues else ""
 
 if __name__ == "__main__":
+    # initialize logger
+    logging.basicConfig(filename='gen_java.log', format=None, filemode='w', level=logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setLevel(os.environ.get('LOG_LEVEL', logging.WARNING))
+    logging.getLogger().addHandler(handler)
 
     # parse command line parameters
     import argparse
     arg_parser = argparse.ArgumentParser(description='OpenCV Java Wrapper Generator')
     arg_parser.add_argument('-p', '--parser', required=True, help='OpenCV header parser')
-    arg_parser.add_argument('-m', '--module', required=True, help='OpenCV module name')
-    arg_parser.add_argument('-s', '--srcfiles', required=True, nargs='+', help='Source headers to be wrapped')
-    arg_parser.add_argument('-c', '--common', nargs='*', help='Common headers')
-    arg_parser.add_argument('-t', '--gendict', nargs='*', help='Custom module dictionaries for C++ to Java conversion')
+    arg_parser.add_argument('-c', '--config', required=True, help='OpenCV modules config')
 
     args=arg_parser.parse_args()
 
@@ -1099,38 +1329,99 @@ if __name__ == "__main__":
     sys.path.append(hdr_parser_path)
     import hdr_parser
 
-    module = args.module
-    srcfiles = args.srcfiles
-    common_headers= args.common
-    gen_dict_files = args.gendict
+    with open(args.config) as f:
+        config = json.load(f)
 
-    dstdir = "."
+    ROOT_DIR = config['rootdir']; assert os.path.exists(ROOT_DIR)
+    FILES_REMAP = { os.path.realpath(os.path.join(ROOT_DIR, f['src'])): f['target'] for f in config['files_remap'] }
+    logging.info("\nRemapped configured files (%d):\n%s", len(FILES_REMAP), pformat(FILES_REMAP))
 
-    # initialize logger
-    logging.basicConfig(filename='%s/%s.log' % (dstdir, module), format=None, filemode='w', level=logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.WARNING)
-    logging.getLogger().addHandler(handler)
+    dstdir = "./gen"
+    jni_path = os.path.join(dstdir, 'cpp'); mkdir_p(jni_path)
+    java_base_path = os.path.join(dstdir, 'java'); mkdir_p(java_base_path)
+    java_test_base_path = os.path.join(dstdir, 'test'); mkdir_p(java_test_base_path)
 
-    # load dictionaries
-    for gdf in gen_dict_files:
-        with open(gdf) as f:
-            gen_type_dict = json.load(f)
-            if "class_ignore_list" in gen_type_dict:
-                class_ignore_list += gen_type_dict["class_ignore_list"]
-            if "const_ignore_list" in gen_type_dict:
-                const_ignore_list += gen_type_dict["const_ignore_list"]
-            if "const_private_list" in gen_type_dict:
-                const_private_list += gen_type_dict["const_private_list"]
-            if "missing_consts" in gen_type_dict:
-                missing_consts.update(gen_type_dict["missing_consts"])
-            if "type_dict" in gen_type_dict:
-                type_dict.update(gen_type_dict["type_dict"])
-            if "ManualFuncs" in gen_type_dict:
-                ManualFuncs.update(gen_type_dict["ManualFuncs"])
-            if "func_arg_fix" in gen_type_dict:
-                func_arg_fix.update(gen_type_dict["func_arg_fix"])
+    for (subdir, target_subdir) in [('src/java', 'java'), ('android/java', None), ('android-21/java', None)]:
+        if target_subdir is None:
+            target_subdir = subdir
+        java_files_dir = os.path.join(SCRIPT_DIR, subdir)
+        if os.path.exists(java_files_dir):
+            target_path = os.path.join(dstdir, target_subdir); mkdir_p(target_path)
+            copy_java_files(java_files_dir, target_path)
 
     # launch Java Wrapper generator
     generator = JavaWrapperGenerator()
-    generator.gen(srcfiles, module, dstdir, common_headers)
+
+    gen_dict_files = []
+
+    print("JAVA: Processing OpenCV modules: %d" % len(config['modules']))
+    for e in config['modules']:
+        (module, module_location) = (e['name'], os.path.join(ROOT_DIR, e['location']))
+        logging.info("\n=== MODULE: %s (%s) ===\n" % (module, module_location))
+
+        java_path = os.path.join(java_base_path, 'org/opencv')
+        mkdir_p(java_path)
+
+        module_imports = []
+        module_j_code = None
+        module_jn_code = None
+        srcfiles = []
+        common_headers = []
+
+        misc_location = os.path.join(module_location, 'misc/java')
+
+        srcfiles_fname = os.path.join(misc_location, 'filelist')
+        if os.path.exists(srcfiles_fname):
+            with open(srcfiles_fname) as f:
+                srcfiles = [os.path.join(module_location, str(l).strip()) for l in f.readlines() if str(l).strip()]
+        else:
+            re_bad = re.compile(r'(private|.inl.hpp$|_inl.hpp$|.details.hpp$|_winrt.hpp$|/cuda/|/legacy/)')
+            # .h files before .hpp
+            h_files = []
+            hpp_files = []
+            for root, dirnames, filenames in os.walk(os.path.join(module_location, 'include')):
+               h_files += [os.path.join(root, filename) for filename in fnmatch.filter(filenames, '*.h')]
+               hpp_files += [os.path.join(root, filename) for filename in fnmatch.filter(filenames, '*.hpp')]
+            srcfiles = h_files + hpp_files
+            srcfiles = [f for f in srcfiles if not re_bad.search(f.replace('\\', '/'))]
+        logging.info("\nFiles (%d):\n%s", len(srcfiles), pformat(srcfiles))
+
+        common_headers_fname = os.path.join(misc_location, 'filelist_common')
+        if os.path.exists(common_headers_fname):
+            with open(common_headers_fname) as f:
+                common_headers = [os.path.join(module_location, str(l).strip()) for l in f.readlines() if str(l).strip()]
+        logging.info("\nCommon headers (%d):\n%s", len(common_headers), pformat(common_headers))
+
+        gendict_fname = os.path.join(misc_location, 'gen_dict.json')
+        if os.path.exists(gendict_fname):
+            with open(gendict_fname) as f:
+                gen_type_dict = json.load(f)
+            class_ignore_list += gen_type_dict.get("class_ignore_list", [])
+            const_ignore_list += gen_type_dict.get("const_ignore_list", [])
+            const_private_list += gen_type_dict.get("const_private_list", [])
+            missing_consts.update(gen_type_dict.get("missing_consts", {}))
+            type_dict.update(gen_type_dict.get("type_dict", {}))
+            ManualFuncs.update(gen_type_dict.get("ManualFuncs", {}))
+            func_arg_fix.update(gen_type_dict.get("func_arg_fix", {}))
+            namespaces_dict.update(gen_type_dict.get("namespaces_dict", {}))
+            if 'module_j_code' in gen_type_dict:
+                module_j_code = read_contents(checkFileRemap(os.path.join(misc_location, gen_type_dict['module_j_code'])))
+            if 'module_jn_code' in gen_type_dict:
+                module_jn_code = read_contents(checkFileRemap(os.path.join(misc_location, gen_type_dict['module_jn_code'])))
+            module_imports += gen_type_dict.get("module_imports", [])
+
+        java_files_dir = os.path.join(misc_location, 'src/java')
+        if os.path.exists(java_files_dir):
+            copy_java_files(java_files_dir, java_base_path, 'org/opencv/' + module)
+
+        java_test_files_dir = os.path.join(misc_location, 'test')
+        if os.path.exists(java_test_files_dir):
+            copy_java_files(java_test_files_dir, java_test_base_path, 'org/opencv/test/' + module)
+
+        if len(srcfiles) > 0:
+            generator.gen(srcfiles, module, dstdir, jni_path, java_path, common_headers)
+        else:
+            logging.info("No generated code for module: %s", module)
+    generator.finalize(jni_path)
+
+    print('Generated files: %d (updated %d)' % (total_files, updated_files))

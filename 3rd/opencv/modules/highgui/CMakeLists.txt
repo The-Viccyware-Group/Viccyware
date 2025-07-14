@@ -20,6 +20,10 @@ if(APPLE)
   list(APPEND HIGHGUI_LIBRARIES ${ZLIB_LIBRARIES})
 endif()
 
+if(HAVE_WEBP)
+  add_definitions(-DHAVE_WEBP)
+endif()
+
 set(highgui_hdrs
     ${CMAKE_CURRENT_LIST_DIR}/src/precomp.hpp
     )
@@ -37,46 +41,61 @@ file(GLOB highgui_ext_hdrs
 # Removing WinRT API headers by default
 list(REMOVE_ITEM highgui_ext_hdrs "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/highgui_winrt.hpp")
 
-if(HAVE_QT5)
-  # "Automoc" doesn't work properly with opencv_world build, use QT5_WRAP_CPP() directly
-  #set(CMAKE_AUTOMOC ON)
+if(HAVE_QT)
+  if(QT_VERSION_MAJOR GREATER 4)
+    # "Automoc" doesn't work properly with opencv_world build, use QT<ver>_WRAP_CPP() directly
+    #set(CMAKE_AUTOMOC ON)
 
-  set(CMAKE_INCLUDE_CURRENT_DIR ON)
+    set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-  QT5_ADD_RESOURCES(_RCC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.qrc)
-  QT5_WRAP_CPP(_MOC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h)
-  list(APPEND highgui_srcs
-       ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.cpp
-       ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h
-       ${_MOC_OUTFILES}
-       ${_RCC_OUTFILES})
+    if(QT_VERSION_MAJOR EQUAL 6)
+      QT6_ADD_RESOURCES(_RCC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.qrc)
+      QT6_WRAP_CPP(_MOC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h)
+    elseif(QT_VERSION_MAJOR EQUAL 5)
+      QT5_ADD_RESOURCES(_RCC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.qrc)
+      QT5_WRAP_CPP(_MOC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h)
+    else()
+      message(FATAL_ERROR "Unsupported QT version: ${QT_VERSION_MAJOR}")
+    endif()
 
-  foreach(dt5_dep Core Gui Widgets Test Concurrent)
-    add_definitions(${Qt5${dt5_dep}_DEFINITIONS})
-    include_directories(${Qt5${dt5_dep}_INCLUDE_DIRS})
-    list(APPEND HIGHGUI_LIBRARIES ${Qt5${dt5_dep}_LIBRARIES})
-  endforeach()
+    list(APPEND highgui_srcs
+         ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.cpp
+         ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h
+         ${_MOC_OUTFILES}
+         ${_RCC_OUTFILES})
 
-  if(HAVE_QT_OPENGL)
-    add_definitions(${Qt5OpenGL_DEFINITIONS})
-    include_directories(${Qt5OpenGL_INCLUDE_DIRS})
-    list(APPEND HIGHGUI_LIBRARIES ${Qt5OpenGL_LIBRARIES})
-  endif()
+    set(qt_deps Core Gui Widgets Test Concurrent)
+    if(HAVE_QT_OPENGL)
+      list(APPEND qt_deps OpenGL)
+      if(OPENGL_LIBRARIES)
+        list(APPEND HIGHGUI_LIBRARIES "${OPENGL_LIBRARIES}")
+      endif()
+    endif()
 
-elseif(HAVE_QT)
-  if (HAVE_QT_OPENGL)
-    set(QT_USE_QTOPENGL TRUE)
-  endif()
-  include(${QT_USE_FILE})
+    foreach(dt_dep ${qt_deps})
+      add_definitions(${Qt${QT_VERSION_MAJOR}${dt_dep}_DEFINITIONS})
+      include_directories(${Qt${QT_VERSION_MAJOR}${dt_dep}_INCLUDE_DIRS})
+      list(APPEND HIGHGUI_LIBRARIES ${Qt${QT_VERSION_MAJOR}${dt_dep}_LIBRARIES})
+    endforeach()
+  else()
+    ocv_assert(QT_VERSION_MAJOR EQUAL 4)
+    if(HAVE_QT_OPENGL)
+      set(QT_USE_QTOPENGL TRUE)
+      if(OPENGL_LIBRARIES)
+        list(APPEND HIGHGUI_LIBRARIES "${OPENGL_LIBRARIES}")
+      endif()
+    endif()
+    include(${QT_USE_FILE})
 
-  QT4_ADD_RESOURCES(_RCC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.qrc)
-  QT4_WRAP_CPP(_MOC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h)
+    QT4_ADD_RESOURCES(_RCC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.qrc)
+    QT4_WRAP_CPP(_MOC_OUTFILES ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.h)
 
-  list(APPEND HIGHGUI_LIBRARIES ${QT_LIBRARIES})
-  list(APPEND highgui_srcs ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.cpp ${_MOC_OUTFILES} ${_RCC_OUTFILES})
-  ocv_check_flag_support(CXX -Wno-missing-declarations _have_flag "")
-  if(${_have_flag})
-    set_source_files_properties(${_RCC_OUTFILES} PROPERTIES COMPILE_FLAGS -Wno-missing-declarations)
+    list(APPEND HIGHGUI_LIBRARIES ${QT_LIBRARIES})
+    list(APPEND highgui_srcs ${CMAKE_CURRENT_LIST_DIR}/src/window_QT.cpp ${_MOC_OUTFILES} ${_RCC_OUTFILES})
+    ocv_check_flag_support(CXX -Wno-missing-declarations _have_flag "")
+    if(${_have_flag})
+      set_source_files_properties(${_RCC_OUTFILES} PROPERTIES COMPILE_FLAGS -Wno-missing-declarations)
+    endif()
   endif()
 elseif(WINRT)
   if(NOT WINRT_8_0)
@@ -114,6 +133,12 @@ elseif(WINRT)
   endif()
 elseif(HAVE_WIN32UI)
   list(APPEND highgui_srcs ${CMAKE_CURRENT_LIST_DIR}/src/window_w32.cpp)
+  if(OpenCV_ARCH STREQUAL "ARM64")
+    list(APPEND HIGHGUI_LIBRARIES "comdlg32" "advapi32")
+  endif()
+  if(HAVE_OPENGL AND OPENGL_LIBRARIES)
+    list(APPEND HIGHGUI_LIBRARIES "${OPENGL_LIBRARIES}")
+  endif()
 elseif(HAVE_GTK OR HAVE_GTK3)
   list(APPEND highgui_srcs ${CMAKE_CURRENT_LIST_DIR}/src/window_gtk.cpp)
 elseif(HAVE_CARBON)
@@ -124,8 +149,8 @@ elseif(HAVE_COCOA)
   list(APPEND HIGHGUI_LIBRARIES "-framework Cocoa")
 endif()
 
-if(UNIX)
-  #these variables are set by CHECK_MODULE macro
+if(TRUE)
+  # these variables are set by 'ocv_append_build_options(HIGHGUI ...)'
   foreach(P ${HIGHGUI_INCLUDE_DIRS})
     ocv_include_directories(${P})
   endforeach()
@@ -144,10 +169,10 @@ ocv_create_module(${HIGHGUI_LIBRARIES})
 
 macro(ocv_highgui_configure_target)
 if(APPLE)
-  add_apple_compiler_options(the_module)
+  add_apple_compiler_options(${the_module})
 endif()
 
-if(MSVC)
+if(MSVC AND NOT BUILD_SHARED_LIBS AND BUILD_WITH_STATIC_CRT)
   set_target_properties(${the_module} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:atlthunk.lib /NODEFAULTLIB:atlsd.lib /NODEFAULTLIB:libcmt.lib /DEBUG")
 endif()
 

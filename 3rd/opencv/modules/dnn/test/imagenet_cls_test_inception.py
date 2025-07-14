@@ -9,10 +9,10 @@ try:
     import cv2 as cv
 except ImportError:
     raise ImportError('Can\'t find OpenCV Python module. If you\'ve built it from sources without installation, '
-                      'configure environemnt variable PYTHONPATH to "opencv_build_dir/lib" directory (with "python3" subdirectory if required)')
+                      'configure environment variable PYTHONPATH to "opencv_build_dir/lib" directory (with "python3" subdirectory if required)')
 
 # If you've got an exception "Cannot load libmkl_avx.so or libmkl_def.so" or similar, try to export next variable
-# before runnigng the script:
+# before running the script:
 # LD_PRELOAD=/opt/intel/mkl/lib/intel64/libmkl_core.so:/opt/intel/mkl/lib/intel64/libmkl_sequential.so
 
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--imgs_dir", help="path to ImageNet validation subset images dir, ILSVRC2012_img_val dir")
     parser.add_argument("--img_cls_file", help="path to file with classes ids for images, download it here:"
-                            "https://github.com/opencv/opencv_extra/tree/master/testdata/dnn/img_classes_inception.txt")
+                            "https://github.com/opencv/opencv_extra/tree/3.4/testdata/dnn/img_classes_inception.txt")
     parser.add_argument("--model", help="path to tensorflow model, download it here:"
                                         "https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip")
     parser.add_argument("--log", help="path to logging file")

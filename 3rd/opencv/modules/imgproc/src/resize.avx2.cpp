@@ -55,12 +55,12 @@ namespace cv
 namespace opt_AVX2
 {
 
-class resizeNNInvokerAVX4 :
+class resizeNNInvokerAVX4 CV_FINAL :
     public ParallelLoopBody
 {
 public:
-    resizeNNInvokerAVX4(const Mat& _src, Mat &_dst, int *_x_ofs, int _pix_size4, double _ify) :
-        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs), pix_size4(_pix_size4),
+    resizeNNInvokerAVX4(const Mat& _src, Mat &_dst, int *_x_ofs, double _ify) :
+        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs),
         ify(_ify)
     {
     }
@@ -68,7 +68,7 @@ public:
 #if defined(__INTEL_COMPILER)
 #pragma optimization_parameter target_arch=AVX
 #endif
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         Size ssize = src.size(), dsize = dst.size();
         int y, x;
@@ -129,21 +129,21 @@ public:
     }
 
 private:
-    const Mat src;
-    Mat dst;
-    int* x_ofs, pix_size4;
+    const Mat& src;
+    Mat& dst;
+    int* x_ofs;
     double ify;
 
     resizeNNInvokerAVX4(const resizeNNInvokerAVX4&);
     resizeNNInvokerAVX4& operator=(const resizeNNInvokerAVX4&);
 };
 
-class resizeNNInvokerAVX2 :
+class resizeNNInvokerAVX2 CV_FINAL :
     public ParallelLoopBody
 {
 public:
-    resizeNNInvokerAVX2(const Mat& _src, Mat &_dst, int *_x_ofs, int _pix_size4, double _ify) :
-        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs), pix_size4(_pix_size4),
+    resizeNNInvokerAVX2(const Mat& _src, Mat &_dst, int *_x_ofs, double _ify) :
+        ParallelLoopBody(), src(_src), dst(_dst), x_ofs(_x_ofs),
         ify(_ify)
     {
     }
@@ -151,7 +151,7 @@ public:
 #if defined(__INTEL_COMPILER)
 #pragma optimization_parameter target_arch=AVX
 #endif
-    virtual void operator() (const Range& range) const
+    virtual void operator() (const Range& range) const CV_OVERRIDE
     {
         Size ssize = src.size(), dsize = dst.size();
         int y, x;
@@ -235,24 +235,24 @@ public:
     }
 
 private:
-    const Mat src;
-    Mat dst;
-    int* x_ofs, pix_size4;
+    const Mat& src;
+    Mat& dst;
+    int* x_ofs;
     double ify;
 
     resizeNNInvokerAVX2(const resizeNNInvokerAVX2&);
     resizeNNInvokerAVX2& operator=(const resizeNNInvokerAVX2&);
 };
 
-void resizeNN2_AVX2(const Range& range, const Mat& src, Mat &dst, int *x_ofs, int pix_size4, double ify)
+void resizeNN2_AVX2(const Range& range, const Mat& src, Mat &dst, int *x_ofs, double ify)
 {
-    resizeNNInvokerAVX2 invoker(src, dst, x_ofs, pix_size4, ify);
+    resizeNNInvokerAVX2 invoker(src, dst, x_ofs, ify);
     parallel_for_(range, invoker, dst.total() / (double)(1 << 16));
 }
 
-void resizeNN4_AVX2(const Range& range, const Mat& src, Mat &dst, int *x_ofs, int pix_size4, double ify)
+void resizeNN4_AVX2(const Range& range, const Mat& src, Mat &dst, int *x_ofs, double ify)
 {
-    resizeNNInvokerAVX4 invoker(src, dst, x_ofs, pix_size4, ify);
+    resizeNNInvokerAVX4 invoker(src, dst, x_ofs, ify);
     parallel_for_(range, invoker, dst.total() / (double)(1 << 16));
 }
 

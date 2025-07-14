@@ -35,7 +35,7 @@
  *    it actually get 1.5~2m/s on my centrino L7200 1.2GHz laptop.
  * 3. the color image algorithm is taken from: Maximally Stable Colour Regions for Recognition and Match;
  *    it should be much slower than gray image method ( 3~4 times );
- *    the chi_table.h file is taken directly from paper's source code which is distributed under GPL.
+ *    the chi_table.h file is taken directly from paper's source code which is distributed under permissive BSD-like license: http://users.isy.liu.se/cvl/perfo/software/chi_table.h
  * 4. though the name is *contours*, the result actually is a list of point set.
  */
 
@@ -48,7 +48,7 @@ namespace cv
 
 using std::vector;
 
-class MSER_Impl : public MSER
+class MSER_Impl CV_FINAL : public MSER
 {
 public:
     struct Params
@@ -85,19 +85,19 @@ public:
 
     explicit MSER_Impl(const Params& _params) : params(_params) {}
 
-    virtual ~MSER_Impl() {}
+    virtual ~MSER_Impl() CV_OVERRIDE {}
 
-    void setDelta(int delta) { params.delta = delta; }
-    int getDelta() const { return params.delta; }
+    void setDelta(int delta) CV_OVERRIDE { params.delta = delta; }
+    int getDelta() const CV_OVERRIDE { return params.delta; }
 
-    void setMinArea(int minArea) { params.minArea = minArea; }
-    int getMinArea() const { return params.minArea; }
+    void setMinArea(int minArea) CV_OVERRIDE { params.minArea = minArea; }
+    int getMinArea() const CV_OVERRIDE { return params.minArea; }
 
-    void setMaxArea(int maxArea) { params.maxArea = maxArea; }
-    int getMaxArea() const { return params.maxArea; }
+    void setMaxArea(int maxArea) CV_OVERRIDE { params.maxArea = maxArea; }
+    int getMaxArea() const CV_OVERRIDE { return params.maxArea; }
 
-    void setPass2Only(bool f) { params.pass2Only = f; }
-    bool getPass2Only() const { return params.pass2Only; }
+    void setPass2Only(bool f) CV_OVERRIDE { params.pass2Only = f; }
+    bool getPass2Only() const CV_OVERRIDE { return params.pass2Only; }
 
     enum { DIR_SHIFT = 29, NEXT_MASK = ((1<<DIR_SHIFT)-1)  };
 
@@ -364,8 +364,8 @@ public:
 
     void detectRegions( InputArray image,
                         std::vector<std::vector<Point> >& msers,
-                        std::vector<Rect>& bboxes );
-    void detect( InputArray _src, vector<KeyPoint>& keypoints, InputArray _mask );
+                        std::vector<Rect>& bboxes ) CV_OVERRIDE;
+    void detect( InputArray _src, vector<KeyPoint>& keypoints, InputArray _mask ) CV_OVERRIDE;
 
     void preprocess1( const Mat& img, int* level_size )
     {
@@ -983,7 +983,7 @@ extractMSER_8uC3( const Mat& src,
                     double s = (double)(lr->size-lr->sizei)/(lr->dt-lr->di);
                     if ( s < lr->s )
                     {
-                        // skip the first one and check stablity
+                        // skip the first one and check stability
                         if ( i > lr->reinit+1 && MSCRStableCheck( lr, params ) )
                         {
                             if ( lr->tmsr == NULL )
@@ -1036,7 +1036,7 @@ extractMSER_8uC3( const Mat& src,
 
 void MSER_Impl::detectRegions( InputArray _src, vector<vector<Point> >& msers, vector<Rect>& bboxes )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat src = _src.getMat();
 
@@ -1074,7 +1074,7 @@ void MSER_Impl::detectRegions( InputArray _src, vector<vector<Point> >& msers, v
 
 void MSER_Impl::detect( InputArray _image, vector<KeyPoint>& keypoints, InputArray _mask )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     vector<Rect> bboxes;
     vector<vector<Point> > msers;

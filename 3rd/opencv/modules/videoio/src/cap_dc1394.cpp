@@ -272,7 +272,7 @@ static CvCaptureCAM_DC1394 * icvCaptureFromCAM_DC1394 (int index)
             format_idx = preferred_modes[i] - FORMAT_MIN;
             continue;
         }
-        assert(format_idx != -1);
+        CV_Assert(format_idx != -1);
         if ( ! icvFormatSupportedCAM_DC1394(pcap->format, formats) )
             continue;
         if ( icvModeSupportedCAM_DC1394(pcap->format, preferred_modes[i], modes[format_idx]) ){
@@ -1049,11 +1049,11 @@ public:
     virtual bool open( int index );
     virtual void close();
 
-    virtual double getProperty(int) const;
-    virtual bool setProperty(int, double);
-    virtual bool grabFrame();
-    virtual IplImage* retrieveFrame(int);
-    virtual int getCaptureDomain() { return CV_CAP_DC1394; } // Return the type of the capture object: CV_CAP_VFW, etc...
+    virtual double getProperty(int) const CV_OVERRIDE;
+    virtual bool setProperty(int, double) CV_OVERRIDE;
+    virtual bool grabFrame() CV_OVERRIDE;
+    virtual IplImage* retrieveFrame(int) CV_OVERRIDE;
+    virtual int getCaptureDomain() CV_OVERRIDE { return CV_CAP_DC1394; }
 protected:
 
     CvCaptureCAM_DC1394* captureDC1394;

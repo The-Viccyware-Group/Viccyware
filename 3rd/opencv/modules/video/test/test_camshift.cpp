@@ -42,8 +42,7 @@
 #include "test_precomp.hpp"
 #include "opencv2/video/tracking_c.h"
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 class CV_TrackBaseTest : public cvtest::BaseTest
 {
@@ -436,7 +435,7 @@ void CV_MeanShiftTest::run_func(void)
 int CV_MeanShiftTest::validate_test_results( int /*test_case_idx*/ )
 {
     int code = cvtest::TS::OK;
-    CvPoint2D32f c;
+    Point2f c;
     double m = MAX(box0.size.width, box0.size.height), delta;
 
     if( cvIsNaN(comp.area) || cvIsInf(comp.area) || comp.area <= 0 )
@@ -509,4 +508,5 @@ _exit_:
 TEST(Video_CAMShift, accuracy) { CV_CamShiftTest test; test.safe_run(); }
 TEST(Video_MeanShift, accuracy) { CV_MeanShiftTest test; test.safe_run(); }
 
+}} // namespace
 /* End of file. */

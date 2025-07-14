@@ -47,16 +47,15 @@
 namespace cv
 {
 
-int rotatedRectangleIntersection( const RotatedRect& rect1, const RotatedRect& rect2, OutputArray intersectingRegion )
+static int _rotatedRectangleIntersection( const RotatedRect& rect1, const RotatedRect& rect2, std::vector<Point2f> &intersection )
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
-    const float samePointEps = 0.00001f; // used to test if two points are the same
+    // L2 metric
+    const float samePointEps = std::max(1e-16f, 1e-6f * (float)std::max(rect1.size.area(), rect2.size.area()));
 
     Point2f vec1[4], vec2[4];
     Point2f pts1[4], pts2[4];
-
-    std::vector <Point2f> intersection;
 
     rect1.points(pts1);
     rect2.points(pts2);
@@ -84,8 +83,6 @@ int rotatedRectangleIntersection( const RotatedRect& rect1, const RotatedRect& r
             {
                 intersection[i] = pts1[i];
             }
-
-            Mat(intersection).copyTo(intersectingRegion);
 
             return INTERSECT_FULL;
         }
@@ -219,34 +216,124 @@ int rotatedRectangleIntersection( const RotatedRect& rect1, const RotatedRect& r
         }
     }
 
-    // Get rid of dupes
-    for( int i = 0; i < (int)intersection.size()-1; i++ )
+    int N = (int)intersection.size();
+    if (N == 0)
     {
-        for( size_t j = i+1; j < intersection.size(); j++ )
-        {
-            float dx = intersection[i].x - intersection[j].x;
-            float dy = intersection[i].y - intersection[j].y;
-            double d2 = dx*dx + dy*dy; // can be a really small number, need double here
+        return INTERSECT_NONE;
+    }
 
-            if( d2 < samePointEps*samePointEps )
+    // Get rid of duplicated points
+    int Nstride = N;
+    cv::AutoBuffer<float, 100> distPt(N * N);
+    cv::AutoBuffer<int> ptDistRemap(N);
+    for (int i = 0; i < N; ++i)
+    {
+        const Point2f pt0 = intersection[i];
+        ptDistRemap[i] = i;
+        for (int j = i + 1; j < N; )
+        {
+            const Point2f pt1 = intersection[j];
+            float d2 = normL2Sqr<float>(pt1 - pt0);
+            if(d2 <= samePointEps)
             {
-                // Found a dupe, remove it
-                std::swap(intersection[j], intersection.back());
-                intersection.pop_back();
-                j--; // restart check
+                if (j < N - 1)
+                    intersection[j] =  intersection[N - 1];
+                N--;
+                continue;
+            }
+            distPt[i*Nstride + j] = d2;
+            ++j;
+        }
+    }
+    while (N > 8) // we still have duplicate points after samePointEps threshold (eliminate closest points)
+    {
+        int minI = 0;
+        int minJ = 1;
+        float minD = distPt[1];
+        for (int i = 0; i < N - 1; ++i)
+        {
+            float* pDist = distPt.data() + Nstride * ptDistRemap[i];
+            for (int j = i + 1; j < N; ++j)
+            {
+                float d = pDist[ptDistRemap[j]];
+                if (d < minD)
+                {
+                    minD = d;
+                    minI = i;
+                    minJ = j;
+                }
+            }
+        }
+        CV_Assert(fabs(normL2Sqr<float>(intersection[minI] - intersection[minJ]) - minD) < 1e-6);  // ptDistRemap is not corrupted
+        // drop minJ point
+        if (minJ < N - 1)
+        {
+            intersection[minJ] =  intersection[N - 1];
+            ptDistRemap[minJ] = ptDistRemap[N - 1];
+        }
+        N--;
+    }
+
+    // order points
+    for (int i = 0; i < N - 1; ++i)
+    {
+        Point2f diffI = intersection[i + 1] - intersection[i];
+        for (int j = i + 2; j < N; ++j)
+        {
+            Point2f diffJ = intersection[j] - intersection[i];
+            if (diffI.cross(diffJ) < 0)
+            {
+                std::swap(intersection[i + 1], intersection[j]);
+                diffI = diffJ;
             }
         }
     }
 
-    if( intersection.empty() )
+    intersection.resize(N);
+
+    return ret;
+}
+
+int rotatedRectangleIntersection( const RotatedRect& rect1, const RotatedRect& rect2, OutputArray intersectingRegion )
+{
+    CV_INSTRUMENT_REGION();
+
+    if (rect1.size.empty() || rect2.size.empty())
     {
-        return INTERSECT_NONE ;
+        intersectingRegion.release();
+        return INTERSECT_NONE;
     }
 
-    // If this check fails then it means we're getting dupes, increase samePointEps
-    CV_Assert( intersection.size() <= 8 );
+    // Shift rectangles closer to origin (0, 0) to improve the calculation of the intesection region
+    // To do that, the average center of the rectangles is moved to the origin
+    const Point2f averageCenter = (rect1.center + rect2.center) / 2.0f;
 
-    Mat(intersection).copyTo(intersectingRegion);
+    RotatedRect shiftedRect1(rect1);
+    RotatedRect shiftedRect2(rect2);
+
+    // Move rectangles closer to origin
+    shiftedRect1.center -= averageCenter;
+    shiftedRect2.center -= averageCenter;
+
+    std::vector <Point2f> intersection; intersection.reserve(24);
+
+    const int ret = _rotatedRectangleIntersection(shiftedRect1, shiftedRect2, intersection);
+
+    // If return is not None, the intersection Points are shifted back to the original position
+    // and copied to the interesectingRegion
+    if (ret != INTERSECT_NONE)
+    {
+        for (size_t i = 0; i < intersection.size(); ++i)
+        {
+            intersection[i] += averageCenter;
+        }
+
+        Mat(intersection).copyTo(intersectingRegion);
+    }
+    else
+    {
+        intersectingRegion.release();
+    }
 
     return ret;
 }

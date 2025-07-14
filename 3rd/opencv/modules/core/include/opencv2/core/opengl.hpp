@@ -245,7 +245,7 @@ public:
 
     /** @brief Maps OpenGL buffer to CUDA device memory.
 
-    This operatation doesn't copy data. Several buffer objects can be mapped to CUDA memory at a time.
+    This operation doesn't copy data. Several buffer objects can be mapped to CUDA memory at a time.
 
     A mapped data store must be unmapped with ogl::Buffer::unmapDevice before its buffer object is used.
      */
@@ -558,12 +558,10 @@ by the call to mapGLBuffer() function.
  */
 CV_EXPORTS void unmapGLBuffer(UMat& u);
 
+//! @}
 }} // namespace cv::ogl
 
 namespace cv { namespace cuda {
-
-//! @addtogroup cuda
-//! @{
 
 /** @brief Sets a CUDA device and initializes it for the current thread with OpenGL interoperability.
 
@@ -572,8 +570,6 @@ This function should be explicitly called after OpenGL context creation and befo
 @ingroup core_opengl
  */
 CV_EXPORTS void setGlDevice(int device = 0);
-
-//! @}
 
 }}
 
@@ -707,10 +703,18 @@ cv::ogl::Texture2D::Format cv::ogl::Texture2D::format() const
 
 ///////
 
+// WARNING: unreachable code using Ninja
+#if defined _MSC_VER && _MSC_VER >= 1920
+#pragma warning(push)
+#pragma warning(disable: 4702)
+#endif
 inline
 cv::ogl::Arrays::Arrays() : size_(0)
 {
 }
+#if defined _MSC_VER && _MSC_VER >= 1920
+#pragma warning(pop)
+#endif
 
 inline
 int cv::ogl::Arrays::size() const

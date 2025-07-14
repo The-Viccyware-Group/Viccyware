@@ -2,7 +2,7 @@
 // It is subject to the license terms in the LICENSE file found in the top-level directory
 // of this distribution and at http://opencv.org/license.html.
 
-#include <precomp.hpp>
+#include "precomp.hpp"
 
 #include <opencv2/core/utils/configuration.private.hpp>
 #include <opencv2/core/utils/logger.hpp>
@@ -11,13 +11,25 @@
 #include <iostream>
 #include <fstream>
 
+#ifdef __ANDROID__
+# include <android/log.h>
+#endif
+
 namespace cv {
 namespace utils {
 namespace logging {
 
 static LogLevel parseLogLevelConfiguration()
 {
-    static cv::String param_log_level = utils::getConfigurationParameterString("OPENCV_LOG_LEVEL", "INFO");
+    (void)getInitializationMutex();  // ensure initialization of global objects
+
+    static cv::String param_log_level = utils::getConfigurationParameterString("OPENCV_LOG_LEVEL",
+#if defined NDEBUG
+            "WARNING"
+#else
+            "INFO"
+#endif
+    );
     if (param_log_level == "DISABLED" || param_log_level == "disabled" ||
         param_log_level == "0" || param_log_level == "OFF" || param_log_level == "off")
         return LOG_LEVEL_SILENT;
@@ -59,22 +71,53 @@ LogLevel getLogLevel()
 
 namespace internal {
 
+static int getShowTimestampMode()
+{
+    static bool param_timestamp_enable = utils::getConfigurationParameterBool("OPENCV_LOG_TIMESTAMP", true);
+    static bool param_timestamp_ns_enable = utils::getConfigurationParameterBool("OPENCV_LOG_TIMESTAMP_NS", false);
+    return (param_timestamp_enable ? 1 : 0) + (param_timestamp_ns_enable ? 2 : 0);
+}
+
 void writeLogMessage(LogLevel logLevel, const char* message)
 {
     const int threadID = cv::utils::getThreadID();
-    std::ostream* out = (logLevel <= LOG_LEVEL_WARNING) ? &std::cerr : &std::cout;
-    std::stringstream ss;
+
+    std::string message_id;
+    switch (getShowTimestampMode())
+    {
+        case 1: message_id = cv::format("%d@%0.3f", threadID, getTimestampNS() * 1e-9); break;
+        case 1+2: message_id = cv::format("%d@%llu", threadID, getTimestampNS()); break;
+        default: message_id = cv::format("%d", threadID); break;
+    }
+
+    std::ostringstream ss;
     switch (logLevel)
     {
-    case LOG_LEVEL_FATAL:   ss << "[FATAL:" << threadID << "] " << message << std::endl; break;
-    case LOG_LEVEL_ERROR:   ss << "[ERROR:" << threadID << "] " << message << std::endl; break;
-    case LOG_LEVEL_WARNING: ss << "[ WARN:" << threadID << "] " << message << std::endl; break;
-    case LOG_LEVEL_INFO:    ss << "[ INFO:" << threadID << "] " << message << std::endl; break;
-    case LOG_LEVEL_DEBUG:   ss << "[DEBUG:" << threadID << "] " << message << std::endl; break;
+    case LOG_LEVEL_FATAL:   ss << "[FATAL:" << message_id << "] " << message << std::endl; break;
+    case LOG_LEVEL_ERROR:   ss << "[ERROR:" << message_id << "] " << message << std::endl; break;
+    case LOG_LEVEL_WARNING: ss << "[ WARN:" << message_id << "] " << message << std::endl; break;
+    case LOG_LEVEL_INFO:    ss << "[ INFO:" << message_id << "] " << message << std::endl; break;
+    case LOG_LEVEL_DEBUG:   ss << "[DEBUG:" << message_id << "] " << message << std::endl; break;
     case LOG_LEVEL_VERBOSE: ss << message << std::endl; break;
-    default:
-        return;
+    case LOG_LEVEL_SILENT: return;  // avoid compiler warning about incomplete switch
+    case ENUM_LOG_LEVEL_FORCE_INT: return;  // avoid compiler warning about incomplete switch
     }
+#ifdef __ANDROID__
+    int android_logLevel = ANDROID_LOG_INFO;
+    switch (logLevel)
+    {
+    case LOG_LEVEL_FATAL:   android_logLevel = ANDROID_LOG_FATAL; break;
+    case LOG_LEVEL_ERROR:   android_logLevel = ANDROID_LOG_ERROR; break;
+    case LOG_LEVEL_WARNING: android_logLevel = ANDROID_LOG_WARN; break;
+    case LOG_LEVEL_INFO:    android_logLevel = ANDROID_LOG_INFO; break;
+    case LOG_LEVEL_DEBUG:   android_logLevel = ANDROID_LOG_DEBUG; break;
+    case LOG_LEVEL_VERBOSE: android_logLevel = ANDROID_LOG_VERBOSE; break;
+    default:
+        break;
+    }
+    __android_log_print(android_logLevel, "OpenCV/" CV_VERSION, "%s", ss.str().c_str());
+#endif
+    std::ostream* out = (logLevel <= LOG_LEVEL_WARNING) ? &std::cerr : &std::cout;
     (*out) << ss.str();
     if (logLevel <= LOG_LEVEL_WARNING)
         (*out) << std::flush;

@@ -34,12 +34,11 @@
 #include <iostream>
 #include <caffe/caffe.hpp>
 
-namespace cvtest
-{
+namespace opencv_test {
 
 static caffe::Net<float>* initNet(std::string proto, std::string weights)
 {
-    proto = findDataFile(proto, false);
+    proto = findDataFile(proto);
     weights = findDataFile(weights, false);
 
 #ifdef HAVE_CLCAFFE
@@ -108,6 +107,5 @@ PERF_TEST(MobileNet_SSD, CaffePerfTest)
     SANITY_CHECK_NOTHING();
 }
 
-}  // namespace cvtest
-
+} // namespace
 #endif  // HAVE_CAFFE

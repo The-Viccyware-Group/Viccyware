@@ -5,19 +5,35 @@
 #include "test_precomp.hpp"
 #include "test_invariance_utils.hpp"
 
-using namespace std;
-using namespace cv;
-using std::tr1::make_tuple;
-using std::tr1::get;
-using namespace testing;
+namespace opencv_test { namespace {
 
 #define SHOW_DEBUG_LOG 1
 
-typedef std::tr1::tuple<std::string, Ptr<FeatureDetector>, Ptr<DescriptorExtractor>, float>
+typedef tuple<std::string, Ptr<FeatureDetector>, Ptr<DescriptorExtractor>, float>
     String_FeatureDetector_DescriptorExtractor_Float_t;
 const static std::string IMAGE_TSUKUBA = "features2d/tsukuba.png";
 const static std::string IMAGE_BIKES = "detectors_descriptors_evaluation/images_datasets/bikes/img1.png";
 #define Value(...) Values(String_FeatureDetector_DescriptorExtractor_Float_t(__VA_ARGS__))
+
+static
+void SetSuitableSIFTOctave(vector<KeyPoint>& keypoints,
+                             int firstOctave = -1, int nOctaveLayers = 3, double sigma = 1.6)
+{
+    for (size_t i = 0; i < keypoints.size(); i++ )
+    {
+        int octv, layer;
+        KeyPoint& kpt = keypoints[i];
+        double octv_layer = std::log(kpt.size / sigma) / std::log(2.) - 1;
+        octv = cvFloor(octv_layer);
+        layer = cvRound( (octv_layer - octv) * nOctaveLayers );
+        if (octv < firstOctave)
+        {
+            octv = firstOctave;
+            layer = 0;
+        }
+        kpt.octave = (layer << 8) | (octv & 255);
+    }
+}
 
 static
 void rotateKeyPoints(const vector<KeyPoint>& src, const Mat& H, float angle, vector<KeyPoint>& dst)
@@ -136,6 +152,10 @@ TEST_P(DescriptorScaleInvariance, scale)
 
         vector<KeyPoint> keypoints1;
         scaleKeyPoints(keypoints0, keypoints1, 1.0f/scale);
+        if (featureDetector->getDefaultName() == "Feature2D.SIFT")
+        {
+            SetSuitableSIFTOctave(keypoints1);
+        }
         Mat descriptors1;
         descriptorExtractor->compute(image1, keypoints1, descriptors1);
 
@@ -171,6 +191,9 @@ TEST_P(DescriptorScaleInvariance, scale)
  * Descriptors's rotation invariance check
  */
 
+INSTANTIATE_TEST_CASE_P(SIFT, DescriptorRotationInvariance,
+                        Value(IMAGE_TSUKUBA, SIFT::create(), SIFT::create(), 0.98f));
+
 INSTANTIATE_TEST_CASE_P(BRISK, DescriptorRotationInvariance,
                         Value(IMAGE_TSUKUBA, BRISK::create(), BRISK::create(), 0.99f));
 
@@ -187,8 +210,13 @@ INSTANTIATE_TEST_CASE_P(AKAZE_DESCRIPTOR_KAZE, DescriptorRotationInvariance,
  * Descriptor's scale invariance check
  */
 
+INSTANTIATE_TEST_CASE_P(SIFT, DescriptorScaleInvariance,
+                        Value(IMAGE_BIKES, SIFT::create(0, 3, 0.09), SIFT::create(0, 3, 0.09), 0.78f));
+
 INSTANTIATE_TEST_CASE_P(AKAZE, DescriptorScaleInvariance,
                         Value(IMAGE_BIKES, AKAZE::create(), AKAZE::create(), 0.6f));
 
 INSTANTIATE_TEST_CASE_P(AKAZE_DESCRIPTOR_KAZE, DescriptorScaleInvariance,
                         Value(IMAGE_BIKES, AKAZE::create(AKAZE::DESCRIPTOR_KAZE), AKAZE::create(AKAZE::DESCRIPTOR_KAZE), 0.55f));
+
+}} // namespace

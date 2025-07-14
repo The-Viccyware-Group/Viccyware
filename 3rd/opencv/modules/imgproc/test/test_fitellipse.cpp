@@ -5,11 +5,8 @@
 // Copyright (C) 2016, Itseez, Inc, all rights reserved.
 
 #include "test_precomp.hpp"
-#include <vector>
-#include <cmath>
 
-using namespace cv;
-using namespace std;
+namespace opencv_test { namespace {
 
 // return true if point lies inside ellipse
 static bool check_pt_in_ellipse(const Point2f& pt, const RotatedRect& el) {
@@ -19,7 +16,7 @@ static bool check_pt_in_ellipse(const Point2f& pt, const RotatedRect& el) {
     double x_dist = 0.5 * el.size.width * cos(pt_angle + el_angle);
     double y_dist = 0.5 * el.size.height * sin(pt_angle + el_angle);
     double el_dist = sqrt(x_dist * x_dist + y_dist * y_dist);
-    return norm(to_pt) < el_dist;
+    return cv::norm(to_pt) < el_dist;
 }
 
 // Return true if mass center of fitted points lies inside ellipse
@@ -68,3 +65,41 @@ TEST(Imgproc_FitEllipse_Issue_6544, accuracy) {
 
     EXPECT_TRUE(fit_and_check_ellipse(pts));
 }
+
+TEST(Imgproc_FitEllipse_Issue_10270, accuracy) {
+    vector<Point2f> pts;
+    float scale = 1;
+    Point2f shift(0, 0);
+    pts.push_back(Point2f(0, 1)*scale+shift);
+    pts.push_back(Point2f(0, 2)*scale+shift);
+    pts.push_back(Point2f(0, 3)*scale+shift);
+    pts.push_back(Point2f(2, 3)*scale+shift);
+    pts.push_back(Point2f(0, 4)*scale+shift);
+
+    // check that we get almost vertical ellipse centered around (1, 3)
+    RotatedRect e = fitEllipse(pts);
+    EXPECT_LT(std::min(fabs(e.angle-180), fabs(e.angle)), 10.);
+    EXPECT_NEAR(e.center.x, 1, 1);
+    EXPECT_NEAR(e.center.y, 3, 1);
+    EXPECT_LT(e.size.width*3, e.size.height);
+}
+
+TEST(Imgproc_FitEllipse_JavaCase, accuracy) {
+    vector<Point2f> pts;
+    float scale = 1;
+    Point2f shift(0, 0);
+    pts.push_back(Point2f(0, 0)*scale+shift);
+    pts.push_back(Point2f(1, 1)*scale+shift);
+    pts.push_back(Point2f(-1, 1)*scale+shift);
+    pts.push_back(Point2f(-1, -1)*scale+shift);
+    pts.push_back(Point2f(1, -1)*scale+shift);
+
+    // check that we get almost vertical ellipse centered around (1, 3)
+    RotatedRect e = fitEllipse(pts);
+    EXPECT_NEAR(e.center.x, 0, 0.01);
+    EXPECT_NEAR(e.center.y, 0, 0.01);
+    EXPECT_NEAR(e.size.width, sqrt(2.)*2, 0.4);
+    EXPECT_NEAR(e.size.height, sqrt(2.)*2, 0.4);
+}
+
+}} // namespace

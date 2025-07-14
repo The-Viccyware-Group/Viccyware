@@ -53,6 +53,7 @@
 #include <ImfInputFile.h>
 #include <ImfChannelList.h>
 #include <ImathBox.h>
+#include <ImfRgbaFile.h>
 #include "grfmt_base.hpp"
 
 namespace cv
@@ -63,25 +64,25 @@ using namespace Imath;
 
 /* libpng version only */
 
-class ExrDecoder : public BaseImageDecoder
+class ExrDecoder CV_FINAL : public BaseImageDecoder
 {
 public:
 
     ExrDecoder();
-    ~ExrDecoder();
+    ~ExrDecoder() CV_OVERRIDE;
 
-    int   type() const;
-    bool  readData( Mat& img );
-    bool  readHeader();
+    int   type() const CV_OVERRIDE;
+    bool  readData( Mat& img ) CV_OVERRIDE;
+    bool  readHeader() CV_OVERRIDE;
     void  close();
 
-    ImageDecoder newDecoder() const;
+    ImageDecoder newDecoder() const CV_OVERRIDE;
 
 protected:
     void  UpSample( uchar *data, int xstep, int ystep, int xsample, int ysample );
     void  UpSampleX( float *data, int xstep, int xsample );
     void  UpSampleY( uchar *data, int xstep, int ystep, int ysample );
-    void  ChromaToBGR( float *data, int numlines, int step );
+    void  ChromaToBGR( float *data, int numlines, int xstep, int ystep );
     void  RGBToGray( float *in, float *out );
 
     InputFile      *m_file;
@@ -91,11 +92,13 @@ protected:
     const Channel  *m_red;
     const Channel  *m_green;
     const Channel  *m_blue;
+    const Channel  *m_alpha;
     Chromaticities  m_chroma;
     int             m_bit_depth;
     bool            m_native_depth;
     bool            m_iscolor;
     bool            m_isfloat;
+    bool            m_hasalpha;
 
 private:
     ExrDecoder(const ExrDecoder &); // copy disabled
@@ -103,15 +106,15 @@ private:
 };
 
 
-class ExrEncoder : public BaseImageEncoder
+class ExrEncoder CV_FINAL : public BaseImageEncoder
 {
 public:
     ExrEncoder();
-    ~ExrEncoder();
+    ~ExrEncoder() CV_OVERRIDE;
 
-    bool  isFormatSupported( int depth ) const;
-    bool  write( const Mat& img, const std::vector<int>& params );
-    ImageEncoder newEncoder() const;
+    bool  isFormatSupported( int depth ) const CV_OVERRIDE;
+    bool  write( const Mat& img, const std::vector<int>& params ) CV_OVERRIDE;
+    ImageEncoder newEncoder() const CV_OVERRIDE;
 };
 
 }
