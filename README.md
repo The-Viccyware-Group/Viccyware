@@ -5,6 +5,8 @@ code. Original README: [README-orig.md](/README-orig.md)
 
 Check the [wiki](https://github.com/kercre123/victor/wiki) for more information about the leak, what we can do with this, and general Vector info.
 
+Learn a little more about the project at [viccyware.com](https://www.viccyware.com/)
+
 ## Branch info
 This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
 
@@ -43,7 +45,8 @@ cd ~/Viccyware
 
 ## Building (ARM64 macOS)
 
-# only works on M1-M4 Macs at the moment, not Intel
+> [!WARNING] 
+> Only works on M1-M4 Macs at the moment, NOT Intel
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
    -  Then: `brew install ccache wget upx`
