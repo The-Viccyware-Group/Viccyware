@@ -25,8 +25,8 @@ namespace Anki {
 namespace Vector {
 
 namespace {
-  constexpr const char * kSupportURL = "error.pvic.xyz";
-  constexpr const char * kVectorWillRestart = "Vector will restart";
+  constexpr const char * kSupportURL = "error.viccyware.com";
+  constexpr const char * kVectorWillRestart = "Cozmo will restart";
 
   const f32 kRobotNameScale = 0.6f;
   const std::string kAppURL = "v.pvic.xyz";

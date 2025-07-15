@@ -15,17 +15,19 @@
     // contains internal cooldowns and requirements
     "PossibleUnintentionalPerformance",
 
-    "ObservingInternal"
+    "ObservingInternal",
+
+    "Singing_EntryOfTheGladiators"
   ],
 
   "anonymousBehaviors" : [
     {
       "behaviorName" : "ObservingInternal",
       "behaviorClass" : "DispatcherStrictPriorityWithCooldown",
-    
+
       "interruptActiveBehavior": true,
-    
-      "behaviors": [    
+
+      "behaviors": [
         {
           "behavior": "TrackingEyeContact",
           "cooldown_s": 15.0
@@ -52,7 +54,6 @@
         }
       ]
     }
-    
   ]
 }
 

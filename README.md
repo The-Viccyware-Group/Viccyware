@@ -1,23 +1,28 @@
-# victor
+# Viccyware-tester
 
-Welcome to `victor`. This is the home of the Anki Vector robot's source code. Original README: [README-orig.md](/README-orig.md)
+Welcome to the unstable branch of `Viccyware`. This is the home of a modified copy of the Vector source
+code. Original README: [README-orig.md](/README-orig.md)
 
 Check the [wiki](https://github.com/kercre123/victor/wiki) for more information about the leak, what we can do with this, and general Vector info.
 
+Learn a little more about the project at [viccyware.com](https://www.viccyware.com/)
+
+## Branch info
+This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
+
 ## Changes
 
-- The wiki includes a list of changes I made: [Changes I Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
+- The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
 ## Building (x86_64/arm64 Linux)
-
- - Prereqs: Make sure you have `docker` and `git` installed.
+ - Prereqs: Make sure you have `docker` installed.
 
 1. Clone the repo and cd into it:
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd wire-os-victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Make sure you can run Docker as a normal user. This will probably involve:
@@ -32,7 +37,7 @@ sudo chmod 660 /var/run/docker.sock
 
 3. Run the build script:
 ```
-cd ~/wire-os-victor
+cd ~/Viccyware
 ./build/build-v.sh
 ```
 
@@ -40,7 +45,8 @@ cd ~/wire-os-victor
 
 ## Building (ARM64 macOS)
 
-# only works on M1-M4 Macs at the moment, not Intel
+> [!WARNING] 
+> Only works on M1-M4 Macs at the moment, NOT Intel
 
  - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
    -  Then: `brew install ccache wget upx`
@@ -49,13 +55,13 @@ cd ~/wire-os-victor
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Run the build script:
 ```
-cd ~/wire-os-victor
+cd ~/Viccyware
 ./build/build-v.sh
 ```
 
@@ -74,5 +80,5 @@ echo 192.168.1.150 > robot_ip.txt
 3. Run:
 
 ```
-./build/deploy-d.sh
+./build/deploy-v.sh
 ```
