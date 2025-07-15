@@ -275,7 +275,7 @@ Result Benchmark::DiffWithPrevious(const ImageRGB& image)
       cv::Mat diffImageRGB;
       cv::absdiff(image.get_CvMat_(), _prevImage.get_CvMat_(), diffImageRGB);
       cv::reduce(diffImageRGB.reshape(1, image.GetNumElements()),
-                 diffImage.get_CvMat_().reshape(1, image.GetNumElements()), 1, CV_REDUCE_MAX);
+                 diffImage.get_CvMat_().reshape(1, image.GetNumElements()), 1, cv::REDUCE_MAX);
     }
     
     if(kVisionBenchmark_DisplayImages)
@@ -487,7 +487,7 @@ Result Benchmark::SquaredDiffFromScalar(const ImageRGB& image)
     
     squared = squared.mul(squared);
     squared = squared.reshape(1, squared.rows * squared.cols);
-    cv::reduce(squared, squared, 1, CV_REDUCE_AVG);
+    cv::reduce(squared, squared, 1, cv::REDUCE_AVG);
     squared = squared.reshape(1, diffSq.GetNumRows());
     squared.convertTo(diffSq.get_CvMat_(), CV_8U, 1.0/256.0);
   }

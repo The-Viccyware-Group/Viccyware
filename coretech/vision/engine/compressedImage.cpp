@@ -60,7 +60,7 @@ const std::vector<u8>& CompressedImage::Compress(const ImageBase<PixelType>& img
   // Convert to BGR so that imencode works
   img.ConvertToShowableFormat(mat);
 
-  const std::vector<int> compressionParams = {CV_IMWRITE_JPEG_QUALITY, quality};
+  const std::vector<int> compressionParams = {cv::IMWRITE_JPEG_QUALITY, quality};
 
   cv::imencode(".jpg", mat, _compressedBuffer, compressionParams);
 
@@ -77,7 +77,7 @@ bool CompressedImage::Decompress(ImageBase<PixelRGB>& img) const
     return false;
   }
 
-  auto mat = cv::imdecode(_compressedBuffer, CV_LOAD_IMAGE_COLOR);
+  auto mat = cv::imdecode(_compressedBuffer, cv::IMREAD_COLOR);
   img.SetFromShowableFormat(mat);
   
   return true;
@@ -93,7 +93,7 @@ bool CompressedImage::Decompress(ImageBase<u8>& img) const
     return false;
   }
 
-  auto mat = cv::imdecode(_compressedBuffer, CV_LOAD_IMAGE_GRAYSCALE);
+  auto mat = cv::imdecode(_compressedBuffer, cv::IMREAD_GRAYSCALE);
   img.SetFromShowableFormat(mat);
   
   return true;
@@ -103,7 +103,7 @@ bool CompressedImage::Decompress(ImageBase<u8>& img) const
 void CompressedImage::Display(const std::string& name) const
 {
   auto img = cv::imdecode(GetCompressedBuffer(),
-                          (GetNumChannels() > 1 ? CV_LOAD_IMAGE_COLOR : CV_LOAD_IMAGE_GRAYSCALE));
+                          (GetNumChannels() > 1 ? cv::IMREAD_COLOR : cv::IMREAD_GRAYSCALE));
   cv::imshow(name.c_str(), img);
   cv::waitKey(5);
 }

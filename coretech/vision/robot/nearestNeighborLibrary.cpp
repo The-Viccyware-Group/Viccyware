@@ -102,7 +102,7 @@ namespace Embedded {
     closestDistance = distThreshold;
     s32 secondClosestDistance = std::numeric_limits<s32>::max();
     
-    cv::normalize(_probeValues, _probeValues, 255, 0, CV_MINMAX);
+    cv::normalize(_probeValues, _probeValues, 255, 0, cv::NORM_MINMAX);
     
     cv::Mat_<u8> diffImage, bestDiffImage, secondBestDiffImage;
     for(s32 iExample=0; iExample<_numDataPoints; ++iExample)
@@ -191,7 +191,7 @@ namespace Embedded {
         cv::Mat_<u8> tempClosestExample(VisionMarker::GRIDSIZE, VisionMarker::GRIDSIZE,
                                         _data[closestIndex]);
         cv::resize(tempClosestExample, closestExampleDisp, cv::Size(dispSize,dispSize));
-        cv::cvtColor(closestExampleDisp, closestExampleDisp, CV_GRAY2BGR);
+        cv::cvtColor(closestExampleDisp, closestExampleDisp, cv::COLOR_GRAY2BGR);
       
         cv::resize(bestDiffImage, bestDiffImage, cv::Size(dispSize,dispSize));
         cv::imshow("ClosestDiff", bestDiffImage);
@@ -199,7 +199,7 @@ namespace Embedded {
         char closestStr[128];
         snprintf(closestStr, 127, "Dist: %d(%d), Index: %d, Label: %d",
                  closestDistance, maskedDist, closestIndex, closestLabel);
-        cv::putText(closestExampleDisp, closestStr, cv::Point(0,closestExampleDisp.rows-2), CV_FONT_NORMAL, 0.4, cv::Scalar(0,0,255));
+        cv::putText(closestExampleDisp, closestStr, cv::Point(0,closestExampleDisp.rows-2), cv::QT_FONT_NORMAL, 0.4, cv::Scalar(0,0,255));
         cv::imshow("ClosestExample", closestExampleDisp);
         
         if(secondClosestIndex != -1)
@@ -211,17 +211,17 @@ namespace Embedded {
           cv::Mat_<u8> tempSecondExample(VisionMarker::GRIDSIZE, VisionMarker::GRIDSIZE,
                                           _data[secondClosestIndex]);
           cv::resize(tempSecondExample, secondClosestDisp, cv::Size(dispSize,dispSize));
-          cv::cvtColor(secondClosestDisp, secondClosestDisp, CV_GRAY2BGR);
+          cv::cvtColor(secondClosestDisp, secondClosestDisp, cv::COLOR_GRAY2BGR);
           
           cv::Mat maskDisp;
           cv::absdiff(tempClosestExample, tempSecondExample, maskDisp);
-          cv::resize(maskDisp>distThreshold, maskDisp, cv::Size(dispSize, dispSize), CV_INTER_NN);
+          cv::resize(maskDisp>distThreshold, maskDisp, cv::Size(dispSize, dispSize), cv::INTER_NEAREST);
           cv::imshow("ExampleDiffMask", maskDisp);
           
           char closestStr[128];
           snprintf(closestStr, 127, "Dist: %d, Index: %d, Label: %d",
                    secondClosestDistance, secondClosestIndex, secondLabel);
-          cv::putText(secondClosestDisp, closestStr, cv::Point(0,secondClosestDisp.rows-2), CV_FONT_NORMAL, 0.4, cv::Scalar(0,0,255));
+          cv::putText(secondClosestDisp, closestStr, cv::Point(0,secondClosestDisp.rows-2), cv::QT_FONT_NORMAL, 0.4, cv::Scalar(0,0,255));
           cv::imshow("SecondExample", secondClosestDisp);
         }
         

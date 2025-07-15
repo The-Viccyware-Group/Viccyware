@@ -403,7 +403,7 @@ void IBehaviorSelfTest::DrawTextOnScreen(Robot& robot,
   Vision::ImageRGB img(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH, {bg.r(), bg.g(), bg.b()});
 
   const int thickness = 1;
-  const int font = CV_FONT_NORMAL;
+  const int font = cv::QT_FONT_NORMAL;
 
   cv::Size minSize(std::numeric_limits<int>::max(),
                    std::numeric_limits<int>::max());

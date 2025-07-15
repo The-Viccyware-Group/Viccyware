@@ -86,12 +86,38 @@ namespace hal {
 
 using namespace emscripten;
 using namespace cv;
+
+using namespace cv::segmentation;  // FIXIT
+
+#ifdef HAVE_OPENCV_OBJDETECT
+using namespace cv::aruco;
+typedef aruco::DetectorParameters aruco_DetectorParameters;
+typedef QRCodeDetectorAruco::Params QRCodeDetectorAruco_Params;
+#endif
+
 #ifdef HAVE_OPENCV_DNN
 using namespace cv::dnn;
 #endif
 
+#ifdef HAVE_OPENCV_FEATURES2D
+typedef SimpleBlobDetector::Params SimpleBlobDetector_Params;
+#endif
+
+#ifdef HAVE_OPENCV_VIDEO
+typedef TrackerMIL::Params TrackerMIL_Params;
+#endif
+
+// HACK: JS generator ommits namespace for parameter types for some reason. Added typedef to handle std::string correctly
+typedef std::string string;
+
 namespace binding_utils
 {
+    template<typename classT, typename enumT>
+    static inline typename std::underlying_type<enumT>::type classT::* underlying_ptr(enumT classT::* enum_ptr)
+    {
+        return reinterpret_cast<typename std::underlying_type<enumT>::type classT::*>(enum_ptr);
+    }
+
     template<typename T>
     emscripten::val matData(const cv::Mat& mat)
     {
@@ -351,6 +377,22 @@ namespace binding_utils
         result.call<void>("push", arg2);
         return result;
     }
+
+    void Tracker_init_wrapper(cv::Tracker& arg0, const cv::Mat& arg1, const Rect& arg2)
+    {
+        return arg0.init(arg1, arg2);
+    }
+
+    emscripten::val Tracker_update_wrapper(cv::Tracker& arg0, const cv::Mat& arg1)
+    {
+        Rect rect;
+        bool update = arg0.update(arg1, rect);
+
+        emscripten::val result = emscripten::val::array();
+        result.call<void>("push", update);
+        result.call<void>("push", rect);
+        return result;
+    }
 #endif  // HAVE_OPENCV_VIDEO
 
     std::string getExceptionMsg(const cv::Exception& e) {
@@ -422,12 +464,18 @@ EMSCRIPTEN_BINDINGS(binding_utils)
     register_vector<char>("CharVector");
     register_vector<float>("FloatVector");
     register_vector<double>("DoubleVector");
+    register_vector<std::string>("StringVector");
     register_vector<cv::Point>("PointVector");
+    register_vector<cv::Point2f>("Point2fVector");
+    register_vector<cv::Point3_<float>>("Point3fVector");
     register_vector<cv::Mat>("MatVector");
     register_vector<cv::Rect>("RectVector");
     register_vector<cv::KeyPoint>("KeyPointVector");
     register_vector<cv::DMatch>("DMatchVector");
+    register_vector<std::vector<char>>("CharVectorVector");
     register_vector<std::vector<cv::DMatch>>("DMatchVectorVector");
+    register_vector<std::vector<cv::KeyPoint>>("KeyPointVectorVector");
+    register_vector<std::vector<cv::Point>>("PointVectorVector");
 
 
     emscripten::class_<cv::Mat>("Mat")
@@ -476,7 +524,7 @@ EMSCRIPTEN_BINDINGS(binding_utils)
         .function("colRange", select_overload<Mat(int, int)const>(&cv::Mat::colRange))
         .function("colRange", select_overload<Mat(const Range&)const>(&cv::Mat::colRange))
         .function("step1", select_overload<size_t(int)const>(&cv::Mat::step1))
-        .function("clone", select_overload<Mat()const>(&cv::Mat::clone))
+        .function("mat_clone", select_overload<Mat()const>(&cv::Mat::clone))
         .function("depth", select_overload<int()const>(&cv::Mat::depth))
         .function("col", select_overload<Mat(int)const>(&cv::Mat::col))
         .function("dot", select_overload<double(const Mat&, const Mat&)>(&binding_utils::matDot))
@@ -540,7 +588,7 @@ EMSCRIPTEN_BINDINGS(binding_utils)
         .field("epsilon", &cv::TermCriteria::epsilon);
 
 #define EMSCRIPTEN_CV_SIZE(type) \
-    emscripten::value_object<type>("#type") \
+    emscripten::value_object<type>(#type) \
         .field("width", &type::width) \
         .field("height", &type::height);
 
@@ -548,12 +596,13 @@ EMSCRIPTEN_BINDINGS(binding_utils)
     EMSCRIPTEN_CV_SIZE(Size2f)
 
 #define EMSCRIPTEN_CV_POINT(type) \
-    emscripten::value_object<type>("#type") \
+    emscripten::value_object<type>(#type) \
         .field("x", &type::x) \
         .field("y", &type::y); \
 
     EMSCRIPTEN_CV_POINT(Point)
     EMSCRIPTEN_CV_POINT(Point2f)
+    EMSCRIPTEN_CV_POINT(Point3f)
 
 #define EMSCRIPTEN_CV_RECT(type, name) \
     emscripten::value_object<cv::Rect_<type>> (name) \
@@ -564,15 +613,12 @@ EMSCRIPTEN_BINDINGS(binding_utils)
 
     EMSCRIPTEN_CV_RECT(int, "Rect")
     EMSCRIPTEN_CV_RECT(float, "Rect2f")
+    EMSCRIPTEN_CV_RECT(double, "Rect2d")
 
     emscripten::value_object<cv::RotatedRect>("RotatedRect")
         .field("center", &cv::RotatedRect::center)
         .field("size", &cv::RotatedRect::size)
         .field("angle", &cv::RotatedRect::angle);
-
-    function("rotatedRectPoints", select_overload<emscripten::val(const cv::RotatedRect&)>(&binding_utils::rotatedRectPoints));
-    function("rotatedRectBoundingRect", select_overload<Rect(const cv::RotatedRect&)>(&binding_utils::rotatedRectBoundingRect));
-    function("rotatedRectBoundingRect2f", select_overload<Rect2f(const cv::RotatedRect&)>(&binding_utils::rotatedRectBoundingRect2f));
 
     emscripten::value_object<cv::KeyPoint>("KeyPoint")
         .field("angle", &cv::KeyPoint::angle)
@@ -600,10 +646,25 @@ EMSCRIPTEN_BINDINGS(binding_utils)
         .field("minLoc", &binding_utils::MinMaxLoc::minLoc)
         .field("maxLoc", &binding_utils::MinMaxLoc::maxLoc);
 
+    emscripten::value_object<cv::Exception>("Exception")
+        .field("code", &cv::Exception::code)
+        .field("msg", &binding_utils::getExceptionMsg, &binding_utils::setExceptionMsg);
+
     emscripten::value_object<binding_utils::Circle>("Circle")
         .field("center", &binding_utils::Circle::center)
         .field("radius", &binding_utils::Circle::radius);
 
+    function("boxPoints", select_overload<emscripten::val(const cv::RotatedRect&)>(&binding_utils::rotatedRectPoints));
+    function("rotatedRectPoints", select_overload<emscripten::val(const cv::RotatedRect&)>(&binding_utils::rotatedRectPoints));
+    function("rotatedRectBoundingRect", select_overload<Rect(const cv::RotatedRect&)>(&binding_utils::rotatedRectBoundingRect));
+    function("rotatedRectBoundingRect2f", select_overload<Rect2f(const cv::RotatedRect&)>(&binding_utils::rotatedRectBoundingRect2f));
+    function("exceptionFromPtr", &binding_utils::exceptionFromPtr, allow_raw_pointers());
+    function("minMaxLoc", select_overload<binding_utils::MinMaxLoc(const cv::Mat&, const cv::Mat&)>(&binding_utils::minMaxLoc));
+    function("minMaxLoc", select_overload<binding_utils::MinMaxLoc(const cv::Mat&)>(&binding_utils::minMaxLoc_1));
+    function("CV_MAT_DEPTH", &binding_utils::cvMatDepth);
+    function("getBuildInformation", &binding_utils::getBuildInformation);
+
+#ifdef HAVE_OPENCV_IMGPROC
     emscripten::value_object<cv::Moments >("Moments")
         .field("m00", &cv::Moments::m00)
         .field("m10", &cv::Moments::m10)
@@ -630,43 +691,23 @@ EMSCRIPTEN_BINDINGS(binding_utils)
         .field("nu12", &cv::Moments::nu12)
         .field("nu03", &cv::Moments::nu03);
 
-    emscripten::value_object<cv::Exception>("Exception")
-        .field("code", &cv::Exception::code)
-        .field("msg", &binding_utils::getExceptionMsg, &binding_utils::setExceptionMsg);
-
-    function("exceptionFromPtr", &binding_utils::exceptionFromPtr, allow_raw_pointers());
-
-#ifdef HAVE_OPENCV_IMGPROC
     function("minEnclosingCircle", select_overload<binding_utils::Circle(const cv::Mat&)>(&binding_utils::minEnclosingCircle));
-
     function("floodFill", select_overload<int(cv::Mat&, cv::Mat&, Point, Scalar, emscripten::val, Scalar, Scalar, int)>(&binding_utils::floodFill_wrapper));
-
     function("floodFill", select_overload<int(cv::Mat&, cv::Mat&, Point, Scalar, emscripten::val, Scalar, Scalar)>(&binding_utils::floodFill_wrapper_1));
-
     function("floodFill", select_overload<int(cv::Mat&, cv::Mat&, Point, Scalar, emscripten::val, Scalar)>(&binding_utils::floodFill_wrapper_2));
-
     function("floodFill", select_overload<int(cv::Mat&, cv::Mat&, Point, Scalar, emscripten::val)>(&binding_utils::floodFill_wrapper_3));
-
     function("floodFill", select_overload<int(cv::Mat&, cv::Mat&, Point, Scalar)>(&binding_utils::floodFill_wrapper_4));
-#endif
-
-    function("minMaxLoc", select_overload<binding_utils::MinMaxLoc(const cv::Mat&, const cv::Mat&)>(&binding_utils::minMaxLoc));
-
-    function("minMaxLoc", select_overload<binding_utils::MinMaxLoc(const cv::Mat&)>(&binding_utils::minMaxLoc_1));
-
-#ifdef HAVE_OPENCV_IMGPROC
     function("morphologyDefaultBorderValue", &cv::morphologyDefaultBorderValue);
 #endif
 
-    function("CV_MAT_DEPTH", &binding_utils::cvMatDepth);
-
 #ifdef HAVE_OPENCV_VIDEO
     function("CamShift", select_overload<emscripten::val(const cv::Mat&, Rect&, TermCriteria)>(&binding_utils::CamShiftWrapper));
-
     function("meanShift", select_overload<emscripten::val(const cv::Mat&, Rect&, TermCriteria)>(&binding_utils::meanShiftWrapper));
-#endif
 
-    function("getBuildInformation", &binding_utils::getBuildInformation);
+    emscripten::class_<cv::Tracker >("Tracker")
+        .function("init", select_overload<void(cv::Tracker&,const cv::Mat&,const Rect&)>(&binding_utils::Tracker_init_wrapper), pure_virtual())
+        .function("update", select_overload<emscripten::val(cv::Tracker&,const cv::Mat&)>(&binding_utils::Tracker_update_wrapper), pure_virtual());
+#endif
 
 #ifdef HAVE_PTHREADS_PF
     function("parallel_pthreads_set_threads_num", &cv::parallel_pthreads_set_threads_num);

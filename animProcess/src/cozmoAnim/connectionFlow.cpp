@@ -73,12 +73,12 @@ bool DrawStartPairingScreen(Anim::AnimationStreamer* animStreamer)
   auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
   img->FillWith(Vision::PixelRGBA(0, 0));
 
-  img->DrawTextCenteredHorizontally(robotName, CV_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
+  img->DrawTextCenteredHorizontally(robotName, cv::QT_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
 
   cv::Size textSize;
   float scale = 0;
-  Vision::Image::MakeTextFillImageWidth(kURL, CV_FONT_NORMAL, 1, img->GetNumCols(), textSize, scale);
-  img->DrawTextCenteredHorizontally(kURL, CV_FONT_NORMAL, scale, 1, kColor, (FACE_DISPLAY_HEIGHT + textSize.height)/2, true);
+  Vision::Image::MakeTextFillImageWidth(kURL, cv::QT_FONT_NORMAL, 1, img->GetNumCols(), textSize, scale);
+  img->DrawTextCenteredHorizontally(kURL, cv::QT_FONT_NORMAL, scale, 1, kColor, (FACE_DISPLAY_HEIGHT + textSize.height)/2, true);
 
   auto handle = std::make_shared<Vision::SpriteWrapper>(img);
   const bool overrideAllSpritesToEyeHue = false;
@@ -113,7 +113,7 @@ void DrawShowPinScreen(Anim::AnimationStreamer* animStreamer, const Anim::AnimCo
   }
   img->DrawTextCenteredHorizontally(robotName, CV_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
 
-  img->DrawTextCenteredHorizontally(pin, CV_FONT_NORMAL, 0.8f, 1, kColor, FACE_DISPLAY_HEIGHT-5, false);
+  img->DrawTextCenteredHorizontally(pin, cv::QT_FONT_NORMAL, 0.8f, 1, kColor, FACE_DISPLAY_HEIGHT-5, false);
 
   auto handle = std::make_shared<Vision::SpriteWrapper>(img);
   const bool overrideAllSpritesToEyeHue = false;

@@ -23,6 +23,8 @@
 #include "util/logging/logging.h"
 #include "util/random/randomGenerator.h"
 
+#include "opencv2/calib3d.hpp"
+
 #define LOG_CHANNEL "FaceRecognizer"
 
 namespace Anki {

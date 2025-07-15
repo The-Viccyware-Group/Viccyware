@@ -703,7 +703,7 @@ bool MotionDetector::DetectGroundAndImageHelper(Vision::Image &foregroundMotion,
                               NamedColors::RED, 4);
       snprintf(tempText, 127, "Area:%.2f X:%d Y:%d", imgRegionArea, msg.img_x, msg.img_y);
       putText(ratioImgDisp.get_CvMat_(), std::string(tempText),
-              cv::Point(0, ratioImgDisp.GetNumRows()), CV_FONT_NORMAL, .4f, CV_RGB(0, 255, 0));
+              cv::Point(0, ratioImgDisp.GetNumRows()), cv::QT_FONT_NORMAL, .4f, CV_RGB(0, 255, 0));
       debugImages.emplace_back("RatioImg", ratioImgDisp);
 
       //_currentResult.debugImages.push_back({"PrevRatioImg", _prevRatioImg});
@@ -720,7 +720,7 @@ bool MotionDetector::DetectGroundAndImageHelper(Vision::Image &foregroundMotion,
                                       NamedColors::RED, 2);
         snprintf(tempText, 127, "Area:%.2f X:%d Y:%d", groundRegionArea, msg.ground_x, msg.ground_y);
         putText(ratioImgDispGround.get_CvMat_(), std::string(tempText),
-                cv::Point(0, crntPoseData.groundPlaneROI.GetWidthFar()), CV_FONT_NORMAL, .4f,
+                cv::Point(0, crntPoseData.groundPlaneROI.GetWidthFar()), cv::QT_FONT_NORMAL, .4f,
                 CV_RGB(0,255,0));
       }
       debugImages.emplace_back("RatioImgGround", ratioImgDispGround);

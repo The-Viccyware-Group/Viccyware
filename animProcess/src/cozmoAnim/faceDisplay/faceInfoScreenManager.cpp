@@ -1678,7 +1678,7 @@ void FaceInfoScreenManager::DrawAlexaFace()
   {
     textLocationY += ( kTextSpacing * line.scale );
     _scratchDrawingImg->DrawTextCenteredHorizontally( line.text,
-                                                      CV_FONT_NORMAL,
+                                                      cv::QT_FONT_NORMAL,
                                                       kDefaultTextScale * line.scale,
                                                       kTextLineThickness,
                                                       kTextColor,

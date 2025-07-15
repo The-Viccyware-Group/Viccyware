@@ -143,7 +143,7 @@ namespace Anki
       Array<Type> newArray = Array<Type>();
 
 #if ANKICORETECH_EMBEDDED_USE_OPENCV
-      const cv::Mat cvImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+      const cv::Mat cvImage = cv::imread(filename, cv::IMREAD_GRAYSCALE);
 
       AnkiConditionalErrorAndReturnValue(cvImage.cols > 0 && cvImage.rows > 0,
         newArray, "Array<Type>::LoadImage", "Could not load image");
@@ -506,9 +506,9 @@ namespace Anki
       AnkiConditionalError(this->IsValid(), "Array<Type>::Show", "Array<Type> is not valid");
 
       if(fitImageToWindow) {
-        cv::namedWindow(windowName, CV_WINDOW_NORMAL);
+        cv::namedWindow(windowName, cv::WINDOW_NORMAL);
       } else {
-        cv::namedWindow(windowName, CV_WINDOW_AUTOSIZE);
+        cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
       }
 
       if(scaleValues) {

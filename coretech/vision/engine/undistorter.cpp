@@ -19,6 +19,7 @@
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/calib3d.hpp"
 
 namespace Anki {
 namespace Vision {
@@ -127,7 +128,7 @@ Result Undistorter::UndistortImageHelper(const ImageBase<T>& img, ImageBase<T>& 
   // Use the computed/cached maps to do the undistortion
   undistortedImage.Allocate(img.GetNumRows(), img.GetNumCols());
   try {
-    cv::remap(img.get_CvMat_(), undistortedImage.get_CvMat_(), mapPair->map1, mapPair->map2, CV_INTER_LINEAR);
+    cv::remap(img.get_CvMat_(), undistortedImage.get_CvMat_(), mapPair->map1, mapPair->map2, cv::INTER_LINEAR);
   } catch (cv::Exception& e) {
     PRINT_NAMED_ERROR("Undistorter.UndistortImageHelper.OpenCvRemapFailed",
                       "%s", e.what());

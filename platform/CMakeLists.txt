@@ -60,17 +60,17 @@ if (VICOS)
   # For each imported library, create a target to generate the symbol file
   set(STRIP_TARGETS
     libc++.so.1
-    libopencv_calib3d.so.3.4
-    libopencv_core.so.3.4
-    libopencv_features2d.so.3.4
-    libopencv_flann.so.3.4
-    libopencv_highgui.so.3.4
-    libopencv_imgcodecs.so.3.4
-    libopencv_imgproc.so.3.4
-    libopencv_ml.so.3.4
-    libopencv_objdetect.so.3.4
-    libopencv_video.so.3.4
-    libopencv_videoio.so.3.4
+    libopencv_calib3d.so.412
+    libopencv_core.so.412
+    libopencv_features2d.so.412
+    libopencv_flann.so.412
+    libopencv_highgui.so.412
+    libopencv_imgcodecs.so.412
+    libopencv_imgproc.so.412
+    libopencv_ml.so.412
+    libopencv_objdetect.so.412
+    libopencv_video.so.412
+    libopencv_videoio.so.412
     ${AVS_LIB_NAMES}
   )
   foreach (target ${STRIP_TARGETS})

@@ -1758,14 +1758,14 @@ namespace Vector {
 
       // Compress to jpeg
       std::vector<u8> imgVec;
-      cv::imencode(".jpg", img.get_CvMat_(), imgVec, std::vector<int>({CV_IMWRITE_JPEG_QUALITY, 50}));
+      cv::imencode(".jpg", img.get_CvMat_(), imgVec, std::vector<int>({cv::IMWRITE_JPEG_QUALITY, 50}));
 
       Vision::Image imgUndistorted(img.GetNumRows(),img.GetNumCols());
       DEV_ASSERT(_camera->IsCalibrated(), "VisionComponent.GetCalibrationImageJpegData.NoCalibration");
       img.Undistort(*_camera->GetCalibration(), imgUndistorted);
 
       std::vector<u8> imgVecUndistort;
-      cv::imencode(".jpg", imgUndistorted.get_CvMat_(), imgVecUndistort, std::vector<int>({CV_IMWRITE_JPEG_QUALITY, 50}));
+      cv::imencode(".jpg", imgUndistorted.get_CvMat_(), imgVecUndistort, std::vector<int>({cv::IMWRITE_JPEG_QUALITY, 50}));
 
       /*
       std::string imgFilename = "savedImg_" + std::to_string(imgIdx) + ".jpg";

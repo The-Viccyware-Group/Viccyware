@@ -71,19 +71,19 @@ bool WeightedLogisticRegression::train(const Ptr<TrainData>& trainData, int)
   CV_Assert( !_labels_i.empty() && !_data_i.empty());
   if(_labels_i.cols != 1)
   {
-    CV_Error( CV_StsBadArg, "labels should be a column matrix" );
+    CV_Error( Error::StsBadArg, "labels should be a column matrix" );
   }
   if(_data_i.type() != CV_32FC1 || _labels_i.type() != CV_32FC1)
   {
-    CV_Error( CV_StsBadArg, "data and labels must be a floating point matrix" );
+    CV_Error( Error::StsBadArg, "data and labels must be a floating point matrix" );
   }
   if(_labels_i.rows != _data_i.rows)
   {
-    CV_Error( CV_StsBadArg, "number of rows in data and labels should be equal" );
+    CV_Error( Error::StsBadArg, "number of rows in data and labels should be equal" );
   }
   if(!_sample_weights.empty() && (_labels_i.rows != _sample_weights.rows))
   {
-    CV_Error( CV_StsBadArg, "number of rows in sample weights and labels should be equal" );
+    CV_Error( Error::StsBadArg, "number of rows in sample weights and labels should be equal" );
   }
 
   // class labels
@@ -92,7 +92,7 @@ bool WeightedLogisticRegression::train(const Ptr<TrainData>& trainData, int)
   int num_classes = (int) this->forward_mapper.size();
   if(num_classes < 2)
   {
-    CV_Error( CV_StsBadArg, "data should have at least 2 classes" );
+    CV_Error( Error::StsBadArg, "data should have at least 2 classes" );
   }
 
   // add a column of ones to the data (bias/intercept term)
@@ -140,7 +140,7 @@ bool WeightedLogisticRegression::train(const Ptr<TrainData>& trainData, int)
   this->learnt_thetas = thetas.clone();
   if( cvIsNaN( (double)sum(this->learnt_thetas)[0] ) )
   {
-    CV_Error( CV_StsBadArg, "check training parameters. Invalid training classifier" );
+    CV_Error( Error::StsBadArg, "check training parameters. Invalid training classifier" );
   }
 
   // success
@@ -153,7 +153,7 @@ float WeightedLogisticRegression::predict(InputArray samples, OutputArray result
   // check if learnt_mats array is populated
   if(!this->isTrained())
   {
-    CV_Error( CV_StsBadArg, "classifier should be trained first" );
+    CV_Error( Error::StsBadArg, "classifier should be trained first" );
   }
 
   // coefficient matrix
@@ -172,7 +172,7 @@ float WeightedLogisticRegression::predict(InputArray samples, OutputArray result
   Mat data = samples.getMat();
   if(data.type() != CV_32F)
   {
-    CV_Error( CV_StsBadArg, "data must be of floating type" );
+    CV_Error( Error::StsBadArg, "data must be of floating type" );
   }
 
   // add a column of ones to the data (bias/intercept term)
@@ -291,7 +291,7 @@ double WeightedLogisticRegression::compute_cost(const Mat& _data, const Mat& _la
 
   if(cvIsNaN( cost ) == 1)
   {
-    CV_Error( CV_StsBadArg, "check training parameters. Invalid training classifier" );
+    CV_Error( Error::StsBadArg, "check training parameters. Invalid training classifier" );
   }
 
   return cost;
@@ -377,12 +377,12 @@ Mat WeightedLogisticRegression::batch_gradient_descent(const Mat& _data, const M
   // implements batch gradient descent
   if(this->params.alpha<=0)
   {
-    CV_Error( CV_StsBadArg, "check training parameters (learning rate) for the classifier" );
+    CV_Error( Error::StsBadArg, "check training parameters (learning rate) for the classifier" );
   }
 
   if(this->params.num_iters <= 0)
   {
-    CV_Error( CV_StsBadArg, "number of iterations cannot be zero or a negative number" );
+    CV_Error( Error::StsBadArg, "number of iterations cannot be zero or a negative number" );
   }
 
   int llambda = 0;
@@ -419,12 +419,12 @@ Mat WeightedLogisticRegression::mini_batch_gradient_descent(const Mat& _data, co
 
   if(this->params.mini_batch_size <= 0 || this->params.alpha == 0)
   {
-    CV_Error( CV_StsBadArg, "check training parameters for the classifier" );
+    CV_Error( Error::StsBadArg, "check training parameters for the classifier" );
   }
 
   if(this->params.num_iters <= 0)
   {
-    CV_Error( CV_StsBadArg, "number of iterations cannot be zero or a negative number" );
+    CV_Error( Error::StsBadArg, "number of iterations cannot be zero or a negative number" );
   }
 
   Mat theta_p = _init_theta.clone();
@@ -531,7 +531,7 @@ void WeightedLogisticRegression::write(FileStorage& fs) const
   // check if open
   if(fs.isOpened() == 0)
   {
-    CV_Error(CV_StsBadArg,"file can't open. Check file path");
+    CV_Error(Error::StsBadArg,"file can't open. Check file path");
   }
 
   std::string desc = "Logistic Regression Classifier";
@@ -554,7 +554,7 @@ void WeightedLogisticRegression::read(const FileNode& fn)
   // check if empty
   if(fn.empty())
   {
-    CV_Error( CV_StsBadArg, "empty FileNode object" );
+    CV_Error( Error::StsBadArg, "empty FileNode object" );
   }
 
   this->params.alpha = (double)fn["alpha"];

@@ -48,12 +48,14 @@
 #include "ap3p.h"
 #include "ippe.hpp"
 #include "sqpnp.hpp"
-#include "opencv2/calib3d/calib3d_c.h"
+
+#include "usac.hpp"
+
 #include <opencv2/core/utils/logger.hpp>
 
 namespace cv
 {
-#if defined _DEBUG || defined CV_STATIC_ANALYSIS
+#if !defined(NDEBUG) || defined(CV_STATIC_ANALYSIS)
 static bool isPlanarObjectPoints(InputArray _objectPoints, double threshold)
 {
     CV_CheckType(_objectPoints.type(), _objectPoints.type() == CV_32FC3 || _objectPoints.type() == CV_64FC3,
@@ -96,7 +98,8 @@ void drawFrameAxes(InputOutputArray image, InputArray cameraMatrix, InputArray d
     CV_CheckType(type, cn == 1 || cn == 3 || cn == 4,
                  "Number of channels must be 1, 3 or 4" );
 
-    CV_Assert(image.getMat().total() > 0);
+    cv::Mat img = image.getMat();
+    CV_Assert(img.total() > 0);
     CV_Assert(length > 0);
 
     // project axes points
@@ -107,6 +110,18 @@ void drawFrameAxes(InputOutputArray image, InputArray cameraMatrix, InputArray d
     axesPoints.push_back(Point3f(0, 0, length));
     std::vector<Point2f> imagePoints;
     projectPoints(axesPoints, rvec, tvec, cameraMatrix, distCoeffs, imagePoints);
+
+    cv::Rect imageRect(0, 0, img.cols, img.rows);
+    bool allIn = true;
+    for (size_t i = 0; i < imagePoints.size(); i++)
+    {
+        allIn &= imageRect.contains(imagePoints[i]);
+    }
+
+    if (!allIn)
+    {
+        CV_LOG_WARNING(NULL, "Some of projected axes endpoints are out of frame. The drawn axes may be not reliable.");
+    }
 
     // draw axes lines
     line(image, imagePoints[0], imagePoints[1], Scalar(0, 0, 255), thickness);
@@ -203,6 +218,11 @@ bool solvePnPRansac(InputArray _opoints, InputArray _ipoints,
                     OutputArray _inliers, int flags)
 {
     CV_INSTRUMENT_REGION();
+
+    if (flags >= USAC_DEFAULT && flags <= USAC_MAGSAC)
+        return usac::solvePnPRansac(_opoints, _ipoints, _cameraMatrix, _distCoeffs,
+            _rvec, _tvec, useExtrinsicGuess, iterationsCount, reprojectionError,
+            confidence, _inliers, flags);
 
     Mat opoints0 = _opoints.getMat(), ipoints0 = _ipoints.getMat();
     Mat opoints, ipoints;
@@ -374,6 +394,35 @@ bool solvePnPRansac(InputArray _opoints, InputArray _ipoints,
     }
     return true;
 }
+
+
+bool solvePnPRansac( InputArray objectPoints, InputArray imagePoints,
+                     InputOutputArray cameraMatrix, InputArray distCoeffs,
+                     OutputArray rvec, OutputArray tvec, OutputArray inliers,
+                     const UsacParams &params) {
+    Ptr<usac::Model> model_params;
+    usac::setParameters(model_params, cameraMatrix.empty() ? usac::EstimationMethod::P6P :
+        usac::EstimationMethod::P3P, params, inliers.needed());
+    Ptr<usac::RansacOutput> ransac_output;
+    if (usac::run(model_params, imagePoints, objectPoints,
+            ransac_output, cameraMatrix, noArray(), distCoeffs, noArray())) {
+        if (inliers.needed()) {
+            const auto &inliers_mask = ransac_output->getInliersMask();
+            Mat inliers_;
+            for (int i = 0; i < (int)inliers_mask.size(); i++)
+                if (inliers_mask[i])
+                    inliers_.push_back(i);
+            inliers_.copyTo(inliers);
+        }
+        const Mat &model = ransac_output->getModel();
+        model.col(0).copyTo(rvec);
+        model.col(1).copyTo(tvec);
+        if (cameraMatrix.empty())
+            model.colRange(2, 5).copyTo(cameraMatrix);
+        return true;
+    } else return false;
+}
+
 
 int solveP3P( InputArray _opoints, InputArray _ipoints,
               InputArray _cameraMatrix, InputArray _distCoeffs,
@@ -705,7 +754,7 @@ static void solvePnPRefine(InputArray _objectPoints, InputArray _imagePoints,
             params.at<double>(i+3,0) = tvec.at<double>(i,0);
         }
 
-        createLMSolver(makePtr<SolvePnPRefineLMCallback>(opoints, ipoints, cameraMatrix, distCoeffs), _criteria.maxCount, _criteria.epsilon)->run(params);
+        LMSolver::create(makePtr<SolvePnPRefineLMCallback>(opoints, ipoints, cameraMatrix, distCoeffs), _criteria.maxCount, _criteria.epsilon)->run(params);
 
         params.rowRange(0, 3).convertTo(rvec0, rvec0.depth());
         params.rowRange(3, 6).convertTo(tvec0, tvec0.depth());
@@ -855,12 +904,7 @@ int solvePnPGeneric( InputArray _opoints, InputArray _ipoints,
             tvec.create(3, 1, CV_64FC1);
         }
 
-        CvMat c_objectPoints = cvMat(opoints), c_imagePoints = cvMat(ipoints);
-        CvMat c_cameraMatrix = cvMat(cameraMatrix), c_distCoeffs = cvMat(distCoeffs);
-        CvMat c_rvec = cvMat(rvec), c_tvec = cvMat(tvec);
-        cvFindExtrinsicCameraParams2(&c_objectPoints, &c_imagePoints, &c_cameraMatrix,
-                                     (c_distCoeffs.rows && c_distCoeffs.cols) ? &c_distCoeffs : 0,
-                                     &c_rvec, &c_tvec, useExtrinsicGuess );
+        findExtrinsicCameraParams2(opoints, ipoints, cameraMatrix, distCoeffs, rvec, tvec, useExtrinsicGuess);
 
         vec_rvecs.push_back(rvec);
         vec_tvecs.push_back(tvec);
@@ -901,7 +945,7 @@ int solvePnPGeneric( InputArray _opoints, InputArray _ipoints,
     {
         CV_Assert(npoints == 4);
 
-#if defined _DEBUG || defined CV_STATIC_ANALYSIS
+#if !defined(NDEBUG) || defined(CV_STATIC_ANALYSIS)
         double Xs[4][3];
         if (opoints.depth() == CV_32F)
         {
@@ -1004,7 +1048,7 @@ int solvePnPGeneric( InputArray _opoints, InputArray _ipoints,
         vec_tvecs.push_back(tvec);
     }*/
     else
-        CV_Error(CV_StsBadArg, "The flags argument must be one of SOLVEPNP_ITERATIVE, SOLVEPNP_P3P, "
+        CV_Error(cv::Error::StsBadArg, "The flags argument must be one of SOLVEPNP_ITERATIVE, SOLVEPNP_P3P, "
             "SOLVEPNP_EPNP, SOLVEPNP_DLS, SOLVEPNP_UPNP, SOLVEPNP_AP3P, SOLVEPNP_IPPE, SOLVEPNP_IPPE_SQUARE or SOLVEPNP_SQPNP");
 
     CV_Assert(vec_rvecs.size() == vec_tvecs.size());

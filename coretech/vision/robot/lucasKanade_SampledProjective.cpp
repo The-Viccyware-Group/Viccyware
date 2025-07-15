@@ -248,9 +248,9 @@ namespace Anki
           snprintf(windowNameTotal, 128, "%s %d", windowName, iScale);
 
           if(fitImageToWindow) {
-            cv::namedWindow(windowNameTotal, CV_WINDOW_NORMAL);
+            cv::namedWindow(windowNameTotal, cv::WINDOW_NORMAL);
           } else {
-            cv::namedWindow(windowNameTotal, CV_WINDOW_AUTOSIZE);
+            cv::namedWindow(windowNameTotal, cv::WINDOW_AUTOSIZE);
           }
 
           cv::Mat_<u8> image_cvMat;

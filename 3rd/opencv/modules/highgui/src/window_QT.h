@@ -48,7 +48,14 @@
 
 #if defined( HAVE_QT_OPENGL )
 #include <QtOpenGL>
-#include <QGLWidget>
+
+  // QGLWidget deprecated and no longer functions with Qt6, use QOpenGLWidget instead
+  #ifdef HAVE_QT6
+  #include <QOpenGLWidget>
+  #else
+  #include <QGLWidget>
+  #endif
+
 #endif
 
 #include <QAbstractEventDispatcher>
@@ -256,7 +263,7 @@ private:
     QPointer<QPushButton > label;
     CvTrackbarCallback callback;
     CvTrackbarCallback2 callback2;//look like it is use by python binding
-    int* dataSlider;
+    int* dataSlider;  // deprecated
     void* userdata;
 };
 
@@ -291,7 +298,6 @@ class CvWindow : public CvWinModel
     Q_OBJECT
 public:
     CvWindow(QString arg2, int flag = CV_WINDOW_NORMAL);
-    ~CvWindow();
 
     void setMouseCallBack(CvMouseCallback m, void* param);
 
@@ -342,6 +348,7 @@ public:
 
 protected:
     virtual void keyPressEvent(QKeyEvent* event) CV_OVERRIDE;
+    virtual void closeEvent(QCloseEvent* event) CV_OVERRIDE;
 
 private:
 
@@ -431,7 +438,14 @@ protected:
 
 #ifdef HAVE_QT_OPENGL
 
-class OpenGlViewPort : public QGLWidget, public OCVViewPort
+// Use QOpenGLWidget for Qt6 (QGLWidget is deprecated)
+#ifdef HAVE_QT6
+typedef QOpenGLWidget OpenCVQtWidgetBase;
+#else
+typedef QGLWidget OpenCVQtWidgetBase;
+#endif
+
+class OpenGlViewPort : public OpenCVQtWidgetBase, public OCVViewPort
 {
 public:
     explicit OpenGlViewPort(QWidget* parent);

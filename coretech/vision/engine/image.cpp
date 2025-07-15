@@ -21,6 +21,7 @@
 
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
+#include "opencv2/calib3d.hpp"
 #include "opencv2/highgui.hpp"
 #include "image.h"
 
@@ -179,8 +180,8 @@ namespace Vision {
       cv::Mat showableImage;
       try {
         showableImage = cv::imread(filename, (GetNumChannels() == 1 ?
-                                              CV_LOAD_IMAGE_GRAYSCALE :
-                                              CV_LOAD_IMAGE_COLOR));
+                                              cv::IMREAD_GRAYSCALE :
+                                              cv::IMREAD_COLOR));
       }
       catch(const cv::Exception& e)
       {
@@ -312,7 +313,7 @@ namespace Vision {
   template<typename T>
   void ImageBase<T>::DrawFilledCircle(const Point2f& center, const ColorRGBA& color, const s32 radius)
   {
-    cv::circle(this->get_CvMat_(), center.get_CvPoint_(), radius, GetCvColor(color), CV_FILLED);
+    cv::circle(this->get_CvMat_(), center.get_CvPoint_(), radius, GetCvColor(color), cv::FILLED);
   }
 
   template<typename T>
@@ -324,7 +325,7 @@ namespace Vision {
   template<typename T>
   void ImageBase<T>::DrawFilledRect(const Rectangle<f32>& rect, const ColorRGBA& color)
   {
-    cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), CV_FILLED);
+    cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), cv::FILLED);
   }
 
 
@@ -337,7 +338,7 @@ namespace Vision {
   template<typename T>
   void ImageBase<T>::DrawFilledRect(const Rectangle<s32>& rect, const ColorRGBA& color)
   {
-    cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), CV_FILLED);
+    cv::rectangle(this->get_CvMat_(), rect.get_CvRect_(), GetCvColor(color), cv::FILLED);
   }
 
   template<typename T>
@@ -416,19 +417,19 @@ namespace Vision {
     switch(method)
     {
       case ResizeMethod::NearestNeighbor:
-        return CV_INTER_NN;
+        return cv::INTER_NEAREST;
 
       case ResizeMethod::Linear:
-        return CV_INTER_LINEAR;
+        return cv::INTER_LINEAR;
 
       case ResizeMethod::Cubic:
-        return CV_INTER_CUBIC;
+        return cv::INTER_CUBIC;
 
       case ResizeMethod::AverageArea:
-        return CV_INTER_AREA;
+        return cv::INTER_AREA;
 
       case ResizeMethod::Lanczos:
-        return CV_INTER_LANCZOS4;
+        return cv::INTER_LANCZOS4;
     }
   }
 
@@ -441,7 +442,7 @@ namespace Vision {
     Point2f alignedPos(position);
     if(centered)
     {
-      const cv::Size textSize = cv::getTextSize(str, CV_FONT_NORMAL, scale, thickness, nullptr);
+      const cv::Size textSize = cv::getTextSize(str, cv::QT_FONT_NORMAL, scale, thickness, nullptr);
       alignedPos.x() -= textSize.width/2;
     }
 
@@ -449,15 +450,15 @@ namespace Vision {
       cv::Point shadowPos(alignedPos.get_CvPoint_());
       shadowPos.x += 1;
       shadowPos.y += 1;
-      cv::putText(this->get_CvMat_(), str, shadowPos, CV_FONT_NORMAL, scale, GetCvColor(NamedColors::BLACK), thickness);
+      cv::putText(this->get_CvMat_(), str, shadowPos, cv::QT_FONT_NORMAL, scale, GetCvColor(NamedColors::BLACK), thickness);
     }
-    cv::putText(this->get_CvMat_(), str, alignedPos.get_CvPoint_(), CV_FONT_NORMAL, scale, GetCvColor(color), thickness);
+    cv::putText(this->get_CvMat_(), str, alignedPos.get_CvPoint_(), cv::QT_FONT_NORMAL, scale, GetCvColor(color), thickness);
   }
 
   template<typename T>
   Vec2f ImageBase<T>::GetTextSize(const std::string& str, f32 scale, int thickness)
   {
-    auto sz = cv::getTextSize(str, CV_FONT_NORMAL, scale, thickness, nullptr);
+    auto sz = cv::getTextSize(str, cv::QT_FONT_NORMAL, scale, thickness, nullptr);
     return Vec2f(sz.width, sz.height);
   }
 
@@ -1690,12 +1691,12 @@ namespace Vision {
   {
     grayImage.SetTimestamp(GetTimestamp()); // Make sure timestamp gets transferred!
     grayImage.SetImageId(GetImageId());
-    cv::cvtColor(this->get_CvMat_(), grayImage.get_CvMat_(), CV_RGBA2GRAY);
+    cv::cvtColor(this->get_CvMat_(), grayImage.get_CvMat_(), cv::COLOR_RGBA2GRAY);
   }
 
   ImageRGBA& ImageRGBA::SetFromGray(const Image& imageGray)
   {
-    cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), CV_GRAY2RGBA);
+    cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), cv::COLOR_GRAY2RGBA);
     SetTimestamp(imageGray.GetTimestamp());
     SetImageId(imageGray.GetImageId());
     return *this;
@@ -1794,7 +1795,7 @@ namespace Vision {
 
   ImageRGB& ImageRGB::SetFromGray(const Image& imageGray)
   {
-    cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), CV_GRAY2RGB);
+    cv::cvtColor(imageGray.get_CvMat_(), this->get_CvMat_(), cv::COLOR_GRAY2RGB);
     SetTimestamp(imageGray.GetTimestamp());
     SetImageId(imageGray.GetImageId());
     return *this;
@@ -1967,7 +1968,7 @@ namespace Vision {
     }
     try
     {
-      cv::reduce(imageVector, imageSum, 1, CV_REDUCE_SUM, CV_32SC1);
+      cv::reduce(imageVector, imageSum, 1, cv::REDUCE_SUM, CV_32SC1);
     }
     catch (cv::Exception& e)
     {

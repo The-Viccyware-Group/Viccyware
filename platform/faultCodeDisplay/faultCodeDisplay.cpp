@@ -45,7 +45,7 @@ static int DrawHeading(Vision::ImageRGB& img, int baselineY)
   const char* word = "Error";
   auto sz = Vision::Image::GetTextSize(word, kHeadScale, kHeadThick);
   img.DrawTextCenteredHorizontally(word,
-                                   CV_FONT_NORMAL,
+                                   cv::QT_FONT_NORMAL,
                                    kHeadScale,
                                    kHeadThick,
                                    NamedColors::RED,
@@ -93,7 +93,7 @@ static void DrawMultiline(const std::string& txt)
   for (auto& l : lines) {
     auto lh = Vision::Image::GetTextSize(l, scale, thick).y();
     img.DrawTextCenteredHorizontally(l,
-                                     CV_FONT_NORMAL,
+                                     cv::QT_FONT_NORMAL,
                                      scale,
                                      thick,
                                      NamedColors::WHITE,
@@ -115,7 +115,7 @@ static void DrawNumber(uint16_t code, bool willRestart)
   std::string s = std::to_string(code);
   Vec2f sz = Vision::Image::GetTextSize(s, 1.5f, 2);
   img.DrawTextCenteredHorizontally(s,
-                                   CV_FONT_NORMAL,
+                                   cv::QT_FONT_NORMAL,
                                    1.5f,
                                    2,
                                    NamedColors::WHITE,
@@ -125,7 +125,7 @@ static void DrawNumber(uint16_t code, bool willRestart)
   const std::string& footer = willRestart ? kVectorWillRestart : kSupportURL;
   sz = Vision::Image::GetTextSize(footer, 0.5f, 1);
   img.DrawTextCenteredHorizontally(footer,
-                                   CV_FONT_NORMAL,
+                                   cv::QT_FONT_NORMAL,
                                    0.5f,
                                    1,
                                    NamedColors::WHITE,

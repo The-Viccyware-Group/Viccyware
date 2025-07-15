@@ -95,7 +95,7 @@ namespace Anki
       cv::subtract(cvImageROI, cvImageROI_filtered, cvImageROI_filtered);
       
       // Normalize to be between 0 and 255
-      cv::normalize(cvImageROI_filtered, cvImageROI, 255, 0, CV_MINMAX);
+      cv::normalize(cvImageROI_filtered, cvImageROI, 255, 0, cv::NORM_MINMAX);
       
       //cv::imshow("Normalized Filtered ROI", cvImageROI);
       

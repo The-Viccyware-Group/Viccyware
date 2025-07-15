@@ -254,9 +254,9 @@ done
 #
 # Get short commit sha
 #
-export ANKI_BUILD_SHA=`git rev-parse --short HEAD`
+export ANKI_BUILD_SHA=`git -c safe.directory="$TOPLEVEL" rev-parse --short HEAD`
 
-export ANKI_BUILD_BRANCH=`git rev-parse --abbrev-ref HEAD`
+export ANKI_BUILD_BRANCH=`git -c safe.directory="$TOPLEVEL" rev-parse --abbrev-ref HEAD`
 
 #
 # Enable export flags
