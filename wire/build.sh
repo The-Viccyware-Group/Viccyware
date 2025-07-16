@@ -29,6 +29,8 @@ if [[ ! -d 3rd ]]; then
     rm old-3rd.tar.gz
 fi
 
+git lfs update --force
+
 echo "Building victor..."
 
 ./project/victor/scripts/victor_build_release.sh

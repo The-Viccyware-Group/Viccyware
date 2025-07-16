@@ -42,6 +42,8 @@ BleCentral* centralContext;
   printf("  ssh-send [filename]                          Generates/Sends a public SSH key to Victor.\n");
   printf("  ssh-start                                    Tries to start an SSH session with Victor.\n");
   printf("  logs [directory]                             Downloads logs tar from Victor, with optional supplied directory path.\n");
+  printf("\n");
+  printf("# Use \\ to escape spaces and \\\\ to escape a literal \\.\n");
 }
 
 - (void)showProgress: (float)current expected:(float)expected {
@@ -110,7 +112,7 @@ BleCentral* centralContext;
   
   (void)[fileManager createDirectoryAtPath:dirPath withIntermediateDirectories:true attributes:nil error:nil];
   
-  std::string cmdCurl = "curl http://ota.global.anki-dev-services.com/vic/rc-dev/lo8awreh23498sf/full/latest.ota --output " + std::string(filePath.UTF8String) + "; ";
+  std::string cmdCurl = "curl http://ota.global.anki-dev-services.com/vic/master-dev/lo8awreh23498sf/full/latest.ota --output " + std::string(filePath.UTF8String) + "; ";
   
   if(!_download) {
     cmdCurl = "";
@@ -2250,10 +2252,12 @@ didUpdateValueForCharacteristic:(CBCharacteristic *)characteristic
   
   for(int i = 0; i < line.length(); i++) {
     char c = line.c_str()[i];
-    
+
     if(i == line.length() - 1) {
       w += line.c_str()[i];
       c = ' ';
+    } else if(c == '\\') {
+      i++;
     }
     
     if((c == ' ') && w != "") {
@@ -2401,7 +2405,7 @@ didUpdateValueForCharacteristic:(CBCharacteristic *)characteristic
       } else if(strcmp(words[0].c_str(), "anki-auth") == 0) {
         Clad::SendRtsMessage_5<Anki::Vector::ExternalComms::RtsCloudSessionRequest_2>(self, _commVersion, words[1], "mac-client", "");
       } else if(strcmp(words[0].c_str(), "ota-start") == 0) {
-        std::string url = "http://ota.global.anki-dev-services.com/vic/rc-dev/lo8awreh23498sf/full/latest.ota";
+        std::string url = "http://ota.global.anki-dev-services.com/vic/master-dev/lo8awreh23498sf/full/latest.ota";
         if(words.size() > 1) {
           url = words[1];
         }

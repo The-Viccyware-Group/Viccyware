@@ -336,9 +336,9 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     METABUILD_INPUTS=`find . -name BUILD.in`
 
     # Process BUILD.in files (creates list of Go projects to fetch)
-    #PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
-    #  -o ${GEN_SRC_DIR} \
-    #  ${METABUILD_INPUTS}
+    PATH="$(dirname $GO_EXE):$PATH" ${BUILD_TOOLS}/metabuild/metabuild.py --go-output \
+      -o ${GEN_SRC_DIR} \
+      ${METABUILD_INPUTS}
 fi
 
 # Set protobuf location
@@ -361,16 +361,16 @@ if [[ $BUILD_PROTOC_PLUGIN -eq 1 ]]; then
 fi
 
 # Build/Install the protoc generators for go
-#GOBIN="${TOPLEVEL}/cloud/go/bin"
-#if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
-#    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
-#    GOBIN=$GOBIN \
-#    CC=/usr/bin/cc \
-#    CXX=/usr/bin/c++ \
-#    "${GOROOT}/bin/go" install \
-#    github.com/golang/protobuf/protoc-gen-go \
-#    github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-#fi
+GOBIN="${TOPLEVEL}/cloud/go/bin"
+if [[ ! -x $GOBIN/protoc-gen-go ]] || [[ ! -x $GOBIN/protoc-gen-grpc-gateway ]]; then
+    echo "Building/Installing protoc-gen-go and protoc-gen-grpc-gateway"
+    GOBIN=$GOBIN \
+    CC=/usr/bin/cc \
+    CXX=/usr/bin/c++ \
+    "${GOROOT}/bin/go" install \
+    github.com/golang/protobuf/protoc-gen-go \
+    github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+fi
 
 #
 # generate source file lists
