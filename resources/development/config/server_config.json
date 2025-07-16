@@ -1,9 +1,8 @@
 {
-        "jdocs": "jdocs.development.ddl.io:443",
-        "tms": "token.development.ddl.io:443",
-        "chipper": "chipper.development.ddl.io:443",
-        "check": "conncheck.global.anki-dev-services.com/ok",
-        "logfiles": "s3://anki-device-logs-dev/victor",
-        "appkey": "2fdd346a-ff12-3146-c096-c3be8fd85094",
-        "offboard_vision": "192.168.40.102:16643"
+	"jdocs": "vicapi.pvic.xyz:8081",
+	"tms": "vicapi.pvic.xyz:8081",
+	"chipper": "vicapi.pvic.xyz:8081",
+	"check": "vicapi.pvic.xyz/ok",
+	"logfiles": "s3://anki-device-logs-prod/victor",
+	"appkey": "oDoa0quieSeir6goowai7f"
 }
