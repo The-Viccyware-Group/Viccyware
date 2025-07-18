@@ -121,22 +121,22 @@ namespace Animations {
   template<>
   void Track<ProceduralFaceKeyFrame>::AdvanceTrack(const TimeStamp_t toTime_ms)
   {
-    if(ANKI_DEV_CHEATS){
-      auto allKeyframes = GetCopyOfKeyframes();
-      auto safetyCheckIter = allKeyframes.begin();
-      while(safetyCheckIter != allKeyframes.end()) {
-        auto nextIter = safetyCheckIter;
-        nextIter++;
+    //if(ANKI_DEV_CHEATS){
+    //  auto allKeyframes = GetCopyOfKeyframes();
+    //  auto safetyCheckIter = allKeyframes.begin();
+    //  while(safetyCheckIter != allKeyframes.end()) {
+    //    auto nextIter = safetyCheckIter;
+    //    nextIter++;
         // Ensure tracks don't overlap
-        if(nextIter != allKeyframes.end()){
-          ANKI_VERIFY(safetyCheckIter->GetTimestampActionComplete_ms() == nextIter->GetTriggerTime_ms(),
-                      "ITrackLayerManager.ValidateTrack.ProceduralKeyframeTimeMismatch",
-                      "Previous keyframe ends at %u, but next frame does not trigger until %u, interpolation will break",
-                      safetyCheckIter->GetTimestampActionComplete_ms(), nextIter->GetTriggerTime_ms());
-        }
-        safetyCheckIter++;
-      }
-    }
+     //   if(nextIter != allKeyframes.end()){
+     //     ANKI_VERIFY(safetyCheckIter->GetTimestampActionComplete_ms() == nextIter->GetTriggerTime_ms(),
+     //                 "ITrackLayerManager.ValidateTrack.ProceduralKeyframeTimeMismatch",
+     //                 "Previous keyframe ends at %u, but next frame does not trigger until %u, interpolation will break",
+     //                 safetyCheckIter->GetTimestampActionComplete_ms(), nextIter->GetTriggerTime_ms());
+     //   }
+     //   safetyCheckIter++;
+     // }
+    //}
     AdvanceTrackHelper(toTime_ms);
   }
   

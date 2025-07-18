@@ -4,6 +4,7 @@ namespace Vector {
 enum uint_8 FeatureType {
   Invalid,
   Laser,
+  Singing,
   Exploring,
   FetchCube,
   FindCube,
