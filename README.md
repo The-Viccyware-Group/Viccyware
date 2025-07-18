@@ -3,8 +3,6 @@
 Welcome to the unstable branch of `Viccyware`. This is the home of a modified copy of the Vector source
 code. Original README: [README-orig.md](/README-orig.md)
 
-Check the [wiki](https://github.com/kercre123/victor/wiki) for more information about the leak, what we can do with this, and general Vector info.
-
 Learn a little more about the project at [viccyware.com](https://www.viccyware.com/)
 
 ## Branch info
@@ -14,10 +12,23 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 - The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
-## Building (x86_64/arm64 Linux)
- - Prereqs: Make sure you have `docker` installed.
+## Building
 
-1. Clone the repo and cd into it:
+`Viccyware` can be built standalone on most Linux distros (arm64 or amd64), and on macOS (arm64 only, for now).
+
+Docker is recommended for now (especially if you have a weird or old Linux distro installed), though bare metal works nicely too.
+
+Note that if you have built in Docker before and want to build on bare metal now (or vice-versa), you should do a [clean](#cleaning) build.
+
+Click an option below for instructions.
+
+<details>
+<summary><strong>Docker: x86_64 or arm64 Linux</strong></summary>
+<br />
+
+- Prerequisites: Make sure you have `docker` and `git` installed.
+
+1. Clone the repo and `cd` into it:
 
 ```
 cd ~
@@ -41,15 +52,56 @@ cd ~/Viccyware
 ./build/build-v.sh
 ```
 
-3. It should just work! The output will be in `./_build/vicos/Release/`
+</details>
 
-## Building (ARM64 macOS)
+<details>
+<summary><strong>Bare Metal: x86_64 or arm64 Linux</strong></summary>
+<br \>
+
+- Prerequisites:
+  - glibc 2.27 or above - this means anything Ubuntu 18.04 and newer will work.
+  - The following packages need to be installed: `git wget curl openssl ninja g++ gcc pkg-config ccache`
+```
+# Arch Linux:
+sudo pacman -S git wget curl openssl ninja gcc pkgconf ccache
+# Ubuntu/Debian:
+sudo apt-get update && sudo apt-get install -y git wget curl openssl ninja-build gcc g++ pkg-config ccache
+# Fedora
+sudo dnf install -y git wget curl openssl ninja-build gcc gcc-c++ pkgconf-pkg-config ccache
+```
+
+1. Clone the repo and `cd` into it:
+
+```
+cd ~
+git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
+cd wire-os-victor
+```
+
+2. Source `setenv.sh`:
+```
+source setenv.sh
+```
+
+3. (OPTIONAL) Run this so you don't have to perform step 2 every time:
+```
+echo "source \"$(pwd)/setenv.sh\"" >> $HOME/.bashrc
+```
+
+4. Build:
+```
+vbuild
+```
+
+</details>
+
+<details>
 
 > [!WARNING] 
-> Only works on M1-M4 Macs at the moment, NOT Intel
+> Only works on M1-M4 Macs, NOT Intel
 
- - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
-   -  Then: `brew install ccache wget upx`
+- Prereqs: Make sure you have [brew](https://brew.sh/) installed.
+  -  Then: `brew install ccache wget upx ninja`
 
 1. Clone the repo and cd into it:
 
@@ -65,20 +117,65 @@ cd ~/Viccyware
 ./build/build-v.sh
 ```
 
-3. It should just work! The output will be in `./_build/vicos/Release/`
+</details>
 
 ## Deploying
 
-1. Echo your robot's IP address to robot_ip.txt (in the root of the victor repo):
+1. Install WireOS on your robot.
+2. Get your robot's IP through CCIS:
+  - 1. Place your robot on the charger
+  - 2. Double click the button
+  - 3. Lift the lift up then down
+  - 4. Write down the IP address somewhere
+  - 5. Lift the lift up then down again to exit CCIS
+3. One of the following:
 
-```
-echo 192.168.1.150 > robot_ip.txt
-```
+<details>
+<summary><strong>(Docker: x86_64 or arm64 Linux) or (macOS M-series)</strong></summary>
+<br \>
 
-2. Copy your bot's SSH key to a file called `robot_sshkey` in the root of this repo.
-
-3. Run:
+- Run:
 
 ```
 ./build/deploy-v.sh
 ```
+</details>
+
+<details>
+<summary><strong>Bare Metal: x86_64 or arm64 Linux</strong></summary>
+<br \>
+
+- Run:
+
+```
+vdeploy
+```
+</details>
+
+## Cleaning
+
+99% of the time, if you're working on a behavior or something, you don't need to clean any build directories. The CMakeLists are correctly setup to properly rebuild the code which needs to be rebuilt upon a file change.
+
+If you do want to clean anyway:
+
+<details>
+<summary><strong>(Docker: x86_64 or arm64 Linux) or (macOS M-series)</strong></summary>
+<br \>
+
+- Run:
+
+```
+./build/clean.sh
+```
+</details>
+
+<details>
+<summary><strong>Bare Metal: x86_64 or arm64 Linux</strong></summary>
+<br \>
+
+- Run:
+
+```
+vclean
+```
+</details>
