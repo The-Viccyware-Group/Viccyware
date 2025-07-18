@@ -95,8 +95,10 @@ vbuild
 
 </details>
 
-<summary><strong>macOS (M-series only)</strong></summary>
 <details>
+
+<summary><strong>macOS (M-series only)</strong></summary>
+<br />
 
 > [!WARNING] 
 > Only works on M1-M4 Macs, NOT Intel
