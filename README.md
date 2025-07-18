@@ -74,8 +74,8 @@ sudo dnf install -y git wget curl openssl ninja-build gcc gcc-c++ pkgconf-pkg-co
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd wire-os-victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Source `setenv.sh`:
@@ -95,6 +95,7 @@ vbuild
 
 </details>
 
+<summary><strong>macOS (M-series only)</strong></summary>
 <details>
 
 > [!WARNING] 
@@ -121,7 +122,7 @@ cd ~/Viccyware
 
 ## Deploying
 
-1. Install WireOS on your robot.
+1. Install Viccyware on your robot.
 2. Get your robot's IP through CCIS:
   - 1. Place your robot on the charger
   - 2. Double click the button
