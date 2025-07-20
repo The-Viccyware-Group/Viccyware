@@ -501,6 +501,15 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
       saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::master_volume);
       // read the new volume setting, for the DAS event and reactor callbacks
       const uint32_t newVol = _settingsManager->GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume);
+      // call vicw-tool
+      constexpr const char* kMasterVolumeStrings[] = {
+        "MUTE", "LOW", "MEDIUM_LOW", "MEDIUM", "MEDIUM_HIGH", "HIGH"
+      };
+      if (newVol < std::size(kMasterVolumeStrings)) {
+        std::string cmd = "/usr/bin/vicw-utils volume ";
+        cmd += kMasterVolumeStrings[newVol];
+        std::system(cmd.c_str());
+      }
       // notify reactors
       for(auto& vcr : _volumeChangeReactors) {
         vcr.callback();
