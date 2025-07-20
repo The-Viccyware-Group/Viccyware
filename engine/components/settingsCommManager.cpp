@@ -505,10 +505,10 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
       constexpr const char* kMasterVolumeStrings[] = {
         "MUTE", "LOW", "MEDIUM_LOW", "MEDIUM", "MEDIUM_HIGH", "HIGH"
       };
-      if (newVol < std::size(kMasterVolumeStrings)) {
+      if (newVol < sizeof(kMasterVolumeStrings) / sizeof(kMasterVolumeStrings[0])) {
         std::string cmd = "/usr/bin/vicw-utils volume ";
         cmd += kMasterVolumeStrings[newVol];
-        std::system(cmd.c_str());
+        (void)std::system(cmd.c_str());
       }
       // notify reactors
       for(auto& vcr : _volumeChangeReactors) {
