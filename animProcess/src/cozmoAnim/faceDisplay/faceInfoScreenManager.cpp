@@ -317,7 +317,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "NUKE" : "NUKE THE FLASH", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "RM SOUL" : "CLEAR OUT SOUL", ClearUserData);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
