@@ -19,6 +19,8 @@
 #define FALSE 0
 #define TRUE (!FALSE)
 
+#define MSB(a) ((a) >> 8)
+#define LSB(a) ((a) & 0xff)
 
 static int MAX_TRANSFER = 0x1000;
 
@@ -28,16 +30,19 @@ static int lcd_use_fb; // use /dev/fb0?
 #define GPIO_LCD_RESET_MIDAS 96
 #define GPIO_LCD_RESET_SANTEK 55
 
-static GPIO RESET_PIN;
+static GPIO RESET_PIN_1;
+static GPIO RESET_PIN_2;
 static GPIO DnC_PIN;
+
+
+static lcd_display_t LCD_DISPLAY_MAN;
+
+static bool isXray;
 
 
 #define RSHIFT 0x1C
 #define XSHIFT 0x0
 #define YSHIFT 0x18
-
-#define MSB(x) (((x) >> 8) & 0xFF)
-#define LSB(x) ((x) & 0xFF)
 
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -134,7 +139,6 @@ static uint32_t get_vector_hw_version() {
     return 0;
   } // ABORT!
 
-
   int res = read(fd, &emr_data, sizeof(emr_data));
   if (res == -1) {
     error_return(app_DEVICE_OPEN_ERROR, "Couldn't read EMR partition: %d\n", errno);
@@ -148,24 +152,26 @@ static uint32_t get_vector_hw_version() {
   return hw_ver;
 } 
 
-
 static inline const bool IsXray()
 {
-  return get_vector_hw_version() >= 0x20;
+  return isXray;
 }
 
 /************* LCD SPI Interface ***************/
 
-
 static int lcd_fd;
 
-bool lcd_use_midas_crop() {
+lcd_display_t lcd_display_version() {
   return IsXray() ? MIDAS : SANTEK;
 }
 
-lcd_display_t lcd_display_version() {
-  //  return SANTEK;
-  return MIDAS;
+
+void InitIsXray() {
+  isXray = (get_vector_hw_version() >= 0x20);
+}
+
+bool lcd_use_midas_crop() {
+  return false;
 }
 
 static int lcd_spi_init()
@@ -273,7 +279,7 @@ static void lcd_device_init()
   lcd_clear_screen();
   
   // Turn display on
-  lcd_run_script(lcd_display_version() == SANTEK ? init_scr_santek : init_scr_midas);
+  lcd_run_script(lcd_display_version() == SANTEK ? display_on_scr_santek : display_on_scr_midas);
 }
 
 void lcd_clear_screen(void) {
@@ -317,6 +323,7 @@ void lcd_draw_frame2_midas_crop(const uint16_t* frame, size_t size)
 
 void lcd_draw_frame2_midas(const uint16_t* frame, size_t size) {
   static uint16_t buffer[LCD_FRAME_WIDTH_MIDAS * LCD_FRAME_HEIGHT_MIDAS];
+
   for(int i=0; i < LCD_FRAME_WIDTH_MIDAS * LCD_FRAME_HEIGHT_MIDAS ; i++) {
     buffer[i] = __builtin_bswap16(frame[i]);
   }
@@ -325,6 +332,7 @@ void lcd_draw_frame2_midas(const uint16_t* frame, size_t size) {
     lseek(lcd_fd, 0, SEEK_SET);
     (void)write(lcd_fd, buffer, size);
   } else {
+
     static const uint8_t WRITE_RAM = 0x2C;
     lcd_spi_transfer(TRUE, 1, &WRITE_RAM);
     lcd_spi_transfer(FALSE, size, buffer);
@@ -336,6 +344,7 @@ void lcd_draw_frame2_santek(const uint16_t* frame, size_t size) {
       lseek(lcd_fd, 0, SEEK_SET);
       (void)write(lcd_fd, frame, size);
    } else {
+
       static const uint8_t WRITE_RAM = 0x2C;
       lcd_spi_transfer(TRUE, 1, &WRITE_RAM);
       lcd_spi_transfer(FALSE, size, frame);
@@ -343,12 +352,14 @@ void lcd_draw_frame2_santek(const uint16_t* frame, size_t size) {
 }
 
 void lcd_draw_frame2(const uint16_t* frame, size_t size) {
-  if (lcd_display_version() != SANTEK) {
+  if (LCD_DISPLAY_MAN != SANTEK) {
     if (lcd_use_midas_crop()) {
       lcd_draw_frame2_midas_crop(frame, size);
     } else {
       lcd_draw_frame2_midas(frame, size);
     }
+  } else {
+    lcd_draw_frame2_santek(frame, size);
   }
 }
 
@@ -396,6 +407,10 @@ int lcd_set_brightness(int brightness)
 
 int lcd_init(void) {
 
+  // define LCD manufacturer rather than read the EMR partition upon EVERY SINGLE LCD DRAW
+  InitIsXray();
+  LCD_DISPLAY_MAN = lcd_display_version();
+
   int res = lcd_set_brightness(10);
   if(res < 0)
   {
@@ -415,11 +430,17 @@ int lcd_init(void) {
     error_return(app_IO_ERROR, "Failed to create GPIO %d: %d\n", GPIO_LCD_WRX, res);
   }
 
-  int gpio_lcd_reset = lcd_display_version() == SANTEK ? GPIO_LCD_RESET_SANTEK : GPIO_LCD_RESET_MIDAS;
-  res = gpio_create_open_drain_output(gpio_lcd_reset, gpio_HIGH, &RESET_PIN);
+  res = gpio_create_open_drain_output(GPIO_LCD_RESET_MIDAS, gpio_HIGH, &RESET_PIN_1);
   if(res < 0)
   {
-    error_return(app_IO_ERROR, "Failed to create GPIO %d: %d\n", gpio_lcd_reset, res);
+    error_return(app_IO_ERROR, "Failed to create GPIO %d: %d\n", GPIO_LCD_RESET_MIDAS, res);
+  }
+
+  //  int gpio_lcd_reset_2 = lcd_display_version() != SANTEK ? GPIO_LCD_RESET_SANTEK : GPIO_LCD_RESET_MIDAS;
+  res = gpio_create(GPIO_LCD_RESET_SANTEK, gpio_DIR_OUTPUT, gpio_HIGH, &RESET_PIN_2);
+  if(res < 0)
+  {
+    error_return(app_IO_ERROR, "Failed to create GPIO %d: %d\n",  GPIO_LCD_RESET_SANTEK, res);
   }
 
   // SPI setup
@@ -433,9 +454,11 @@ int lcd_init(void) {
 
   // Send reset signal
   microwait(50);
-  gpio_set_value(RESET_PIN, 0);
+  gpio_set_value(RESET_PIN_1, 0);
+  gpio_set_value(RESET_PIN_2, 0);
   microwait(50);
-  gpio_set_value(RESET_PIN, 1);
+  gpio_set_value(RESET_PIN_1, 1);
+  gpio_set_value(RESET_PIN_2, 1);
   // Wait 120 milliseconds after releasing reset before sending commands
   milliwait(120);
 
@@ -462,8 +485,12 @@ void lcd_shutdown(void) {
   if (DnC_PIN) {
     gpio_close(DnC_PIN);
   }
-  if (RESET_PIN) {
-    gpio_close(RESET_PIN);
+  if (RESET_PIN_1) {
+    gpio_close(RESET_PIN_1);
+  }
+
+  if (RESET_PIN_2) {
+    gpio_close(RESET_PIN_2);
   }
 
 }

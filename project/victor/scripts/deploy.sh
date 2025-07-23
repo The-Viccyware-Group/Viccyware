@@ -235,7 +235,7 @@ set -e
 # deployment, exe and shared library files can't be replaced.
 #
 logv "stop victor services"
-robot_sh "/bin/systemctl stop victor.target"
+robot_sh "/bin/systemctl stop victor.target mm-anki-camera mm-qcamera-daemon"
 
 logv "create target dirs"
 robot_sh mkdir -p "${INSTALL_ROOT}"
