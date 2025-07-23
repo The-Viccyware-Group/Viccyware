@@ -219,7 +219,7 @@ list(APPEND VICOS_LINKER_FLAGS
 list(APPEND VICOS_LINKER_FLAGS
     -Wl,-z,relro -Wl,-z,now)
 list(APPEND VICOS_COMPILER_FLAGS
-    -Wformat -Werror=format-security)
+    -Wformat)
 
 # Convert these lists into strings.
 string(REPLACE ";" " " VICOS_COMPILER_FLAGS         "${VICOS_COMPILER_FLAGS}")

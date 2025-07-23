@@ -31,6 +31,7 @@ target_link_libraries(cti_vision
   cti_common
   jsoncpp
   util
+  robot_interface
   ${OPENCV_LIBS}
   ${OKAO_LIBS}
   ${ASAN_LINKER_FLAGS}
