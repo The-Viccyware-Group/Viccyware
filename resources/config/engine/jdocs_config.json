@@ -77,7 +77,7 @@
         }
       ],
       "resolveMethod" : "PULL_FROM_CLOUD",
-      "jdocFormatVersion" : 1,
+      "jdocFormatVersion" : 2,
       "bodyOwnedByJdocManager" : false
     },
     "USER_ENTITLEMENTS" : {

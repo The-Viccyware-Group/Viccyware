@@ -9,6 +9,15 @@
   "eye_color" :
   {
     "defaultValue" : 0,
+    "updateCloudOnChange" : true
+  },
+  "custom_eye_color" :
+  {
+    "defaultValue" : {
+      "hue": 0,
+      "saturation": 0,
+      "enabled": false      
+    },
     "updateCloudOnChange" : false
   },
   "default_location" :
