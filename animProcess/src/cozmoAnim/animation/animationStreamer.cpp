@@ -71,8 +71,8 @@ namespace Anim {
 #if PROCEDURALFACE_NOISE_FEATURE
   CONSOLE_VAR_EXTERN(s32, kProcFace_NoiseNumFrames);
 #endif
-  CONSOLE_VAR_ENUM(int, kProcFace_GammaType,            CONSOLE_GROUP, 0, "None,FromLinear,ToLinear,AddGamma,RemoveGamma,Custom");
-  CONSOLE_VAR_RANGED(f32, kProcFace_Gamma,              CONSOLE_GROUP, IsXray() ? 2.1f : 1.0f, 1.f, 4.f);
+  CONSOLE_VAR_ENUM(int, kProcFace_GammaType,            CONSOLE_GROUP, IsXray() ? 3 : 0, "None,FromLinear,ToLinear,AddGamma,RemoveGamma,Custom");
+  CONSOLE_VAR_RANGED(f32, kProcFace_Gamma,              CONSOLE_GROUP, IsXray() ? 2.6f : 1.0f, 1.f, 4.f);
 
   enum class FaceGammaType {
     None,
@@ -1618,6 +1618,7 @@ namespace Anim {
 
         Vision::ImageRGBA img(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
         compImg.DrawIntoImage(img);
+        ProceduralFaceDrawer::ApplyScanlines(img, 0.4f, true);
         stateToSend.faceImg.SetFromImageRGB(img);
 
         stateToSend.haveFaceToSend = true;
