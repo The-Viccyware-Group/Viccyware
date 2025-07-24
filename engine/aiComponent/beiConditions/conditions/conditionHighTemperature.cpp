@@ -12,7 +12,6 @@
  *
  **/
 
-#include "anki/cozmo/shared/factory/emrHelper.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionHighTemperature.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
@@ -33,7 +32,7 @@ namespace
   // from 60C that there's some margin for the battery to heat
   // up further while he's frantically searching for and
   // docking to the charger.
-  const int kBatteryOverheatingThreshold_degC = IsXray() ? 55 : 50;
+  const int kBatteryOverheatingThreshold_degC = 55;
 
   // i don't LIKE it - wire
   // idc, I want the bots to last - Rajjy 
