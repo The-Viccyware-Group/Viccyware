@@ -178,6 +178,23 @@ namespace Anim {
   // Default time to wait before forcing KeepFaceAlive() after the latest stream has stopped
   const f32 kDefaultLongEnoughSinceLastStreamTimeout_s = 0.5f;
 
+
+  // Default KeepFaceAliveParams
+  #define SET_DEFAULT(param, value) {KeepFaceAliveParameter::param, static_cast<f32>(value)}
+  const std::unordered_map<KeepFaceAliveParameter, f32> _kDefaultKeepFaceAliveParams = {
+    SET_DEFAULT(BlinkSpacingMinTime_ms, 3000),
+    SET_DEFAULT(BlinkSpacingMaxTime_ms, 4000),
+    SET_DEFAULT(EyeDartSpacingMinTime_ms, 250),
+    SET_DEFAULT(EyeDartSpacingMaxTime_ms, 1000),
+    SET_DEFAULT(EyeDartMaxDistance_pix, 6),
+    SET_DEFAULT(EyeDartMinDuration_ms, 50),
+    SET_DEFAULT(EyeDartMaxDuration_ms, 200),
+    SET_DEFAULT(EyeDartOuterEyeScaleIncrease, 0.1f),
+    SET_DEFAULT(EyeDartUpMaxScale, 1.1f),
+    SET_DEFAULT(EyeDartDownMinScale, 0.85f)
+  };
+  #undef SET_DEFAULT
+
   bool kIsInManualUpdateMode    = false;
   u32 kCurrentManualFrameNumber = 0;
   CONSOLE_VAR(bool, kShouldDisplayKeyframeNumber, "ManualAnimationPlayback", false);
@@ -397,6 +414,9 @@ namespace Anim {
 
   Result AnimationStreamer::Init(TextToSpeechComponent* ttsComponent)
   {
+
+    SetDefaultKeepFaceAliveParams();
+
     // TODO: Restore ability to subscribe to messages here?
     //       It's currently hard to do with CPPlite messages.
     // SetupHandlers(_context->GetExternalInterface());
@@ -978,6 +998,43 @@ namespace Anim {
       Util::SafeDelete(msg);
     }
     return res;
+  }
+
+  void AnimationStreamer::SetParam(KeepFaceAliveParameter whichParam, float newValue)
+  {
+    switch(whichParam) {
+      case KeepFaceAliveParameter::BlinkSpacingMaxTime_ms:
+      {
+        const auto maxSpacing_ms = _proceduralTrackComponent->GetMaxBlinkSpacingTimeForScreenProtection_ms();
+        if( newValue > maxSpacing_ms)
+        {
+          LOG_WARNING("AnimationStreamer.SetParam.MaxBlinkSpacingTooLong",
+                      "Clamping max blink spacing to %dms to avoid screen burn-in",
+                      maxSpacing_ms);
+
+          newValue = maxSpacing_ms;
+        }
+        // intentional fall through
+      }
+      case KeepFaceAliveParameter::BlinkSpacingMinTime_ms:
+      case KeepFaceAliveParameter::EyeDartMinDuration_ms:
+      case KeepFaceAliveParameter::EyeDartMaxDuration_ms:
+      case KeepFaceAliveParameter::EyeDartSpacingMinTime_ms:
+      case KeepFaceAliveParameter::EyeDartSpacingMaxTime_ms:
+      {
+        if ((_keepFaceAliveParams[whichParam] != newValue) &&
+            IsKeepAlivePlaying()) {
+          _relativeStreamTime_ms = 0;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    _keepFaceAliveParams[whichParam] = newValue;
+    LOG_DEBUG("AnimationStreamer.SetParam", "%s : %f",
+              EnumToString(whichParam), newValue);
   }
 
   void AnimationStreamer::GetStreamableFace(const Anim::AnimContext* context, const ProceduralFace& procFace, Vision::ImageRGB565& outImage)
@@ -1751,7 +1808,7 @@ namespace Anim {
             _wasAnimationInterruptedWithNothing = false;
           }
 
-          _proceduralTrackComponent->KeepFaceAlive(_relativeStreamTime_ms);
+          _proceduralTrackComponent->KeepFaceAlive(_keepFaceAliveParams, _relativeStreamTime_ms);
         }
         else
         {
@@ -1908,9 +1965,19 @@ namespace Anim {
     s_enableKeepFaceAlive = enable;
   }
   
-  void AnimationStreamer::SetKeepFaceAliveFocus(bool enable)
+  void AnimationStreamer::SetDefaultKeepFaceAliveParams()
   {
-    _proceduralTrackComponent->SetKeepFaceAliveFocus(enable);
+    LOG_DEBUG("AnimationStreamer.SetDefaultKeepFaceAliveParams", "");
+
+    for(auto param = Util::EnumToUnderlying(KeepFaceAliveParameter::BlinkSpacingMinTime_ms);
+        param != Util::EnumToUnderlying(KeepFaceAliveParameter::NumParameters); ++param) {
+      SetParamToDefault(static_cast<KeepFaceAliveParameter>(param));
+    }
+  } // SetDefaultKeepFaceAliveParams()
+
+  void AnimationStreamer::SetParamToDefault(KeepFaceAliveParameter whichParam)
+  {
+    SetParam(whichParam, _kDefaultKeepFaceAliveParams.at(whichParam));
   }
 
   const std::string AnimationStreamer::GetStreamingAnimationName() const
