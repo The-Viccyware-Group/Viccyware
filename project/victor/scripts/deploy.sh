@@ -235,9 +235,7 @@ set -e
 # deployment, exe and shared library files can't be replaced.
 #
 logv "stop victor services"
-robot_sh "/bin/systemctl stop victor.target mm-anki-camera"
-sleep 1
-robot_sh "/bin/systemctl stop mm-qcamera-daemon"
+robot_sh "/bin/systemctl stop anki-robot.target"
 
 logv "create target dirs"
 robot_sh mkdir -p "${INSTALL_ROOT}"
@@ -255,6 +253,9 @@ set +e
 #  robot_cp ${RSYNC_BIN_DIR}/rsync.bin ${DEVICE_RSYNC_BIN_DIR}/rsync.bin
 #fi
 
+robot_sh [ -f "/etc/rsyncd-victor.conf" ]
+if [ $? -ne 0 ]; then
+
 robot_sh [ -f "$DEVICE_RSYNC_CONF_DIR/rsyncd.conf" ]
 if [ $? -ne 0 ] || [ $FORCE_RSYNC_BIN -eq 1 ]; then
   echo "loading rsync config to device"
@@ -266,6 +267,7 @@ if [ $? -ne 0 ] || [ $FORCE_RSYNC_BIN -eq 1 ]; then
   echo "loading rsyncd.service to device"
   robot_cp ${RSYNC_BIN_DIR}/rsyncd.service ${DEVICE_RSYNC_CONF_DIR}/rsyncd.service
   robot_sh "/bin/systemctl daemon-reload"
+fi
 fi
 set -e
 
