@@ -60,6 +60,9 @@ elif [ "$ROBOT_COUNT" == "3" ]; then
     else
         export ROBOT_3_IP=$(cat robot_ip_3.txt)
     fi
+else
+echo Not a valid number. Exiting.
+exit 0
 fi
 
 eval `ssh-agent`
