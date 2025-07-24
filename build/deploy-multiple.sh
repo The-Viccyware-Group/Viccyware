@@ -2,6 +2,16 @@
 
 clear
 
+echo Staging /anki files...
+./project/victor/scripts/stage.sh
+
+clear
+
+if [ ! -f "_build/staging/Release/anki/bin/vic-anim" ]; then
+echo Build victor first, then run this script.
+exit 0
+fi
+
 read -p "How many robots are you deploying to? (max is 3): " robocount
 export ROBOT_COUNT="$robocount"
 
