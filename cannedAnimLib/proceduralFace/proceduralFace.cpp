@@ -291,9 +291,18 @@ void ProceduralFace::SetEyeArrayHelper(WhichEye eye, const std::vector<Value>& e
     SetParameter(eye, static_cast<ProceduralFace::Parameter>(i), eyeArray[i]);
   }
 
-  // Upgrade old param arrays to add hotspots/glow as needed
-  static_assert(N_without_hotspots < N_without_glowlightness,
-                "Expecting hotspot parameters to come before glow");
+  if (eyeArray.size() <= N_without_hotspots)
+  {
+    // upgrade from with hotspots to with glowsize (as default values)
+    for (std::underlying_type<Parameter>::type iParam=N_without_glowlightness; iParam < N; ++iParam)
+    {
+      const auto& paramInfo = kEyeParamInfoLUT[iParam].Value();
+      if(paramInfo.canBeUnset)
+      {
+        _eyeParams[eye][iParam]  = paramInfo.defaultValueIfCombiningWithUnset;
+      }
+    }
+  }
   if (eyeArray.size() <= N_without_glowlightness)
   {
     // Start updating params beginning with hotspots or glow
@@ -630,7 +639,7 @@ void ProceduralFace::CombineEyeParams(EyeParamArray& eyeArray0, const EyeParamAr
         break;
 
       case EyeParamCombineMethod::Average:
-        eyeArray0[iParam] = LinearBlendHelper(eyeArray0[iParam], eyeArray1[iParam], 0.5f);
+        LinearBlendHelper(eyeArray0[iParam], eyeArray1[iParam], 0.5f);
         break;
     }
   }

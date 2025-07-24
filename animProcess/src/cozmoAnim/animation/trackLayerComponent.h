@@ -18,6 +18,7 @@
 #define __Anki_Cozmo_TrackLayerComponent_H__
 
 #include "cannedAnimLib/cannedAnims/animation.h"
+#include "clad/types/keepFaceAliveParameters.h"
 #include "coretech/common/shared/types.h"
 #include <functional>
 #include <list>
@@ -74,11 +75,8 @@ public:
   
   // Keep Victor's face alive using the params specified
   // (call each tick while the face should be kept alive)
-  void KeepFaceAlive(const TimeStamp_t timeSinceKeepAliveStart_ms);
-  
-  // Put keep face alive into "focused" mode, which reduces the jumpiness and eye darts
-  // to make the robot appear more focused and looking straight ahead, but without "dead" eyes.
-  void SetKeepFaceAliveFocus(bool enable) { _isKeepFaceAliveFocused = enable; }
+  void KeepFaceAlive(const std::map<KeepFaceAliveParameter, f32>& params,
+                     const TimeStamp_t timeSinceKeepAliveStart_ms);
   
   // Removes the live face after duration_ms has passed
   // Note: Will not cancel/remove a blink that is in progress
@@ -138,8 +136,10 @@ private:
   // could be added in the future to handle more complicated cases.
   
   struct KeepAliveModifier {
-    using ActivityPerformFunc = std::function<bool(const TimeStamp_t streamTime_ms)>;
-    using ActivityGetNextPerformanceTimeFunc = std::function<s32()>;
+    using ParameterMap = std::map<KeepFaceAliveParameter,f32>;
+    using ActivityPerformFunc = std::function<bool(const ParameterMap& parameterMap,
+                                                   const TimeStamp_t streamTime_ms)>;
+    using ActivityGetNextPerformanceTimeFunc = std::function<s32(const ParameterMap& parameterMap)>;
     std::string name;
     ActivityPerformFunc performFunc = nullptr;
     ActivityGetNextPerformanceTimeFunc getNextPerformanceTimeFunc = nullptr;
@@ -154,7 +154,8 @@ private:
     , getNextPerformanceTimeFunc(getNextPerformanceTimeFunc)
     , hasFaceLayers(hasFaceLayers) {}
     
-    void UpdateNextPerformanceTime() { nextPerformanceTime_ms = getNextPerformanceTimeFunc(); }
+    void UpdateNextPerformanceTime(const ParameterMap& parameterMap)
+    { nextPerformanceTime_ms = getNextPerformanceTimeFunc(parameterMap); }
   };
 
 
@@ -170,7 +171,6 @@ private:
   
   // Setup and add keep face alive activites to _keepAliveActivities vector
   void SetupKeepFaceAliveActivities();
-  bool _isKeepFaceAliveFocused = false;
   
   // Handle track layer
   void ApplyAudioLayersToAnim(Animation* anim,
