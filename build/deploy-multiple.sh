@@ -26,7 +26,7 @@ if [ "$ROBOT_COUNT" == "1" ]; then
 elif [ "$ROBOT_COUNT" == "2" ]; then
         if [ ! -f "robot_ip.txt" ]; then
         read -p "Enter robot 1's IP: " robotip
-        export ROBOT_1_IP="$robotip"
+        export ROBOT_IP="$robotip"
         echo "$ROBOT_IP" >> robot_ip.txt
     else
         export ROBOT_IP=$(cat robot_ip.txt)
@@ -41,8 +41,8 @@ elif [ "$ROBOT_COUNT" == "2" ]; then
 elif [ "$ROBOT_COUNT" == "3" ]; then
             if [ ! -f "robot_ip.txt" ]; then
         read -p "Enter robot 1's IP: " robotip
-        export ROBOT_1_IP="$robotip"
-        echo $ROBOT_1_IP >> robot_ip.txt
+        export ROBOT_IP="$robotip"
+        echo $ROBOT_IP >> robot_ip.txt
     else
         export ROBOT_IP=$(cat robot_ip.txt)
     fi
