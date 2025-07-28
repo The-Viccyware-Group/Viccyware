@@ -1,3 +1,4 @@
+
 /**
  * File: BehaviorSinging.cpp
  *
@@ -31,6 +32,9 @@
 
 namespace Anki {
 namespace Vector {
+
+using AMD_GE_GE = AudioMetaData::GameEvent::GenericEvent;
+using AMD_GOT = AudioMetaData::GameObjectType;
 
 namespace {
   static const char* kAudioSwitchGroup = "audioSwitchGroup";
@@ -241,6 +245,8 @@ void BehaviorSinging::OnBehaviorDeactivated()
                               0,
                               AudioMetaData::GameObjectType::Default /* FIXME: Not correct game object */);
   }
+
+  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Singing, AMD_GOT::Behavior);
 
   // Remove all our listeners
   _cubeAccelListeners.clear();

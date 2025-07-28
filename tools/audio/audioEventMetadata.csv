@@ -474,3 +474,4 @@ Event,,Stop__Robot_Vic_Sfx__Wake_Word_Success_Processing_Stop,2452862642,Robot_V
 Event,,Stop__Robot_Vic_Sfx__Working_Loop_Stop,2468739505,Robot_Vic_Sfx,Working_Loop_Stop,
 Event,,Stop__Robot_Vic__External_Sdk_Playback_01,3298247410,Robot_Vic,External_Sdk_Playback_01,
 Event,,Stop__Robot_Vic__External_Sdk_Playback_02,3298247409,Robot_Vic,External_Sdk_Playback_02,
+Event,,Stop__Robot_Singing,2189143819,Robot,Singing
