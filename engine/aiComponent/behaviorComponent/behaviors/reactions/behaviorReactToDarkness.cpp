@@ -288,7 +288,7 @@ void BehaviorReactToDarkness::TransitionToGoingHome()
 {
   std::vector<const ObservableObject*> locatedHomes;
   GetBEI().GetBlockWorld().FindLocatedMatchingObjects(*_iConfig.homeFilter, locatedHomes);
-  const bool hasAHome = !locatedHomes.empty();
+  // const bool hasAHome = !locatedHomes.empty();
   
   // If we're on the charger, don't know where home is, or are configured to sleep in place
   // Suggest napping to high-level AI through the whiteboard
