@@ -182,3 +182,10 @@ If you do want to clean anyway:
 vclean
 ```
 </details>
+
+## Contributors
+<a href="https://github.com/The-Viccyware-Group/Viccyware/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=The-Viccyware-Group/Viccyware" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks).
