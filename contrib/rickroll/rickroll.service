@@ -1,0 +1,11 @@
+[Unit]
+Description=Rickroll Startup Service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/root/rickroll.py
+User=root
+
+[Install]
+WantedBy=multi-user.target
