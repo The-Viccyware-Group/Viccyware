@@ -19,6 +19,7 @@
 #include "anki/cozmo/shared/cozmoEngineConfig.h"
 
 #include "clad/robotInterface/messageRobotToEngine.h"
+#include "clad/types/keepFaceAliveParameters.h"
 #include "clad/types/compositeImageTypes.h"
 
 #include "coretech/common/shared/types.h"
@@ -180,6 +181,16 @@ public:
   // lock". If any disable locks are present, the keep alive will be disabled
   void AddKeepFaceAliveDisableLock(const std::string& lockName);
   void RemoveKeepFaceAliveDisableLock(const std::string& lockName);
+
+  // Restore all KeepFaceAlive parameters to defaults. Note that this does not enable or disable the keep
+  // alive
+  Result SetDefaultKeepFaceAliveParameters() const;
+
+  // Set KeepFaceAliveParameterToDefault
+  Result SetKeepFaceAliveParameterToDefault(KeepFaceAliveParameter param) const;
+
+  // Set KeepFaceAlive parameter to specified value
+  Result SetKeepFaceAliveParameter(KeepFaceAliveParameter param, f32 value) const;
 
   // Either start an eye shift or update an already existing eye shift with new params
   // Note: Eye shift will continue until removed so if eye shift with the same name

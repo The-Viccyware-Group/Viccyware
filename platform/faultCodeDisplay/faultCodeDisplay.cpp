@@ -24,18 +24,19 @@
 namespace Anki { namespace Vector {
 
 static const std::unordered_map<uint16_t,std::string> kFaultText = {
+  {800,  "vic-anim crashed. Cozmo will restart.."},
   {898,  "Body communication timeout (898)."},
   {899,  "Body communication failure (899)."},
-  {917,  "vic-robot crashed. Vector will restart."},
-  {916,  "vic-robot crashed. Vector will restart."},
-  {915,  "vic-engine crashed. Vector will restart."},
-  {914,  "vic-engine crashed. Vector will restart."},
+  {917,  "vic-robot crashed. Cozmo will restart."},
+  {916,  "vic-robot crashed. Cozmo will restart."},
+  {915,  "vic-engine crashed. Cozmo will restart."},
+  {914,  "vic-engine crashed. Cozmo will restart."},
   {980,  "Camera issue. Reboot the robot if this persists."},
 };
 
-static const char* kSupportURL        = "error.pvic.xyz";
-static const char* kVectorWillRestart = "vector will restart";
-
+static const char* kSupportURL        = "error.vicw.xyz";
+static const char* kVectorWillRestart = "Vector will restart";
+  
 static constexpr float kHeadScale = 0.7f;
 static constexpr int   kHeadThick = 1;
 static constexpr int   kHeadingGap = 5;     // teeny gap

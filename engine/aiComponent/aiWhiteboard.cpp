@@ -774,6 +774,8 @@ void AIWhiteboard::NotifyNewUserIntentPending(UserIntentTag userIntent)
     case UserIntentTag::play_pickupcube:
     case UserIntentTag::play_popawheelie:
     case UserIntentTag::play_rollcube:
+    case UserIntentTag::play_specific:
+    case UserIntentTag::play_keepaway:
       // these maybe indicate the user wants the robot doing more stuff, so reduce the cooldown
       _exploringTransitionCooldownExtra_s -= 60.0f;
       break;
