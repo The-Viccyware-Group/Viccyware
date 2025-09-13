@@ -101,6 +101,7 @@ private:
 
   uint32_t                                                _messageCountOutgoing = 0;
   uint32_t                                                _messageCountIncoming = 0;
+  
 }; // class MessageHandler
 
 } // namespace Vector

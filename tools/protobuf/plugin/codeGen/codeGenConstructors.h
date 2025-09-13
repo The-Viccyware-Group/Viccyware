@@ -71,7 +71,7 @@ private:
       printer->Print( " );\n" );
     } else {
       printer->Print( " )\n" );
-      printer->Print( ("  : " + _messageName + "() {\n").c_str() ); // call default ctor
+      printer->Print( ("  : " + _messageName + "(static_cast<::PROTOBUF_NAMESPACE_ID::Arena*>(nullptr)) {\n").c_str() );
       printer->Indent();
       for( int i=0; i<_varList.size(); ++i ) {
         const auto& entry = _varList[i];
@@ -100,7 +100,7 @@ private:
         printer->Print( {{"Name", _messageName}}, "$Name$::$Name$(" );
         printer->Print( {{"Type", entry.type}, {"Name", entry.varName}}, " $Type$ $Name$" );
         printer->Print( " )\n" );
-        printer->Print( ("  : " + _messageName + "() {\n").c_str() ); // call default ctor
+        printer->Print( ("  : " + _messageName + "(static_cast<::PROTOBUF_NAMESPACE_ID::Arena*>(nullptr)) {\n").c_str() );
         printer->Indent();
         if( entry.isMessageType ) {
           printer->Print( {{"Name", entry.varName}}, "set_allocated_$Name$( $Name$ );\n" );

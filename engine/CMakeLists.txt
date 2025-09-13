@@ -18,7 +18,7 @@ include(anki_build_cxx)
 #
 
 # Generate c++ protobuf files
-set(PROTOBUF_CPP_PLUGIN "protocCppPlugin")
+set(PROTOBUF_CPP_PLUGIN "protocCppPlugin2")
 set(PROTOBUF_CPP_PLUGIN_PATH "${CMAKE_SOURCE_DIR}/tools/protobuf/plugin/${PROTOBUF_CPP_PLUGIN}")
 add_custom_command(
   OUTPUT ${GATEWAY_PROTO_CPP_GEN_HEADERS} ${GATEWAY_PROTO_CPP_GEN_SRCS}

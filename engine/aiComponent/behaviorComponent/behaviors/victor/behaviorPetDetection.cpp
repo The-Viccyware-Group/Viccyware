@@ -13,18 +13,14 @@
 #include "engine/aiComponent/beiConditions/beiConditionFactory.h"
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
-#include "engine/audio/engineRobotAudioClient.h"
 #include "engine/aiComponent/behaviorComponent/behaviorContainer.h"
 
-#include "clad/audio/audioEventTypes.h"
 
 #include <chrono>
 
 namespace Anki {
 namespace Vector {
 
-using AMD_GE_GE = AudioMetaData::GameEvent::GenericEvent;
-using AMD_GOT = AudioMetaData::GameObjectType;
 using Clock = std::chrono::steady_clock;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -87,11 +83,6 @@ void BehaviorPetDetection::OnBehaviorActivated()
     _cooldownUntil = Clock::now() + std::chrono::seconds(15);
   }
 
-  // kind of a placeholder until sounds are added to animations
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Down_Long_Excited, AMD_GOT::Behavior);
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Single, AMD_GOT::Behavior);
-
-
   if( GetBEI().GetRobotInfo().IsOnChargerPlatform() &&
       _iConfig.driveOffChargerBehavior->WantsToBeActivated() ) {
       DelegateIfInControl(_iConfig.driveOffChargerBehavior.get(), &BehaviorPetDetection::PlayAnimation);
@@ -107,8 +98,6 @@ void BehaviorPetDetection::PlayAnimation() {
   AnimationTrigger trig = _isDog ? AnimationTrigger::PetDetectionDog
                                  : AnimationTrigger::PetDetectionCat;
   auto* action = new TriggerLiftSafeAnimationAction(trig);
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Up_Long_Curious, AMD_GOT::Animation);
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Purr_Single, AMD_GOT::Behavior);
 
   DelegateIfInControl(action, [](const ActionResult& result) {
     ANKI_VERIFY( result == ActionResult::SUCCESS,
@@ -135,7 +124,7 @@ void BehaviorPetDetection::AlwaysHandleInScope(const EngineToGameEvent& ev)
 
   const auto& petMsg = ev.GetData().Get_RobotObservedPet();
   // okao hits us with a burst of events whenever a pet is seen.
-  // let's account for false-positives a little bit by needing 3 events
+  // let's account for false-positives a little bit by needing 6 events
   if (!_activate) {
     if (petMsg.numTimesObserved >= 6) {
       if (petMsg.img_rect.height > 100) {

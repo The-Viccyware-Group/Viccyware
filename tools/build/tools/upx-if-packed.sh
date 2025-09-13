@@ -13,5 +13,5 @@ if [[ ! -f "${2}" ]]; then
 fi
 
 if [[ ! "$(strings ${2})" == *'This file is packed with the UPX executable packer'* ]]; then
-	${1} --lzma --best "${2}" > /dev/null
+	${1} --best --lzma "${2}" > /dev/null
 fi

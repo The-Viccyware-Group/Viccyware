@@ -86,10 +86,11 @@ void ProtoMessageHandler::DeliverToExternal(const external_interface::GatewayWra
   ANKI_CPU_PROFILE("ProtoMH::DeliverToExternal");
   ++_messageCountOutgoing;
 
-  Comms::MsgPacket p;
-  message.SerializeToArray(p.data, Comms::MsgPacket::MAX_SIZE);
+  external_interface::GatewayWrapper safeCopy(message);
 
-  p.dataLen = message.ByteSizeLong();
+  Comms::MsgPacket p;
+  safeCopy.SerializeToArray(p.data, Comms::MsgPacket::MAX_SIZE);
+  p.dataLen = safeCopy.ByteSizeLong();
   p.destId = 1;
 
   if (_socketComms)
@@ -123,7 +124,6 @@ Result ProtoMessageHandler::ProcessMessageBytes(const uint8_t* const packetBytes
     (void) ProtoCladInterpreter::Redirect(message, _context);
 
     ++_messageCountIncoming;
-
     Broadcast(message);
   }
 

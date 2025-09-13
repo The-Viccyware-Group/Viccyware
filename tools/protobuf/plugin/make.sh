@@ -18,7 +18,7 @@ if [[ `uname -a` == *"aarch64"* || `uname -a` == *"arm64"* ]]; then
 fi
 
 echo "protocCppPlugin platform: ${HOST}"
-echo "Building protocCppPlugin..."
+echo "Building protocCppPlugin2..."
 
 pushd ${SCRIPT_PATH} >> /dev/null
 
@@ -27,7 +27,7 @@ PROTOBUF_LOC="${GIT_ROOT}/3rd/protobuf/${HOST}"
 INCLUDES="${PROTOBUF_LOC}/include"
 LIBS="${PROTOBUF_LOC}/lib"
 SRCS=`find . -type f -iname "*.cpp"`
-OUTPUT="${SCRIPT_PATH_ABSOLUTE}/protocCppPlugin"
+OUTPUT="${SCRIPT_PATH_ABSOLUTE}/protocCppPlugin2"
 
 EXTRA_ARGS=""
 if [[ $(uname -a) == *"Darwin"* ]]; then

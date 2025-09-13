@@ -133,7 +133,7 @@ list(APPEND VICOS_COMPILER_FLAGS_DEBUG
 	-O0
         -fno-limit-debug-info)
 list(APPEND VICOS_COMPILER_FLAGS_RELEASE
-	-Oz
+	-O2
         -DNDEBUG)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -159,7 +159,8 @@ list(APPEND VICOS_LINKER_FLAGS
 # STL specific flags for libc++
 set(VICOS_STL_PREFIX llvm-libc++)
 list(APPEND VICOS_LINKER_FLAGS
-	-Wl,--exclude-libs,libunwind.a
+    -lunwind
+    -lunwind-arm
 	-lc
 	-latomic
 	-lpthread)
