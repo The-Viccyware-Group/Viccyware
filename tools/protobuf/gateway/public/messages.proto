@@ -1578,5 +1578,5 @@ message CheckCloudResponse{
 }
 
 message _FakeAlexaUsage {
-  AlexaAuthState ignored = 1 [deprecated = true];
+  AlexaAuthState ignored = 1;
 }

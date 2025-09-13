@@ -224,7 +224,7 @@ message ObjectTapped {
 //  and the world
 message RobotObservedObject {
     uint32       timestamp                = 1;
-    ObjectFamily object_family            = 2 [deprecated=true]; // ObjectFamily is deprecated. Use ObjectType instead to reason about groupings of objects.
+    ObjectFamily object_family            = 2; // ObjectFamily is deprecated. Use ObjectType instead to reason about groupings of objects.
     ObjectType   object_type              = 3;
     int32        object_id                = 4; // signed to match U2G::PickAndPlaceObject which has the option to have objectID<0
     CladRect     img_rect                 = 5; // position in image coords
