@@ -555,12 +555,12 @@ function(check_licenses)
 
 
       endif()
-    else()
+    #else()
       # linker option is not a known target, i.e. a system library or missing cmake configuration
 
-      if(NOT system_lib)
-        message(${MESSAGE_STATUS} "WARNING: ${target} is not a recognised system lib and does not have cmake configuration including licensing information.")
-      endif()
+      # if(NOT system_lib)
+      #   message(${MESSAGE_STATUS} "WARNING: ${target} is not a recognised system lib and does not have cmake configuration including licensing information.")
+      # endif()
 
     endif()
   endforeach()

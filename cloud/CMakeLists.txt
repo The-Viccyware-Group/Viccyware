@@ -59,7 +59,7 @@ set(GATEWAY_PROTO_HOME_DIR "${GATEWAY_PROTO_HOME_DIR}" PARENT_SCOPE)
 anki_build_go(
   NAME         vic-cloud
   DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
-  SRC_DIRS     cloud/main.go
+  SRC_DIRS     cloud
   INCLUDE_DIRS "${OPUS_INC}"
   LINK_FLAGS   "${OPUS_LIBS}"
   PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
@@ -83,16 +83,16 @@ set(PROTO_GO_GEN_FILES
   ${GENERATED_GO_FILES}
 )
 
-anki_build_go(
-  NAME         vic-gateway
-  DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
-  SRC_DIRS     gateway
-  INCLUDE_DIRS "${OPUS_INC}"
-  LINK_FLAGS   "${OPUS_LIBS}"
-  PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
-  BUILD_TAGS "vicos nolibopusfile"
-  EXTRA_DEPENDS ${PROTO_GO_GEN_FILES}
-)
+#anki_build_go(
+#  NAME         vic-gateway
+#  DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
+#  SRC_DIRS     gateway
+#  INCLUDE_DIRS "${OPUS_INC}"
+#  LINK_FLAGS   "${OPUS_LIBS}"
+#  PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
+#  BUILD_TAGS "vicos nolibopusfile"
+#  EXTRA_DEPENDS ${PROTO_GO_GEN_FILES}
+#)
 
 # wrapper to add protoc-gen-go stuff to path
 add_custom_command(
@@ -115,7 +115,7 @@ add_custom_command(
 
 add_custom_target(proto_gen ALL DEPENDS ${PROTO_GO_GEN_FILES})
 
-add_dependencies(vic-gateway proto_gen)
+add_dependencies(vic-cloud proto_gen)
 
 add_custom_command(
     OUTPUT "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"

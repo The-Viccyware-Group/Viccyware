@@ -1,2 +1,4 @@
 build/
 go/
+*.pb.go
+*.pb.gw.go

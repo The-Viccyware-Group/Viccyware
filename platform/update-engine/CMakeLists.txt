@@ -1,17 +1,34 @@
-cmake_minimum_required(VERSION 3.10)
-                                                                                                    
-if (VICOS)
-
 project(update-engine)
 
-# copy update-engine.py to rename it to update-engine
-configure_file(update-engine.py ${CMAKE_CURRENT_BINARY_DIR}/update-engine @ONLY)
+include(archive)
+include(anki_build_cxx)
 
-# install script into bin
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/update-engine
-        DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-                    GROUP_EXECUTE GROUP_READ
-)
+if (VICOS)
+
+  anki_build_cxx_executable(update-engine ${ANKI_SRCLIST_DIR})
+  anki_build_target_license(update-engine "ANKI")
+
+  target_compile_options(update-engine
+    PRIVATE
+    -Wno-unused-result
+  )
+
+  target_include_directories(update-engine
+    PRIVATE
+    ${CMAKE_SOURCE_DIR}
+  )
+  
+  target_link_libraries(update-engine
+    PRIVATE
+    ${ARCHIVE_LIBS}
+    pthread
+    crypto 
+    z
+    zstd
+    bz2
+    lzma
+  )
+
+  anki_build_strip(TARGET update-engine)
 
 endif(VICOS)
