@@ -32,10 +32,11 @@ static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {915,  "vic-engine crashed. Cozmo will restart."},
   {914,  "vic-engine crashed. Cozmo will restart."},
   {980,  "Camera issue. Reboot the robot if this persists."},
+  {990,  "False alarm for display issue. Reboot the robot if this persists."},
 };
 
 static const char* kSupportURL        = "error.vicw.xyz";
-static const char* kVectorWillRestart = "Vector will restart";
+static const char* kVectorWillRestart = "Cozmo will restart";
   
 static constexpr float kHeadScale = 0.7f;
 static constexpr int   kHeadThick = 1;
