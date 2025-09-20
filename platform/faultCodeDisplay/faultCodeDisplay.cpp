@@ -24,15 +24,16 @@
 namespace Anki { namespace Vector {
 
 static const std::unordered_map<uint16_t,std::string> kFaultText = {
-  {800,  "vic-anim crashed. Cozmo will restart.."},
-  {898,  "Body communication timeout (898)."},
-  {899,  "Body communication failure (899)."},
-  {917,  "vic-robot crashed. Cozmo will restart."},
-  {916,  "vic-robot crashed. Cozmo will restart."},
-  {915,  "vic-engine crashed. Cozmo will restart."},
-  {914,  "vic-engine crashed. Cozmo will restart."},
-  {980,  "Camera issue. Reboot the robot if this persists."},
-  {990,  "False alarm for display issue. Reboot the robot if this persists."},
+  {800,  "800. vic-anim crashed. Cozmo will restart."},
+  {898,  "898. Body communication timeout."},
+  {899,  "899. Body communication failure."},
+  {917,  "917. vic-robot crashed. Cozmo will restart."},
+  {916,  "916. vic-robot crashed. Cozmo will restart."},
+  {915,  "915. vic-engine crashed. Cozmo will restart."},
+  {914,  "914. vic-engine crashed. Cozmo will restart."},
+  {980,  "980. Camera issue. Reboot the robot if this persists."},
+  {981,  "981. Camera issue. Reboot the robot if this persists."},
+  {990,  "990. False alarm for display issue. Reboot the robot if this persists."},
 };
 
 static const char* kSupportURL        = "error.vicw.xyz";
