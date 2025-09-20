@@ -64,7 +64,7 @@ void ProceduralFace::SaturationConsoleFunction(ConsoleFunctionContextRef context
 namespace {
 # define CONSOLE_GROUP "Face.ParameterizedFace"
 
-  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 83 :88, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
+  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 84 :89, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
 
 # undef CONSOLE_GROUP
 
@@ -387,7 +387,7 @@ void ProceduralFace::SetFromJson(const Json::Value &jsonRoot)
     SetFaceScale({jsonFaceScaleX, jsonFaceScaleY});
   }
 
-  f32 scanlineOpacity = -1.f;
+  f32 scanlineOpacity = 0.f;
   if(JsonTools::GetValueOptional(jsonRoot, kScanlineOpacityKey, scanlineOpacity))
   {
     SetScanlineOpacity(scanlineOpacity);
