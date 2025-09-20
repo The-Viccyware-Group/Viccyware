@@ -52,11 +52,11 @@ namespace Vector {
   CONSOLE_VAR(bool, kProcFace_CustomEyes, CONSOLE_GROUP, false);
   CONSOLE_VAR_RANGED(f32, kProcFace_CustomEyeOpacity, CONSOLE_GROUP, 0.8f, 0.f, 1.f);
   CONSOLE_VAR_ENUM(u8, kProcFace_FlavorOfGay, CONSOLE_GROUP, 0, "Lesbian,Gay,Bi,Trans,Pan,Frog,All,Galaxy,Custom");
-  static void LOOK_LoadFaceOverlay(ConsoleFunctionContextRef context)
+  static void LoadFaceOverlay(ConsoleFunctionContextRef context)
   {
     ProceduralFaceDrawer::LoadCustomEyePNG();
   }
-  CONSOLE_FUNC(LOOK_LoadFaceOverlay, CONSOLE_GROUP);
+  CONSOLE_FUNC(LoadFaceOverlay, CONSOLE_GROUP);
 
 
 #if PROCEDURALFACE_GLOW_FEATURE
