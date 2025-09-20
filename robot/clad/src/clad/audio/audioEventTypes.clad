@@ -106,6 +106,8 @@ enum uint_32 GenericEvent
   Play__Dev_Squawk__Tread_Happy = 621662666,
   Play__Dev_Squawk__Wake_Word_On = 4211032222,
   Play__Robot_Sfx__Fist_Bump = 1216170354,
+  Play__Robot_Sfx__Scrn_Look = 3560778311,
+  Play__Robot_Sfx__Scrn_Curious_Short = 2929211683,
   Play__Robot_Vic_Alexa__Avs_System_Prompt_Error_Cannot_Play_Song = 1721825381,
   Play__Robot_Vic_Alexa__Avs_System_Prompt_Error_Offline_Lost_Connection = 2347545436,
   Play__Robot_Vic_Alexa__Avs_System_Prompt_Error_Offline_Not_Connected_To_Internet = 2960318302,
