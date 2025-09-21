@@ -55,6 +55,7 @@ const char* kPathToExternalSpriteSequences = "assets/sprites/spriteSequences/";
 const char* kPathToEngineSpriteSequences   = "config/sprites/spriteSequences/";
 const char* kPathToEngineBackpackLightsWireOS = "config/engine/lights/backpackLights/backpackLightsWireOS/";
 const char* kPathToEngineBackpackLightsViccyware = "config/engine/lights/backpackLights/backpackLightsViccyware/";
+const char* kPathToEngineBackpackLightsUser = "../../../../data/data/customBackpackLights/";
 const char* kProceduralAnimName = "_PROCEDURAL_";
 
 }
@@ -135,9 +136,13 @@ void RobotDataLoader::LoadNonConfigData()
 
 
   struct stat buffer;
-  int rc = stat("/data/data/wirelights", &buffer);
-  if(rc == 0) {
-    wireoslights = true;
+  int wl = stat("/data/data/wirelights", &buffer);
+  if(wl == 0) {
+    _wireoslights = true;
+  }
+  int cl = stat("/data/data/customBackpackLights/off.json", &buffer);
+  if(cl == 0) {
+    _customlights = true;
   } 
 
   // Dependency Order:
@@ -191,8 +196,11 @@ void RobotDataLoader::LoadNonConfigData()
                                      _spriteSequenceContainer.get(), 
                                      _loadingCompleteRatio, _abortLoad);
 
-    if(wireoslights){
+    if(_wireoslights) {
       const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsWireOS});
+      LoadBackpackLightAnimations(fileInfo);
+    } else if(_customlights) {
+      const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsUser});
       LoadBackpackLightAnimations(fileInfo);
     } else {
       const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsViccyware});
