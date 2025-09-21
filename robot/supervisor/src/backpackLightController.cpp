@@ -107,17 +107,11 @@ namespace BackpackLightController {
   {
     memset(&_ledParams[(int)BackpackLightLayer::BPL_USER], 0, sizeof(_ledParams[(int)BackpackLightLayer::BPL_USER]));
 
-    struct stat buffer;
-    int rc = stat("/data/data/wirelights", &buffer);
-    if(rc == 0) {
-      _wireoslights = true;
-    }
-
     const u16 kTimeDiff_ms = 1000;
     for(u8 i = 0; i < (u8)LEDId::NUM_BACKPACK_LEDS; i++)
     {
       u32 color;
-      if (_wireoslights) {
+      if (_wireoslights()) {
         if(i == 0) {
           color = 0x80ff0000; // red for back led
         } else if(i == 1) {

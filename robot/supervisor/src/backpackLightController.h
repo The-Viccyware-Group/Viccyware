@@ -14,6 +14,7 @@
 
 #include "coretech/common/shared/types.h"
 #include "clad/types/ledTypes.h"
+#include "engine/components/lightsConfig.h"
 
 namespace Anki {
   namespace Vector {
@@ -32,9 +33,6 @@ namespace Anki {
       // Mostly only useful for test mode or special simluation modes.
       void Enable();
       void Disable();
-
-      // Use wireOS lights or not?
-      bool _wireoslights = false;
 
       // Specify which layer should be active
       // If forceUpdate == false, then an updated light command is sent to body

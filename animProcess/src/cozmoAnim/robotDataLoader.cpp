@@ -134,17 +134,6 @@ void RobotDataLoader::LoadNonConfigData()
     return;
   }
 
-
-  struct stat buffer;
-  int wl = stat("/data/data/wirelights", &buffer);
-  if(wl == 0) {
-    _wireoslights = true;
-  }
-  int cl = stat("/data/data/customBackpackLights/off.json", &buffer);
-  if(cl == 0) {
-    _customlights = true;
-  } 
-
   // Dependency Order:
   //  1) Load map of sprite filenames to asset paths
   //  2) SpriteSequences use sprite map to load sequenceName -> all images in sequence directory
@@ -196,10 +185,10 @@ void RobotDataLoader::LoadNonConfigData()
                                      _spriteSequenceContainer.get(), 
                                      _loadingCompleteRatio, _abortLoad);
 
-    if(_wireoslights) {
+    if(_wireoslights()) {
       const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsWireOS});
       LoadBackpackLightAnimations(fileInfo);
-    } else if(_customlights) {
+    } else if(_userlights()) {
       const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsUser});
       LoadBackpackLightAnimations(fileInfo);
     } else {
