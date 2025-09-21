@@ -33,6 +33,9 @@ namespace Anki {
       void Enable();
       void Disable();
 
+      // Use wireOS lights or not?
+      bool _wireoslights = false;
+
       // Specify which layer should be active
       // If forceUpdate == false, then an updated light command is sent to body
       // only if the current layer is not the given layer.
