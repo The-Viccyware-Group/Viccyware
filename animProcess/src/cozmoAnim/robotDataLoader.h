@@ -115,6 +115,7 @@ private:
   std::atomic<bool>     _abortLoad{false};
 
   bool                  _isNonConfigDataLoaded = false;
+  bool                  wireoslights = false;
   std::thread           _dataLoadingThread;
 
   

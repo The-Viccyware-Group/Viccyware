@@ -57,8 +57,6 @@ const char* kPathToEngineBackpackLightsWireOS = "config/engine/lights/backpackLi
 const char* kPathToEngineBackpackLightsViccyware = "config/engine/lights/backpackLights/backpackLightsViccyware/";
 const char* kProceduralAnimName = "_PROCEDURAL_";
 
-bool wireoslights = false;
-
 }
 
 RobotDataLoader::RobotDataLoader(const AnimContext* context)
