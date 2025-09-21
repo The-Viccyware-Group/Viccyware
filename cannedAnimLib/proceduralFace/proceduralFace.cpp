@@ -25,8 +25,8 @@ namespace Vector {
 
 const int ProceduralFace::WIDTH = FACE_DISPLAY_WIDTH;
 const int ProceduralFace::HEIGHT = FACE_DISPLAY_HEIGHT;
-const int ProceduralFace::NominalEyeHeight = IsXray() ? 50 : 57;
-const int ProceduralFace::NominalEyeWidth = IsXray() ? 38 : 43;
+const int ProceduralFace::NominalEyeHeight = IsXray() ? 51 : 57;
+const int ProceduralFace::NominalEyeWidth = IsXray() ? 39 : 43;
 // const int ProceduralFace::NominalEyeHeight = 57;
 // const int ProceduralFace::NominalEyeWidth = 43;
 
@@ -64,7 +64,7 @@ void ProceduralFace::SaturationConsoleFunction(ConsoleFunctionContextRef context
 namespace {
 # define CONSOLE_GROUP "Face.ParameterizedFace"
 
-  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 84 :89, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
+  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 85 :89, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
 
 # undef CONSOLE_GROUP
 
@@ -99,8 +99,8 @@ namespace {
   ProceduralFace::Parameter::NumParameters> kEyeParamInfoLUT {
     {ProceduralFace::Parameter::EyeCenterX,        { false, false,  0.f,  0.f, EyeParamCombineMethod::Add,      {-static_cast<ProceduralFace::Value>(FACE_DISPLAY_WIDTH)/2, static_cast<ProceduralFace::Value>(FACE_DISPLAY_WIDTH)/2 }    }     },
     {ProceduralFace::Parameter::EyeCenterY,        { false, false,  0.f,  0.f, EyeParamCombineMethod::Add,      {-static_cast<ProceduralFace::Value>(FACE_DISPLAY_HEIGHT)/2,static_cast<ProceduralFace::Value>(FACE_DISPLAY_HEIGHT)/2}    }     },
-    {ProceduralFace::Parameter::EyeScaleX,         { false, false,  0.f,  0.f, EyeParamCombineMethod::Multiply, {0.f, 10.f}    }     },
-    {ProceduralFace::Parameter::EyeScaleY,         { false, false,  0.f,  0.f, EyeParamCombineMethod::Multiply, {0.f, 10.f}    }     },
+    {ProceduralFace::Parameter::EyeScaleX,         { false, false,  IsXray() ? 0.90f : 1.07f, 0.f, EyeParamCombineMethod::Multiply, {0.f, 10.f}    }     },
+    {ProceduralFace::Parameter::EyeScaleY,         { false, false,  IsXray() ? 0.90f : 1.07f, 0.f, EyeParamCombineMethod::Multiply, {0.f, 10.f}    }     },
     {ProceduralFace::Parameter::EyeAngle,          { true,  false,  0.f,  0.f, EyeParamCombineMethod::Add,      {-360, 360}    }     },
     {ProceduralFace::Parameter::LowerInnerRadiusX, { false, false,  0.f,  0.f, EyeParamCombineMethod::None,     {0.f, 1.f}    }     },
     {ProceduralFace::Parameter::LowerInnerRadiusY, { false, false,  0.f,  0.f, EyeParamCombineMethod::None,     {0.f, 1.f}    }     },
