@@ -25,8 +25,8 @@ namespace Vector {
 
 const int ProceduralFace::WIDTH = FACE_DISPLAY_WIDTH;
 const int ProceduralFace::HEIGHT = FACE_DISPLAY_HEIGHT;
-const int ProceduralFace::NominalEyeHeight = IsXray() ? 45 : 57;
-const int ProceduralFace::NominalEyeWidth = IsXray() ? 33 : 43;
+const int ProceduralFace::NominalEyeHeight = IsXray() ? 50 : 57;
+const int ProceduralFace::NominalEyeWidth = IsXray() ? 38 : 43;
 // const int ProceduralFace::NominalEyeHeight = 57;
 // const int ProceduralFace::NominalEyeWidth = 43;
 
