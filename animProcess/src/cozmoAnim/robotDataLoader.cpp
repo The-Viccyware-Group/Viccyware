@@ -53,7 +53,12 @@ const char* kPathToExternalIndependentSprites = "assets/sprites/independentSprit
 const char* kPathToEngineIndependentSprites = "config/sprites/independentSprites/";
 const char* kPathToExternalSpriteSequences = "assets/sprites/spriteSequences/";
 const char* kPathToEngineSpriteSequences   = "config/sprites/spriteSequences/";
+const char* kPathToEngineBackpackLightsWireOS = "config/engine/lights/backpackLights/backpackLightsWireOS/";
+const char* kPathToEngineBackpackLightsViccyware = "config/engine/lights/backpackLights/backpackLightsViccyware/";
 const char* kProceduralAnimName = "_PROCEDURAL_";
+
+bool wireoslights = false;
+
 }
 
 RobotDataLoader::RobotDataLoader(const AnimContext* context)
@@ -129,7 +134,14 @@ void RobotDataLoader::LoadNonConfigData()
   if (_platform == nullptr) {
     return;
   }
-  
+
+
+  struct stat buffer;
+  int rc = stat("/data/data/wirelights", &buffer);
+  if(rc == 0) {
+    wireoslights = true;
+  } 
+
   // Dependency Order:
   //  1) Load map of sprite filenames to asset paths
   //  2) SpriteSequences use sprite map to load sequenceName -> all images in sequence directory
@@ -181,8 +193,13 @@ void RobotDataLoader::LoadNonConfigData()
                                      _spriteSequenceContainer.get(), 
                                      _loadingCompleteRatio, _abortLoad);
 
-    const auto& fileInfo = animLoader.CollectAnimFiles({"config/engine/lights/backpackLights"});
-    LoadBackpackLightAnimations(fileInfo);
+    if(wireoslights){
+      const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsWireOS});
+      LoadBackpackLightAnimations(fileInfo);
+    } else {
+      const auto& fileInfo = animLoader.CollectAnimFiles({kPathToEngineBackpackLightsViccyware});
+      LoadBackpackLightAnimations(fileInfo);
+    }
   }
 
   {
