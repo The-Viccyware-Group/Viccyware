@@ -25,8 +25,8 @@ namespace Vector {
 
 const int ProceduralFace::WIDTH = FACE_DISPLAY_WIDTH;
 const int ProceduralFace::HEIGHT = FACE_DISPLAY_HEIGHT;
-const int ProceduralFace::NominalEyeHeight = IsXray() ? 51 : 57;
-const int ProceduralFace::NominalEyeWidth = IsXray() ? 39 : 43;
+const int ProceduralFace::NominalEyeHeight = IsXray() ? 51 : 59;
+const int ProceduralFace::NominalEyeWidth = IsXray() ? 39 : 45;
 // const int ProceduralFace::NominalEyeHeight = 57;
 // const int ProceduralFace::NominalEyeWidth = 43;
 
@@ -64,7 +64,7 @@ void ProceduralFace::SaturationConsoleFunction(ConsoleFunctionContextRef context
 namespace {
 # define CONSOLE_GROUP "Face.ParameterizedFace"
 
-  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 85 :89, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
+  CONSOLE_VAR_RANGED(s32, kProcFace_NominalEyeSpacing, CONSOLE_GROUP, IsXray() ? 85 :94, -FACE_DISPLAY_WIDTH, FACE_DISPLAY_WIDTH);  // V1: 64;
 
 # undef CONSOLE_GROUP
 
