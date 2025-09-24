@@ -10,7 +10,6 @@
  *
  **/
 
-#include "anki/cozmo/shared/factory/emrHelper.h"
 #include "cannedAnimLib/baseTypes/cozmo_anim_generated.h"
 #include "cannedAnimLib/proceduralFace/proceduralFace.h"
 #include "cannedAnimLib/proceduralFace/scanlineDistorter.h"
