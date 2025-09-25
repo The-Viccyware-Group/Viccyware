@@ -15,6 +15,9 @@ enum uint_16 BehaviorID {
   DevExecuteBehaviorRerun,
   Wait_TestInjectable,
 
+  // <root>
+  StackBlocks,
+
   // devBehaviors
   AcousticTestMode,
   CubeDrive,

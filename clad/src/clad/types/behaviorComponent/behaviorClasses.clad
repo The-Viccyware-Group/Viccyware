@@ -61,6 +61,7 @@ enum uint_8 BehaviorClass {
   PlaceCubeByCharger,
   PopAWheelie,
   RequestToGoHome,
+  StackBlocks,
   Turn,
   TurnToFace,
   WiggleOntoChargerContacts,

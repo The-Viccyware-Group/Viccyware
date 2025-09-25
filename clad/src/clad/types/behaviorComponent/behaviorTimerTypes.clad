@@ -22,6 +22,7 @@ enum uint_8 BehaviorTimerTypes {
   ReactToIllumination,
   ReactToTouchPetting,
   Socializing,
+  StackBlocks,
   
 }
 

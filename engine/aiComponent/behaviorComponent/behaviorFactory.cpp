@@ -44,6 +44,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorPlaceCubeByCharger.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorPopAWheelie.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorRequestToGoHome.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorStackBlocks.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorTurn.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorTurnToFace.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicWorldInteractions/behaviorWiggleOntoChargerContacts.h"
@@ -413,6 +414,12 @@ ICozmoBehaviorPtr BehaviorFactory::CreateBehavior(const Json::Value& config)
       break;
     }
     
+    case BehaviorClass::StackBlocks:
+    {
+      newBehavior = ICozmoBehaviorPtr(new BehaviorStackBlocks(config));
+      break;
+    }
+
     case BehaviorClass::Turn:
     {
       newBehavior = ICozmoBehaviorPtr(new BehaviorTurn(config));
