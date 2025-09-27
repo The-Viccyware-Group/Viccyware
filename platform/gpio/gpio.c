@@ -99,12 +99,17 @@ int gpio_get_base_offset()
 {
   if (GPIO_BASE_OFFSET < 0) {
     // gpio pinctrl for msm8909:
+    // mainline/6.17:  /sys/devices/platform/soc@0/1000000.pinctrl/gpio/gpiochip512/base -> 512
     // oe-linux/4.9:  /sys/devices/platform/soc/1000000.pinctrl/gpio/gpiochip0/base -> 0
     // oe-linux/3.18: /sys/devices/soc/1000000.pinctrl/gpio/gpiochip0/base     -> 0
     // android/3.10:  /sys/devices/soc.0/1000000.pinctrl/gpio/gpiochip911/base -> 911
 
-    // Assume we are on an OE-linux with 4.9 kernel
-    int fd = open_patiently("/sys/devices/platform/soc/1000000.pinctrl/gpio/gpiochip0/base", O_RDONLY);
+    // Assume we are on mainline
+    int fd = open_patiently("/sys/devices/platform/soc@0/1000000.pinctrl/gpio/gpiochip512/base", O_RDONLY);
+    if (fd < 0) {
+      // Fallback to OE-linux 4.9 kernel
+      fd = open_patiently("/sys/devices/platform/soc/1000000.pinctrl/gpio/gpiochip0/base", O_RDONLY);
+    }
     if (fd < 0) {
       // Fallback to OE-linux 3.18 kernel
       fd = open_patiently("/sys/devices/soc/1000000.pinctrl/gpio/gpiochip0/base", O_RDONLY);
@@ -121,7 +126,7 @@ int gpio_get_base_offset()
     char base_buf[5] = {0};
     int r = read(fd, base_buf, sizeof(base_buf));
     if (r < 0) {
-      error_return(app_IO_ERROR, "can't read gpiopchip base property");
+      error_return(app_IO_ERROR, "can't read gpiochip base property");
     }
 
     if (isdigit(base_buf[0]) == 0)
