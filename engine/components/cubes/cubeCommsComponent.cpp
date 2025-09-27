@@ -49,7 +49,7 @@ namespace Vector {
 
 namespace {
   // This is the only cube type that we expect to communicate with
-  const ObjectType kValidCubeType = ObjectType::Block_LIGHTCUBE1;
+  const ObjectType kValidCubeType = ObjectType::Block_LIGHTCUBE4;
   
   // How long to remain in discovery mode
 #ifdef SIMULATOR

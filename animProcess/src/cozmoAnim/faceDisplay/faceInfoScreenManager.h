@@ -191,6 +191,7 @@ private:
   void DrawAlexaFace();
   void DrawMuteAnimation();
   void DrawAlexaNotification();
+  void DrawRebootScreen();
   
   // Draw the _scratchDrawingImg to the face
   void DrawScratch();

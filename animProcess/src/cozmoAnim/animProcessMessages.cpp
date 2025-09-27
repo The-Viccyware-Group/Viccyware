@@ -308,9 +308,18 @@ void Process_enableKeepFaceAlive(const Anki::Vector::RobotInterface::EnableKeepF
   _animStreamer->EnableKeepFaceAlive(msg.enable, msg.disableTimeout_ms);
 }
 
-void Process_setKeepFaceAliveFocus(const Anki::Vector::RobotInterface::SetKeepFaceAliveFocus& msg)
+void Process_setDefaultKeepFaceAliveParameters(const Anki::Vector::RobotInterface::SetDefaultKeepFaceAliveParameters& msg)
 {
-  _animStreamer->SetKeepFaceAliveFocus(msg.enable);
+  _animStreamer->SetDefaultKeepFaceAliveParams();
+}
+
+void Process_setKeepFaceAliveParameter(const Anki::Vector::RobotInterface::SetKeepFaceAliveParameter& msg)
+{
+  if (msg.setToDefault) {
+    _animStreamer->SetParamToDefault(msg.param);
+  } else {
+    _animStreamer->SetParam(msg.param, msg.value);
+  }
 }
 
 void Process_addOrUpdateEyeShift(const Anki::Vector::RobotInterface::AddOrUpdateEyeShift& msg)

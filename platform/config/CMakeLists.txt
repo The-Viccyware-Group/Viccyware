@@ -5,6 +5,8 @@
 #
 # Build options
 #
+# hi 
+#
 # Configure with -DANKI_RESOURCE_SHIPPING=1 to deploy shipping config files.
 # Configure with -DANKI_RESOURCE_SHIPPING=0 to deploy development config files.
 # Default is ANKI_RESOURCE_SHIPPING=0.
@@ -92,8 +94,8 @@ else()
     set(platform_config_etc_extra platform_config_etc_epdev)
     set(platform_config_bin_extra platform_config_bin_epdev)
   else()
-    set(BASE_URL "https://ota.pvic.xyz/vic/")
-    set(BASE_URL_LATEST "https://ota.pvic.xyz/vic/")
+    set(BASE_URL "https://ota-cdn.vicw.xyz/vic/")
+    set(BASE_URL_LATEST "https://ota-cdn.vicw.xyz/vic/")
     configure_file(development/etc-template/update-engine.env.in ${CMAKE_BINARY_DIR}/etc/update-engine.env)
     set(platform_config_etc_extra platform_config_etc_development)
     set(platform_config_bin_extra platform_config_bin_development)

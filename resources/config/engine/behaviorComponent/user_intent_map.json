@@ -37,12 +37,21 @@
       "user_intent": "play_anygame"
     },
     {
+      "cloud_intent": "intent_play_specific_extend",
+      "app_intent": "intent_play_specific",
+      "user_intent": "play_specific"
+    },
+    {
       "cloud_intent": "intent_play_blackjack",
       "user_intent": "play_blackjack"
     },
     {
       "cloud_intent": "intent_play_fistbump",
       "user_intent": "play_fistbump"
+    },
+      {
+      "cloud_intent": "intent_play_keepaway",
+      "user_intent": "play_keepaway"
     },
     {
       "cloud_intent": "intent_play_pickupcube",

@@ -1,0 +1,19 @@
+{
+  "behaviorID" : "FindCubeAndPlayKeepaway",
+  "behaviorClass" : "FindCubeAndThen",
+  "associatedActiveFeature" : "FindCube",
+
+  "followUpBehaviorID" : "Keepaway",
+  "respondToUserIntents" : [
+    {
+      "type" : "play_keepaway"
+    }
+  ]
+}
+
+"wantsToBeActivatedCondition": {
+  "conditionType": "FeatureGate",
+  "feature": "Keepaway"
+
+  "postBehaviorSuggestion" : "Socialize"
+}

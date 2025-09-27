@@ -19,6 +19,7 @@
 #include "util/cladHelpers/cladEnumToStringMap.h"
 #include "util/helpers/noncopyable.h"
 #include "coretech/vision/shared/spritePathMap.h"
+#include "engine/components/lightsConfig.h"
 
 #include "assert.h"
 #include <json/json.h>

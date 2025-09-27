@@ -288,7 +288,7 @@ void BehaviorReactToDarkness::TransitionToGoingHome()
 {
   std::vector<const ObservableObject*> locatedHomes;
   GetBEI().GetBlockWorld().FindLocatedMatchingObjects(*_iConfig.homeFilter, locatedHomes);
-  const bool hasAHome = !locatedHomes.empty();
+  // const bool hasAHome = !locatedHomes.empty();
   
   // If we're on the charger, don't know where home is, or are configured to sleep in place
   // Suggest napping to high-level AI through the whiteboard
@@ -300,13 +300,13 @@ void BehaviorReactToDarkness::TransitionToGoingHome()
     GetAIComp<AIWhiteboard>().OfferPostBehaviorSuggestion( PostBehaviorSuggestions::SleepOnCharger );
     CancelSelf();
   }
-  else if( !hasAHome || _iConfig.sleepInPlace )
-  {
-    PRINT_CH_INFO("Behaviors", "BehaviorReactToDarkness.TransitionToGoingHome.SuggestSleep",
-                  "Sleeping in place (may not know where home is), suggesting Sleep" );
-    GetAIComp<AIWhiteboard>().OfferPostBehaviorSuggestion( PostBehaviorSuggestions::Sleep );
-    CancelSelf();
-  }
+  // else if( !hasAHome || _iConfig.sleepInPlace )
+  // {
+  //   PRINT_CH_INFO("Behaviors", "BehaviorReactToDarkness.TransitionToGoingHome.SuggestSleep",
+  //                 "Sleeping in place (may not know where home is), suggesting Sleep" );
+  //   GetAIComp<AIWhiteboard>().OfferPostBehaviorSuggestion( PostBehaviorSuggestions::Sleep );
+  //   CancelSelf();
+  // }
   // Else delegate to the FindAndGoHome behavior and wait for it to return
   else
   {

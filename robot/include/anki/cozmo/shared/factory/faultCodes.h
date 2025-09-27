@@ -105,9 +105,9 @@ enum : uint16_t {
   // when it receives these codes.
   SHUTDOWN_BATTERY_CRITICAL_TEMP  = 705,
   SHUTDOWN_BATTERY_CRITICAL_VOLT  = 702,
-
-  // No fault code is displayed when it receives these codes.
   SHUTDOWN_GYRO_NOT_CALIBRATING   = 701,
+
+  // No fault code is displayed when it receives this code.
   SHUTDOWN_BUTTON                 = 700,
   // ------ End of Shutdown codes ------
 

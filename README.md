@@ -1,24 +1,20 @@
-# WireOS - /anki folder
+# Viccyware-tester
 
-**This is where the personality code for WireOS exists.**
+Welcome to the unstable branch of `Viccyware`. This is the home of a modified copy of the Vector source
+code. Original README: [README-orig.md](/README-orig.md)
 
-For the entire OS, check out the [wire-os](https://github.com/os-vector/wire-os) repo. This repo, `wire-os-victor`, is a submodule of that, and just builds the /anki folder which goes into that OS. However, `wire-os-victor` can still be built standalone and deployed to a robot which is running a good base OTA. This is recommended for developers.
+Learn a little more about the project at [viccyware.com](https://www.viccyware.com/)
 
-Most changes happen in this repo. If one wants to, for instance, add a new feature; this is where they'd do it.
+## Branch info
+This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
 
-If you want to add a program to the OS, do that in [wire-os](https://github.com/os-vector/wire-os).
+## Changes
 
-Check [vector-docs](https://os-vector.github.io/vector-docs) for more information about the source code leak, what we can do with this, and general Vector info.
-
-## What is WireOS?
-
-WireOS serves as a stable, up-to-date, easily-buildable base for CFW, and is a continuation of Anki's work.
-
-Any feature added here should be somewhat objectively applicable to other CFW. Feel free to make a PR. Wire encourages PRs which add things like 3rd-party library upgrades, new behaviors which Anki might have planned to add, code documentation, and optimizations. Wire discourages PRs which significantly alter the experience, like transforming him into a (soulless) GPT box or making him into Cozmo. If you want to do something like that, make your own CFW (instructions in [vector-docs](https://os-vector.github.io/vector-docs)).
+- The wiki includes a list of changes that were made by a fellow community member, Wire: [Changes Wire Made](https://github.com/kercre123/victor/wiki/Changes-I-Made)
 
 ## Building
 
-`wire-os-victor` can be built standalone on most Linux distros (arm64 or amd64).
+`Viccyware` can be built standalone on most Linux distros (arm64 or amd64), and on macOS (arm64 only, for now).
 
 macOS building used to work, but **doesn't at the moment**. This will be fixed soon. Disregard the macOS instructions for now.
 
@@ -38,8 +34,8 @@ Click an option below for instructions.
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd wire-os-victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Make sure you can run Docker as a normal user. This will probably involve:
@@ -54,7 +50,7 @@ sudo chmod 660 /var/run/docker.sock
 
 3. Run the build script:
 ```
-cd ~/wire-os-victor
+cd ~/Viccyware
 ./build/build-v.sh
 ```
 
@@ -80,8 +76,8 @@ sudo dnf install -y git wget curl openssl ninja-build gcc gcc-c++ pkgconf-pkg-co
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd wire-os-victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Source `setenv.sh`:
@@ -115,13 +111,13 @@ vbuild
 
 ```
 cd ~
-git clone --recurse-submodules https://github.com/os-vector/wire-os-victor
-cd victor
+git clone --recurse-submodules https://github.com/The-Viccyware-Group/Viccyware -b Viccyware-tester
+cd Viccyware
 ```
 
 2. Run the build script:
 ```
-cd ~/wire-os-victor
+cd ~/Viccyware
 ./build/build-v.sh
 ```
 
@@ -129,7 +125,7 @@ cd ~/wire-os-victor
 
 ## Deploying
 
-1. Install WireOS on your robot.
+1. Install Viccyware on your robot.
 2. Get your robot's IP through CCIS:
   - 1. Place your robot on the charger
   - 2. Double click the button
@@ -196,3 +192,10 @@ vclean
   - `compile_commands.json`
   - `.clangd`
 - If you install the [`clangd`](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) extension for VSCode then relaunch VSCode after a build, it will index the code and you will have speedy code completion, error underlining+explanations, function descriptions, and such for the entire codebase.
+
+## Contributors
+<a href="https://github.com/The-Viccyware-Group/Viccyware/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=The-Viccyware-Group/Viccyware" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks).
