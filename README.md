@@ -16,6 +16,8 @@ This branch of the Vector source code will attempt to reimpliment Cozmo from old
 
 `Viccyware` can be built standalone on most Linux distros (arm64 or amd64), and on macOS (arm64 only, for now).
 
+macOS building used to work, but **doesn't at the moment**. This will be fixed soon. Disregard the macOS instructions for now.
+
 Docker is recommended for now (especially if you have a weird or old Linux distro installed), though bare metal works nicely too.
 
 Note that if you have built in Docker before and want to build on bare metal now (or vice-versa), you should do a [clean](#cleaning) build.
@@ -59,7 +61,7 @@ cd ~/Viccyware
 <br \>
 
 - Prerequisites:
-  - glibc 2.27 or above - this means anything Ubuntu 18.04 and newer will work.
+  - glibc 2.35 or above - this means anything Debian Bookworm-era and newer will work.
   - The following packages need to be installed: `git wget curl openssl ninja g++ gcc pkg-config ccache`
 ```
 # Arch Linux:
@@ -100,8 +102,7 @@ vbuild
 <summary><strong>macOS (M-series only)</strong></summary>
 <br />
 
-> [!WARNING] 
-> Only works on M1-M4 Macs, NOT Intel
+# macOS BUILDING IS NOT WORKING AT THE MOMENT. THIS WILL BE FIXED SOON.
 
 - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
   -  Then: `brew install ccache wget upx ninja`
@@ -184,6 +185,13 @@ If you do want to clean anyway:
 vclean
 ```
 </details>
+
+## IDE Help
+
+- After you build for the first time, two files will be generated and placed in the root of the source directory:
+  - `compile_commands.json`
+  - `.clangd`
+- If you install the [`clangd`](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) extension for VSCode (I use VSCodium, which I think gets rid of Intellisense stuff) then relaunch VSCode after a build, it will index the code and you will have speedy error underlining+explanations, function descriptions, and such for the entire codebase.
 
 ## Contributors
 <a href="https://github.com/The-Viccyware-Group/Viccyware/graphs/contributors">

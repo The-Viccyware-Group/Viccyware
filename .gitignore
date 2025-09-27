@@ -6,6 +6,8 @@ build/cache
 build/gocache
 build/usercache
 anki-deps
+compile_commands.json
+.clangd
 *.swp
 matlab.mat
 
