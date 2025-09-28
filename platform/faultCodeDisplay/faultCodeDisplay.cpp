@@ -25,6 +25,7 @@ namespace Anki { namespace Vector {
 
 static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {800,  "800. vic-anim crashed."},
+  {801,  "801. Unable to flash the BodyBoard."},
   {898,  "898. Body communication timeout."},
   {899,  "899. Body communication failure."},
   {917,  "917. vic-robot crashed."},
@@ -33,7 +34,7 @@ static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {914,  "914. vic-engine crashed."},
   {980,  "Camera issue (980)."},
   {981,  "Camera process issue (981)."},
-  {990,  "990. False alert for display issues. Reboot the robot if this persists."},
+  {990,  "990. False alert for display issues."},
 };
 
 static const char* kSupportURL        = "error.vicw.xyz";
@@ -63,7 +64,7 @@ static void DrawMultiline(uint16_t code, std::string txt, bool willRestart)
   if (willRestart) {
     txt = txt + " Cozmo will restart.";
   } else {
-    if (code == 980 || code == 981) {
+    if (code == 801 || code == 980 || code == 981 || code == 990) {
       txt = txt + " Robot reboot recommended.";
     } else {
       txt = txt + " Restarts exhausted.";
