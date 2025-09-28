@@ -16,7 +16,7 @@
 #include "cozmoAnim/animation/trackLayerManagers/audioLayerManager.h"
 #include "cozmoAnim/animation/trackLayerManagers/backpackLayerManager.h"
 #include "cozmoAnim/animation/trackLayerManagers/faceLayerManager.h"
-//#include "anki/cozmo/basestation/components/desiredFaceDistortionComponent.h"
+#include "engine/components/desiredFaceDistortionComponent.h"
 #include "cozmoAnim/animContext.h"
 #include "util/console/consoleInterface.h"
 #include "util/helpers/ankiDefines.h"
