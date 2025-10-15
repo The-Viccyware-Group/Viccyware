@@ -47,7 +47,7 @@
   },
   "time_zone" :
   {
-    "defaultValue" : "America/Los_Angeles",
+    "defaultValue" : "America/New_York",
     "updateCloudOnChange" : true
   },
   "button_wakeword" :
