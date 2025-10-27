@@ -64,16 +64,34 @@
     "translation": "You're {0}, not {1}"
   },
   "BehaviorHowOldAreYou.OneDay": {
-    "translation": "One day old"
+    "translation": "One day!"
   },
   "BehaviorHowOldAreYou.SomeDays": {
-    "translation": "{0} days old"
+    "translation": "{0} days!"
   },
   "BehaviorHowOldAreYou.OneMonth": {
-    "translation": "One month old"
+    "translation": "One month!"
+  },
+  "BehaviorHowOldAreYou.AndOneMonth": {
+    "translation": "and one month!"
   },
   "BehaviorHowOldAreYou.SomeMonths": {
-    "translation": "{0} months old"
+    "translation": "{0} months!"
+  },
+  "BehaviorHowOldAreYou.AndSomeMonths": {
+    "translation": "and {0} months!"
+  },
+  "BehaviorHowOldAreYou.OneYear": {
+    "translation": "One year!"
+  },
+  "BehaviorHowOldAreYou.SomeYears": {
+    "translation": "{0} years!"
+  },
+  "BehaviorHowOldAreYou.OneYearAndMonth": {
+    "translation": "One year"
+  },
+  "BehaviorHowOldAreYou.SomeYearsAndMonth": {
+    "translation": "{0} years"
   },
   "BehaviorKnowledgeGraphQuestion.Ready": {
     "translation": "Ready"

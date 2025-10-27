@@ -186,7 +186,7 @@ vclean
 ```
 </details>
 
-## IDE Help
+## VSCode Code Completion
 
 - After you build for the first time, two files will be generated and placed in the root of the source directory:
   - `compile_commands.json`
