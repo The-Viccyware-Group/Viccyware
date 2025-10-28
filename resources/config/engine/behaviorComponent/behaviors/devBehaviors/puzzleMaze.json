@@ -3,9 +3,9 @@
   "behaviorID": "PuzzleMaze",
   "tileSize_pixels": 20,
   "wallSize_pixels":2,
-  "timeBetweenTiles_Sec":0.3,
-  "timePauseAtIntersectionMin_Sec":0.1,
-  "timePauseAtIntersectionMax_Sec":0.3,
+  "timeBetweenTiles_Sec":0.1,
+  "timePauseAtIntersectionMin_Sec":0.2,
+  "timePauseAtIntersectionMax_Sec":0.6,
   "chanceRandomWrongChoice":0.05,
   "cozmoAvatarSize_pixels": 3
 }

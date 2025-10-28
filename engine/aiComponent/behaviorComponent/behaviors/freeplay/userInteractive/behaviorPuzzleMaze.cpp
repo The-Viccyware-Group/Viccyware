@@ -7,11 +7,14 @@
  **/
 
 #include "engine/aiComponent/behaviorComponent/behaviors/freeplay/userInteractive/behaviorPuzzleMaze.h"
+#include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 
 #include "engine/actions/animActions.h"
+#include "engine/actions/basicActions.h"
 #include "engine/audio/engineRobotAudioClient.h"
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/aiComponent/puzzleComponent.h"
+#include "engine/components/movementComponent.h"
 #include "engine/cozmoContext.h"
 #include "engine/robot.h"
 
@@ -338,7 +341,11 @@ void BehaviorPuzzleMaze::SingleStepMaze()
       }
 
       Point2i moveDir;
+      MazeWalls oldDirection = _dVars.currFacing;
       _dVars.currFacing = GetNextDir(currcell, _dVars.currFacing, moveDir, makeWrongTurn);
+      if (oldDirection != _dVars.currFacing) {
+        AnimateDirectionChange(oldDirection, _dVars.currFacing);
+      }
       _dVars.nextPos = _dVars.currPos + moveDir;
       _dVars.path.emplace_back(_dVars.currPos);
       GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Blink, AMD_GOT::Behavior);
@@ -531,6 +538,41 @@ float BehaviorPuzzleMaze::GetTotalTimeFromLastRun()
   return _dVars.totalTimeInLastPuzzle_Sec;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void BehaviorPuzzleMaze::AnimateDirectionChange(MazeWalls oldDirection, MazeWalls newDirection) // Semi-based on snakegame's movement code
+{
+  bool turnedLeft = false;
+  bool turnedRight = false;
+  
+  if ((oldDirection == MazeWalls::North && newDirection == MazeWalls::West) ||
+      (oldDirection == MazeWalls::West && newDirection == MazeWalls::South) ||
+      (oldDirection == MazeWalls::South && newDirection == MazeWalls::East) ||
+      (oldDirection == MazeWalls::East && newDirection == MazeWalls::North)) {
+    turnedLeft = true;
+  }
+  
+  if ((oldDirection == MazeWalls::North && newDirection == MazeWalls::East) ||
+      (oldDirection == MazeWalls::East && newDirection == MazeWalls::South) ||
+      (oldDirection == MazeWalls::South && newDirection == MazeWalls::West) ||
+      (oldDirection == MazeWalls::West && newDirection == MazeWalls::North)) {
+    turnedRight = true;
+  }
+  
+  if (turnedLeft || turnedRight) {
+    float degrees = turnedLeft ? -3.0f : 3.0f;
+    float speed = MAX_BODY_ROTATION_SPEED_RAD_PER_SEC;
+    float accel = MAX_BODY_ROTATION_ACCEL_RAD_PER_SEC2;
+    
+    GetBEI().GetRobotInfo().GetMoveComponent().TurnInPlace(
+      DEG_TO_RAD(degrees),
+      speed,
+      accel,
+      0.0f,
+      0,
+      false
+    );
+  }
+}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorPuzzleMaze::IsPuzzleCompleted()
 {

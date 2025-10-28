@@ -137,6 +137,7 @@ private:
   void DrawCozmo(Vision::Image& image);
   
   // Action helpers
+  void AnimateDirectionChange(MazeWalls oldDirection, MazeWalls newDirection);
   void StartAnimation(const AnimationTrigger& animationTrigger);
   void StartAnimation(const AnimationTrigger& animationTrigger, const MazeState& nextState);
 };
