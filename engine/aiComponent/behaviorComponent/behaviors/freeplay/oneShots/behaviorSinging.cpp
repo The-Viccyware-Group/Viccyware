@@ -81,21 +81,21 @@ BehaviorSinging::BehaviorSinging(const Json::Value& config)
     case AudioSwitchGroup::Cozmo_Sings_80Bpm:
     {
       _audioSwitch = static_cast<GenericSwitch>(AudioMetaData::SwitchState::Cozmo_Sings_80BpmFromString(value));
-      GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_80bpm, AMD_GOT::Behavior);
+      // GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_80bpm, AMD_GOT::Behavior);
       _songAnimTrigger = k80BpmTrigger;
       break;
     }
     case AudioSwitchGroup::Cozmo_Sings_100Bpm:
     {
       _audioSwitch = static_cast<GenericSwitch>(AudioMetaData::SwitchState::Cozmo_Sings_100BpmFromString(value));
-      GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_100bpm, AMD_GOT::Behavior);
+      // GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_100bpm, AMD_GOT::Behavior);
       _songAnimTrigger = k100BpmTrigger;
       break;
     }
     case AudioSwitchGroup::Cozmo_Sings_120Bpm:
     {
       _audioSwitch = static_cast<GenericSwitch>(AudioMetaData::SwitchState::Cozmo_Sings_120BpmFromString(value));
-      GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_120bpm, AMD_GOT::Behavior);
+      // GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_120bpm, AMD_GOT::Behavior);
       _songAnimTrigger = k120BpmTrigger;
       break;
     }
@@ -161,6 +161,17 @@ void BehaviorSinging::OnBehaviorActivated()
   CompoundActionSequential* action = new CompoundActionSequential();
   action->AddAction(new TriggerAnimationAction(kGetInTrigger));
   action->AddAction(new TriggerAnimationAction(_songAnimTrigger));
+
+  if (_songAnimTrigger == k80BpmTrigger) {
+    GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_80bpm, AMD_GOT::Behavior);
+  } else if (_songAnimTrigger == k100BpmTrigger) {
+    GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_100bpm, AMD_GOT::Behavior);
+  } else if (_songAnimTrigger == k120BpmTrigger) {
+    GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_120bpm, AMD_GOT::Behavior);
+  } else {
+    GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play_Cozmo_80bpm, AMD_GOT::Behavior);
+  }
+
   action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
   DelegateIfInControl(action, [this](const ActionResult& res) {
     if(res == ActionResult::SUCCESS)
@@ -168,8 +179,6 @@ void BehaviorSinging::OnBehaviorActivated()
       BehaviorObjectiveAchieved(BehaviorObjective::Singing);
     }
   });
-
-  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Singing, AMD_GOT::Behavior);
 }
 
 
