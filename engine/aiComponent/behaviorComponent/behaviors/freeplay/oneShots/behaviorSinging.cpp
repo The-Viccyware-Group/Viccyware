@@ -48,7 +48,8 @@ namespace {
   static const AnimationTrigger k120BpmTrigger = AnimationTrigger::DEPRECATED_Singing_120bpm;
 
   static const AudioMetaData::GameParameter::ParameterType kVibratoParam =
-    AudioMetaData::GameParameter::ParameterType::Cozmo_Singing_Vibrato;
+  AudioMetaData::GameParameter::ParameterType::Cozmo_Singing_Vibrato;
+
 }
 
 
@@ -139,6 +140,11 @@ bool BehaviorSinging::WantsToBeActivatedBehavior() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSinging::OnBehaviorActivated()
 {
+
+  _cubeShakingStartTime_ms = 0;
+  _vibratoScaleFilt = 0.0f;
+  _objectShakeAverages.clear();
+
   if(ANKI_VERIFY(GetBEI().HasRobotAudioClient(),
                  "BehaviorSinging.OnBehaviorActivated.MissingAudioClient","")){
     // Tell Wwise to switch to the specific SwitchGroup (80/100/120bpm)
@@ -159,6 +165,8 @@ void BehaviorSinging::OnBehaviorActivated()
       BehaviorObjectiveAchieved(BehaviorObjective::Singing);
     }
   });
+
+  GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Singing, AMD_GOT::Behavior);
 }
 
 
@@ -241,9 +249,11 @@ void BehaviorSinging::OnBehaviorDeactivated()
 {
   if(GetBEI().HasRobotAudioClient()){
     auto& audioClient = GetBEI().GetRobotAudioClient();
-    audioClient.PostParameter(kVibratoParam,
-                              0,
-                              AudioMetaData::GameObjectType::Default /* FIXME: Not correct game object */);
+    audioClient.PostParameter(kVibratoParam, 0,
+                              AudioMetaData::GameObjectType::Default);
+
+    audioClient.PostEvent(AMD_GE_GE::Stop__Robot_Singing, 
+                         AudioMetaData::GameObjectType::Default);
   }
 
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Singing, AMD_GOT::Behavior);
