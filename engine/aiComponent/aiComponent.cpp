@@ -91,6 +91,13 @@ void AIComponent::InitDependent(Vector::Robot* robot, const RobotCompMap& depend
       _aiComponents->AddDependentComponent(AIComponentID::SalientPointsDetectorComponent,    new SalientPointsComponent());
       _aiComponents->AddDependentComponent(AIComponentID::TimerUtility,                      new TimerUtility());
       _aiComponents->AddDependentComponent(AIComponentID::Whiteboard,                        new AIWhiteboard(*robot));
+
+      Result puzzleInitResult = _aiComponents->GetComponent<PuzzleComponent>().InitConfigs();
+      if (puzzleInitResult != RESULT_OK) {
+        PRINT_NAMED_WARNING("AIComponent.InitDependent.PuzzleInitFailed", 
+                            "Failed to initialize PuzzleComponent configs");
+      }
+
     }
 
     _aiComponents->InitComponents(robot);

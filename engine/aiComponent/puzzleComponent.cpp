@@ -137,8 +137,19 @@ Result PuzzleComponent::InitConfigs()
 
 const MazeConfig& PuzzleComponent::GetCurrentMaze() const
 {
-  // there should always be a puzzle
-  DEV_ASSERT(_currMaze != _mazes.end(), "PuzzleComponent.GetCurrentMaze.NoMaze");
+  if (_currMaze == _mazes.end() || _mazes.empty()) {
+    PRINT_NAMED_ERROR("PuzzleComponent.GetCurrentMaze.NoMaze", 
+                      "If you're seeing this the maze isn't able to load for some reason");
+    // If the maze doesn't load we load a dummy maze
+    static std::unique_ptr<MazeConfig> emergencyMaze = nullptr;
+    if (!emergencyMaze) {
+      emergencyMaze = std::make_unique<MazeConfig>("emergency");
+      emergencyMaze->_maze = {{0}}; 
+      emergencyMaze->_start = Point2i(0, 0);
+      emergencyMaze->_end = Point2i(0, 0);
+    }
+    return *emergencyMaze;
+  }
   return (*(*_currMaze).get());
 }
 
