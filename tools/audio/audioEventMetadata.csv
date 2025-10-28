@@ -1,4 +1,7 @@
 Type,AudioCategory,WWiseIdKey,WWiseIdValue,GroupName,AliasName,Comment
+Event,,Play_Cozmo_80bpm,255088144,Robot,singing,
+Event,,Play_Cozmo_120bpm,1768031725,Robot,singing,
+Event,,Play_Cozmo_120bpm,985691727,Robot,singing,
 Event,,Play__Dev_Device__External_Source,3462246304,Dev_Device,External_Source,
 Event,,Play__Dev_Device__Tone_Generator,2415524415,Dev_Device,Tone_Generator,
 Event,,Play__Dev_Robot_Factory__Scan_Loop_Stop_Bell,1550510811,Dev_Robot_Factory,Scan_Loop_Stop_Bell,

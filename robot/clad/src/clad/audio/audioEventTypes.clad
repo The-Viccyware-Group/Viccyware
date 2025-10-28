@@ -73,6 +73,9 @@ enum uint_32 EventGroupType
 enum uint_32 GenericEvent
 {
   Invalid = 0,  // Use this to check for Invalid events
+  Play_Cozmo_80bpm = 255088144,
+  Play_Cozmo_100bpm = 1768031725,
+  Play_Cozmo_120bpm = 985691727,
   Play__Dev_Device__External_Source = 3462246304,
   Play__Dev_Device__Tone_Generator = 2415524415,
   Play__Dev_Robot_Factory__Scan_Loop_Stop_Bell = 1550510811,
