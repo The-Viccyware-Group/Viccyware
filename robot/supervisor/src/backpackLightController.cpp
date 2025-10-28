@@ -123,7 +123,6 @@ namespace BackpackLightController {
           color = 0x80808000; // fallback color
         }
       } else {
-<<<<<<< HEAD
         if(i == 0) {
           color = 0xff07b5f5;
         } else if(i == 1) {
@@ -135,11 +134,6 @@ namespace BackpackLightController {
         }
       }
 
-=======
-        color = 0x80ff0000; // red for back led
-      }  
-    
->>>>>>> merge-branch
       _ledParams[(int)BackpackLightLayer::BPL_USER].lights[i] = {
         .onColor = color,
         .offColor = 0,

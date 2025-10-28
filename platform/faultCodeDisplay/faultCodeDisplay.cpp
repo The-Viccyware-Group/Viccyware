@@ -24,7 +24,6 @@
 namespace Anki { namespace Vector {
 
 static const std::unordered_map<uint16_t,std::string> kFaultText = {
-<<<<<<< HEAD
   {800,  "800. vic-anim crashed."},
   {801,  "801. Unable to flash the BodyBoard."},
   {898,  "898. Body communication timeout."},
@@ -36,26 +35,12 @@ static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {980,  "Camera issue (980)."},
   {981,  "Camera process issue (981)."},
   {990,  "990. False alert for display issues."},
-=======
-  {800,  "vic-anim crashed."},
-  {898,  "Body communication timeout (898)."},
-  {899,  "Body communication failure (899)."},
-  {917,  "vic-robot crashed."},
-  {916,  "vic-robot crashed."},
-  {915,  "vic-engine crashed."},
-  {914,  "vic-engine crashed."},
-  {980,  "Camera issue. Reboot the robot if this persists."},
-  {981,  "Camera issue. Reboot the robot if this persists."},
->>>>>>> merge-branch
 };
 
 static const char* kSupportURL        = "error.vicw.xyz";
 static const char* kVectorWillRestart = "Cozmo will restart";
-<<<<<<< HEAD
-  
-=======
 
->>>>>>> merge-branch
+
 static constexpr float kHeadScale = 0.7f;
 static constexpr int   kHeadThick = 1;
 static constexpr int   kHeadingGap = 5;     // teeny gap
