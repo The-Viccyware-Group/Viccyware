@@ -9,6 +9,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/freeplay/userInteractive/behaviorPuzzleMaze.h"
 
 #include "engine/actions/animActions.h"
+#include "engine/audio/engineRobotAudioClient.h"
 #include "engine/aiComponent/aiComponent.h"
 #include "engine/aiComponent/puzzleComponent.h"
 #include "engine/cozmoContext.h"
@@ -17,6 +18,7 @@
 #include "coretech/common/shared/math/rect.h"
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
+#include "clad/audio/audioEventTypes.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 
 #include "util/console/consoleInterface.h"
@@ -36,6 +38,9 @@
 namespace Anki {
 namespace Vector {
   
+using AMD_GE_GE = AudioMetaData::GameEvent::GenericEvent;
+using AMD_GOT = AudioMetaData::GameObjectType;
+
 namespace {
   const char* kTileSizeKey = "tileSize_pixels";
   const char* kWallSizeKey = "wallSize_pixels";
@@ -324,14 +329,19 @@ void BehaviorPuzzleMaze::SingleStepMaze()
       _dVars.totalTimeInLastPuzzle_Sec += _iConfig.timeBetweenMazeSteps_Sec;
       
       bool makeWrongTurn = false;
-      if( numExits > 2 )
-      {
+      if( numExits > 2 ) {
         makeWrongTurn = GetBEI().GetRNG().RandDbl() < _iConfig.chanceWrongTurn ;
       }
+
+      if(makeWrongTurn) {
+        GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Head_Loop_Play, AMD_GOT::Behavior);
+      }
+
       Point2i moveDir;
       _dVars.currFacing = GetNextDir(currcell, _dVars.currFacing, moveDir, makeWrongTurn);
       _dVars.nextPos = _dVars.currPos + moveDir;
       _dVars.path.emplace_back(_dVars.currPos);
+      GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Play__Robot_Vic_Sfx__Blink, AMD_GOT::Behavior);
       LOG_TRACE("BehaviorPuzzleMaze.SingleStepMaze.ToMoving","at %d, %d, facing %d",_dVars.currPos.x(),_dVars.currPos.y(),(int)_dVars.currFacing);
     }
   }
