@@ -38,25 +38,25 @@ namespace Vector {
     GaussianFilter = 2,
   };
 
-  CONSOLE_VAR_ENUM(u8,      kProcFace_LineType,                   CONSOLE_GROUP, IsXray() ? 2 : 1, "Line_4,Line_8,Line_AA"); // Only affects OpenCV drawing, not post-smoothing
+  CONSOLE_VAR_ENUM(u8,      kProcFace_LineType,                   CONSOLE_GROUP, 2, "Line_4,Line_8,Line_AA"); // Only affects OpenCV drawing, not post-smoothing
   CONSOLE_VAR_ENUM(u8,      kProcFace_InterpolationType,          CONSOLE_GROUP, 1, "Nearest,Linear,Cubic,Area,Lanczos,LinearExact,Max,WarpFillOutliers");
-  CONSOLE_VAR_RANGED(s32,   kProcFace_EllipseDelta,               CONSOLE_GROUP, 1, 1, 90);
+  CONSOLE_VAR_RANGED(s32,   kProcFace_EllipseDelta,               CONSOLE_GROUP, 5, 1, 90);
   CONSOLE_VAR_RANGED(f32,   kProcFace_EyeLightnessMultiplier,     CONSOLE_GROUP, 1.f, 0.f, 2.f);
 
-  CONSOLE_VAR(bool,         kProcFace_HotspotRender,              CONSOLE_GROUP, true); // Render glow
+  CONSOLE_VAR(bool,         kProcFace_HotspotRender,              CONSOLE_GROUP, false); // Render glow
   CONSOLE_VAR_RANGED(f32,   kProcFace_HotspotFalloff,             CONSOLE_GROUP, 1.f, 0.05f, 1.f);
   CONSOLE_VAR(bool,         kProcFace_EnableAntiAliasing,         CONSOLE_GROUP, true);
-  CONSOLE_VAR_RANGED(s32,   kProcFace_AntiAliasingSize,           CONSOLE_GROUP, 15, 0, 15); // full image antialiasing (3 will use NEON)
+  CONSOLE_VAR_RANGED(s32,   kProcFace_AntiAliasingSize,           CONSOLE_GROUP, 1, 1, 15); // full image antialiasing (3 will use NEON)
   CONSOLE_VAR_ENUM(uint8_t, kProcFace_AntiAliasingFilter,         CONSOLE_GROUP, (uint8_t)Filter::GaussianFilter, "None,Box,Gaussian");
   CONSOLE_VAR_RANGED(f32,   kProcFace_AntiAliasingSigmaFraction,  CONSOLE_GROUP, 0.5f, 0.0f, 1.0f);
   CONSOLE_VAR(bool, kProcFace_CustomEyes, CONSOLE_GROUP, false);
   CONSOLE_VAR_RANGED(f32, kProcFace_CustomEyeOpacity, CONSOLE_GROUP, 0.8f, 0.f, 1.f);
   CONSOLE_VAR_ENUM(u8, kProcFace_FlavorOfGay, CONSOLE_GROUP, 0, "Lesbian,Gay,Bi,Trans,Pan,Frog,All,Galaxy,Custom");
-  static void LOOK_LoadFaceOverlay(ConsoleFunctionContextRef context)
+  static void LoadFaceOverlay(ConsoleFunctionContextRef context)
   {
     ProceduralFaceDrawer::LoadCustomEyePNG();
   }
-  CONSOLE_FUNC(LOOK_LoadFaceOverlay, CONSOLE_GROUP);
+  CONSOLE_FUNC(LoadFaceOverlay, CONSOLE_GROUP);
 
 
 #if PROCEDURALFACE_GLOW_FEATURE
@@ -73,7 +73,7 @@ namespace Vector {
 #if PROCEDURALFACE_NOISE_FEATURE
   static const s32 kNumNoiseImages = 7;
 
-  CONSOLE_VAR_RANGED(s32, kProcFace_NoiseNumFrames,              CONSOLE_GROUP, 5, 0, kNumNoiseImages);
+  CONSOLE_VAR_RANGED(s32, kProcFace_NoiseNumFrames,              CONSOLE_GROUP, 0, 0, kNumNoiseImages);
   CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMinLightness,           CONSOLE_GROUP, 0.92f, 0.f, 2.f); // replaces kProcFace_NoiseFraction
   CONSOLE_VAR_RANGED(f32, kProcFace_NoiseMaxLightness,           CONSOLE_GROUP, 1.14f, 0.f, 2.f); // replaces kProcFace_NoiseFraction
 

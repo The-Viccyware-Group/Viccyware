@@ -157,7 +157,7 @@ FaceInfoScreenManager::FaceInfoScreenManager()
 , _wheelMovingBackwardsCount(0)
 , _liftTriggerReady(false)
 , _headTriggerReady(false)
-, _debugInfoScreensUnlocked(false)
+, _debugInfoScreensUnlocked(true)
 , _currScreen(nullptr)
 , _webService(nullptr)
 {

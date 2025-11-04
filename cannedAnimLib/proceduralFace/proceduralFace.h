@@ -24,7 +24,8 @@
 #include <list>
 #include <vector>
 
-#define PROCEDURALFACE_NOISE_FEATURE         1 // feature capable and enabled as num frames = 5
+// #define PROCEDURALFACE_NOISE_FEATURE         1 // feature capable and enabled as num frames = 5
+#define PROCEDURALFACE_NOISE_FEATURE         1 // feature capable but disabled by setting num frames = 0 because Cozmo's eyes don't have this
 #define PROCEDURALFACE_ANIMATED_SATURATION   0 // disable saturation in canned animations
 #define PROCEDURALFACE_PROCEDURAL_SATURATION 1 // only take saturation from the C++ API
 #define PROCEDURALFACE_GLOW_FEATURE          0
@@ -327,7 +328,7 @@ inline void ProceduralFace::SetScanlineOpacity(Value opacity)
 
 inline ProceduralFace::Value ProceduralFace::GetScanlineOpacity() const {
 #if PROCEDURALFACE_SCANLINE_FEATURE
-  return 0.5f;
+  return 0.0f;
 #else
   return 1.0f;
 #endif

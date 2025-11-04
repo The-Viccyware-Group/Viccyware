@@ -49,6 +49,10 @@
       "cloud_intent": "intent_play_fistbump",
       "user_intent": "play_fistbump"
     },
+      {
+      "cloud_intent": "intent_play_keepaway",
+      "user_intent": "play_keepaway"
+    },
     {
       "cloud_intent": "intent_play_pickupcube",
       "user_intent": "play_pickupcube"

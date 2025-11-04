@@ -11,18 +11,21 @@
  * Copyright: Raj-jyot, 2025
  **/
 
+#ifndef ANKI_VECTOR_LIGHTS_CONFIG_H
+#define ANKI_VECTOR_LIGHTS_CONFIG_H
+
 #include <sys/stat.h>
 
 namespace Anki {
 namespace Vector {
 
-  inline bool& _ankilights() {
+  inline bool& _wireoslights() {
     static bool initialized = false;
     static bool value = false;
     
     if (!initialized) {
       struct stat buffer;
-      value = (stat("/data/data/enableankilights", &buffer) == 0);
+      value = (stat("/data/data/wirelights", &buffer) == 0);
       initialized = true;
     }
     
@@ -45,3 +48,5 @@ namespace Vector {
 
 }
 }
+
+#endif // ANKI_VECTOR_LIGHTS_CONFIG_H

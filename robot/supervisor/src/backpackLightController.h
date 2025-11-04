@@ -14,6 +14,7 @@
 
 #include "coretech/common/shared/types.h"
 #include "clad/types/ledTypes.h"
+#include "engine/components/lightsConfig.h"
 
 namespace Anki {
   namespace Vector {

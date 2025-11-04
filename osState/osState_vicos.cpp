@@ -65,12 +65,12 @@ CONSOLE_VAR(u32,  kFakeCpuTemperature_degC, "OSState.Temperature", 20);
 namespace {
 
   // When memory pressure > this, report red alert
-  CONSOLE_VAR_RANGED(u32, kHighMemPressureMultiple, "OSState.MemoryInfo", 10, 0, 100);
+  CONSOLE_VAR_RANGED(u32, kHighMemPressureMultiple, "OSState.MemoryInfo", 15, 0, 100);
 
   // When memory pressure > this, report yellow alert
-  CONSOLE_VAR_RANGED(u32, kMediumMemPressureMultiple, "OSState.MemoryInfo", 5, 0, 100);
+  CONSOLE_VAR_RANGED(u32, kMediumMemPressureMultiple, "OSState.MemoryInfo", 10, 0, 100);
 
- // When disk pressure > this, report red alert
+  // When disk pressure > this, report red alert
   CONSOLE_VAR_RANGED(u32, kHighDiskPressureMultiple, "OSState.DiskInfo", 10, 0, 100);
 
   // When disk pressure > this, report yellow alert

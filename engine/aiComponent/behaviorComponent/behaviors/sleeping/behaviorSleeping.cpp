@@ -134,6 +134,10 @@ void BehaviorSleeping::TransitionToBoutOfStirring()
 {
   SetDebugStateName("inBout");
 
+  if (GetBEI().GetSleepTracker().IsNightTime()) {
+    TransitionToSleeping();
+  }
+
   _dVars.animIsPlaying = false;
 
   if( _dVars.numRemainingInBout-- >= 0 ) {

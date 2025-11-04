@@ -20,6 +20,7 @@
 #include "engine/components/lightsConfig.h"
 
 #include <string.h>
+#include <sys/stat.h>
 #include "clad/robotInterface/messageEngineToRobot.h"
 
 namespace Anki {
@@ -110,17 +111,29 @@ namespace BackpackLightController {
     const u16 kTimeDiff_ms = 1000;
     for(u8 i = 0; i < (u8)LEDId::NUM_BACKPACK_LEDS; i++)
     {
-      u32 color; // Purple lights
-      if(i == 0) {
-        color = 0xff07b5f5;
-      } else if(i == 1) {
-        color = 0xff07b5f5;
-      } else if(i == 2) {
-        color = 0xff07b5f5;
+      u32 color;
+      if (_wireoslights()) {
+        if(i == 0) {
+          color = 0x80ff0000; // red for back led
+        } else if(i == 1) {
+          color = 0x8000ff00; // green for middle led
+        } else if(i == 2) {
+          color = 0x800000ff; // blue for top led
+        } else {
+          color = 0x80808000; // fallback color
+        }
       } else {
-        color = 0x80ff0000; // red for back led
-      }  
-    
+        if(i == 0) {
+          color = 0xff07b5f5;
+        } else if(i == 1) {
+          color = 0xff07b5f5;
+        } else if(i == 2) {
+          color = 0xff07b5f5;
+        } else {
+          color = 0x80808000; // fallback color
+        }
+      }
+
       _ledParams[(int)BackpackLightLayer::BPL_USER].lights[i] = {
         .onColor = color,
         .offColor = 0,
