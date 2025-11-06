@@ -42,24 +42,17 @@
 #include <memory>
 #include <vector>
 
-#include <google/protobuf/stubs/common.h>
 #include <google/protobuf/message.h>
-#include <google/protobuf/stubs/mutex.h>
-#include <google/protobuf/reflection.h>
 #include <google/protobuf/repeated_field.h>
-
-#ifdef SWIG
-#error "You cannot SWIG proto headers"
-#endif
-
-#include <google/protobuf/port_def.inc>
+#include <google/protobuf/stubs/common.h>
+#include <google/protobuf/stubs/mutex.h>
 
 namespace google {
 namespace protobuf {
 
 // Defined in other files.
-class Descriptor;      // descriptor.h
-class DescriptorPool;  // descriptor.h
+class Descriptor;        // descriptor.h
+class DescriptorPool;    // descriptor.h
 
 // Constructs implementations of Message which can emulate types which are not
 // known at compile-time.
@@ -78,7 +71,7 @@ class DescriptorPool;  // descriptor.h
 // encapsulates this "cache".  All DynamicMessages of the same type created
 // from the same factory will share the same support data.  Any Descriptors
 // used with a particular factory must outlive the factory.
-class PROTOBUF_EXPORT DynamicMessageFactory : public MessageFactory {
+class LIBPROTOBUF_EXPORT DynamicMessageFactory : public MessageFactory {
  public:
   // Construct a DynamicMessageFactory that will search for extensions in
   // the DescriptorPool in which the extendee is defined.
@@ -122,20 +115,20 @@ class PROTOBUF_EXPORT DynamicMessageFactory : public MessageFactory {
   // outlive the DynamicMessageFactory.
   //
   // The method is thread-safe.
-  const Message* GetPrototype(const Descriptor* type) override;
+  const Message* GetPrototype(const Descriptor* type);
 
  private:
   const DescriptorPool* pool_;
   bool delegate_to_generated_factory_;
 
-  // This struct just contains a hash_map.  We can't #include <hash_map> from
+  // This struct just contains a hash_map.  We can't #include <google/protobuf/stubs/hash.h> from
   // this header due to hacks needed for hash_map portability in the open source
   // release.  Namely, stubs/hash.h, which defines hash_map portably, is not a
   // public header (for good reason), but dynamic_message.h is, and public
   // headers may only #include other public headers.
   struct PrototypeMap;
   std::unique_ptr<PrototypeMap> prototypes_;
-  mutable internal::WrappedMutex prototypes_mutex_;
+  mutable Mutex prototypes_mutex_;
 
   friend class DynamicMessage;
   const Message* GetPrototypeNoLock(const Descriptor* type);
@@ -154,27 +147,30 @@ class PROTOBUF_EXPORT DynamicMessageFactory : public MessageFactory {
 };
 
 // Helper for computing a sorted list of map entries via reflection.
-class PROTOBUF_EXPORT DynamicMapSorter {
+class LIBPROTOBUF_EXPORT DynamicMapSorter {
  public:
-  static std::vector<const Message*> Sort(const Message& message, int map_size,
+  static std::vector<const Message*> Sort(const Message& message,
+                                          int map_size,
                                           const Reflection* reflection,
                                           const FieldDescriptor* field) {
-    std::vector<const Message*> result;
-    result.reserve(map_size);
-    RepeatedFieldRef<Message> map_field =
-        reflection->GetRepeatedFieldRef<Message>(message, field);
-    for (auto it = map_field.begin(); it != map_field.end(); ++it) {
-      result.push_back(&*it);
+    std::vector<const Message*> result(static_cast<size_t>(map_size));
+    const RepeatedPtrField<Message>& map_field =
+        reflection->GetRepeatedPtrField<Message>(message, field);
+    size_t i = 0;
+    for (RepeatedPtrField<Message>::const_pointer_iterator it =
+             map_field.pointer_begin(); it != map_field.pointer_end(); ) {
+      result[i++] = *it++;
     }
+    GOOGLE_DCHECK_EQ(result.size(), i);
     MapEntryMessageComparator comparator(field->message_type());
     std::stable_sort(result.begin(), result.end(), comparator);
     // Complain if the keys aren't in ascending order.
 #ifndef NDEBUG
     for (size_t j = 1; j < static_cast<size_t>(map_size); j++) {
       if (!comparator(result[j - 1], result[j])) {
-        GOOGLE_LOG(ERROR) << (comparator(result[j], result[j - 1])
-                           ? "internal error in map key sorting"
-                           : "map keys are not unique");
+        GOOGLE_LOG(ERROR) << (comparator(result[j], result[j - 1]) ?
+                      "internal error in map key sorting" :
+                      "map keys are not unique");
       }
     }
 #endif
@@ -182,7 +178,7 @@ class PROTOBUF_EXPORT DynamicMapSorter {
   }
 
  private:
-  class PROTOBUF_EXPORT MapEntryMessageComparator {
+  class LIBPROTOBUF_EXPORT MapEntryMessageComparator {
    public:
     explicit MapEntryMessageComparator(const Descriptor* descriptor)
         : field_(descriptor->field(0)) {}
@@ -216,8 +212,8 @@ class PROTOBUF_EXPORT DynamicMapSorter {
           return first < second;
         }
         case FieldDescriptor::CPPTYPE_STRING: {
-          std::string first = reflection->GetString(*a, field_);
-          std::string second = reflection->GetString(*b, field_);
+          string first = reflection->GetString(*a, field_);
+          string second = reflection->GetString(*b, field_);
           return first < second;
         }
         default:
@@ -232,8 +228,6 @@ class PROTOBUF_EXPORT DynamicMapSorter {
 };
 
 }  // namespace protobuf
+
 }  // namespace google
-
-#include <google/protobuf/port_undef.inc>
-
 #endif  // GOOGLE_PROTOBUF_DYNAMIC_MESSAGE_H__

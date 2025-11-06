@@ -4,7 +4,7 @@ set(LIBARCHIVE_LIB_PATH "${ANKI_THIRD_PARTY_DIR}/libarchive/vicos/lib/libarchive
 set(ARCHIVE_LIBS archive)
 
 add_library(archive STATIC IMPORTED)
-anki_build_target_license(archive "BSD-4")
+anki_build_target_license(archive "BSD-4,${CMAKE_SOURCE_DIR}/licenses/archive.license")
 
 set_target_properties(archive PROPERTIES
   IMPORTED_LOCATION "${LIBARCHIVE_LIB_PATH}"

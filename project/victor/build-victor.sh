@@ -346,16 +346,16 @@ fi
 PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
 
 # Build protocCppPlugin if needed
-if [[ ! -x "${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin2" ]]; then
+if [[ ! -x "${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin3" ]]; then
   BUILD_PROTOC_PLUGIN=1
 # "Unknown" means it's functional
-elif [[ "$(${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin2 --help 2>&1)" != *"Unknown"* ]]; then
+elif [[ "$(${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin3 --help 2>&1)" != *"Unknown"* ]]; then
   echo "Rebuilding protocCppPlugin plugin as it fails to run"
   BUILD_PROTOC_PLUGIN=1
 else 
   BUILD_PROTOC_PLUGIN=0
   for f in `find ${TOPLEVEL}/tools/protobuf/plugin -type f`; do
-    if [ "$f" -nt ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin2 ]; then
+    if [ "$f" -nt ${TOPLEVEL}/tools/protobuf/plugin/protocCppPlugin3 ]; then
       BUILD_PROTOC_PLUGIN=1
     fi
   done

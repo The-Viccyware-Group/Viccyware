@@ -2,7 +2,8 @@
 
 # usage: ./tools/build/tools/upx-if-packed.sh <path/to/upx> <path/to/file>
 
-if [[ ! -x "${1}" ]]; then
+# also want to handle upx being installed on system
+if [[ ! -x "${1}" && "${1}" != "upx" ]]; then
 	echo "provide an executable UPX please"
 	exit 1
 fi
