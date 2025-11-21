@@ -161,8 +161,24 @@ void BehaviorVolume::OnBehaviorActivated()
       LOG_WARNING("BehaviorVolume.OnBehavrioActivated.setFailed",
                   "New volume level %u does not match desired volume level %u", static_cast<uint32_t>(newVolumeLevel), static_cast<uint32_t>(desiredVolume));
     }
-    if (newVol == 1) {
-      (void)system("/anki/bin/vic-log-event testing VOL_LOW_SET");
+    if (newVol == 0) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MUTE");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume has been muted");
+    } else if (newVol == 1) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=LOW");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to low");
+    } else if (newVol == 2) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM_LOW");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium low");
+    } else if (newVol == 3) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium");
+    } else if (newVol == 4) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM_HIGH");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium high");
+    } else if (newVol == 5) {
+      (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=HIGH");
+      LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to high");
     }
     // issue DAS event
     DASMSG(robot_settings_volume, "robot.settings.volume", "The robot's volume setting was changed");

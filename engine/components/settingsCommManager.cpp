@@ -502,8 +502,24 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
       saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::master_volume);
       // read the new volume setting, for the DAS event and reactor callbacks
       const uint32_t newVol = _settingsManager->GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume);
-      if (newVol == 1) {
-        (void)system("/anki/bin/vic-log-event testing VOL_LOW_SET");
+      if (newVol == 0) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MUTE");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume has been muted");
+      } else if (newVol == 1) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=LOW");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to low");
+      } else if (newVol == 2) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM_LOW");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium low");
+      } else if (newVol == 3) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium");
+      } else if (newVol == 4) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=MEDIUM_HIGH");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to medium high");
+      } else if (newVol == 5) {
+        (void)system("curl localhost:8080/api/mods/VolumeControl/set?level=HIGH");
+        LOG_INFO("SettingsCommManager.ChangeVolume", "Volume set to high");
       }
       // notify reactors
       for(auto& vcr : _volumeChangeReactors) {
