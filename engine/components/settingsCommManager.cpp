@@ -501,6 +501,7 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
       saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::master_volume);
       // read the new volume setting, for the DAS event and reactor callbacks
       const uint32_t newVol = _settingsManager->GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume);
+      LOG_INFO("SettingsCommManager.SetMasterVolume", "Volume has been set to %u", newVol);
       // notify reactors
       for(auto& vcr : _volumeChangeReactors) {
         vcr.callback();
