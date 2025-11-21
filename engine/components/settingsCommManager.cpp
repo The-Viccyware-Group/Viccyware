@@ -24,6 +24,7 @@
 #include "engine/externalInterface/externalMessageRouter.h"
 #include "engine/robotInterface/messageHandler.h"
 
+#include "proto/external_interface/settings.pb.h"
 #include "util/console/consoleInterface.h"
 #include "util/logging/DAS.h"
 
@@ -501,7 +502,9 @@ void SettingsCommManager::OnRequestUpdateSettings(const external_interface::Upda
       saveToCloudImmediately |= _settingsManager->DoesSettingUpdateCloudImmediately(external_interface::RobotSetting::master_volume);
       // read the new volume setting, for the DAS event and reactor callbacks
       const uint32_t newVol = _settingsManager->GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume);
-      LOG_INFO("SettingsCommManager.SetMasterVolume", "Volume has been set to %u", newVol);
+      if (newVol == 1) {
+        (void)system("/anki/bin/vic-log-event testing VOL_LOW_SET");
+      }
       // notify reactors
       for(auto& vcr : _volumeChangeReactors) {
         vcr.callback();

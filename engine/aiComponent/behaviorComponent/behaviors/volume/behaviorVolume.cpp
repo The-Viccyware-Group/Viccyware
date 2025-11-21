@@ -161,6 +161,9 @@ void BehaviorVolume::OnBehaviorActivated()
       LOG_WARNING("BehaviorVolume.OnBehavrioActivated.setFailed",
                   "New volume level %u does not match desired volume level %u", static_cast<uint32_t>(newVolumeLevel), static_cast<uint32_t>(desiredVolume));
     }
+    if (newVol == 1) {
+      (void)system("/anki/bin/vic-log-event testing VOL_LOW_SET");
+    }
     // issue DAS event
     DASMSG(robot_settings_volume, "robot.settings.volume", "The robot's volume setting was changed");
     DASMSG_SET(i1, oldVol, "Old volume");
