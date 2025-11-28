@@ -961,6 +961,20 @@ void MoodManager::SubscribeToWebViz()
 
   _signalHandles.emplace_back( webService->OnWebVizSubscribed( kWebVizModuleName ).ScopedSubscribe( onSubscribedBehaviors ) );
   _signalHandles.emplace_back( webService->OnWebVizData( kWebVizModuleName ).ScopedSubscribe( onDataBehaviors ) );
+
+  auto onGetMoodValues = [this]() -> Json::Value {
+    Json::Value result;
+    for (size_t i = 0; i < (size_t)EmotionType::Count; ++i)
+    {
+      const EmotionType emotionType = (EmotionType)i;
+      const float val = GetEmotionByIndex(i).GetValue();
+      result[EmotionTypeToString(emotionType)] = val;
+    }
+    result["simpleMood"] = SimpleMoodTypeToString(GetSimpleMood());
+    return result;
+  };
+
+  _signalHandles.emplace_back( webService->OnGetMoodValues().ScopedSubscribe( onGetMoodValues ) );
 }
 
 

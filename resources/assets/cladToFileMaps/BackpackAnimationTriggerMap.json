@@ -44,6 +44,22 @@
       "AnimName": "offline_off"
   },
   {
+      "CladEvent": "On_High_Stim",
+      "AnimName": "on_high_stim"
+  },
+  {
+      "CladEvent": "On_Med_Stim",
+      "AnimName": "on_med_stim"
+  },
+  {
+      "CladEvent": "On_Low_Stim",
+      "AnimName": "on_low_stim"
+  },
+  {
+      "CladEvent": "On_Frustrated",
+      "AnimName": "on_frustrated"
+  },
+  {
       "CladEvent": "Petting",
       "AnimName": "petting"
   },

@@ -30,6 +30,7 @@
 #include "util/fileUtils/fileUtils.h"
 
 #include "osState/osState.h"
+#include <cstdlib>
 
 #define DEBUG_LIGHTS 0
 
@@ -99,7 +100,24 @@ void BackpackLightComponent::UpdateDependent(const RobotCompMap& dependentComps)
     }
     else
     {
-      SetBackpackAnimationInternal(BackpackAnimationTrigger::Off);
+      CheckStimAndConfidence();
+      if (_currentConfidence < -0.29) {
+        SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Frustrated);
+      } else {
+        if (_currentStim <= 0.8) {
+          SetBackpackAnimationInternal(BackpackAnimationTrigger::On_High_Stim);
+        }
+        else if (_currentStim < 0.20 && _currentStim > 0.80) {
+          SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Med_Stim);
+        }
+        else if (_currentStim <= 0.20) {
+          SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Low_Stim);
+        }
+        else {
+          // We should never get here but just in case we do...
+          SetBackpackAnimationInternal(BackpackAnimationTrigger::On_High_Stim);
+        }
+      }
     }
     
     _curBackpackLightConfig = bestNewConfig;
@@ -108,8 +126,93 @@ void BackpackLightComponent::UpdateDependent(const RobotCompMap& dependentComps)
   else if(newConfig == nullptr && curConfig == nullptr && !sBothConfigsWereNull)
   {
     sBothConfigsWereNull = true;
-    SetBackpackAnimationInternal(BackpackAnimationTrigger::Off);
+    CheckStimAndConfidence();
+    if (_currentConfidence < -0.29) {
+      SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Frustrated);
+    } else {
+      if (_currentStim <= 0.8) {
+        SetBackpackAnimationInternal(BackpackAnimationTrigger::On_High_Stim);
+      }
+      else if (_currentStim < 0.20 && _currentStim > 0.80) {
+        SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Med_Stim);
+      }
+      else if (_currentStim <= 0.20) {
+        SetBackpackAnimationInternal(BackpackAnimationTrigger::On_Low_Stim);
+      }
+      else {
+        // We should never get here but just in case we do...
+        SetBackpackAnimationInternal(BackpackAnimationTrigger::On_High_Stim);
+      }
+    }
   }
+}
+
+void BackpackLightComponent::CheckStimAndConfidence()
+{
+  // Helper lambda to read command output with timeout
+  auto getCommandOutput = [](const char* cmd) -> float {
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) {
+      PRINT_NAMED_WARNING("BackpackLightComponent.CheckStimAndConfidence.PopenFailed",
+                          "Failed to open pipe");
+      return 0.0f;
+    }
+    
+    char buffer[128];
+    std::string result = "";
+    
+    // Set a timeout on the file descriptor
+    int fd = fileno(pipe);
+    fd_set readfds;
+    struct timeval timeout;
+    
+    FD_ZERO(&readfds);
+    FD_SET(fd, &readfds);
+    
+    // 100ms timeout
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
+    
+    int select_result = select(fd + 1, &readfds, NULL, NULL, &timeout);
+    
+    if (select_result > 0) {
+      // Data is available
+      if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result = buffer;
+      }
+    } else if (select_result == 0) {
+      PRINT_NAMED_WARNING("BackpackLightComponent.CheckStimAndConfidence.Timeout",
+                          "Command timed out");
+      pclose(pipe);
+      return 0.0f;
+    } else {
+      PRINT_NAMED_WARNING("BackpackLightComponent.CheckStimAndConfidence.SelectError",
+                          "Select error");
+      pclose(pipe);
+      return 0.0f;
+    }
+    
+    pclose(pipe);
+    
+    // Parse result
+    result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
+    
+    if (result.empty()) {
+      return 0.0f;
+    }
+    
+    try {
+      return std::stof(result);
+    } catch (...) {
+      PRINT_NAMED_WARNING("BackpackLightComponent.CheckStimAndConfidence.ParseError",
+                          "Failed to parse: %s", result.c_str());
+      return 0.0f;
+    }
+  };
+  
+  // Add timeout to curl commands (--max-time 0.1 = 100ms)
+  _currentStim = getCommandOutput("curl --max-time 0.1 -s 'http://localhost:8888/getmoodvalues' | awk -F '[:,]' '/\"Stimulated\"/ { gsub(\"[[:space:]\"]+\", \"\", $2); print $2 }'");
+  _currentConfidence = getCommandOutput("curl --max-time 0.1 -s 'http://localhost:8888/getmoodvalues' | awk -F '[:,]' '/\"Confident\"/ { gsub(\"[[:space:]\"]+\", \"\", $2); print $2 }'");
 }
 
 void BackpackLightComponent::SetBackpackAnimation(const BackpackLightAnimation::BackpackAnimation& lights)

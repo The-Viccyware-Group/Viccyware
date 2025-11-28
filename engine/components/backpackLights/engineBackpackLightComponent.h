@@ -28,9 +28,11 @@
 #include "util/helpers/noncopyable.h"
 #include "util/signals/simpleSignal_fwd.h"
 
+#include <cstdint>
 #include <list>
 #include <map>
 #include <memory>
+#include <string>
 
 namespace Anki {
 namespace Vector {
@@ -72,6 +74,8 @@ public:
   // Related to the above start looping call, allows the caller to cancel a currently looping light pattern
   bool StopLoopingBackpackAnimation(const BackpackLightDataLocator& lightDataLocator);
   
+  void CheckStimAndConfidence();
+
   // General purpose call to set backpack lights. The light pattern will persist until this function is called again.
   void SetBackpackAnimation(const BackpackLightAnimation::BackpackAnimation& lights);
   
@@ -98,6 +102,10 @@ private:
   
   // Locator handle for the shared light configuration associated with SetBackpackLightAnimation above
   BackpackLightDataLocator _sharedLightConfig{};
+
+  // stim
+  float _currentStim = 1;
+  float _currentConfidence = 1;
   
 };
 

@@ -317,6 +317,15 @@ ConsoleVarSet(struct mg_connection *conn, void *cbdata)
 }
 
 static int
+GetMoodValues(struct mg_connection *conn, void *cbdata)
+{
+  const int returnCode = ProcessRequest(conn, 
+                                       WebService::WebService::RequestType::RT_GetMoodValues, 
+                                       "", "");
+  return returnCode;
+}
+
+static int
 ConsoleVarGet(struct mg_connection *conn, void *cbdata)
 {
   const mg_request_info* info = mg_get_request_info(conn);
@@ -1012,6 +1021,7 @@ void WebService::Start(Anki::Util::Data::DataPlatform* platform, const Json::Val
   mg_set_request_handler(_ctx, "/getinitialconfig", GetInitialConfig, 0);
   mg_set_request_handler(_ctx, "/getmainrobotinfo", GetMainRobotInfo, 0);
   mg_set_request_handler(_ctx, "/getperfstats", GetPerfStats, 0);
+  mg_set_request_handler(_ctx, "/getmoodvalues", GetMoodValues, 0);
 #ifndef SIMULATOR
   mg_set_request_handler(_ctx, "/systemctl", SystemCtl, 0);
   mg_set_request_handler(_ctx, "/getprocessstatus", GetProcessStatus, 0);
@@ -1220,6 +1230,16 @@ void WebService::Update()
           }
           break;
         case RT_WebsocketOnSubscribe:
+        case RT_GetMoodValues:
+          {
+            Json::Value moodData = _getMoodValues.emit();
+              if (!moodData.empty()) {
+                requestPtr->_result = moodData.toStyledString();
+              } else {
+                requestPtr->_result = "{\"error\":\"No mood data available\"}";
+              }
+          }
+          break;
         case RT_WebsocketOnData:
           {
             const auto& moduleName = requestPtr->_param1;

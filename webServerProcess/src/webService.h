@@ -82,6 +82,10 @@ public:
   OnAppToEngineOnDataType& OnAppToEngineOnData() { return _appToEngineOnData; }
   using OnAppToEngineRequestDataType = Signal::Signal<std::string()>;
   OnAppToEngineRequestDataType& OnAppToEngineRequestData() { return _appToEngineRequestData; }
+
+  // Get latest mood values
+  using OnGetMoodValuesType = Signal::Signal<Json::Value()>;
+  OnGetMoodValuesType& OnGetMoodValues() { return _getMoodValues; }
   
   const std::string& getConsoleVarsTemplate();
 
@@ -108,6 +112,7 @@ public:
     
     RT_WebsocketOnSubscribe,
     RT_WebsocketOnData,
+    RT_GetMoodValues,
   };
 
   struct Request;
@@ -166,6 +171,8 @@ private:
   void SendToWebSocket(struct mg_connection* conn, const Json::Value& data) const;
 
   // todo: OTA update somehow?
+
+  OnGetMoodValuesType _getMoodValues;
 
   struct mg_context* _ctx;
   
