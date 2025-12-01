@@ -35,10 +35,25 @@ CozmoExperiments::CozmoExperiments(const CozmoContext* context)
 static const char* GetDeviceId()
 {
 #if USE_DAS
-  DEV_ASSERT(DASGetPlatform() != nullptr, "CozmoExperiments.GetDeviceId.MissingDASPlatform");
-  return DASGetPlatform()->GetDeviceId();
+  static const char* cachedDeviceId = nullptr;
+  static bool dasWasUnavailable = false;
+  // If we previously failed and got a fallback, try again once
+  if (cachedDeviceId == nullptr || dasWasUnavailable) {
+    auto* platform = DASGetPlatform();
+    if (platform != nullptr) {
+      cachedDeviceId = platform->GetDeviceId();
+      dasWasUnavailable = false;
+    } else if (cachedDeviceId == nullptr) {
+      PRINT_NAMED_WARNING("CozmoExperiments.GetDeviceId", 
+                          "DAS platform not initialized yet, using fallback");
+      cachedDeviceId = "user_fallback";
+      dasWasUnavailable = true;
+    }
+  }
+
+  return cachedDeviceId;
 #else
-  return "user"; // non-empty string keeps it from failing on mac release
+  return "user";
 #endif
 }
 
