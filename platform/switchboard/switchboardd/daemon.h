@@ -76,7 +76,8 @@ namespace Switchboard {
       const std::string kUpdateEngineExitCodePath = "/run/update-engine/exit_code";
       const std::string kUpdateEngineExecPath = "/anki/bin/update-engine";
       const std::string kUpdateEngineServicePath = "/lib/systemd/system/update-engine.service";
-      const std::string kServerConfigFilePath = "/anki/data/assets/cozmo_resources/config/server_config.json";
+      const std::string kServerConfigDefaultFilePath = "/anki/data/assets/cozmo_resources/config/server_config.json";
+      const std::string kServerConfigCustomFilePath = "/data/data/server_config.json";
 
       static void HandleEngineTimer(struct ev_loop* loop, struct ev_timer* w, int revents);
       static void HandleTokenTimer(struct ev_loop* loop, struct ev_timer* w, int revents);
@@ -163,7 +164,10 @@ namespace Switchboard {
       bool _shouldRestartPairing;
       bool _isTokenClientFullyInitialized;
       bool _hasCloudOwner = false;
+      bool _usesCustServConfig = true;
       bool _usesEscapePod = false;
+      bool _usesEscapePodIPMode = false;
+      bool _usesEscapePodEPMode = false;
 
       std::shared_ptr<WifiWatcher> _wifiWatcher;
   };

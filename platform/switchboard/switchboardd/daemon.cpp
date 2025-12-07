@@ -95,7 +95,11 @@ void Daemon::Start() {
 
   // Initialize Cloud Stack Status
   _usesEscapePod = IsVectorConnectedToEscapePod();
-  Log::Write("Vector %s escape pod", _usesEscapePod ? "uses" : "does not use");
+  if (_usesEscapePod) {
+    Log::Write("Vector uses Wire-Pod/Escape Pod in %s mode!", _usesEscapePodEPMode ? "EP" : _usesEscapePodIPMode ? "IP" : "Unknown");
+  } else {
+    Log::Write("Vector uses a community server!");
+  }
 
   // Log the initial wifi state
   LogWifiState();
@@ -164,26 +168,42 @@ void Daemon::InitializeEngineComms() {
 }
 
 bool Daemon::IsVectorConnectedToEscapePod() {
-  std::string jsonContents = Anki::Util::FileUtils::ReadFile(kServerConfigFilePath);
+  std::string jsonContents = Anki::Util::FileUtils::ReadFile(kServerConfigCustomFilePath);
+  if (jsonContents.empty()) {
+    jsonContents = Anki::Util::FileUtils::ReadFile(kServerConfigDefaultFilePath);
+    _usesCustServConfig = false;
+  }
+  
   Json::Reader reader;
   Json::Value config;
   if (!reader.parse(jsonContents, config)) {
     Log::Write("Failed to Initialize CloudStackStatus ...");
     const std::string& errors = reader.getFormattedErrorMessages();
     if (!errors.empty()) {
-     Log::Write("Json reader errors [%s]", errors.c_str());
+      Log::Write("Json reader errors [%s]", errors.c_str());
     }
-   
     return false;
   }
-
+  
   if (!config.isMember("chipper")) {
-    Log::Write("Failed to Find chipper url in config file ... ");
+    Log::Write("Failed to Find chipper url in the server config file. Could the config be empty?");
     return false;
   }
-
+  
   std::string chipperUrl = config["chipper"].asCString();
-  return chipperUrl.find("escapepod.local") != std::string::npos;
+  
+  if (_usesCustServConfig) {
+    if (chipperUrl.find("escapepod.local") != std::string::npos) {
+      _usesEscapePodEPMode = true;
+      _usesEscapePodIPMode = false;
+    } else {
+      _usesEscapePodIPMode = true;
+      _usesEscapePodEPMode = false;
+    }
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void Daemon::InitializeGatewayComms() {
