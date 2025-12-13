@@ -217,12 +217,13 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG) || !ANKI_DEV_CHEATS;  // TODO: Use this line in master
   //const bool hideSpecialDebugScreens = (FACTORY_TEST && Factory::GetEMR()->fields.PLAYPEN_PASSED_FLAG);                        // Use this line in factory branch
 
-  ADD_SCREEN_WITH_TEXT(Recovery, Recovery, {"RECOVERY (Wipes OS)"});
+  ADD_SCREEN_WITH_TEXT(Reonboard, Reonboard, {"REONBOARD?"});
   ADD_SCREEN(None, None);
   ADD_SCREEN(Pairing, Pairing);
   ADD_SCREEN(FAC, None);
   ADD_SCREEN(CustomText, None);
   ADD_SCREEN(Main, Network);
+  ADD_SCREEN_WITH_TEXT(UserDataSubmenu, UserDataSubmenu, {"DATA OPTIONS"});
   ADD_SCREEN_WITH_TEXT(ClearUserData, Main, {"CLEAR OUT SOUL?"});
   ADD_SCREEN_WITH_TEXT(ClearUserDataFail, Main, {"UNABLE TO CLEAR SOUL"});
   ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {IsXray() ? "Cozmo will remember..." : "Cozmo will remember that..."});
@@ -317,7 +318,13 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "CLEAR" : "CLEAR OUT SOUL", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "DATA" : "DATA OPTIONS", UserDataSubmenu);
+
+  // === User Data Menu ===
+  ADD_MENU_ITEM(UserDataSubmenu, "EXIT", Main);
+  ADD_MENU_ITEM(UserDataSubmenu, "REONBOARD", Reonboard);
+  ADD_MENU_ITEM(UserDataSubmenu, "CLEAR USER DATA", ClearUserData);
+  DISABLE_TIMEOUT(UserDataSubmenu);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
@@ -344,9 +351,9 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     this->Reboot();
     return ScreenName::Rebooting;
   };
-  ADD_MENU_ITEM(ClearUserData, "EXIT", Main);
+  ADD_MENU_ITEM(ClearUserData, "EXIT", UserDataSubmenu);
   ADD_MENU_ITEM_WITH_ACTION(ClearUserData, "CONFIRM", confirmClearUserData);
-  SET_TIMEOUT(ClearUserDataFail, 2.f, Main);
+  SET_TIMEOUT(ClearUserDataFail, 3.f, UserDataSubmenu);
 
 
   // === Network screen ===
@@ -355,19 +362,18 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   };
   SET_ENTER_ACTION(Network, networkEnterFcn);
 
-  // === Recovery screen ===
-  FaceInfoScreen::MenuItemAction rebootAction = [this]() {
+  // === Reonboard screen ===
+  FaceInfoScreen::MenuItemAction confirmReonboard = [this]() {
     LOG_INFO("FaceInfoScreenManager.Recovery.Rebooting", "");
 
-    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_a");
-    (void)system("dd if=/dev/zero of=/dev/block/bootdevice/by-name/boot_b");
+    (void)system("cd /data/data/com.anki.victor/persistent && rm -f onboarding/onboardingState.json rm -f token/token.jwt");
     this->Reboot();
 
     return ScreenName::Rebooting;
   };
-  ADD_MENU_ITEM_WITH_ACTION(Recovery, "EXIT", rebootAction);
-  ADD_MENU_ITEM(Recovery, "CONTINUE", None);
-  DISABLE_TIMEOUT(Recovery);
+  ADD_MENU_ITEM(Reonboard, "EXIT", UserDataSubmenu);
+  ADD_MENU_ITEM_WITH_ACTION(Reonboard, "CONFIRM", confirmReonboard);
+  DISABLE_TIMEOUT(Reonboard);
 
     
   // === Camera screen ===
@@ -461,12 +467,12 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 
   
   // Check if we booted in recovery mode
-  if (OSState::getInstance()->IsInRecoveryMode()) {
-    LOG_WARNING("FaceInfoScreenManager.Init.RecoveryModeFileFound", "Going into recovery mode");
-    SetScreen(ScreenName::Recovery);
-  } else {
+  // if (OSState::getInstance()->IsInRecoveryMode()) {
+  //   LOG_WARNING("FaceInfoScreenManager.Init.RecoveryModeFileFound", "Going into recovery mode");
+  //   SetScreen(ScreenName::Recovery);
+  // } else {
     SetScreen(ScreenName::None);
-  }
+  // }
 }
 
 FaceInfoScreen* FaceInfoScreenManager::GetScreen(ScreenName name)
@@ -507,20 +513,20 @@ void FaceInfoScreenManager::SetShouldDrawFAC(bool draw)
     return;
   }
 
-  bool changed = (_drawFAC != draw);
+  // bool changed = (_drawFAC != draw);
   _drawFAC = draw;
 
-  if(changed && GetCurrScreenName() != ScreenName::Recovery)
-  {
-    if(draw)
-    {
-      SetScreen(ScreenName::FAC);
-    }
-    else
-    {
-      SetScreen(ScreenName::None);
-    }
-  }
+  // if(changed && GetCurrScreenName() != ScreenName::Recovery)
+  // {
+  //   if(draw)
+  //   {
+  //     SetScreen(ScreenName::FAC);
+  //   }
+  //   else
+  //   {
+  //     SetScreen(ScreenName::None);
+  //   }
+  // }
 }
 
 // Returns true if the screen is of the type during which the lift should be disabled
@@ -1078,7 +1084,7 @@ void FaceInfoScreenManager::ProcessMenuNavigation(const RobotState& state)
         (currScreenName != ScreenName::None &&
           currScreenName != ScreenName::FAC &&
           currScreenName != ScreenName::Pairing &&
-          currScreenName != ScreenName::Recovery) ) {
+          currScreenName != ScreenName::Reonboard) ) {
       SetScreen(_currScreen->GetButtonGotoScreen());
     }
   }
@@ -1990,7 +1996,11 @@ void FaceInfoScreenManager::EnableMirrorModeScreen(bool enable)
 
 void FaceInfoScreenManager::DrawScratch()
 {
-  _currScreen->DrawMenu(*_scratchDrawingImg);
+  if (_currScreen == GetScreen(ScreenName::UserDataSubmenu)) {
+    _currScreen->DrawMenuVertical(*_scratchDrawingImg);
+  } else {
+    _currScreen->DrawMenu(*_scratchDrawingImg);
+  }
 
   // Draw white pixel in top-right corner of main customer support screen
   // to indicate that debug screens are unlocked

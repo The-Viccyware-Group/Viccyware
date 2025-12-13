@@ -21,7 +21,7 @@ enum class ScreenName : uint8_t {
   None = 0,
   FAC  = 1, // Needs to be after None
 
-  Recovery,
+  Reonboard,
 
   Pairing,
     
@@ -51,6 +51,7 @@ enum class ScreenName : uint8_t {
   ToF,
   Kercre123,
   Kercre123branch,
+  UserDataSubmenu,
   
   Count
 };
