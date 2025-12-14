@@ -323,7 +323,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   // === User Data Menu ===
   ADD_MENU_ITEM(UserDataSubmenu, "EXIT", Main);
   ADD_MENU_ITEM(UserDataSubmenu, "REONBOARD", Reonboard);
-  ADD_MENU_ITEM(UserDataSubmenu, "CLEAR USER DATA", ClearUserData);
+  ADD_MENU_ITEM(UserDataSubmenu, "CLEAR OUT SOUL", ClearUserData);
   DISABLE_TIMEOUT(UserDataSubmenu);
 
   // === Self test screen ===
@@ -338,7 +338,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_MENU_ITEM_WITH_ACTION(SelfTest, "START", confirmSelfTest);
   DISABLE_TIMEOUT(SelfTestRunning);
   
-  // Clear User Data menu
+  // CLEAR OUT SOUL menu
   FaceInfoScreen::MenuItemAction confirmClearUserData = [this]() {
     // Write this file to indicate that the data partition should be wiped on reboot
     if (!Util::FileUtils::WriteFile("/run/wipe-data", "1")) {
