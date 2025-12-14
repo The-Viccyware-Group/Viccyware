@@ -185,11 +185,7 @@ vclean
 - After you build for the first time, two files will be generated and placed in the root of the source directory:
   - `compile_commands.json`
   - `.clangd`
-<<<<<<< HEAD
 - If you install the [`clangd`](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) extension for VSCode then relaunch VSCode after a build, it will index the code and you will have speedy code completion, error underlining+explanations, function descriptions, and such for the entire codebase.
-=======
-- If you install the [`clangd`](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) extension for VSCode (I use VSCodium, which I think gets rid of Intellisense stuff) then relaunch VSCode after a build, it will index the code and you will have speedy error underlining+explanations, function descriptions, and such for the entire codebase.
->>>>>>> merge-branch
 
 ## Contributors
 <a href="https://github.com/The-Viccyware-Group/Viccyware/graphs/contributors">
