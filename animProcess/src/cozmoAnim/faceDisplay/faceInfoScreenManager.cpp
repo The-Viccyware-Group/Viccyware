@@ -960,7 +960,7 @@ void FaceInfoScreenManager::CheckForButtonEvent(const bool buttonPressed,
 
   // The maximum amount of time allowed between button releases
   // to register as a double press
-  static const u32 kDoublePressWindow_ms   = 700;
+  static const u32 kDoublePressWindow_ms   = 400;
 
   const u32  curTime_ms         = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
   const bool mightBeDoublePress = (lastPressTime_ms > 0) && (curTime_ms - lastPressTime_ms < kDoublePressWindow_ms);
