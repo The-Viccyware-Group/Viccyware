@@ -15,6 +15,7 @@
 #include "engine/actions/animActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/behaviorExternalInterface.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
+#include "osState/osState.h"
 #include "util/cladHelpers/cladFromJSONHelpers.h"
 
 namespace Anki {
@@ -113,6 +114,11 @@ BehaviorAnimSequence::~BehaviorAnimSequence()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorAnimSequence::WantsToBeActivatedBehavior() const
 {
+
+  if (GetDebugLabel() == "NormalWakeUp" && OSState::getInstance()->RebootedForMaintenance()) {
+    return false;
+  }
+
   const bool hasAnims = !_iConfig.animTriggers.empty() || !_iConfig.animationNames.empty();
   return hasAnims && WantsToBeActivatedAnimSeqInternal();
 }
