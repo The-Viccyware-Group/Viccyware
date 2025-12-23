@@ -366,7 +366,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   FaceInfoScreen::MenuItemAction confirmReonboard = [this]() {
     LOG_INFO("FaceInfoScreenManager.Recovery.Rebooting", "");
 
-    (void)system("cd /data/data/com.anki.victor/persistent && rm -f onboarding/onboardingState.json rm -f token/token.jwt");
+    (void)system("cd /data/data/com.anki.victor/persistent && rm -f onboarding/onboardingState.json && rm -f token/token.jwt ../server_config.json");
     this->Reboot();
 
     return ScreenName::Rebooting;
