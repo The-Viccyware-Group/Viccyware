@@ -81,6 +81,8 @@ private:
   
   // Keep track of when cubes start being shaken
   EngineTimeStamp_t _cubeShakingStartTime_ms = 0;
+
+  int singtype = 0;
 };
   
 }

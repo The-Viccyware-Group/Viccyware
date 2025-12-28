@@ -134,6 +134,7 @@ enum uint_16 BehaviorID {
   Singing_WilliamTell,
   Singing_YankeeDoodle,
   Singing_YellowRose,
+  Cozmo_singing,
 
   // victorBehaviorTree
   ComeHereVoiceCommand,

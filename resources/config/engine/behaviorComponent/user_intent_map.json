@@ -345,6 +345,21 @@
       "user_intent": "imperative_eyecolor",
       "cloud_intent": "intent_imperative_eyecolor",
       "feature_gate": "EyeColorVC"
+    },
+    {
+      "user_intent": "cozmo_sing_80",
+      "cloud_intent": "intent_cozmo_sing_80",
+      "app_intent": "intent_cozmo_sing_80"
+    },
+    {
+      "user_intent": "cozmo_sing_100",
+      "cloud_intent": "intent_cozmo_sing_100",
+      "app_intent": "intent_cozmo_sing_100"
+    },
+    {
+      "user_intent": "cozmo_sing_120",
+      "cloud_intent": "intent_cozmo_sing_120",
+      "app_intent": "intent_cozmo_sing_120"
     }
   ],
 

@@ -1,0 +1,6 @@
+{
+  "behaviorClass":"Singing",
+  "behaviorID":"Cozmo_singing",
+
+  "associatedActiveFeature": "NoFeature"
+}

@@ -15,6 +15,7 @@
     "PickUpCubeVoiceCommand",
     "FistBumpVoiceCommand",
     "GoHomeVoiceCommand",
+    "Cozmo_singing",
     "RollCubeVoiceCommand",
     "PopAWheelieVoiceCommand",
     "WireTest",

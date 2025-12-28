@@ -18,6 +18,10 @@
 
 #include "engine/actions/animActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorTypesWrapper.h"
+#include "engine/aiComponent/behaviorComponent/userIntentComponent.h"
+#include "engine/aiComponent/behaviorComponent/userIntents.h"
+#include "engine/events/ankiEvent.h"
+#include "engine/externalInterface/externalInterface.h"
 #include "engine/audio/engineRobotAudioClient.h"
 #include "engine/block.h"
 #include "engine/blockWorld/blockWorld.h"
@@ -131,15 +135,37 @@ void BehaviorSinging::GetBehaviorJsonKeys(std::set<const char*>& expectedKeys) c
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorSinging::WantsToBeActivatedBehavior() const
 {
+  auto& uic = GetBehaviorComp<UserIntentComponent>();
+
   // Always activatable, the higher level Singing goal/activity is responsible
   // for deciding when Cozmo should sing
-  return true;
+  return uic.IsUserIntentPending(USER_INTENT(cozmo_sing_80)) && uic.IsUserIntentPending(USER_INTENT(cozmo_sing_100)) && uic.IsUserIntentPending(USER_INTENT(cozmo_sing_120));
 }
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorSinging::OnBehaviorActivated()
 {
+  UserIntentPtr Sing_80 = SmartActivateUserIntent(USER_INTENT(cozmo_sing_80));
+  UserIntentPtr Sing_100 = SmartActivateUserIntent(USER_INTENT(cozmo_sing_100));
+  UserIntentPtr Sing_120 = SmartActivateUserIntent(USER_INTENT(cozmo_sing_120));
+
+  if (!Sing_80 && !Sing_100 && !Sing_120) {
+    PRINT_NAMED_WARNING("BehaviorRespondToName.OnBehaviorActivated", "No pending 'name_victor_say' intent found");
+  }
+
+  if (Sing_80) {
+    singtype = 80;
+  } else if (Sing_100) {
+    singtype = 100;
+  } else if (Sing_120) {
+    singtype = 120;
+  } else {
+    singtype = 0;
+  }
+
+  // Log that the behavior was activated
+  PRINT_NAMED_INFO("BehaviorWireTest.OnBehaviorActivated", "Activated 'namevictor' intent");
 
   _cubeShakingStartTime_ms = 0;
   _vibratoScaleFilt = 0.0f;
@@ -153,18 +179,55 @@ void BehaviorSinging::OnBehaviorActivated()
                                                                      _audioSwitch,
                                                                      AudioMetaData::GameObjectType::Default /* FIXME: Not correct game object */);
   }
-
-  // Setup the only action this behavior does, three sequential animations
-  CompoundActionSequential* action = new CompoundActionSequential();
-  action->AddAction(new TriggerAnimationAction(kGetInTrigger));
-  action->AddAction(new TriggerAnimationAction(_songAnimTrigger));
-  action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
-  DelegateIfInControl(action, [this](const ActionResult& res) {
-    if(res == ActionResult::SUCCESS)
-    {
-      BehaviorObjectiveAchieved(BehaviorObjective::Singing);
-    }
-  });
+  if (singtype == 80) {
+    // Setup the only action this behavior does, three sequential animations
+    CompoundActionSequential* action = new CompoundActionSequential();
+    action->AddAction(new TriggerAnimationAction(kGetInTrigger));
+    action->AddAction(new TriggerAnimationAction(k80BpmTrigger));
+    action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
+    DelegateIfInControl(action, [this](const ActionResult& res) {
+      if(res == ActionResult::SUCCESS)
+      {
+        BehaviorObjectiveAchieved(BehaviorObjective::Singing);
+      }
+    });
+  } else if (singtype == 100) {
+    // Setup the only action this behavior does, three sequential animations
+    CompoundActionSequential* action = new CompoundActionSequential();
+    action->AddAction(new TriggerAnimationAction(kGetInTrigger));
+    action->AddAction(new TriggerAnimationAction(k100BpmTrigger));
+    action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
+    DelegateIfInControl(action, [this](const ActionResult& res) {
+      if(res == ActionResult::SUCCESS)
+      {
+        BehaviorObjectiveAchieved(BehaviorObjective::Singing);
+      }
+    });
+  } else if (singtype == 120) {
+    // Setup the only action this behavior does, three sequential animations
+    CompoundActionSequential* action = new CompoundActionSequential();
+    action->AddAction(new TriggerAnimationAction(kGetInTrigger));
+    action->AddAction(new TriggerAnimationAction(k120BpmTrigger));
+    action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
+    DelegateIfInControl(action, [this](const ActionResult& res) {
+      if(res == ActionResult::SUCCESS)
+      {
+        BehaviorObjectiveAchieved(BehaviorObjective::Singing);
+      }
+    });
+  } else {
+    // Setup the only action this behavior does, three sequential animations
+    CompoundActionSequential* action = new CompoundActionSequential();
+    action->AddAction(new TriggerAnimationAction(kGetInTrigger));
+    action->AddAction(new TriggerAnimationAction(_songAnimTrigger));
+    action->AddAction(new TriggerAnimationAction(kGetOutTrigger));
+    DelegateIfInControl(action, [this](const ActionResult& res) {
+      if(res == ActionResult::SUCCESS)
+      {
+        BehaviorObjectiveAchieved(BehaviorObjective::Singing);
+      }
+    });
+  }
 
   GetBEI().GetRobotAudioClient().PostEvent(AMD_GE_GE::Stop__Robot_Singing, AMD_GOT::Behavior);
 }
