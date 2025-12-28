@@ -138,7 +138,7 @@ namespace {
   const char* kAlexaIconSpriteName = "face_alexa_icon";
 
   // TODO (VIC-11606): don't use timeout for mute <-- // VIC-11606 seems to be lost to time so this fix will likely never happen.
-  CONSOLE_VAR_RANGED(f32, kToggleMuteTimeout_s, "FaceInfoScreenManager", 1.8f, 0.001f, 3.0f);  // Change the mute timeout from 1.2 to 1.8 for now
+  // CONSOLE_VAR_RANGED(f32, kToggleMuteTimeout_s, "FaceInfoScreenManager", 1.8f, 0.001f, 3.0f);  // Change the mute timeout from 1.2 to 1.8 for now
   CONSOLE_VAR_RANGED(f32, kAlexaNotificationTimeout_s, "FaceInfoScreenManager", 2.0f, 0.001f, 3.0f);
 
   // How long the button needs to be pressed for before it should trigger shutdown animation
@@ -424,7 +424,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   };
   SET_ENTER_ACTION(ToggleMute, toggleMuteEnterAction);
   // TODO (VIC-11606): don't use timeout and instead wait for mute anim to end
-  SET_TIMEOUT(ToggleMute, kToggleMuteTimeout_s, None);
+  SET_TIMEOUT(ToggleMute, 8, None);
   
   // === AlexaNotification ===
   auto alexaNotification = [this]() {
