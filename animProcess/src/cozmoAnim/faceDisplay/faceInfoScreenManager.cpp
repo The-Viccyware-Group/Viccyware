@@ -67,9 +67,9 @@
 
 // CHANGE THIS TO BE YOUR PROJECT'S STUFF
 const std::string OSProject = "Viccyware";
-const std::string OSVerName = "Finished I-Beta 7??";
+const std::string OSVerName = "Beta 7";
 const std::string Creator = "Built by the Viccyware Team";
-const std::string CreatorWebsite = "https://vicw.xyz";
+const std::string CreatorWebsite = "vicw.froggitti.net";
 
 // Log options
 #define LOG_CHANNEL    "FaceInfoScreenManager"
