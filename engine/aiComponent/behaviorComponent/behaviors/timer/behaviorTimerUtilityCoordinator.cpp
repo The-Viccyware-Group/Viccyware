@@ -711,7 +711,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         int tensDigit = 0;
         if(displayingHoursOnScreen){
           // display as minutes
-          tensDigit = (hoursRemaining * 60)/10;
+          tensDigit = hoursRemaining/10;
         }else{
           tensDigit = minsRemaining/10;
         }
@@ -723,7 +723,7 @@ BehaviorProceduralClock::GetDigitsFunction BehaviorTimerUtilityCoordinator::Buil
         int onesDigit = 0;
         if(displayingHoursOnScreen){
           // display as minutes
-          onesDigit = (hoursRemaining * 60) % 10;
+          onesDigit = hoursRemaining % 10;
         }else{
           onesDigit = minsRemaining % 10;
         }

@@ -57,20 +57,20 @@ target_include_directories(victor_web_library
 
 # victor_web_server binary only builds on VICOS now
 # mac implementation uses (webotsCtrlWebServer)
-if (VICOS AND NOT ANKI_NO_WEBSERVER_ENABLED)
-
-  anki_build_cxx_executable(vic-webserver ${ANKI_SRCLIST_DIR})
-  anki_build_target_license(vic-webserver "ANKI")
-
-  target_link_libraries(vic-webserver
-    PRIVATE
-    victor_web_library
-    cti_common
-    victorCrashReports
-    ${PLATFORM_LIBS}
-    ${ASAN_EXE_LINKER_FLAGS}
-  )
-
-  anki_build_strip(TARGET vic-webserver)
-
-endif()
+#if (VICOS AND NOT ANKI_NO_WEBSERVER_ENABLED)
+#
+#  anki_build_cxx_executable(vic-webserver ${ANKI_SRCLIST_DIR})
+#  anki_build_target_license(vic-webserver "ANKI")
+#
+#  target_link_libraries(vic-webserver
+#    PRIVATE
+#    victor_web_library
+#    cti_common
+#    victorCrashReports
+#    ${PLATFORM_LIBS}
+#    ${ASAN_EXE_LINKER_FLAGS}
+#  )
+#
+#  anki_build_strip(TARGET vic-webserver)
+#
+#endif()

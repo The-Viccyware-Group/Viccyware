@@ -552,12 +552,21 @@ int main(int argc, char **argv)
     die(203, "failed to open URL");
   }
 
+  int curl_status = 0;
+
   struct archive *a = archive_read_new();
   archive_read_support_format_tar(a);
   archive_read_support_filter_all(a);
+
   if (archive_read_open_FILE(a, curl_pipe) != ARCHIVE_OK)
   {
-    pclose(curl_pipe);
+    curl_status = pclose(curl_pipe);
+
+    if (WIFEXITED(curl_status) && WEXITSTATUS(curl_status) != 0)
+    {
+      die(204, "download failed. likely a bad URL");
+    }
+
     die(204, std::string("couldn't open contents as tar file: ") + archive_error_string(a));
   }
 

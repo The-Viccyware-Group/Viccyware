@@ -74,7 +74,7 @@ void BehaviorEyeColor::GetBehaviorOperationModifiers( BehaviorOperationModifiers
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorEyeColor::WantsToBeActivatedBehavior() const
 {
-  return GetBEI().GetSettingsManager().IsSettingsUpdateRequestPending( external_interface::RobotSetting::eye_color );
+  return GetBEI().GetSettingsManager().IsSettingsUpdateRequestPending( external_interface::RobotSetting::eye_color ) || GetBEI().GetSettingsManager().IsSettingsUpdateRequestPending( external_interface::RobotSetting::custom_eye_color );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -83,6 +83,7 @@ void BehaviorEyeColor::OnBehaviorActivated()
   _dVars = DynamicVariables();
 
   GetBEI().GetSettingsManager().ClaimPendingSettingsUpdate( external_interface::RobotSetting::eye_color );
+  GetBEI().GetSettingsManager().ClaimPendingSettingsUpdate( external_interface::RobotSetting::custom_eye_color );
 
   CompoundActionSequential* animationSequence = new CompoundActionSequential();
   animationSequence->AddAction( new TriggerLiftSafeAnimationAction( AnimationTrigger::EyeColorGetIn ), true );
@@ -100,6 +101,11 @@ void BehaviorEyeColor::OnBehaviorDeactivated()
   if ( settings.IsSettingsUpdateRequestPending( external_interface::RobotSetting::eye_color ))
   {
     settings.ApplyPendingSettingsUpdate( external_interface::RobotSetting::eye_color, true );
+  }
+
+  if ( settings.IsSettingsUpdateRequestPending( external_interface::RobotSetting::custom_eye_color ))
+  {
+    settings.ApplyPendingSettingsUpdate( external_interface::RobotSetting::custom_eye_color, true );
   }
 }
 

@@ -59,26 +59,37 @@
     *, *:before, *:after {
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      box-sizing:border-box;
+      -moz-box-sizing:border-box;
     }
-  
+
     body {
       font: 14px 'Open Sans', sans-serif;
       background-color: #004a8f;
       color: #ffffff;
     }
-  
+
     #container,
     #popouts {
       width: 800px;
       margin: 20px auto;
+
     }
-  
+
     ul.tabs {
+      -ms-box-orient: horizontal;
+      display: -webkit-box;
+      display: -moz-box;
+      display: -ms-flexbox;
+      display: -moz-flex;
+      display: -webkit-flex;
       display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      width: 100%;
+      -webkit-flex-wrap: wrap-reverse;
+      flex-wrap: wrap-reverse;
+      align-items: stretch;
+      width:100%;
+      position: relative;
+      text-align: center;
       list-style: none;
       margin: 0;
       padding: 0 6px;
@@ -103,97 +114,119 @@
     ul.tabs li:hover {
       background-color: #356bac;
     }
-  
-    ul.tabs li.current {
-      background-color: #121212;
-      border-bottom: 1px solid #121212;
-      z-index: 2;
+    ul.tabs li:before,
+    ul.tabs li:after {
+      position: absolute;
+      bottom: -1px;
+      width: 15px;
+      height: 26px;
+      content: " ";
+      border: 1px solid #AAA;
+      background: linear-gradient(to bottom, #d9d9d9 50%, #bcbcbc 100%);
+      z-index: 3;
     }
-  
+    ul.tabs li:before {
+      left: -10px;
+      border-right: none;
+      border-top-left-radius: 6px;
+      transform: skew(-20deg);
+      box-shadow: -2px 0px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+    ul.tabs li:after {
+      right: -10px;
+      border-left: none;
+      border-top-right-radius: 6px;
+      transform: skew(20deg);
+      box-shadow: 2px 0px 3px rgba(0, 0, 0, 0.1), inset 0 1px 0 #FFF;
+    }
+
+    ul.tabs li.current {
+      background: #ededed;
+      color: #000;
+      z-index: 2;
+      border-bottom-color: #ededed;
+    }
+
+    ul.tabs li.current:before,
+    ul.tabs li.current:after {
+      background: #ededed;
+      border-bottom-color: #ededed;
+    }
+
     .tab-content {
       background-color: #356bac;
       padding: 15px;
-      border: 1px solid #333;
-      border-top: none;
-      color: #ffffff;
-      border-radius: 0 4px 4px 4px;
+      border: 1px solid #AAA;
+      border-top:none;
+      position:relative;
     }
-  
     .tab-content:not(.poppedOut),
     .tab-content.tab-placeholder {
       display: none;
     }
-  
+
     .tab-content.current {
-      display: block;
+      display: inherit;
     }
-  
     .tab-placeholder {
-      height: 10px;
+      height:10px;
     }
-  
+
     #tab-overview p {
-      padding: 10px;
+      padding:10px;
     }
-  
     #tab-overview h3 {
-      padding: 10px;
+      padding:10px;
     }
-  
+
     #status {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      font-size: 14px;
-      color: #f44336;
+      position:fixed;
+      bottom:10px;
+      right:10px;
+      font-size:20px;
+      color:red;
     }
-  
+
     #linkToHome {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      font-size: 14px;
-      color: #ffffff;
+      position:fixed;
+      bottom:10px;
+      left:10px;
+      font-size:20px;
     }
-  
+
     .popoutIcon,
     .nowItsAPinIcon {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      background-image: url(images/webVizPins.png);
-      cursor: pointer;
-      filter: invert(100%);
+      position:absolute;
+      top:0px;
+      right:0px;
+      width:16px;
+      height:16px;
+      background-image:url(images/webVizPins.png);
+      cursor:pointer;
     }
-  
     .nowItsAPinIcon {
-      background-position: -16px 0;
+      background-position: -16px 0px;
     }
-  
+
     #popouts {
       margin-top: 50px;
     }
-  
     #popouts .tab-content {
       border-top: 1px solid #9d0080;
       margin-bottom: 20px;
     }
-  
+
     #devDataDump {
       overflow-x: scroll;
       overflow-y: scroll;
-      border: 1px solid #333;
-      padding: 10px;
-      margin: 10px;
-      font-family: monospace;
-      background-color: #1e1e1e;
-      color: #ffffff;
+      border:1px solid black;
+      padding:10px;
+      margin:10px;
+      font-family:monospace;
     }
+
+    
   </style>
-  
-  
 
   <!--[if lt IE 9]>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>

@@ -31,7 +31,8 @@ namespace {
       {"COLOR_YELLOW", external_interface::EyeColor::UNCANNY_YELLOW},
       {"COLOR_GREEN", external_interface::EyeColor::NON_LINEAR_LIME},
       {"COLOR_BLUE", external_interface::EyeColor::SINGULARITY_SAPPHIRE},
-      {"COLOR_PURPLE", external_interface::EyeColor::FALSE_POSITIVE_PURPLE}
+      {"COLOR_PURPLE", external_interface::EyeColor::FALSE_POSITIVE_PURPLE},
+      {"COLOR_RAINBOW", external_interface::EyeColor::RAINBOW_EYES}
   };
 }
 

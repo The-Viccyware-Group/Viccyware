@@ -19,15 +19,9 @@ add_subdirectory(victorCrashReports)
 
 add_subdirectory(faultCodeDisplay)
 
-add_subdirectory(robotLogUploader)
-
 add_subdirectory(vic-log-event)
 
 add_subdirectory(vic-log-forward)
-
-add_subdirectory(vic-log-kernel-panic)
-
-add_subdirectory(vic-log-upload)
 
 add_subdirectory(ion-sample)
 

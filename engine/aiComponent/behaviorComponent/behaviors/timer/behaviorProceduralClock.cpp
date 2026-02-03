@@ -313,6 +313,16 @@ void BehaviorProceduralClock::AddKeyFramesForOffset(const int clockOffset_s, con
 
   // Truncate to the nearest valid frame time for the triggerTime
   const int triggerTime_ms = displayTime_ms - (displayTime_ms % ANIM_TIME_STEP_MS);
+  Vision::SpriteBoxKeyFrame colonFrame = kKeyFrameMap.at(Vision::SpriteBoxName::SpriteBox_3);
+  colonFrame.triggerTime_ms = triggerTime_ms;
+
+  const bool showColon = (clockOffset_s % 2) == 0;
+  colonFrame.assetID = showColon
+    ? Vision::SpritePathMap::GetAssetID("clock_colon")
+    : Vision::SpritePathMap::GetAssetID("clock_colon_dim");
+
+  _lifetimeParams.keyFrames.push_back(std::move(colonFrame));
+
 
   // set digits
   bool isLeadingZero = ShouldDimLeadingZeros();

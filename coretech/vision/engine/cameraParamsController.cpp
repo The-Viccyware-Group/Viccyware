@@ -590,11 +590,11 @@ Result CameraParamsController::ComputeExposureAdjustment(const Vision::Image& im
   const bool haveWeights = GetMeteringWeightMask(image.GetNumRows(), image.GetNumCols(), weightMask);
   if(haveWeights)
   {
-    result = _hist.FillFromImage(image, _subSample, linearizeFcn);
+    result = _hist.FillFromImage(image, weightMask, _subSample, linearizeFcn);
   }
   else
   {
-    result = _hist.FillFromImage(image, weightMask, _subSample, linearizeFcn);
+    result = _hist.FillFromImage(image, _subSample, linearizeFcn);
   }
   
   if(RESULT_OK != result)

@@ -13,6 +13,7 @@
 #ifdef __ARM_NEON__
 
 #include "coretech/vision/engine/debayer/neon/raw10.h"
+#include "anki/cozmo/shared/factory/emrHelper.h"
 
 #include "util/logging/logging.h"
 
@@ -30,6 +31,9 @@
  * reduce the quality of the output.
  */
 #define DO_GREEN_AVG 0
+
+static constexpr uint8_t BLACK_LEVEL_8 = 6; // raw10 32
+static constexpr uint8_t WHITE_LEVEL_8 = 240;
 
 namespace Anki {
 namespace Vision {
@@ -53,6 +57,10 @@ struct StoreInfo
   uint8x8_t value_32;
   uint8x8_t mapL;
   uint8x8_t mapH;
+
+  uint8x8_t prevG1;
+  uint8x8_t prevG2;
+  bool prevValid;
 };
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -323,6 +331,50 @@ Result HandleRAW10::operator()(const Debayer::InArgs& inArgs, Debayer::OutArgs& 
   }
 }
 
+// this essentially increases contrast in the final image
+inline void BlackLevelAndNormalize(uint8x8_t& data)
+{
+  // we only want to do this for 2.0
+  if (!Vector::IsXray()) {
+    return;
+  }
+
+  const uint8x8_t black = vdup_n_u8(BLACK_LEVEL_8);
+  const uint8x8_t range = vdup_n_u8(WHITE_LEVEL_8 - BLACK_LEVEL_8);
+  data = vqsub_u8(data, black);
+  data = vmin_u8(data, range);
+  uint16x8_t data16 = vmovl_u8(data);
+  const uint16x8_t scale = vdupq_n_u16(255);
+  data16 = vmulq_u16(data16, scale);
+
+  data = vshrn_n_u16(data16, 8);
+}
+
+inline void TemporalDenoiseGreen(uint8x8_t& cur, uint8x8_t& prev, bool& valid)
+{
+  // maybe this would benefit a 1.0's image
+  // but i don't feel like testing it rn
+  if (!Vector::IsXray()) {
+    return;
+  }
+
+  if (!valid) {
+    prev = cur;
+    valid = true;
+    return;
+  }
+
+  // alpha = 0.75
+  // cur = (3*cur+1*prev)/4
+  uint16x8_t c = vmovl_u8(cur);
+  uint16x8_t p = vmovl_u8(prev);
+
+  c = vaddq_u16(vmulq_n_u16(c, 3), p);
+  cur = vshrn_n_u16(c, 2);
+
+  prev = cur;
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::OutArgs& outArgs) const
@@ -337,6 +389,9 @@ Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -400,6 +455,11 @@ Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::
       block.val[1] = unzipped1.val[1];
       block.val[2] = unzipped2.val[0];
       block.val[3] = unzipped2.val[1];
+
+      BlackLevelAndNormalize(block.val[0]);
+      BlackLevelAndNormalize(block.val[1]);
+      BlackLevelAndNormalize(block.val[2]);
+      BlackLevelAndNormalize(block.val[3]);
 
       // Gamma Correct is the most expensive step timewise. Doing it as a helper function seems to have no effect on
       // the time to complete this step.
@@ -455,6 +515,9 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -524,6 +587,9 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
       rgb.val[1] = vhadd_u8(block.val[1], block.val[2]);
       rgb.val[2] = block.val[3];
 #else
+      BlackLevelAndNormalize(block.val[0]);
+      BlackLevelAndNormalize(block.val[1]);
+      BlackLevelAndNormalize(block.val[3]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
@@ -559,6 +625,9 @@ Result HandleRAW10::RAW10_to_RGB24_EIGHTH(const Debayer::InArgs& inArgs, Debayer
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -636,6 +705,9 @@ Result HandleRAW10::RAW10_to_RGB24_EIGHTH(const Debayer::InArgs& inArgs, Debayer
       rgb.val[1] = vhadd_u8(block.val[1], block.val[2]);
       rgb.val[2] = block.val[3];
 #else
+      BlackLevelAndNormalize(block.val[1]);
+      BlackLevelAndNormalize(block.val[2]);
+      BlackLevelAndNormalize(block.val[3]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
@@ -671,6 +743,9 @@ Result HandleRAW10::RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::Out
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -736,6 +811,8 @@ Result HandleRAW10::RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::Out
 
       // Gamma Correct is the most expensive step timewise. Doing it as a helper function seems to have no effect on
       // the time to complete this step.
+      BlackLevelAndNormalize(block.val[1]);
+      BlackLevelAndNormalize(block.val[2]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
       
@@ -769,6 +846,9 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -831,6 +911,7 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
       GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
       vst1_u8(outBufferPtr, vhadd_u8(block.val[1], block.val[2]));
 #else
+      BlackLevelAndNormalize(block.val[1]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
       vst1_u8(outBufferPtr, block.val[1]);
 #endif
@@ -860,6 +941,9 @@ Result HandleRAW10::RAW10_to_Y8_EIGHTH(const Debayer::InArgs& inArgs, Debayer::O
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
   StoreInfo store;
+  store.prevG1 = vdup_n_u8(0);
+  store.prevG2 = vdup_n_u8(0);
+  store.prevValid = false;
   for (int i = 0; i < store.gammaLUT.size(); ++i){
     for (int j = 0; j < 4; ++j){
       store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
@@ -929,6 +1013,7 @@ Result HandleRAW10::RAW10_to_Y8_EIGHTH(const Debayer::InArgs& inArgs, Debayer::O
       GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
       vst1_u8(outBufferPtr, vhadd_u8(block.val[1], block.val[2]));
 #else
+      BlackLevelAndNormalize(block.val[1]);
       GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
       vst1_u8(outBufferPtr, block.val[1]);
 #endif
