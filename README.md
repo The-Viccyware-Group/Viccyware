@@ -3,7 +3,7 @@
 Welcome to the unstable branch of `Viccyware`. This is the home of a modified copy of the Vector source
 code. Original README: [README-orig.md](/README-orig.md)
 
-Learn a little more about the project at [viccyware.com](https://www.viccyware.com/)
+Learn a little more about the project at [vicw.froggitti.net](https://vicw.froggitti.net/)
 
 ## Branch info
 This branch of the Vector source code will attempt to reimpliment Cozmo from old versions of Cozmoware into the modern os. Unlike the main branch this branch will be updated more frequently compared to the stable branch. This can mean the code may be more buggy so if you need reliability switch to the main branch please.
