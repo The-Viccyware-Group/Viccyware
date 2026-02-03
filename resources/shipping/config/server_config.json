@@ -1,8 +1,8 @@
 {
-	"jdocs": "api-vicw.froggitti.net:8081",
-	"tms": "api-vicw.froggitti.net:8081",
-	"chipper": "api-vicw.froggitti.net:8081",
-	"check": "api.vicw.xyz:7070/ok",
+	"jdocs": "api.skittl.net:8081",
+	"tms": "api.skittl.net:8081",
+	"chipper": "api.skittl.net:8081",
+	"check": "api.skittl.net:443/ok",
 	"logfiles": "s3://anki-device-logs-prod/victor",
 	"appkey": "oDoa0quieSeir6goowai7f"
 }
