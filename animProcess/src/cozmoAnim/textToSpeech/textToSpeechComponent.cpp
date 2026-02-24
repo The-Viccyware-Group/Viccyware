@@ -360,6 +360,7 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
         if (!sentPlayable && framesSent >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
           bundle->state = AudioCreationState::Playable;
+          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
           sentPlayable = true;
         }
