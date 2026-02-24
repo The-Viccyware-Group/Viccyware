@@ -38,8 +38,15 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <errno.h>
+#include <signal.h>
+
 // Log options
 #define LOG_CHANNEL "TextToSpeech"
+
+#define TTS_SOCKET_PATH "/tmp/akalsasink_audio.sock"
 
 namespace {
 
@@ -58,6 +65,105 @@ namespace {
 
 namespace Anki {
 namespace Vector {
+
+static int tts_socket_connect()
+{
+  signal(SIGPIPE, SIG_IGN);
+
+  int sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (sock < 0) {
+    LOG_WARNING("TextToSpeechComponent.SocketConnect", "socket() failed: errno=%d (%s)", errno, strerror(errno));
+    return -1;
+  }
+
+  struct sockaddr_un addr;
+  ::memset(&addr, 0, sizeof(addr));
+  addr.sun_family = AF_UNIX;
+  ::strncpy(addr.sun_path, TTS_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+  if (::connect(sock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+    LOG_WARNING("TextToSpeechComponent.SocketConnect", "connect() failed: errno=%d (%s)", errno, strerror(errno));
+    ::close(sock);
+    return -1;
+  }
+
+  LOG_INFO("TextToSpeechComponent.SocketConnect", "Connected to %s", TTS_SOCKET_PATH);
+  return sock;
+}
+
+static int tts_send_all(int sock, const void* buf, size_t len)
+{
+  const uint8_t* ptr = static_cast<const uint8_t*>(buf);
+  size_t remaining = len;
+  while (remaining > 0) {
+    ssize_t n = ::send(sock, ptr, remaining, MSG_NOSIGNAL);
+    if (n < 0) {
+      if (errno == EINTR) { continue; }
+      LOG_WARNING("TextToSpeechComponent.SendAll", "send() failed: errno=%d (%s)", errno, strerror(errno));
+      return -1;
+    }
+    ptr       += static_cast<size_t>(n);
+    remaining -= static_cast<size_t>(n);
+  }
+  return 0;
+}
+
+static int tts_send_pcm(int sock, const int16_t* samples, size_t numSamples)
+{
+  if (numSamples == 0) { return 0; }
+  return tts_send_all(sock, samples, numSamples * sizeof(int16_t));
+}
+
+static void tts_send_trailing_silence(int sock, int sampleRate)
+{
+  const int kSilenceMs = 250;
+  const size_t numSamples = static_cast<size_t>((sampleRate * kSilenceMs) / 1000);
+  if (numSamples == 0) { return; }
+
+  std::vector<int16_t> silence(numSamples, 0);
+  tts_send_pcm(sock, silence.data(), numSamples);
+}
+
+static bool AppendAudioData(int sock,
+                            const TextToSpeech::TextToSpeechProviderData& ttsData,
+                            bool done)
+{
+  // Enable this to inspect raw PCM
+  if (kWriteTTSFile) {
+    const auto num_samples = ttsData.GetNumSamples();
+    const auto samples = ttsData.GetSamples();
+    static int _fd = -1;
+    if (_fd < 0) {
+      const auto path = "/data/data/com.anki.victor/cache/tts.pcm";
+      _fd = open(path, O_CREAT|O_RDWR|O_TRUNC, 0644);
+    }
+    if (num_samples > 0) {
+      (void) write(_fd, samples, num_samples * sizeof(short));
+    }
+    if (done) {
+      close(_fd);
+      _fd = -1;
+    }
+  }
+
+  if (ttsData.GetNumSamples() > 0) {
+    const int16_t* samples  = ttsData.GetSamples();
+    const size_t numSamples = ttsData.GetNumSamples();
+
+    if (tts_send_pcm(sock, samples, numSamples) < 0) {
+      LOG_ERROR("TextToSpeechComponent.AppendAudioData", "Socket send failed");
+      return false;
+    }
+  }
+
+  if (done) {
+    const int sampleRate = ttsData.GetNumSamples() > 0 ? ttsData.GetSampleRate() : 16000;
+    tts_send_trailing_silence(sock, sampleRate);
+    LOG_DEBUG("TextToSpeechComponent.AppendAudioData", "Done producing data");
+  }
+
+  return true;
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TextToSpeechComponent::TextToSpeechComponent(const Anim::AnimContext* context)
@@ -174,28 +280,47 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
   // Dispatch work onto another thread
   Util::Dispatch::Async(_dispatchQueue, [this, ttsID, ttsStr, durationScalar, pitchScalar, waveData]
   {
-
-    // Have we sent TextToSpeechState::Playable for this utterance?
-    bool sentPlayable = false;
-
-    // Have we finished generating audio for this utterance?
-    bool done = false;
-
-    Result result = GetFirstAudioData(ttsStr, durationScalar, pitchScalar, waveData, done);
-    if (RESULT_OK != result) {
-      LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get first audio data (error %d)", result);
+    int sock = tts_socket_connect();
+    if (sock < 0) {
+      LOG_ERROR("TextToSpeechComponent.CreateSpeech",
+                "Unable to connect to TTS socket for ttsID %d", ttsID);
       PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
       return;
     }
+
+    // Have we sent TextToSpeechState::Playable for this utterance?
+    bool sentPlayable = false;
+    bool done         = false;
+
+    TextToSpeech::TextToSpeechProviderData ttsData;
+    Result result = _pvdr->GetFirstAudioData(ttsStr, durationScalar, pitchScalar, ttsData, done);
+
+    if (RESULT_OK != result) {
+      LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get first audio data (error %d)", result);
+      ::close(sock);
+      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+      return;
+    }
+
+    if (!AppendAudioData(sock, ttsData, done)) {
+      LOG_ERROR("TextToSpeechComponent.CreateSpeech",
+                "Socket send failed on first chunk for ttsID %d", ttsID);
+      ::close(sock);
+      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+      return;
+    }
+
+    size_t framesSent = ttsData.GetNumSamples();
 
     {
       std::lock_guard<std::mutex> lock(_lock);
       const auto bundle = GetBundle(ttsID);
       if (!bundle) {
         LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d has been cancelled", ttsID);
+        ::close(sock);
         return;
       }
-      if (!sentPlayable && waveData->GetNumberOfFramesReceived() >= kMinPlayableFrames) {
+      if (!sentPlayable && framesSent >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
           const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
@@ -204,22 +329,36 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
     }
 
     while (result == RESULT_OK && !done) {
-      result = GetNextAudioData(waveData, done);
+      ttsData = TextToSpeech::TextToSpeechProviderData{};
+
+      result = _pvdr->GetNextAudioData(ttsData, done);
       if (RESULT_OK != result) {
         LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get next audio data (error %d)", result);
+        ::close(sock);
         PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
         return;
       }
+
+      if (!AppendAudioData(sock, ttsData, done)) {
+        LOG_ERROR("TextToSpeechComponent.CreateSpeech",
+                  "Socket send failed mid-stream for ttsID %d", ttsID);
+        ::close(sock);
+        PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+        return;
+      }
+
+      framesSent += ttsData.GetNumSamples();
+
       {
         std::lock_guard<std::mutex> lock(_lock);
         const auto bundle = GetBundle(ttsID);
         if (!bundle) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d has been cancelled", ttsID);
+          ::close(sock);
           return;
         }
-        if (!sentPlayable && waveData->GetNumberOfFramesReceived() >= kMinPlayableFrames) {
+        if (!sentPlayable && framesSent >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
-          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
           bundle->state = AudioCreationState::Playable;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
           sentPlayable = true;
@@ -228,6 +367,9 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
     }
 
     // Finalize data instance
+    ::close(sock);
+    LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "Socket closed for ttsID %d", ttsID);
+
     {
       std::lock_guard<std::mutex> lock(_lock);
       auto bundle = GetBundle(ttsID);
@@ -236,7 +378,9 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
         return;
       }
 
-      const f32 duration_ms = GetDuration_ms(waveData);
+      const f32 duration_ms = (framesSent > 0 && ttsData.GetSampleRate() > 0)
+        ? static_cast<f32>(framesSent) / static_cast<f32>(ttsData.GetSampleRate()) * 1000.f
+        : GetEstimatedDuration_ms(ttsStr) * durationScalar;
 
       if (!sentPlayable) {
         LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
@@ -279,23 +423,7 @@ bool TextToSpeechComponent::PrepareAudioEngine(const TTSID_t ttsID,
     return false;
   }
 
-  StreamingWaveDataPtr waveData = ttsBundle->waveData;
-  if (!waveData) {
-    LOG_ERROR("TextToSpeechComponent.PrepareAudioEngine.InvalidWaveData", "ttsID %d has no audio data", ttsID);
-    return false;
-  }
-
-  // Set OUT value
-  // TBD: How do we estimate duration of streaming audio?
-  out_duration_ms = GetDuration_ms(waveData);
-
-  auto * pluginInterface = _audioController->GetPluginInterface();
-  DEV_ASSERT(nullptr != pluginInterface, "TextToSpeechComponent.PrepareAudioEngine.InvalidPluginInterface");
-
-  // Clear previously loaded data
-  auto * plugin = pluginInterface->GetStreamingWavePortalPlugIn();
-  plugin->ClearAudioData(kTtsPluginId);
-  plugin->AddDataInstance(waveData, kTtsPluginId);
+  out_duration_ms = GetDuration_ms(ttsBundle);
 
   SetAudioProcessingStyle(ttsBundle->style);
 
@@ -346,53 +474,11 @@ void TextToSpeechComponent::ClearAllLoadedAudioData()
   _bundleMap.clear();
 } // ClearAllLoadedAudioData()
 
-static void AppendAudioData(const std::shared_ptr<AudioEngine::StreamingWaveDataInstance> & waveData,
-                            const TextToSpeech::TextToSpeechProviderData & ttsData,
-                            bool done)
-{
-  using namespace AudioEngine;
-
-  // Enable this to inspect raw PCM
-  if (kWriteTTSFile) {
-    const auto num_samples = ttsData.GetNumSamples();
-    const auto samples = ttsData.GetSamples();
-    static int _fd = -1;
-    if (_fd < 0) {
-      const auto path = "/data/data/com.anki.victor/cache/tts.pcm";
-      _fd = open(path, O_CREAT|O_RDWR|O_TRUNC, 0644);
-    }
-    if (num_samples > 0) {
-      (void) write(_fd, samples, num_samples * sizeof(short));
-    }
-    if (done) {
-      close(_fd);
-      _fd = -1;
-    }
-  }
-
-  if (ttsData.GetNumSamples() > 0) {
-    const int sample_rate = ttsData.GetSampleRate();
-    const int num_channels = ttsData.GetNumChannels();
-    const size_t num_samples = ttsData.GetNumSamples();
-    const short * samples = ttsData.GetSamples();
-
-    // TBD: How can we get rid of intermediate container?
-    StandardWaveDataContainer waveContainer(sample_rate, num_channels, num_samples);
-    waveContainer.CopyWaveData(samples, num_samples);
-
-    waveData->AppendStandardWaveData(std::move(waveContainer));
-  }
-  if (done) {
-    LOG_DEBUG("TextToSpeechComponent.AppendAudioData", "Done producing data");
-    waveData->DoneProducingData();
-  }
-}
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Result TextToSpeechComponent::GetFirstAudioData(const std::string & text,
                                                 float durationScalar,
                                                 float pitchScalar,
-                                                const StreamingWaveDataPtr & data,
+                                                const StreamingWaveDataPtr & /*data*/,
                                                 bool & done)
 {
   TextToSpeech::TextToSpeechProviderData ttsData;
@@ -403,12 +489,10 @@ Result TextToSpeechComponent::GetFirstAudioData(const std::string & text,
     return result;
   }
 
-  AppendAudioData(data, ttsData, done);
-
   return RESULT_OK;
 } // GetFirstAudioData()
 
-Result TextToSpeechComponent::GetNextAudioData(const StreamingWaveDataPtr & data, bool & done)
+Result TextToSpeechComponent::GetNextAudioData(const StreamingWaveDataPtr & /*data*/, bool & done)
 {
   TextToSpeech::TextToSpeechProviderData ttsData;
   const Result result = _pvdr->GetNextAudioData(ttsData, done);
@@ -417,8 +501,6 @@ Result TextToSpeechComponent::GetNextAudioData(const StreamingWaveDataPtr & data
     LOG_ERROR("TextToSpeechComponent.GetNextAudioData", "Unable to get next audio data (error %d)", result);
     return result;
   }
-
-  AppendAudioData(data, ttsData, done);
 
   return RESULT_OK;
 }
