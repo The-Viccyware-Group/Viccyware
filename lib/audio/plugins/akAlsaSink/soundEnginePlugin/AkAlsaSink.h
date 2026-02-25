@@ -22,6 +22,8 @@
 
 #include <functional>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 /////////////////////////////////////////////////////
 // Static buffer size
@@ -92,6 +94,17 @@ public:
 	bool											m_bCustomThreadEnable;
 	snd_async_handler_t *                           m_pPcm_callback_handle;
 	AkUInt32										m_uCpuMask;
+	std::atomic<bool>                               m_bSocketThreadRun;
+	std::atomic<bool>                               m_bSocketClientConnected;
+	std::vector<uint8_t>                            _socketAudioBuffer;
+	std::mutex                                      _socketBufferMutex;
+	std::atomic<bool>                               _socketBufferReady;
+	std::thread                                     m_socketThread;
+	std::vector<uint8_t>    						_socketRing;
+	size_t                  						_socketRingHead{0};
+	size_t                  						_socketRingTail{0};
+	size_t                  						_socketRingUsed{0};
+	std::mutex              						_socketRingMutex;
 
 	using SinkPluginTypes = Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes;
 	
