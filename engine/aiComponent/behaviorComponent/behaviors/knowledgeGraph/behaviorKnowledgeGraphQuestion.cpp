@@ -364,7 +364,7 @@ namespace Anki
         _dVars.responseString = intentResponse.answer;
 
         PRINT_DEBUG("Knowledge Graph Question: %s", Util::HidePersonallyIdentifiableInfo(intentResponse.query_text.c_str()));
-        PRINT_DEBUG("Knowledge Graph Response: %s", Util::HidePersonallyIdentifiableInfo(intentResponse.answer.c_str()));
+        LOG_WARNING("Knowledge Graph Response: %s", "%s", Util::HidePersonallyIdentifiableInfo(intentResponse.answer.c_str()));
       }
       else if (uic.IsUserIntentPending(USER_INTENT(knowledge_unknown)))
       {
@@ -498,10 +498,10 @@ namespace Anki
       DEV_ASSERT(EState::Responding == _dVars.state, "Should only allow interruptions during response state");
       PRINT_INFO("Interruption event received, cancelling TTS");
 
-      _dVars.state = EState::Interrupted;
+      // _dVars.state = EState::Interrupted;
       if (IsControlDelegated() && _iVars.ttsBehavior.get()->IsActivated())
       {
-        _iVars.ttsBehavior.get()->Interrupt(false);
+        // _iVars.ttsBehavior.get()->Interrupt(false);
       }
     }
 

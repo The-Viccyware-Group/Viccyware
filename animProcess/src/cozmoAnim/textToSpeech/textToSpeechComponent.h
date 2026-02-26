@@ -120,6 +120,9 @@ private:
     AudioCreationState state = AudioCreationState::None;
     AudioTtsProcessingStyle style = AudioTtsProcessingStyle::Unprocessed;
     StreamingWaveDataPtr waveData;
+    std::vector<int16_t> pcmBuffer;
+    int sampleRate = 16000;
+    bool generationDone = false;
   };
 
   // Shared pointer to data bundle
@@ -131,6 +134,7 @@ private:
 
   // Internal mutex
   mutable std::mutex _lock;
+  std::mutex _socketMutex;
 
   // Map of data bundles
   std::map<TTSID_t, BundlePtr> _bundleMap;
@@ -143,6 +147,7 @@ private:
 
   // Worker thread
   DispatchQueue * _dispatchQueue = nullptr;
+  DispatchQueue * _flushQueue;
 
   // Platform-specific provider
   std::unique_ptr<TextToSpeechProvider> _pvdr;
@@ -223,6 +228,7 @@ private:
 
   // AudioEngine Callbacks
   void OnUtteranceCompleted(uint8_t ttsID);
+  void FlushToSocket(const TTSID_t ttsID);
 
 }; // class TextToSpeechComponent
 

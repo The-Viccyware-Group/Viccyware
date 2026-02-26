@@ -37,6 +37,8 @@
 #include <memory>
 #include <fcntl.h>
 #include <unistd.h>
+#include <thread>
+#include <chrono>
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -116,7 +118,7 @@ static int tts_send_pcm(int sock, const int16_t* samples, size_t numSamples)
 
 static void tts_send_trailing_silence(int sock, int sampleRate)
 {
-  const int kSilenceMs = 250;
+  const int kSilenceMs = 0;
   const size_t numSamples = static_cast<size_t>((sampleRate * kSilenceMs) / 1000);
   if (numSamples == 0) { return; }
 
@@ -124,51 +126,11 @@ static void tts_send_trailing_silence(int sock, int sampleRate)
   tts_send_pcm(sock, silence.data(), numSamples);
 }
 
-static bool AppendAudioData(int sock,
-                            const TextToSpeech::TextToSpeechProviderData& ttsData,
-                            bool done)
-{
-  // Enable this to inspect raw PCM
-  if (kWriteTTSFile) {
-    const auto num_samples = ttsData.GetNumSamples();
-    const auto samples = ttsData.GetSamples();
-    static int _fd = -1;
-    if (_fd < 0) {
-      const auto path = "/data/data/com.anki.victor/cache/tts.pcm";
-      _fd = open(path, O_CREAT|O_RDWR|O_TRUNC, 0644);
-    }
-    if (num_samples > 0) {
-      (void) write(_fd, samples, num_samples * sizeof(short));
-    }
-    if (done) {
-      close(_fd);
-      _fd = -1;
-    }
-  }
-
-  if (ttsData.GetNumSamples() > 0) {
-    const int16_t* samples  = ttsData.GetSamples();
-    const size_t numSamples = ttsData.GetNumSamples();
-
-    if (tts_send_pcm(sock, samples, numSamples) < 0) {
-      LOG_ERROR("TextToSpeechComponent.AppendAudioData", "Socket send failed");
-      return false;
-    }
-  }
-
-  if (done) {
-    const int sampleRate = ttsData.GetNumSamples() > 0 ? ttsData.GetSampleRate() : 16000;
-    tts_send_trailing_silence(sock, sampleRate);
-    LOG_DEBUG("TextToSpeechComponent.AppendAudioData", "Done producing data");
-  }
-
-  return true;
-}
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TextToSpeechComponent::TextToSpeechComponent(const Anim::AnimContext* context)
 : _activeTTSID(kInvalidTTSID)
 , _dispatchQueue(Util::Dispatch::Create("TtSpeechComponent"))
+, _flushQueue(Util::Dispatch::Create("TtSpeechFlush"))   // separate queue — flushing never blocks generation
 {
   DEV_ASSERT(nullptr != context, "TextToSpeechComponent.InvalidContext");
   DEV_ASSERT(nullptr != context->GetAudioController(), "TextToSpeechComponent.InvalidAudioController");
@@ -185,6 +147,8 @@ TextToSpeechComponent::~TextToSpeechComponent()
 {
   Util::Dispatch::Stop(_dispatchQueue);
   Util::Dispatch::Release(_dispatchQueue);
+  Util::Dispatch::Stop(_flushQueue);
+  Util::Dispatch::Release(_flushQueue);
 } // ~TextToSpeechComponent()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -275,19 +239,15 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
     bundle->triggerMode = triggerMode;
     bundle->style = style;
     bundle->waveData = waveData;
+    bundle->generationDone = false;
+    bundle->sampleRate     = 16000;
   }
 
-  // Dispatch work onto another thread
+  // Generation runs on _dispatchQueue.
+  // PCM is buffered into bundle->pcmBuffer — nothing touches the socket here.
+  // Socket delivery happens in FlushToSocket() on the separate _flushQueue.
   Util::Dispatch::Async(_dispatchQueue, [this, ttsID, ttsStr, durationScalar, pitchScalar, waveData]
   {
-    int sock = tts_socket_connect();
-    if (sock < 0) {
-      LOG_ERROR("TextToSpeechComponent.CreateSpeech",
-                "Unable to connect to TTS socket for ttsID %d", ttsID);
-      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
-      return;
-    }
-
     // Have we sent TextToSpeechState::Playable for this utterance?
     bool sentPlayable = false;
     bool done         = false;
@@ -297,30 +257,33 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
 
     if (RESULT_OK != result) {
       LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get first audio data (error %d)", result);
-      ::close(sock);
       PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
       return;
     }
 
-    if (!AppendAudioData(sock, ttsData, done)) {
-      LOG_ERROR("TextToSpeechComponent.CreateSpeech",
-                "Socket send failed on first chunk for ttsID %d", ttsID);
-      ::close(sock);
-      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
-      return;
-    }
-
-    size_t framesSent = ttsData.GetNumSamples();
-
+    // Buffer first chunk
     {
       std::lock_guard<std::mutex> lock(_lock);
       const auto bundle = GetBundle(ttsID);
       if (!bundle) {
         LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d has been cancelled", ttsID);
-        ::close(sock);
         return;
       }
-      if (!sentPlayable && framesSent >= kMinPlayableFrames) {
+
+      if (ttsData.GetNumSamples() > 0) {
+        const int16_t* samples = ttsData.GetSamples();
+        bundle->pcmBuffer.insert(bundle->pcmBuffer.end(), samples, samples + ttsData.GetNumSamples());
+        bundle->sampleRate = ttsData.GetSampleRate();
+      }
+
+      if (kWriteTTSFile) {
+        static int _fd = -1;
+        if (_fd < 0) { _fd = open("/data/data/com.anki.victor/cache/tts.pcm", O_CREAT|O_RDWR|O_TRUNC, 0644); }
+        if (ttsData.GetNumSamples() > 0) { (void) write(_fd, ttsData.GetSamples(), ttsData.GetNumSamples() * sizeof(short)); }
+        if (done) { close(_fd); _fd = -1; }
+      }
+
+      if (!sentPlayable && bundle->pcmBuffer.size() >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
           const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
@@ -328,36 +291,39 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
       }
     }
 
+    // Buffer subsequent chunks
     while (result == RESULT_OK && !done) {
       ttsData = TextToSpeech::TextToSpeechProviderData{};
 
       result = _pvdr->GetNextAudioData(ttsData, done);
       if (RESULT_OK != result) {
         LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get next audio data (error %d)", result);
-        ::close(sock);
         PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
         return;
       }
-
-      if (!AppendAudioData(sock, ttsData, done)) {
-        LOG_ERROR("TextToSpeechComponent.CreateSpeech",
-                  "Socket send failed mid-stream for ttsID %d", ttsID);
-        ::close(sock);
-        PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
-        return;
-      }
-
-      framesSent += ttsData.GetNumSamples();
 
       {
         std::lock_guard<std::mutex> lock(_lock);
         const auto bundle = GetBundle(ttsID);
         if (!bundle) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d has been cancelled", ttsID);
-          ::close(sock);
           return;
         }
-        if (!sentPlayable && framesSent >= kMinPlayableFrames) {
+
+        if (ttsData.GetNumSamples() > 0) {
+          const int16_t* samples = ttsData.GetSamples();
+          bundle->pcmBuffer.insert(bundle->pcmBuffer.end(), samples, samples + ttsData.GetNumSamples());
+          bundle->sampleRate = ttsData.GetSampleRate();
+        }
+
+        if (kWriteTTSFile) {
+          static int _fd = -1;
+          if (_fd < 0) { _fd = open("/data/data/com.anki.victor/cache/tts.pcm", O_CREAT|O_RDWR|O_TRUNC, 0644); }
+          if (ttsData.GetNumSamples() > 0) { (void) write(_fd, ttsData.GetSamples(), ttsData.GetNumSamples() * sizeof(short)); }
+          if (done) { close(_fd); _fd = -1; }
+        }
+
+        if (!sentPlayable && bundle->pcmBuffer.size() >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
           bundle->state = AudioCreationState::Playable;
           const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
@@ -367,10 +333,7 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
       }
     }
 
-    // Finalize data instance
-    ::close(sock);
-    LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "Socket closed for ttsID %d", ttsID);
-
+    // Generation complete
     {
       std::lock_guard<std::mutex> lock(_lock);
       auto bundle = GetBundle(ttsID);
@@ -379,8 +342,11 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
         return;
       }
 
-      const f32 duration_ms = (framesSent > 0 && ttsData.GetSampleRate() > 0)
-        ? static_cast<f32>(framesSent) / static_cast<f32>(ttsData.GetSampleRate()) * 1000.f
+      bundle->generationDone = true;
+
+      const size_t totalFrames = bundle->pcmBuffer.size();
+      const f32 duration_ms = (totalFrames > 0 && bundle->sampleRate > 0)
+        ? static_cast<f32>(totalFrames) / static_cast<f32>(bundle->sampleRate) * 1000.f
         : GetEstimatedDuration_ms(ttsStr) * durationScalar;
 
       if (!sentPlayable) {
@@ -399,10 +365,125 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
   return RESULT_OK;
 } // CreateSpeech()
 
+//
+// Send a TextToSpeechEvent message from anim to engine.
+// This is called on main thread for thread-safe access to comms.
+//
+static bool SendAnimToEngine(uint8_t ttsID, TextToSpeechState state, float expectedDuration = 0.0f)
+{
+  LOG_DEBUG("TextToSpeechComponent.SendAnimToEngine", "ttsID %hhu state %hhu", ttsID, state);
+  TextToSpeechEvent evt;
+  evt.ttsID = ttsID;
+  evt.ttsState = state;
+  evt.expectedDuration_ms = expectedDuration; // Used only on TextToSpeechState::Delivered messages
+  return AnimProcessMessages::SendAnimToEngine(std::move(evt));
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //
-// Deliver audio data to wwise audio engine
+// Send buffered PCM to the socket sink, then drain any remaining frames as
+// generation finishes. Runs on _flushQueue (independent of _dispatchQueue)
+// so it never stalls TTS generation for subsequent utterances.
 //
+void TextToSpeechComponent::FlushToSocket(const TTSID_t ttsID)
+{
+  Util::Dispatch::Async(_flushQueue, [this, ttsID] {
+    std::lock_guard<std::mutex> socketLock((_socketMutex));
+
+    std::vector<int16_t> buffer;
+    int    sampleRate  = 16000;
+    bool   done        = false;
+    size_t totalFrames = 0;
+
+    {
+      std::lock_guard<std::mutex> lock(_lock);
+      const auto bundle = GetBundle(ttsID);
+      if (!bundle) { return; }
+      buffer     = std::move(bundle->pcmBuffer);
+      sampleRate = bundle->sampleRate;
+      done       = bundle->generationDone;
+    }
+
+    int sock = tts_socket_connect();
+    if (sock < 0) {
+      LOG_ERROR("TextToSpeechComponent.FlushToSocket",
+                "Unable to connect socket for ttsID %d", ttsID);
+      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+      return;
+    }
+
+    totalFrames += buffer.size();
+    if (tts_send_pcm(sock, buffer.data(), buffer.size()) < 0) {
+      LOG_ERROR("TextToSpeechComponent.FlushToSocket",
+                "Socket send failed for ttsID %d", ttsID);
+      ::close(sock);
+      PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+      return;
+    }
+
+    while (!done) {
+      std::vector<int16_t> chunk;
+      {
+        std::lock_guard<std::mutex> lock(_lock);
+        const auto bundle = GetBundle(ttsID);
+        if (!bundle) {
+          LOG_DEBUG("TextToSpeechComponent.FlushToSocket",
+                    "TTSID %d cancelled during flush", ttsID);
+          ::close(sock);
+          return;
+        }
+        chunk      = std::move(bundle->pcmBuffer);
+        sampleRate = bundle->sampleRate;
+        done       = bundle->generationDone;
+      }
+
+      if (!chunk.empty()) {
+        totalFrames += chunk.size();
+        if (tts_send_pcm(sock, chunk.data(), chunk.size()) < 0) {
+          LOG_ERROR("TextToSpeechComponent.FlushToSocket",
+                    "Socket send failed mid-stream for ttsID %d", ttsID);
+          ::close(sock);
+          PushEvent({ttsID, TextToSpeechState::Invalid, 0.f});
+          return;
+        }
+      } else if (!done) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+    }
+
+    tts_send_trailing_silence(sock, sampleRate);
+    ::close(sock);
+
+    // Account for trailing silence frames in duration calculation
+    const size_t silenceFrames = static_cast<size_t>((sampleRate * 250) / 1000);
+    totalFrames += silenceFrames;
+
+    // Wait for ALSA to finish draining — closing the socket only means we're
+    // done writing, not that playback is complete. Sleep for the actual audio
+    // duration plus a small buffer for ALSA's internal pipeline.
+    const f32 duration_s     = (sampleRate > 0 && totalFrames > 0)
+      ? static_cast<f32>(totalFrames) / static_cast<f32>(sampleRate)
+      : 0.f;
+    const f32 kDrainBuffer_s = 0.0f;
+    const f32 waitTime_s     = duration_s + kDrainBuffer_s;
+
+    LOG_DEBUG("TextToSpeechComponent.FlushToSocket",
+              "Waiting %.2f seconds for ALSA to drain for ttsID %d",
+              waitTime_s, ttsID);
+
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(static_cast<int>(waitTime_s * 1000.f))
+    );
+
+    LOG_DEBUG("TextToSpeechComponent.FlushToSocket",
+              "Signalling Finished for ttsID %d", ttsID);
+
+    _activeTTSID = kInvalidTTSID;
+    PushEvent({ttsID, TextToSpeechState::Finished, 0.f});
+  });
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool TextToSpeechComponent::PrepareAudioEngine(const TTSID_t ttsID,
                                                float& out_duration_ms)
 {
@@ -424,7 +505,11 @@ bool TextToSpeechComponent::PrepareAudioEngine(const TTSID_t ttsID,
     return false;
   }
 
-  out_duration_ms = GetDuration_ms(ttsBundle);
+  // Estimate duration from frames buffered so far
+  const size_t totalFrames = ttsBundle->pcmBuffer.size();
+  out_duration_ms = (totalFrames > 0 && ttsBundle->sampleRate > 0)
+    ? static_cast<f32>(totalFrames) / static_cast<f32>(ttsBundle->sampleRate) * 1000.f
+    : 0.f;
 
   SetAudioProcessingStyle(ttsBundle->style);
 
@@ -528,20 +613,6 @@ void TextToSpeechComponent::SetAudioProcessingStyle(AudioTtsProcessingStyle styl
     static_cast<AudioEngine::AudioSwitchStateId>(style),
     static_cast<AudioEngine::AudioGameObject>(kTTSGameObject)
   );
-}
-
-//
-// Send a TextToSpeechEvent message from anim to engine.
-// This is called on main thread for thread-safe access to comms.
-//
-static bool SendAnimToEngine(uint8_t ttsID, TextToSpeechState state, float expectedDuration = 0.0f)
-{
-  LOG_DEBUG("TextToSpeechComponent.SendAnimToEngine", "ttsID %hhu state %hhu", ttsID, state);
-  TextToSpeechEvent evt;
-  evt.ttsID = ttsID;
-  evt.ttsState = state;
-  evt.expectedDuration_ms = expectedDuration; // Used only on TextToSpeechState::Delivered messages
-  return AnimProcessMessages::SendAnimToEngine(std::move(evt));
 }
 
 //
@@ -686,13 +757,8 @@ void TextToSpeechComponent::HandleMessage(const RobotInterface::TextToSpeechPlay
   // For keyframe events, event will be posted by AnimationAudioClient and engine will be notified by
   // callback to OnAudioPlaying.
   if (triggerMode == TextToSpeechTriggerMode::Manual) {
-    if (!PostAudioEvent(ttsID)) {
-      LOG_ERROR("TextToSpeechComponent.TextToSpeechPlay", "Unable to post audio event for ttsID %d", ttsID);
-      SendAnimToEngine(ttsID, TextToSpeechState::Invalid);
-      CleanupAudioEngine(ttsID);
-      return;
-    }
     SendAnimToEngine(ttsID, TextToSpeechState::Playing, duration_ms);
+    FlushToSocket(ttsID);
   }
 
 }
@@ -760,30 +826,18 @@ void TextToSpeechComponent::OnStatePlayable(const TTSID_t ttsID, f32 duration_ms
   SendAnimToEngine(ttsID, TextToSpeechState::Playable, duration_ms);
 
   //
-  // For immediate triggers, enqueue audio for playback and post trigger event
-  // as soon as audio becomes playable.
+  // For immediate triggers, flush buffered audio to the socket and post the
+  // audio event as soon as kMinPlayableFrames have been buffered.
   //
-  // Audio generation continues on the worker thread.  New audio frames are
-  // added to the data instance as they become available.
-  //
-  // When audio playback is complete, the audio engine invokes a callback
-  // to clean up operation data.
+  // FlushToSocket() runs on _flushQueue (separate from _dispatchQueue) so it
+  // continues draining new frames from generation concurrently without stalling
+  // future TTS generation requests.
   //
   if (bundle->triggerMode == TextToSpeechTriggerMode::Immediate) {
-    if (!PrepareAudioEngine(ttsID, duration_ms)) {
-      LOG_ERROR("TextToSpeechComponent.OnStatePlayable", "Unable to prepare audio for ttsID %d", ttsID);
-      SendAnimToEngine(ttsID, TextToSpeechState::Invalid);
-      ClearOperationData(ttsID);
-      return;
-    }
-    if (!PostAudioEvent(ttsID)) {
-      LOG_ERROR("TextToSpeechComponent.OnStatePlayable", "Unable to post audio event for ttsID %d", ttsID);
-      SendAnimToEngine(ttsID, TextToSpeechState::Invalid);
-      ClearOperationData(ttsID);
-      return;
-    }
-    LOG_INFO("TextToSpeech.OnStatePlayable", "ttsID %d will play for at least %.2f ms", ttsID, duration_ms);
+    SetAudioProcessingStyle(bundle->style);
+    _activeTTSID = ttsID;
     SendAnimToEngine(ttsID, TextToSpeechState::Playing, duration_ms);
+    FlushToSocket(ttsID);  // sends Finished when done
   }
 }
 
@@ -821,6 +875,10 @@ void TextToSpeechComponent::Update()
     LOG_DEBUG("TextToSpeechComponent.Update", "Event ttsID %d state %hhu duration %f", ttsID, ttsState, duration_ms);
 
     switch (ttsState) {
+      case TextToSpeechState::Finished:
+        SendAnimToEngine(ttsID, TextToSpeechState::Finished);
+        ClearOperationData(ttsID);
+        break;
       case TextToSpeechState::Invalid:
         OnStateInvalid(ttsID);
         break;
