@@ -269,12 +269,12 @@ Result TextToSpeechProviderImpl::GetFirstAudioData(const std::string & text,
 
   // Get base speed for this utterance, then adjust by duration scalar
   const auto baseSpeed = _tts_config->GetSpeed(_rng, text.size());
-  const auto adjustedSpeed = AcapelaTTS::GetSpeechRate(baseSpeed, durationScalar);
+  const auto adjustedSpeed = baseSpeed / 3;
   const auto speed = Anki::Util::numeric_cast<int>(std::round(adjustedSpeed));
 
   // Get base pitch for this utterance, then adjust by pitch scalar
   const auto basePitch = _tts_config->GetPitch();
-  const auto adjustedPitch = AcapelaTTS::GetAdjustedPitch(basePitch, pitchScalar);
+  const auto adjustedPitch = basePitch + -0.31 * (1.0f - -1.0f);
   const auto pitch = Anki::Util::numeric_cast<int>(std::round(adjustedPitch));
 
   // Get shaping

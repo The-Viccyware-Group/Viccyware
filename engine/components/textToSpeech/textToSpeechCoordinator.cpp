@@ -165,8 +165,8 @@ const uint8_t TextToSpeechCoordinator::CreateUtterance(const std::string& uttera
   msg.ttsID = utteranceID;
   msg.style = style;
   msg.triggerMode = GetTriggerMode(triggerType);
-  msg.durationScalar = durationScalar;
-  msg.pitchScalar = pitchScalar;
+  msg.durationScalar = durationScalar / 3;
+  msg.pitchScalar = pitchScalar + -0.31 * (1.0f - -1.0f);
 
   // Copy our null-terminated string
   std::memcpy( msg.text.data(), utteranceString.c_str(), utteranceString.size() + 1 );
@@ -204,7 +204,7 @@ const uint8_t TextToSpeechCoordinator::CreateUtterance(const std::string & text,
                                                        const AudioTtsProcessingStyle & style,
                                                        UtteranceUpdatedCallback callback)
 {
-  return CreateUtterance(text, triggerType, style, 1.f, 0.f, callback);
+  return CreateUtterance(text, triggerType, style, 1.f / 3, 0.f -0.31 * (1.0f - -1.0f), callback);
 }
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 const UtteranceState TextToSpeechCoordinator::GetUtteranceState(const uint8_t utteranceID) const

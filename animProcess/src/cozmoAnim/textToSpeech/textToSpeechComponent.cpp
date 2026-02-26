@@ -63,6 +63,9 @@ namespace {
   // Enable write to /tmp/tts.pcm?
   CONSOLE_VAR(bool, kWriteTTSFile, "TextToSpeech", false);
 
+  const float durationScalar1 = 1.f / 3;
+  const float pitchScalar1 = 1.f + -0.31 * (1.0f - -1.0f);
+
 }
 
 namespace Anki {
@@ -193,16 +196,16 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
                                            const TextToSpeechTriggerMode triggerMode,
                                            const std::string& text,
                                            const AudioTtsProcessingStyle style,
-                                           const float durationScalar,
-                                           const float pitchScalar)
+                                           const float durationScalar1 = 1.f / 3,
+                                           const float pitchScalar1 = 1.f + -0.31 * (1.0f - -1.0f))
 {
   // Prepare to generate TTS on other thread
   LOG_INFO("TextToSpeechComponent.CreateSpeech",
-           "ttsID %d triggerMode %s text '%s' style '%s' durationScalar %.2f pitchScalar %.2f",
+           "ttsID %d triggerMode %s text '%s' style '%s' durationScalar1 %.2f pitchScalar1 %.2f",
            ttsID, EnumToString(triggerMode), Util::HidePersonallyIdentifiableInfo(text.c_str()),
            EnumToString(style),
-           durationScalar,
-           pitchScalar);
+           durationScalar1,
+           pitchScalar1);
 
   // Add Acapela Silence tag to remove trailing silence at end of audio stream
   // Trim white space
@@ -246,14 +249,14 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
   // Generation runs on _dispatchQueue.
   // PCM is buffered into bundle->pcmBuffer — nothing touches the socket here.
   // Socket delivery happens in FlushToSocket() on the separate _flushQueue.
-  Util::Dispatch::Async(_dispatchQueue, [this, ttsID, ttsStr, durationScalar, pitchScalar, waveData]
+  Util::Dispatch::Async(_dispatchQueue, [this, ttsID, ttsStr, durationScalar1, pitchScalar1, waveData]
   {
     // Have we sent TextToSpeechState::Playable for this utterance?
     bool sentPlayable = false;
     bool done         = false;
 
     TextToSpeech::TextToSpeechProviderData ttsData;
-    Result result = _pvdr->GetFirstAudioData(ttsStr, durationScalar, pitchScalar, ttsData, done);
+    Result result = _pvdr->GetFirstAudioData(ttsStr, durationScalar1, pitchScalar1, ttsData, done);
 
     if (RESULT_OK != result) {
       LOG_ERROR("TextToSpeechComponent.CreateSpeech", "Unable to get first audio data (error %d)", result);
@@ -285,7 +288,7 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
 
       if (!sentPlayable && bundle->pcmBuffer.size() >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
-          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
+          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar1;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
           sentPlayable = true;
       }
@@ -326,7 +329,7 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
         if (!sentPlayable && bundle->pcmBuffer.size() >= kMinPlayableFrames) {
           LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
           bundle->state = AudioCreationState::Playable;
-          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar;
+          const f32 duration_ms = GetEstimatedDuration_ms(ttsStr) * durationScalar1;
           PushEvent({ttsID, TextToSpeechState::Playable, duration_ms});
           sentPlayable = true;
         }
@@ -347,7 +350,7 @@ Result TextToSpeechComponent::CreateSpeech(const TTSID_t ttsID,
       const size_t totalFrames = bundle->pcmBuffer.size();
       const f32 duration_ms = (totalFrames > 0 && bundle->sampleRate > 0)
         ? static_cast<f32>(totalFrames) / static_cast<f32>(bundle->sampleRate) * 1000.f
-        : GetEstimatedDuration_ms(ttsStr) * durationScalar;
+        : GetEstimatedDuration_ms(ttsStr) * durationScalar1;
 
       if (!sentPlayable) {
         LOG_DEBUG("TextToSpeechComponent.CreateSpeech", "TTSID %d audio is ready to play", ttsID);
@@ -562,13 +565,13 @@ void TextToSpeechComponent::ClearAllLoadedAudioData()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Result TextToSpeechComponent::GetFirstAudioData(const std::string & text,
-                                                float durationScalar,
-                                                float pitchScalar,
+                                                float durationScalar1,
+                                                float pitchScalar1,
                                                 const StreamingWaveDataPtr & /*data*/,
                                                 bool & done)
 {
   TextToSpeech::TextToSpeechProviderData ttsData;
-  const Result result = _pvdr->GetFirstAudioData(text, durationScalar, pitchScalar, ttsData, done);
+  const Result result = _pvdr->GetFirstAudioData(text, durationScalar1, pitchScalar1, ttsData, done);
 
   if (RESULT_OK != result) {
     LOG_ERROR("TextToSpeechComponent.GetFirstAudioData", "Unable to get first audio data (error %d)", result);
@@ -694,17 +697,15 @@ void TextToSpeechComponent::HandleMessage(const RobotInterface::TextToSpeechPrep
   const auto ttsID = msg.ttsID;
   const auto triggerMode = msg.triggerMode;
   const auto style = msg.style;
-  const auto durationScalar = msg.durationScalar;
-  const auto pitchScalar = msg.pitchScalar;
   const std::string text( reinterpret_cast<const char*>(msg.text) );
 
   LOG_DEBUG("TextToSpeechComponent.TextToSpeechPrepare",
-            "ttsID %d triggerMode %s style %s durationScalar %.2f pitchScalar %.2f text %s",
-            ttsID, EnumToString(triggerMode), EnumToString(style), durationScalar, pitchScalar,
+            "ttsID %d triggerMode %s style %s durationScalar1 %.2f pitchScalar1 %.2f text %s",
+            ttsID, EnumToString(triggerMode), EnumToString(style), durationScalar1, pitchScalar1,
             HidePersonallyIdentifiableInfo(text.c_str()));
 
   // Enqueue request on worker thread
-  const Result result = CreateSpeech(ttsID, triggerMode, text, style, durationScalar, pitchScalar);
+  const Result result = CreateSpeech(ttsID, triggerMode, text, style, durationScalar1, pitchScalar1);
   if (RESULT_OK != result) {
     LOG_ERROR("TextToSpeechComponent.TextToSpeechPrepare", "Unable to create ttsID %d (result %d)", ttsID, result);
     SendAnimToEngine(ttsID, TextToSpeechState::Invalid);

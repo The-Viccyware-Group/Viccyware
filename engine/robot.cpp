@@ -181,8 +181,8 @@ constexpr const char * kTextToSpeechPath = "TextToSpeech";
 constexpr const char * kVoiceStyles = "Default_Processed,Unprocessed";
 
 CONSOLE_VAR_ENUM(u8, kVoiceStyle, kTextToSpeechPath, 0, kVoiceStyles);
-CONSOLE_VAR_RANGED(f32, kDurationScalar, kTextToSpeechPath, 1.f, 0.25f, 4.f);
-CONSOLE_VAR_RANGED(f32, kPitchScalar, kTextToSpeechPath, 0.f, -1.f, 1.f);
+CONSOLE_VAR_RANGED(f32, kDurationScalar, kTextToSpeechPath, 3.f, 0.25f, 4.f);
+CONSOLE_VAR_RANGED(f32, kPitchScalar, kTextToSpeechPath, -0.31f, -1.f, 1.f);
 
 void SayText(ConsoleFunctionContextRef context)
 {

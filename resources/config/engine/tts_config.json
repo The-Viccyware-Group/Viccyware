@@ -20,7 +20,7 @@
   {
     "en":
     {
-      "voice": "colibri-ben_enu",
+      "voice": "Ryan22k_CO",
       "speed": 80,
       "speedTraits": [
         { "textLengthMin": 0, "textLengthMax": 10, "rangeMin": 68, "rangeMax": 68},
@@ -65,7 +65,13 @@
     "en":
     {
       "voice": "co-USEnglish-Ryan-22khz/enu/enu_ryan_22k_co.fl.ini",
-      "speed": 50,
+      "speed": 10,
+      "speedTraits": [
+        { "textLengthMin": 0, "textLengthMax": 3, "rangeMin": 50, "rangeMax": 79},
+        { "textLengthMin": 10, "textLengthMax": 999, "rangeMin": 79, "rangeMax": 100}
+      ],
+      "pitch": 160,
+      "shaping": 140
     },
     "fr":
     {
