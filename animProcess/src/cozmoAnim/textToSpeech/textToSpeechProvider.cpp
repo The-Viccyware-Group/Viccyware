@@ -65,7 +65,7 @@ Result TextToSpeechProvider::GetFirstAudioData(const std::string & text,
 {
   // Forward to implementation
   DEV_ASSERT(_impl != nullptr, "TextToSpeechProvider.GetFirstAudioData.InvalidImplementation");
-  return _impl->GetFirstAudioData(text, durationScalar, pitchScalar, data, done);
+  return _impl->GetFirstAudioData(text, 1.f / 3, 1.f + -0.31 * (1.0f - -1.0f), data, done);
 }
 
 Result TextToSpeechProvider::GetNextAudioData(TextToSpeechProviderData & data, bool & done)
