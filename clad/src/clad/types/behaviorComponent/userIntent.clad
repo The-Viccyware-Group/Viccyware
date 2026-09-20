@@ -181,7 +181,6 @@ union dupes_allowed UserIntent
   UserIntent_Void             play_pickupcube,
   UserIntent_Void             play_popawheelie,
   UserIntent_Void             play_rollcube,
-  UserIntent_Void             play_keepaway,
   UserIntent_Void             seasonal_happyholidays,
   UserIntent_Void             seasonal_happynewyear,
   UserIntent_TimeInSeconds    set_timer,
