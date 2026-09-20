@@ -233,12 +233,6 @@ namespace Vector {
     _lastObservedImageCentroid.SetFromMessage(msg);
   }
 
-  void WebotsKeyboardController::HandleRobotObservedPet(const ExternalInterface::RobotObservedPet& msg)
-  {
-    // Record centroid of observation in image
-    _lastObservedImageCentroid.SetFromMessage(msg);
-  }
-
   void WebotsKeyboardController::HandleLoadedKnownFace(const Vision::LoadedKnownFace& msg)
   {
     printf("HandleLoadedKnownFace: '%s' (ID:%d) first enrolled %lld seconds ago, last updated %lld seconds ago, last seen %lld seconds ago\n",
@@ -513,13 +507,6 @@ namespace Vector {
     backpackLightsOn = !backpackLightsOn;
   }
 
-
-  void WebotsKeyboardController::TrackPet()
-  {
-    using namespace ExternalInterface;
-    TrackToPet trackAction(5.f, Vision::UnknownFaceID, Vision::PetType::Unknown);
-    SendMessage(MessageGameToEngine(std::move(trackAction)));
-  }
 
   void WebotsKeyboardController::ToggleTrackToObject()
   {
@@ -1916,7 +1903,6 @@ namespace Vector {
     REGISTER_KEY_FCN('T', MOD_NONE,      ExecuteTestPlan,     "Execute test plan");
     REGISTER_KEY_FCN('T', MOD_ALT,       ToggleTrackToFace,   "Track to face");
     REGISTER_KEY_FCN('T', MOD_SHIFT,     ToggleTrackToObject, "Track to object");
-    REGISTER_KEY_FCN('T', MOD_ALT_SHIFT, TrackPet,            "Track to pet");
 
     REGISTER_KEY_FCN('U', MOD_NONE,      RequestSingleImageToGame,   "Requests single image to game");
     REGISTER_KEY_FCN('U', MOD_SHIFT,     ToggleImageStreamingToGame, "Toggle image streaming to game mode");

@@ -67,7 +67,6 @@
 #include "engine/moodSystem/moodManager.h"
 #include "engine/moodSystem/stimulationFaceDisplay.h"
 #include "engine/navMap/mapComponent.h"
-#include "engine/petWorld.h"
 #include "engine/receptiveSocialPresenceEstimator/socialPresenceEstimator.h"
 #include "engine/robotDataLoader.h"
 #include "engine/robotGyroDriftDetector.h"
@@ -314,7 +313,6 @@ Robot::Robot(const RobotID_t robotID, CozmoContext* context)
     _components->AddDependentComponent(RobotComponentID::CozmoContextWrapper,        new ContextWrapper(context));
     _components->AddDependentComponent(RobotComponentID::BlockWorld,                 new BlockWorld());
     _components->AddDependentComponent(RobotComponentID::FaceWorld,                  new FaceWorld());
-    _components->AddDependentComponent(RobotComponentID::PetWorld,                   new PetWorld());
     _components->AddDependentComponent(RobotComponentID::PublicStateBroadcaster,     new PublicStateBroadcaster());
     _components->AddDependentComponent(RobotComponentID::EngineAudioClient,          new Audio::EngineRobotAudioClient());
     _components->AddDependentComponent(RobotComponentID::PathPlanning,               new PathComponent());
@@ -2747,6 +2745,12 @@ bool Robot::UpdateGyroCalibChecks(Result& res)
                                                                          kGyroNotCalibratedImg);
     Vision::ImageRGB img;
     img.Load(imgPath);
+
+    // Emily - Ported from 1.6-rebuild: Resize the image on the fly so Vector 2.0 can correctly display it
+    if (img.GetNumCols() != FACE_DISPLAY_WIDTH || img.GetNumRows() != FACE_DISPLAY_HEIGHT) {
+      img.Resize(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
+    }
+
     // Display the image indefinitely or atleast until something else is displayed
     GetAnimationComponent().DisplayFaceImage(img, 0, true);
     // Move the head to look up to show the image clearly

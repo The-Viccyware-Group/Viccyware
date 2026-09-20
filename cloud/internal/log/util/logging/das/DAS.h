@@ -11,6 +11,7 @@
 #ifndef __util_logging_DAS_h
 #define __util_logging_DAS_h
 
+#include <cstdint>
 #include <string>
 
 //

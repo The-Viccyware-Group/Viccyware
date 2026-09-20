@@ -21,10 +21,12 @@
 #include <string>
 #include <json/json.h>
 
-#include "tensorflow/lite/model.h"
-#include "tensorflow/lite/interpreter.h"
-
 namespace Anki {
+
+namespace Vision {
+  class TfliteModel;
+}
+
 namespace NeuralNets {
 
 class TFLiteModel : public INeuralNetModel
@@ -43,8 +45,7 @@ protected:
 private:
   void ScaleImage(Vision::ImageRGB& img);
 
-  std::unique_ptr<tflite::FlatBufferModel> _model;
-  std::unique_ptr<tflite::Interpreter>     _interpreter;
+  std::unique_ptr<Vision::TfliteModel> _model;
 };
 
 } // namespace NeuralNets

@@ -47,7 +47,7 @@ struct GazeDirectionData
  *                 GazeDirection                   *
  ***************************************************/
 /*
-  This class' primary input is head rotation estimation from the okao library.
+  This class' primary input is head rotation estimation from the face tracker.
   This head rotation which can also be though of as a face "normal" is then
   projected onto the ground plane (if such a projection exists) into a point
   in world coordinates. These points are stored in a buffer.

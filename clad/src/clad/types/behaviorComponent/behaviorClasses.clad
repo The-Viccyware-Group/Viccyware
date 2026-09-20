@@ -256,7 +256,6 @@ enum uint_8 BehaviorClass {
 
   // victor
   ConfirmObject,
-  PetDetection,
   PoweringRobotOff,
   ReactToTouchPetting,
   ReactToUnclaimedIntent,

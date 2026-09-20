@@ -47,7 +47,6 @@
 #include "engine/aiComponent/beiConditions/conditions/conditionOffTreadsState.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionOnCharger.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionOnChargerPlatform.h"
-#include "engine/aiComponent/beiConditions/conditions/conditionPetInitialDetection.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionProxInRange.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionRobotHeldInPalm.h"
 #include "engine/aiComponent/beiConditions/conditions/conditionRobotInHabitat.h"
@@ -347,11 +346,6 @@ IBEIConditionPtr BEIConditionFactory::CreateBEICondition(const Json::Value& conf
     case BEIConditionType::ObstacleDetected:
     {
       condition = std::make_shared<ConditionObstacleDetected>(config);
-      break;
-    }
-    case BEIConditionType::PetInitialDetection:
-    {
-      condition = std::make_shared<ConditionPetInitialDetection>(config);
       break;
     }
     case BEIConditionType::ProxInRange:

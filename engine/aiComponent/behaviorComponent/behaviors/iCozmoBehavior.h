@@ -60,7 +60,6 @@ enum class BehaviorStat : uint32_t;
 class ISubtaskListener;
 class IReactToFaceListener;
 class IReactToObjectListener;
-class IReactToPetListener;
 class IFistBumpListener;
 class IFeedingListener;
 
@@ -241,8 +240,6 @@ public:
                 { DEV_ASSERT(false, "AddListener.FaceListener.Unimplemented"); }
   virtual void AddListener(IReactToObjectListener* listener)
                 { DEV_ASSERT(false, "AddListener.ObjectListener.Unimplemented"); }
-  virtual void AddListener(IReactToPetListener* listener)
-                { DEV_ASSERT(false, "AddListener.PetListener.Unimplemented"); }
   virtual void AddListener(IFistBumpListener* listener)
                 { DEV_ASSERT(false, "AddListener.FistBumpListener.Unimplemented"); }
   virtual void AddListener(IFeedingListener* listener)

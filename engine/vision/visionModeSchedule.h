@@ -63,7 +63,6 @@ public:
   //   AllVisionModesSchedule({{VisionMode::Markers, VisionModeSchedule(1)}})
   //
   // Example for setting two modes:
-  //   AllVisionModesSchedule({{VisionMode::Pets,          VisionModeSchedule({true, false})},
   //                           {VisionMode::OverheadEdges, VisionModeSchedule({false, true})}});
   //
   AllVisionModesSchedule(const ModeScheduleList& schedules,

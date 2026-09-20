@@ -75,7 +75,6 @@ class MoodManager;
 class MovementComponent;
 class NVStorageComponent;
 enum class OffTreadsState : int8_t;
-class PetWorld;
 class PhotographyManager;
 class PowerStateManager;
 class RobotEventHandler;
@@ -145,7 +144,7 @@ public:
   const RobotID_t GetID() const;
 
   bool IsPhysical() const {
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
     return false;
 #else
     return true;
@@ -234,7 +233,6 @@ public:
   INLINE_GETTERS(MoodManager)
   INLINE_GETTERS(NVStorageComponent)
   INLINE_GETTERS(PathComponent)
-  INLINE_GETTERS(PetWorld)
   INLINE_GETTERS(PhotographyManager)
   INLINE_GETTERS(PowerStateManager)
   INLINE_GETTERS(ProxSensorComponent)

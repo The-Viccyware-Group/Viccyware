@@ -26,7 +26,6 @@ class ContextWrapper;
 class BlockWorld;
 class FaceWorld;
 class LocaleComponent;
-class PetWorld;
 class PublicStateBroadcaster;
 class PathComponent;
 class DrivingAnimationHandler;
@@ -87,7 +86,6 @@ LINK_COMPONENT_TYPE_TO_ENUM(AppCubeConnectionSubscriber,   RobotComponentID, App
 LINK_COMPONENT_TYPE_TO_ENUM(ContextWrapper,                RobotComponentID, CozmoContextWrapper)
 LINK_COMPONENT_TYPE_TO_ENUM(BlockWorld,                    RobotComponentID, BlockWorld)
 LINK_COMPONENT_TYPE_TO_ENUM(FaceWorld,                     RobotComponentID, FaceWorld)
-LINK_COMPONENT_TYPE_TO_ENUM(PetWorld,                      RobotComponentID, PetWorld)
 LINK_COMPONENT_TYPE_TO_ENUM(PublicStateBroadcaster,        RobotComponentID, PublicStateBroadcaster)
 LINK_COMPONENT_TYPE_TO_ENUM(Audio::EngineRobotAudioClient, RobotComponentID, EngineAudioClient)
 LINK_COMPONENT_TYPE_TO_ENUM(PathComponent,                 RobotComponentID, PathPlanning)
@@ -191,7 +189,6 @@ std::string GetComponentStringForID<Vector::RobotComponentID>(Vector::RobotCompo
     CASE(Movement)
     CASE(NVStorage)
     CASE(PathPlanning)
-    CASE(PetWorld)
     CASE(PhotographyManager)
     CASE(PowerStateManager)
     CASE(ProxSensor)

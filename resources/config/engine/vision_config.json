@@ -13,6 +13,13 @@
 
   "FaceAlbum" : "default",
 
+  "FaceDetection" :
+  {
+    "UseGpu"      : true,   // Run YuNet and MobileFaceNet on the Adreno via the OpenCL delegate
+    "GpuCacheDir" : "/data/data/com.anki.victor/cache/gpuCache", // Created if missing; empty disables kernel caching
+    "NumThreads"  : 2       // Only used for whatever falls back to CPU
+  },
+
   "FaceRecognition" :
   {
     "RunMode": "asynchronous"  // "synchronous" or "asynchronous"
@@ -54,18 +61,6 @@
     "DropStatsWindowLength_sec"         : 30,  // How long to average dropped image stats
     "TimeBetweenProfilerInfoPrints_sec" : 60,  // How often to print Profiler info messages to the logs
     "TimeBetweenProfilerDasLogs_sec"    : 600  // How often to log Profiler DAS events
-  },
-
-  "PetTracker" :
-  {
-    "MaxPets"             : 4,    // Detectable/trackable at the same time
-    "MinFaceSize"         : 60,
-    "MaxFaceSize"         : 240,
-    "DetectionThreshold"  : 900,  // 0 to 1000
-    "InitialSearchCycle"  : 4,    // 1 to 45
-    "NewSearchCycle"      : 8,    // 5 to 45
-    "TrackLostCount"      : 2,    // Number of frames to continue searching for (and reporting) a lost pet
-    "TrackSteadiness"     : 15    // 10 to 30 in Percentage change required to actually update size/position
   },
 
   "MotionDetector" :

@@ -47,7 +47,6 @@ public:
     // probably not ALL necessary, but theoretically public state could be broadcast about any/all of these
     dependencies.insert(RobotComponentID::BlockWorld);
     dependencies.insert(RobotComponentID::FaceWorld);
-    dependencies.insert(RobotComponentID::PetWorld);
     dependencies.insert(RobotComponentID::EngineAudioClient);
     dependencies.insert(RobotComponentID::PathPlanning);
     dependencies.insert(RobotComponentID::DrivingAnimationHandler);

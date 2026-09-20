@@ -345,6 +345,14 @@
       "user_intent": "imperative_eyecolor",
       "cloud_intent": "intent_imperative_eyecolor",
       "feature_gate": "EyeColorVC"
+    },
+    {
+      "cloud_intent": "intent_play_keepaway",
+      "user_intent": "play_keepaway"
+    },
+    {
+      "cloud_intent": "intent_play_cubedrive",
+      "user_intent": "play_cubedrive"
     }
   ],
 

@@ -44,7 +44,6 @@
 #include "engine/actions/trackFaceAction.h"
 #include "engine/actions/trackMotionAction.h"
 #include "engine/actions/trackObjectAction.h"
-#include "engine/actions/trackPetFaceAction.h"
 #include "engine/actions/visuallyVerifyActions.h"
 
 #include "engine/components/animationComponent.h"
@@ -972,26 +971,6 @@ IActionRunner* GetActionHelper(Robot& robot, const ExternalInterface::TrackToObj
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-template<>
-IActionRunner* GetActionHelper(Robot& robot, const ExternalInterface::TrackToPet& trackPet)
-{
-  TrackPetFaceAction* action = nullptr;
-
-  if(trackPet.petID != Vision::UnknownFaceID)
-  {
-    action = new TrackPetFaceAction(trackPet.petID);
-  }
-  else
-  {
-    action = new TrackPetFaceAction(trackPet.petType);
-  }
-
-  action->SetUpdateTimeout(trackPet.timeout_sec);
-
-  return action;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // THIS FUNCTION IS A CLAD EQUIVALENT FOR THE FOLLOWING: SetHeadAngleRequest
 //  if any changes are made here, they should be reflected in the associated function.
 template<>
@@ -1298,7 +1277,6 @@ RobotEventHandler::RobotEventHandler(const CozmoContext* context)
       DEFINE_HANDLER(trackFace,                TrackToFace,              0),
       DEFINE_HANDLER(trackObject,              TrackToObject,            0),
       DEFINE_HANDLER(trackLaserPoint,          TrackToLaserPoint,        0),
-      DEFINE_HANDLER(trackPet,                 TrackToPet,               0),
       DEFINE_HANDLER(turnInPlace,              TurnInPlace,              0),
       DEFINE_HANDLER(turnTowardsFace,          TurnTowardsFace,          0),
       DEFINE_HANDLER(turnTowardsImagePoint,    TurnTowardsImagePoint,    0),

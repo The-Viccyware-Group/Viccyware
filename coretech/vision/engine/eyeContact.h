@@ -44,12 +44,12 @@ struct GazeData
  *                 EyeContact                      *
  ***************************************************/
 /*
-  This class' primary input is gaze estimation from the okao library. These
+  This class' primary input is gaze estimation from the face tracker. These
   inputs are the angles the gaze is making with the image plane. There
   are two angles: the horizontal angle (left right), and vertical (up down).
   The range of the these inputs are +/-30 degrees for the horizontal angle,
   and +/-20 degrees for the vertical angle. Both of these ranges are from
-  the okoa documentation; however in practice angles occasionally
+  the original face tracker documentation; however in practice angles occasionally
   exceed this range. Due to this limited range we don't need to address
   typical issues when comparing angles, and for this class these inputs
   are treated as Cartesian coordinates.

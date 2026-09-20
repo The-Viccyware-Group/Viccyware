@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+
+	"github.com/digital-dream-labs/vector-cloud/internal/fsroot"
 )
 
 // URLs represents a set of URLs where Anki's cloud services can be reached
@@ -50,10 +52,10 @@ var wirepodFilename = "/data/data/server_config.json"
 // is blank, a known hardcoded location for server_config.json on the robot is used.
 func LoadURLs(filename string) (*URLs, error) {
 	if filename == "" {
-		if _, err := os.Open(wirepodFilename); err != nil {
-			filename = defaultFilename
+		if _, err := os.Open(fsroot.RobotPath(wirepodFilename)); err != nil {
+			filename = fsroot.RobotPath(defaultFilename)
 		} else {
-			filename = wirepodFilename
+			filename = fsroot.RobotPath(wirepodFilename)
 		}
 	}
 	buf, err := ioutil.ReadFile(filename)

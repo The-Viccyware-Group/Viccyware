@@ -9,7 +9,6 @@
 #include "clad/types/pathMotionProfile.clad"
 #include "clad/types/proceduralFaceTypes.clad"
 #include "clad/types/animationTrigger.clad"
-#include "clad/types/petTypes.clad"
 
 namespace Anki {
 namespace Vector {
@@ -296,13 +295,6 @@ message TrackToLaserPoint {
 
 }
 
-// TrackToPet
-message TrackToPet {
-    float_32         timeout_sec, // Give up after not seeing a pet for this long (0 to never give up)
-    uint_32          petID,       // Set to UnknownFaceID (-1) to use first of specified PetType
-    Vision::PetType  petType      // Set to Unknown to use any pet type (ignored if ID set)
-}
-
 // TurnInPlace
 // If isAbsolute == 0, turns the specified number of radians, *relative to the robot's current heading*
 // If isAbsolute != 0, turns to the specified absolute orientation.
@@ -497,7 +489,6 @@ union RobotActionUnion {
   TrackToFace                   trackFace,
   TrackToObject                 trackObject,
   TrackToLaserPoint             trackLaserPoint,
-  TrackToPet                    trackPet,
   TurnInPlace                   turnInPlace,
   TurnTowardsFace               turnTowardsFace,
   TurnTowardsImagePoint         turnTowardsImagePoint,

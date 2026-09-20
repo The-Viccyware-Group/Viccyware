@@ -56,15 +56,37 @@ set(GATEWAY_PROTO_SRCS "${GATEWAY_PROTO_SRCS}" PARENT_SCOPE)
 set(PROTOBUF_OUTPUT_DIR "${PROTOBUF_OUTPUT_DIR}" PARENT_SCOPE)
 set(GATEWAY_PROTO_HOME_DIR "${GATEWAY_PROTO_HOME_DIR}" PARENT_SCOPE)
 
-anki_build_go(
-  NAME         vic-cloud
-  DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
-  SRC_DIRS     cloud
-  INCLUDE_DIRS "${OPUS_INC}"
-  LINK_FLAGS   "${OPUS_LIBS}"
-  PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
-  BUILD_TAGS "vicos nolibopusfile"
-)
+option(VIC_CLOUD_NATIVE "Build vic-cloud for the host when STANDALONE_SIM" ON)
+
+if(STANDALONE_SIM AND VIC_CLOUD_NATIVE)
+  anki_build_go(
+    NAME       vic-cloud
+    NATIVE
+    DIR        "${CMAKE_CURRENT_SOURCE_DIR}"
+    SRC_DIRS   cloud
+    BUILD_TAGS "nolibopusfile"
+  )
+elseif(STANDALONE_SIM)
+  anki_build_go(
+    NAME         vic-cloud
+    DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
+    SRC_DIRS     cloud
+    INCLUDE_DIRS "${OPUS_INC}"
+    LINK_FLAGS   "${OPUS_LIBS}"
+    PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
+    BUILD_TAGS "nolibopusfile"
+  )
+else()
+  anki_build_go(
+    NAME         vic-cloud
+    DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
+    SRC_DIRS     cloud
+    INCLUDE_DIRS "${OPUS_INC}"
+    LINK_FLAGS   "${OPUS_LIBS}"
+    PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
+    BUILD_TAGS "vicos nolibopusfile"
+  )
+endif()
 
 set(PROTO_SRC_DIR "${GATEWAY_PROTO_HOME_DIR}/public")
 file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")
@@ -117,16 +139,18 @@ add_custom_target(proto_gen ALL DEPENDS ${PROTO_GO_GEN_FILES})
 
 add_dependencies(vic-cloud proto_gen)
 
-add_custom_command(
-    OUTPUT "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
-    COMMAND ${CMAKE_COMMAND}
-    ARGS -E copy_if_different "${CMAKE_SOURCE_DIR}/3rd/opus/vicos/lib/libopus.so.0.10.1" "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
-    COMMENT "copy libopus"
-    VERBATIM
-)
+if(NOT (STANDALONE_SIM AND VIC_CLOUD_NATIVE))
+  add_custom_command(
+      OUTPUT "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
+      COMMAND ${CMAKE_COMMAND}
+      ARGS -E copy_if_different "${CMAKE_SOURCE_DIR}/3rd/opus/vicos/lib/libopus.so.0.10.1" "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
+      COMMENT "copy libopus"
+      VERBATIM
+  )
 
-add_custom_target(opus
-  DEPENDS "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
-)
+  add_custom_target(opus
+    DEPENDS "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
+  )
 
-add_dependencies(vic-cloud opus)
+  add_dependencies(vic-cloud opus)
+endif()

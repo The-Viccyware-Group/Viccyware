@@ -10,6 +10,7 @@
 **/
 
 #include "anki/cozmo/shared/cozmoConfig.h"
+#include "anki/cozmo/shared/factory/faultCodes.h"
 #include "core/lcd.h"
 #include "coretech/vision/engine/image.h"
 #include "opencv2/highgui.hpp"
@@ -37,9 +38,14 @@ static const std::unordered_map<uint16_t,std::string> kFaultText = {
   {990,  "990. False alert for display issues."},
 };
 
+// Map of fault codes that map to images that should be drawn instead of the number
+std::unordered_map<uint16_t, std::string> kFaultImageMap = {
+  {FaultCode::SHUTDOWN_BATTERY_CRITICAL_TEMP, "/anki/data/assets/cozmo_resources/config/sprites/independentSprites/battery_overheated.png"},
+  {FaultCode::SHUTDOWN_BATTERY_CRITICAL_VOLT, "/anki/data/assets/cozmo_resources/config/sprites/independentSprites/battery_low.png"},
+};
+
 static const char* kSupportURL        = "error.vicw.xyz";
 static const char* kVectorWillRestart = "Cozmo will restart";
-
 
 static constexpr float kHeadScale = 0.7f;
 static constexpr int   kHeadThick = 1;
@@ -151,6 +157,21 @@ static void DrawNumber(uint16_t code, bool willRestart)
                   img565.GetNumRows() * img565.GetNumCols() * sizeof(u16));
 }
 
+bool DrawImage(std::string& image_path)
+{
+  Vision::ImageRGB565 img565;
+  if (img565.Load(image_path) != RESULT_OK) {
+    return false;
+  }
+
+  // Resize if the image isn't the right size
+  if (img565.GetNumCols() != FACE_DISPLAY_WIDTH || img565.GetNumRows() != FACE_DISPLAY_HEIGHT) {
+    img565.Resize(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
+  }
+
+  lcd_draw_frame2(reinterpret_cast<u16*>(img565.GetDataPointer()), img565.GetNumRows() * img565.GetNumCols() * sizeof(u16));
+  return true;
+}
 
 }} // ns
 
@@ -163,6 +184,8 @@ int main(int argc,char*argv[])
   using namespace Anki::Vector;
 
   bool willRestart=false;
+  bool imageDrawn = false;
+
   int opt;
   while((opt=getopt(argc,argv,"hr"))!=-1){
     if(opt=='h'){ usage(stdout); return 0; }
@@ -175,8 +198,21 @@ int main(int argc,char*argv[])
   uint16_t code=static_cast<uint16_t>(v);
 
   lcd_init();
+
   auto it=kFaultText.find(code);
-  if(it!=kFaultText.end()) DrawMultiline(code, it->second, willRestart);
-  else                     DrawNumber(code,willRestart);
+  auto faultImageIt = kFaultImageMap.find(code);
+
+  if (faultImageIt != kFaultImageMap.end()) {
+    imageDrawn = DrawImage(faultImageIt->second);
+  }
+
+  if (!imageDrawn) {
+    if (it!=kFaultText.end()) {
+      DrawMultiline(code, it->second, willRestart);
+    } else {
+      DrawNumber(code,willRestart);
+    }
+  }
+
   return 0;
 }

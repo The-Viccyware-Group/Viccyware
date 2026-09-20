@@ -689,7 +689,7 @@ namespace Anim {
     }
     assert(destI == kExpectedNumPixels * (1+msg.chunkIndex));
 
-    if (_faceImageChunksReceivedBitMask == kAllFaceImageChunksReceivedMask) {
+    if (_faceImageChunksReceivedBitMask == IsXray() ? kAllFaceImageGrayscaleChunksReceivedMaskFor15Chunks : kAllFaceImageGrayscaleChunksReceivedMaskFor15Chunks) {
       auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
       img->SetFromGray(_faceImageGrayscale);
       auto handle = std::make_shared<Vision::SpriteWrapper>(img);
@@ -727,7 +727,7 @@ namespace Anim {
     uint8_t* imageData_i = _faceImageGrayscale.GetDataPointer();
     std::copy_n(msg.faceData, numPixels, imageData_i + (msg.chunkIndex * kMaxNumPixelsPerChunk) );
 
-    if (_faceImageGrayscaleChunksReceivedBitMask == kAllFaceImageGrayscaleChunksReceivedMask) {
+    if (_faceImageGrayscaleChunksReceivedBitMask == IsXray() ? kAllFaceImageGrayscaleChunksReceivedMaskFor15Chunks : kAllFaceImageGrayscaleChunksReceivedMaskFor15Chunks) {
       auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
       img->SetFromGray(_faceImageGrayscale);
       auto handle = std::make_shared<Vision::SpriteWrapper>(img);
@@ -738,6 +738,8 @@ namespace Anim {
       _wasAnimationInterruptedWithNothing = true;
       _faceImageGrayscaleId = 0;
       _faceImageGrayscaleChunksReceivedBitMask = 0;
+    } else {
+      LOG_INFO("AnimationStreamer.Process_displayFaceImageChunk", "Not enough face image chunks, not displaying image");
     }
   }
 

@@ -7,7 +7,6 @@ option(USE_DAS "Enable DAS reporting" OFF)
 option(ALEXA_ACOUSTIC_TEST "Enable alexa acoustic testing (no movement mode)" OFF)
 
 include(opencv)
-include(okao)
 include(flatbuffers)
 include(protobuf)
 include(anki_build_strip)

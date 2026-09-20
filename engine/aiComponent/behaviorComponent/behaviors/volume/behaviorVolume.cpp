@@ -38,7 +38,8 @@ namespace {
   // in the app and in verbal semantics.
   // update: this interface is a moving target. now changed to VOLUME_1 through VOLUME_5...
   // (once it's stabilized we could remove the older ones...)
-  const std::map<std::string, EVolumeLevel> kVolumeLevelMap {//{"mute", EVolumeLevel::MUTE}, // don't ever actually use "mute"
+  const std::map<std::string, EVolumeLevel> kVolumeLevelMap {{"mute", EVolumeLevel::MUTE}, // don't ever actually use "mute" // TOO FUCKING BAD ANKI, I WILL
+                                                            {"VOLUME_0", EVolumeLevel::MUTE},
                                                             {"minimum", EVolumeLevel::MIN},
                                                             {"min", EVolumeLevel::MIN},
                                                             {"VOLUME_1", EVolumeLevel::MIN},
@@ -51,7 +52,8 @@ namespace {
                                                             {"maximum", EVolumeLevel::MAX},
                                                             {"max", EVolumeLevel::MAX},
                                                             {"VOLUME_5", EVolumeLevel::MAX}};
-  const std::map<EVolumeLevel, AnimationTrigger> kVolumeLevelAnimMap {{EVolumeLevel::MIN, AnimationTrigger::VolumeLevel1},
+  const std::map<EVolumeLevel, AnimationTrigger> kVolumeLevelAnimMap {{EVolumeLevel::MUTE, AnimationTrigger::VolumeLevelMute},
+                                                                    {EVolumeLevel::MIN, AnimationTrigger::VolumeLevel1},
                                                                     {EVolumeLevel::MEDLOW, AnimationTrigger::VolumeLevel2},
                                                                     {EVolumeLevel::MED, AnimationTrigger::VolumeLevel3},
                                                                     {EVolumeLevel::MEDHIGH, AnimationTrigger::VolumeLevel4},
@@ -250,7 +252,7 @@ bool BehaviorVolume::SetVolume(EVolumeLevel desiredVolumeEnum)
 {
   // Let's do some range checking here
   // should really be unnecessary now that we're using the enum, but let's be safe
-  if ( (desiredVolumeEnum < EVolumeLevel::MIN) || (desiredVolumeEnum > EVolumeLevel::MAX) ) {
+  if ( (desiredVolumeEnum < EVolumeLevel::MUTE) || (desiredVolumeEnum > EVolumeLevel::MAX) ) {
     LOG_WARNING("BehaviorVolume.SetVolume.OutsidePermittedRange",
                 "Requested volume %u outside permitted range of [%u,%u].", static_cast<uint32_t>(desiredVolumeEnum), static_cast<uint32_t>(EVolumeLevel::MIN), static_cast<uint32_t>(EVolumeLevel::MAX));
     return false;
@@ -316,7 +318,7 @@ EVolumeLevel BehaviorVolume::ComputeDesiredVolumeFromIncrement(bool positiveIncr
   // read volume from settings
   SettingsManager& settings = GetBEI().GetSettingsManager();
   uint32_t vol = settings.GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume);
-  if ( (vol < static_cast<uint32_t>(EVolumeLevel::MIN) ) || (vol > static_cast<uint32_t>(EVolumeLevel::MAX)) ){
+  if ( (vol < static_cast<uint32_t>(EVolumeLevel::MUTE) ) || (vol > static_cast<uint32_t>(EVolumeLevel::MAX)) ){
     LOG_WARNING("BehaviorVolume.ComputeDesiredVolumeFromIncrement.unexpectedCurrentVolume",
                 "Volume read from settings was outside expected range: %u", vol);
     if (vol < 1 && !positiveIncrement){
@@ -330,8 +332,8 @@ EVolumeLevel BehaviorVolume::ComputeDesiredVolumeFromIncrement(bool positiveIncr
   int increment = positiveIncrement ? 1 : -1;
   uint32_t newVol = vol + increment; 
   // check bounds
-  if (newVol < static_cast<uint32_t>(EVolumeLevel::MIN) ) {
-    newVol = static_cast<uint32_t>(EVolumeLevel::MIN);
+  if (newVol < static_cast<uint32_t>(EVolumeLevel::MUTE) ) {
+    newVol = static_cast<uint32_t>(EVolumeLevel::MUTE);
     LOG_INFO("BehaviorVolume.ComputeDesiredVolumeFromIncrement.out_of_range",
               "volume is already at minimum level");
   }

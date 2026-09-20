@@ -28,7 +28,6 @@ enum class BEIComponentID{
   MicComponent,
   MoodManager,
   MovementComponent,
-  PetWorld,
   PhotographyManager,
   PowerStateManager,
   ProxSensor,

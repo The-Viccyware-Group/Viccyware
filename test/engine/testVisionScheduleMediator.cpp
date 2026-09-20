@@ -88,7 +88,7 @@ TEST(VisionScheduleMediator, Interleaving)
         "relativeCost" : 16
       },
       {
-        "mode"         : "Pets",
+        "mode"         : "Hands",
         "low"          : 8,
         "med"          : 4,
         "high"         : 2,
@@ -119,9 +119,9 @@ TEST(VisionScheduleMediator, Interleaving)
   TestSubscriber medFaceSubscriber(&vsm, { { VisionMode::Faces, EVisionUpdateFrequency::Med } });
   TestSubscriber highFaceSubscriber(&vsm, { { VisionMode::Faces, EVisionUpdateFrequency::High } });
 
-  TestSubscriber lowPetSubscriber(&vsm, { { VisionMode::Pets, EVisionUpdateFrequency::Low } });
-  TestSubscriber medPetSubscriber(&vsm, { { VisionMode::Pets, EVisionUpdateFrequency::Med } });
-  TestSubscriber highPetSubscriber(&vsm, { { VisionMode::Pets, EVisionUpdateFrequency::High } });
+  TestSubscriber lowHandSubscriber(&vsm, { { VisionMode::Hands, EVisionUpdateFrequency::Low } });
+  TestSubscriber medHandSubscriber(&vsm, { { VisionMode::Hands, EVisionUpdateFrequency::Med } });
+  TestSubscriber highHandSubscriber(&vsm, { { VisionMode::Hands, EVisionUpdateFrequency::High } });
   
   TestSubscriber lowMotionSubscriber(&vsm, { { VisionMode::Motion, EVisionUpdateFrequency::Low } });
   TestSubscriber medMotionSubscriber(&vsm, { { VisionMode::Motion, EVisionUpdateFrequency::Med } });
@@ -130,7 +130,7 @@ TEST(VisionScheduleMediator, Interleaving)
   // Test basic Subscription
   lowFaceSubscriber.Subscribe();
   lowMarkerSubscriber.Subscribe();
-  lowPetSubscriber.Subscribe();
+  lowHandSubscriber.Subscribe();
   lowMotionSubscriber.Subscribe();
   vsm.UpdateVisionSchedule(nullptr);
   AllVisionModesSchedule::ModeScheduleList scheduleList = vsm.GenerateBalancedSchedule();
@@ -143,7 +143,7 @@ TEST(VisionScheduleMediator, Interleaving)
       case VisionMode::Markers:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, false, false, true})));
         break;
-      case VisionMode::Pets:
+      case VisionMode::Hands:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, true, false, false,
                                                                          false, false, false, false})));
         break;
@@ -160,7 +160,7 @@ TEST(VisionScheduleMediator, Interleaving)
   // Test Layered Subscription
   medFaceSubscriber.Subscribe();
   medMarkerSubscriber.Subscribe();
-  medPetSubscriber.Subscribe();
+  medHandSubscriber.Subscribe();
   medMotionSubscriber.Subscribe();
   vsm.UpdateVisionSchedule(nullptr);
   scheduleList = vsm.GenerateBalancedSchedule();
@@ -173,7 +173,7 @@ TEST(VisionScheduleMediator, Interleaving)
       case VisionMode::Markers:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, true})));
         break;
-      case VisionMode::Pets:
+      case VisionMode::Hands:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, true, false, false})));
         break;
       case VisionMode::Motion:
@@ -189,7 +189,7 @@ TEST(VisionScheduleMediator, Interleaving)
   // Test basic Unsubscribe
   medFaceSubscriber.Unsubscribe();
   medMarkerSubscriber.Unsubscribe();
-  medPetSubscriber.Unsubscribe();
+  medHandSubscriber.Unsubscribe();
   medMotionSubscriber.Unsubscribe();
   vsm.UpdateVisionSchedule(nullptr);
   scheduleList = vsm.GenerateBalancedSchedule();
@@ -202,7 +202,7 @@ TEST(VisionScheduleMediator, Interleaving)
       case VisionMode::Markers:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, false, false, true})));
         break;
-      case VisionMode::Pets:
+      case VisionMode::Hands:
         EXPECT_TRUE((modeSchedule.second._schedule == std::vector<bool>({false, true, false, false,
                                                                          false, false, false, false})));
         break;
@@ -219,7 +219,7 @@ TEST(VisionScheduleMediator, Interleaving)
   // Test full Unsubscribe
   lowFaceSubscriber.Unsubscribe();
   lowMarkerSubscriber.Unsubscribe();
-  lowPetSubscriber.Unsubscribe();
+  lowHandSubscriber.Unsubscribe();
   lowMotionSubscriber.Unsubscribe();
   vsm.UpdateVisionSchedule(nullptr);
   scheduleList = vsm.GenerateBalancedSchedule();

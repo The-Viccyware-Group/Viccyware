@@ -45,7 +45,6 @@
 #include "coretech/vision/engine/image.h"
 #include "coretech/vision/engine/imageCache.h"
 #include "coretech/vision/engine/markerDetector.h"
-#include "coretech/vision/engine/petTracker.h"
 
 #include "clad/vizInterface/messageViz.h"
 #include "clad/robotInterface/messageEngineToRobot.h"
@@ -121,10 +120,8 @@ CONSOLE_VAR(u32, kCalibTargetType, "Vision.Calibration", (u32)CameraCalibrator::
 // The percentage of the width of the image that will remain after cropping
 CONSOLE_VAR_RANGED(f32, kFaceTrackingCropWidthFraction, "Vision.FaceDetection", 2.f / 3.f, 0.f, 1.f);
 
-// Fake hand and pet detections for testing behaviors while we don't have reliable neural net models
+// Fake hand detections for testing behaviors while we don't have reliable neural net models
 CONSOLE_VAR_RANGED(f32, kFakeHandDetectionProbability, "Vision.NeuralNets", 0.f, 0.f, 1.f);
-CONSOLE_VAR_RANGED(f32, kFakeCatDetectionProbability,  "Vision.NeuralNets", 0.f, 0.f, 1.f);
-CONSOLE_VAR_RANGED(f32, kFakeDogDetectionProbability,  "Vision.NeuralNets", 0.f, 0.f, 1.f);
 
 CONSOLE_VAR(bool, kDisplayUndistortedImages,"Vision.General", false);
   
@@ -156,7 +153,6 @@ VisionSystem::VisionSystem(const CozmoContext* context)
                                                              _currentCameraParams))
 , _poseOrigin("VisionSystemOrigin")
 , _vizManager(context == nullptr ? nullptr : context->GetVizManager())
-, _petTracker(new Vision::PetTracker())
 , _markerDetector(new Vision::MarkerDetector(_camera))
 , _laserPointDetector(new LaserPointDetector(_vizManager))
 , _overheadEdgeDetector(new OverheadEdgesDetector(_camera, _vizManager, *this))
@@ -297,12 +293,6 @@ Result VisionSystem::Init(const Json::Value& config)
   // TODO check config entry here
   _groundPlaneClassifier.reset(new GroundPlaneClassifier(config["GroundPlaneClassifier"], _context));
 
-  const Result petTrackerInitResult = _petTracker->Init(config);
-  if(RESULT_OK != petTrackerInitResult) {
-    PRINT_NAMED_ERROR("VisionSystem.Init.PetTrackerInitFailed", "");
-    return petTrackerInitResult;
-  }
-  
   if(!config.isMember(NeuralNets::JsonKeys::NeuralNets))
   {
     PRINT_NAMED_ERROR("VisionSystem.Init.MissingNeuralNetsConfigField", "");
@@ -875,39 +865,6 @@ Result VisionSystem::DetectFaces(Vision::ImageCache& imageCache, std::vector<Ank
 } // DetectFaces()
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Result VisionSystem::DetectPets(Vision::ImageCache& imageCache,
-                                std::vector<Anki::Rectangle<s32>>& detections)
-{
-  const Vision::Image& grayImage = imageCache.GetGray();
-  Result result = RESULT_FAIL;
-  
-  if(detections.empty())
-  {
-    result = _petTracker->Update(grayImage, _currentResult.pets);
-  }
-  else
-  {
-    // Don't look for pets where we've already found something else
-    Vision::Image maskedImage = BlackOutRects(grayImage, detections);
-    result = _petTracker->Update(maskedImage, _currentResult.pets);
-  }
-  
-  if(RESULT_OK != result) {
-    PRINT_NAMED_WARNING("VisionSystem.DetectPets.PetTrackerUpdateFailed", "");
-  }
-  
-  for(auto const& pet : _currentResult.pets)
-  {
-    detections.emplace_back((s32)std::round(pet.GetRect().GetX()),
-                            (s32)std::round(pet.GetRect().GetY()),
-                            (s32)std::round(pet.GetRect().GetWidth()),
-                            (s32)std::round(pet.GetRect().GetHeight()));
-  }
-  return result;
-  
-} // DetectPets()
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Result VisionSystem::DetectMotion(Vision::ImageCache& imageCache)
 {
 
@@ -1433,10 +1390,8 @@ void VisionSystem::CheckForNeuralNetResults()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void VisionSystem::AddFakeDetections(const TimeStamp_t atTimestamp, const std::set<VisionMode>& modes)
 {
-  // DEBUG: Randomly fake detections of hands and pets if this network was registered to those modes
-  if(Util::IsFltGTZero(kFakeHandDetectionProbability) ||
-     Util::IsFltGTZero(kFakeCatDetectionProbability) ||
-     Util::IsFltGTZero(kFakeDogDetectionProbability))
+  // DEBUG: Randomly fake detections of hands if this network was registered to those modes
+  if(Util::IsFltGTZero(kFakeHandDetectionProbability))
   {
     std::vector<Vision::SalientPointType> fakeDetectionsToAdd;
     for(auto & mode : modes)
@@ -1447,14 +1402,6 @@ void VisionSystem::AddFakeDetections(const TimeStamp_t atTimestamp, const std::s
       if((VisionMode::Hands == mode) && (rng.RandDbl() < kFakeHandDetectionProbability))
       {
         fakeDetectionsToAdd.emplace_back(Vision::SalientPointType::Hand);
-      }
-      if((VisionMode::Pets == mode) && (rng.RandDbl() < kFakeCatDetectionProbability))
-      {
-        fakeDetectionsToAdd.emplace_back(Vision::SalientPointType::Cat);
-      }
-      if((VisionMode::Pets == mode) && (rng.RandDbl() < kFakeDogDetectionProbability))
-      {
-        fakeDetectionsToAdd.emplace_back(Vision::SalientPointType::Dog);
       }
     }
     for(const auto& type : fakeDetectionsToAdd)
@@ -1651,17 +1598,6 @@ Result VisionSystem::Update(const VisionPoseData& poseData, Vision::ImageCache& 
     Toc("TotalFaces");
   }
   
-  if(IsModeEnabled(VisionMode::Pets))
-  {
-    Tic("TotalPets");
-    if((lastResult = DetectPets(imageCache, detectionsByMode[VisionMode::Pets])) != RESULT_OK) {
-      PRINT_NAMED_ERROR("VisionSystem.Update.DetectPetsFailed", "");
-      anyModeFailures = true;
-    } else {
-      visionModesProcessed.Insert(VisionMode::Pets);
-    }
-    Toc("TotalPets");
-  }
   
   if(IsModeEnabled(VisionMode::Motion))
   {

@@ -25,6 +25,7 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/animationWrappers/behaviorTextToSpeechLoop.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/appBehaviors/behaviorEyeColor.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/attentionTransfer/behaviorAttentionTransferIfNeeded.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/basicCubeInteractions/behaviorCubeDrive.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicCubeInteractions/behaviorPickUpCube.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicCubeInteractions/behaviorPutDownBlock.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/basicCubeInteractions/behaviorPutDownBlockAtPose.h"
@@ -58,7 +59,6 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/danceToTheBeat/behaviorDanceToTheBeat.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/danceToTheBeat/behaviorDanceToTheBeatCoordinator.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/danceToTheBeat/behaviorListenForBeats.h"
-#include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorCubeDrive.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorDevBatteryLogging.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorDevCubeSpinnerConsole.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorDevDesignCubeLights.h"
@@ -171,7 +171,6 @@
 #include "engine/aiComponent/behaviorComponent/behaviors/userDefinedBehaviorTree/behaviorUserDefinedBehaviorSelector.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/userDefinedBehaviorTree/behaviorUserDefinedBehaviorTreeRouter.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorConfirmObject.h"
-#include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorPetDetection.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorPoweringRobotOff.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorReactToTouchPetting.h"
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/behaviorReactToUnclaimedIntent.h"
@@ -1172,12 +1171,6 @@ ICozmoBehaviorPtr BehaviorFactory::CreateBehavior(const Json::Value& config)
     case BehaviorClass::ConfirmObject:
     {
       newBehavior = ICozmoBehaviorPtr(new BehaviorConfirmObject(config));
-      break;
-    }
-    
-    case BehaviorClass::PetDetection:
-    {
-      newBehavior = ICozmoBehaviorPtr(new BehaviorPetDetection(config));
       break;
     }
     

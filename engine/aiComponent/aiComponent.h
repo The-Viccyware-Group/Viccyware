@@ -68,7 +68,6 @@ public:
     dependencies.insert(RobotComponentID::Map);
     dependencies.insert(RobotComponentID::Movement);
     dependencies.insert(RobotComponentID::MoodManager);
-    dependencies.insert(RobotComponentID::PetWorld);
     dependencies.insert(RobotComponentID::ProxSensor);
     dependencies.insert(RobotComponentID::TouchSensor);
     dependencies.insert(RobotComponentID::Vision);

@@ -148,7 +148,6 @@ struct DockingErrorSignal;
     // Individual processing update helpers. These are called individually by
     // UpdateAllResults() above, but are exposed as public for Unit Test usage.
     Result UpdateFaces(const VisionProcessingResult& result);
-    Result UpdatePets(const VisionProcessingResult& procResult);
     Result UpdateVisionMarkers(const VisionProcessingResult& result);
     Result UpdateMotionCentroid(const VisionProcessingResult& result);
     Result UpdateLaserPoints(const VisionProcessingResult& result);

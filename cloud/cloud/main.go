@@ -17,6 +17,7 @@ import (
 	"github.com/digital-dream-labs/vector-cloud/internal/clad/cloud"
 	"github.com/digital-dream-labs/vector-cloud/internal/cloudproc"
 	"github.com/digital-dream-labs/vector-cloud/internal/config"
+	"github.com/digital-dream-labs/vector-cloud/internal/fsroot"
 	"github.com/digital-dream-labs/vector-cloud/internal/ipc"
 	"github.com/digital-dream-labs/vector-cloud/internal/jdocs"
 	"github.com/digital-dream-labs/vector-cloud/internal/log"
@@ -87,26 +88,19 @@ func randomString() string {
 
 func main() {
 	go mainGateway()
-	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
-	if err != nil {
-		token.PerRuntimeToken = randomString()
-		os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
-	} else {
-		token.PerRuntimeToken = string(f)
-	}
 	var pool = rootcerts.ServerCertPool()
 	// load custom cert
 	// /anki/etc/wirepod-cert.crt
-	certBytes, err := os.ReadFile("/anki/etc/" + podCert)
+	certBytes, err := os.ReadFile(fsroot.RobotPath("/anki/etc/" + podCert))
 	if err == nil {
 		log.Println("Found /anki/etc/" + podCert + ", appending")
 		ok := pool.AppendCertsFromPEM(certBytes)
 		if ok {
 			log.Println("Successfully loaded custom cert! Writing to /data")
-			os.WriteFile("/data/data/wirepod-cert.crt", certBytes, 0644)
+			os.WriteFile(fsroot.RobotPath("/data/data/wirepod-cert.crt"), certBytes, 0644)
 		} else {
 			log.Println("Failed to load /anki/etc/"+podCert, ", trying /data/data/wirepod-cert.crt")
-			certBytes, err := os.ReadFile("/data/data/" + podCert)
+			certBytes, err := os.ReadFile(fsroot.RobotPath("/data/data/" + podCert))
 			if err == nil {
 				log.Println("Found /data/data/" + podCert + ", appending")
 				ok := pool.AppendCertsFromPEM(certBytes)
@@ -119,7 +113,7 @@ func main() {
 		}
 	} else {
 		log.Println("Failed to load /anki/etc/"+podCert, ", trying /data/data/wirepod-cert.crt")
-		certBytes, err := os.ReadFile("/data/data/" + podCert)
+		certBytes, err := os.ReadFile(fsroot.RobotPath("/data/data/" + podCert))
 		if err == nil {
 			log.Println("Found /data/data/" + podCert + ", appending")
 			ok := pool.AppendCertsFromPEM(certBytes)

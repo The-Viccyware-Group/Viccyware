@@ -1052,14 +1052,6 @@
     "AnimName": "ag_pickupcube_success"
   },
   {
-    "CladEvent":"PetDetectionDog",
-    "AnimName": "ag_petdetection_reaction_dog"
-  },
-  {
-    "CladEvent":"PetDetectionCat",
-    "AnimName": "ag_petdetection_reaction_cat"
-  },
-  {
     "CladEvent":"PlaceCubeByChargerFail",
     "AnimName": "ag_reacttoblock_dropfail"
   },
@@ -1973,6 +1965,10 @@
   {
     "CladEvent": "VC_SleepingToListeningGetOut",
     "AnimName": "ag_wakeword_groggyeyes_getout"
+  },
+  {
+    "CladEvent": "VolumeLevelMute",
+    "AnimName": "ag_volume_stage_min"
   },
   {
     "CladEvent": "VolumeLevel1",

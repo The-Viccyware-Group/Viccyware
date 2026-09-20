@@ -66,7 +66,6 @@ enum class RobotComponentID {
   Movement,
   NVStorage,
   PathPlanning,
-  PetWorld,
   PhotographyManager,
   PowerStateManager,
   ProxSensor,

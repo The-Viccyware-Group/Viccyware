@@ -17,7 +17,6 @@
 #include "coretech/vision/engine/compressedImage.h"
 #include "coretech/vision/engine/debugImageList.h"
 #include "coretech/vision/engine/trackedFace.h"
-#include "coretech/vision/engine/trackedPet.h"
 #include "coretech/vision/engine/visionMarker.h"
 
 #include "clad/externalInterface/messageEngineToGame.h"
@@ -44,7 +43,6 @@ struct VisionProcessingResult
   std::list<ExternalInterface::RobotObservedMotion>     observedMotions;
   std::list<Vision::ObservedMarker>                     observedMarkers;
   std::list<Vision::TrackedFace>                        faces;
-  std::list<Vision::TrackedPet>                         pets;
   std::list<OverheadEdgeFrame>                          overheadEdges;
   std::list<Vision::UpdatedFaceID>                      updatedFaceIDs;
   std::list<ExternalInterface::RobotObservedLaserPoint> laserPoints;

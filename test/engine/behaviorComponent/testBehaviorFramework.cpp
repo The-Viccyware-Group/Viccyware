@@ -107,7 +107,6 @@ void InitBEIPartial( const BEIComponentMap& map, BehaviorExternalInterface& bei 
            GetFromMap<MicComponent>(map, BEIComponentID::MicComponent),
            GetFromMap<MoodManager>(map, BEIComponentID::MoodManager),
            GetFromMap<MovementComponent>(map, BEIComponentID::MovementComponent),
-           GetFromMap<PetWorld>(map, BEIComponentID::PetWorld),
            GetFromMap<PhotographyManager>(map, BEIComponentID::PhotographyManager),
            GetFromMap<PowerStateManager>(map, BEIComponentID::PowerStateManager),
            GetFromMap<ProxSensorComponent>(map, BEIComponentID::ProxSensor),

@@ -351,7 +351,7 @@ namespace Anki {
                  expressionValues[Util::EnumToUnderlying(expression)]);
         name += buffer;
         
-        // Draw expression score histogram (NOTE: sum of all OKAO expression scores is 100)
+        // Draw expression score histogram (NOTE: sum of all expression scores is 100)
         const f32 kTotalScoreSum = 100.f;
         const ColorRGBA barColor(0.f,1.f,1.f,barAlpha);
         const s32 barWidth = std::round((1.f - (2.f*kBarFraction)) *

@@ -23,6 +23,7 @@
 #include "engine/components/animationComponent.h"
 #include "engine/faceWorld.h"
 
+#include "anki/cozmo/shared/factory/emrHelper.h"
 
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
@@ -59,10 +60,10 @@ const std::vector<Vision::SpritePathMap::AssetID> kDigitMap =
 const Vision::SpriteBoxKeyFrame kTensLeftOfColonKeyFrame(
   Vision::SpriteBox(
     100.0f,
-    27,
-    26,
-    29,
-    43,
+    IsXray() ? 23 : 27,
+    IsXray() ? 22 : 26,
+    IsXray() ? 25 : 29,
+    IsXray() ? 36 : 43,
     Vision::SpriteBoxName::SpriteBox_1,
     Anki::Vision::LayerName::Layer_6,
     Anki::Vision::SpriteRenderMethod::EyeColor,
@@ -77,10 +78,10 @@ const Vision::SpriteBoxKeyFrame kTensLeftOfColonKeyFrame(
 const Vision::SpriteBoxKeyFrame kOnesLeftOfColonKeyFrame(
   Vision::SpriteBox(
     100.0f,
-    57,
-    26,
-    29,
-    43,
+    IsXray() ? 50 : 57,
+    IsXray() ? 22 : 26,
+    IsXray() ? 25 : 29,
+    IsXray() ? 36 : 43,
     Vision::SpriteBoxName::SpriteBox_2,
     Anki::Vision::LayerName::Layer_6,
     Anki::Vision::SpriteRenderMethod::EyeColor,
@@ -95,10 +96,10 @@ const Vision::SpriteBoxKeyFrame kOnesLeftOfColonKeyFrame(
 const Vision::SpriteBoxKeyFrame kColonKeyFrame(
   Vision::SpriteBox(
     100.0f,
-    87,
-    27,
-    10,
-    43,
+    IsXray() ? 76 : 87,
+    IsXray() ? 23 : 27,
+    IsXray() ? 9 : 10,
+    IsXray() ? 36 : 43,
     Vision::SpriteBoxName::SpriteBox_3,
     Anki::Vision::LayerName::Layer_6,
     Anki::Vision::SpriteRenderMethod::EyeColor,
@@ -113,10 +114,10 @@ const Vision::SpriteBoxKeyFrame kColonKeyFrame(
 const Vision::SpriteBoxKeyFrame kTensRightOfColonKeyFrame(
   Vision::SpriteBox(
     100.0f,
-    98,
-    26,
-    29,
-    43,
+    IsXray() ? 85 : 98,
+    IsXray() ? 22 : 26,
+    IsXray() ? 25 : 29,
+    IsXray() ? 36 : 43,
     Vision::SpriteBoxName::SpriteBox_4,
     Anki::Vision::LayerName::Layer_6,
     Anki::Vision::SpriteRenderMethod::EyeColor,
@@ -131,10 +132,10 @@ const Vision::SpriteBoxKeyFrame kTensRightOfColonKeyFrame(
 const Vision::SpriteBoxKeyFrame kOnesRightOfColonKeyFrame(
   Vision::SpriteBox(
     100.0f,
-    128,
-    26,
-    29,
-    43,
+    IsXray() ? 111 : 128,
+    IsXray() ? 22 : 26,
+    IsXray() ? 25 : 29,
+    IsXray() ? 36 : 43,
     Vision::SpriteBoxName::SpriteBox_5,
     Anki::Vision::LayerName::Layer_6,
     Anki::Vision::SpriteRenderMethod::EyeColor,

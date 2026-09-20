@@ -38,7 +38,6 @@
 #include "coretech/vision/engine/imageCache.h"
 #include "coretech/vision/engine/profiler.h"
 #include "coretech/vision/engine/trackedFace.h"
-#include "coretech/vision/engine/trackedPet.h"
 #include "coretech/vision/engine/visionMarker.h"
 
 #include "clad/vizInterface/messageViz.h"
@@ -68,7 +67,6 @@ namespace Vision {
   class FaceTracker;
   class ImageCache;
   class MarkerDetector;
-  class PetTracker;
   class ImageCompositor;
 }
   
@@ -230,7 +228,6 @@ namespace Vector {
 
     // Sub-components for detection/tracking/etc:
     std::unique_ptr<Vision::FaceTracker>            _faceTracker;
-    std::unique_ptr<Vision::PetTracker>             _petTracker;
     std::unique_ptr<Vision::MarkerDetector>         _markerDetector;
     std::unique_ptr<Vision::BrightColorDetector>    _brightColorDetector;
     std::unique_ptr<LaserPointDetector>             _laserPointDetector;
@@ -299,10 +296,6 @@ namespace Vector {
     Result DetectFaces(Vision::ImageCache& imageCache,
                        std::vector<Anki::Rectangle<s32>>& detectionRects,
                        const bool useCropping);
-    
-    // Uses grayscale
-    Result DetectPets(Vision::ImageCache& imageCache,
-                      std::vector<Anki::Rectangle<s32>>& ignoreROIs);
     
     // Will use color if not empty, or gray otherwise
     Result DetectMotion(Vision::ImageCache& imageCache);

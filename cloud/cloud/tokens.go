@@ -11,6 +11,7 @@ import (
 
 	cloud_clad "github.com/digital-dream-labs/vector-cloud/internal/clad/cloud"
 
+	"github.com/digital-dream-labs/vector-cloud/internal/fsroot"
 	"github.com/digital-dream-labs/vector-cloud/internal/ipc"
 	"github.com/digital-dream-labs/vector-cloud/internal/log"
 	"github.com/digital-dream-labs/vector-cloud/internal/robot"
@@ -55,11 +56,12 @@ type ClientTokenManager struct {
 func (ctm *ClientTokenManager) Init() error {
 	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
 	if err != nil {
+		os.MkdirAll("/run/vic-cloud", 0755)
 		token.PerRuntimeToken = randomString()
 		err = os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
 		fmt.Println("HEY WIRE LOOK AT ME!!!:", err)
 	} else {
-		token.PerRuntimeToken = string(f)
+		token.PerRuntimeToken = string(bytes.TrimSpace(f))
 	}
 	ctm.forceClearFile = false
 	ctm.lastUpdatedTokens = time.Now().Add(-24 * time.Hour) // older than our startup time
@@ -97,7 +99,7 @@ func (ctm *ClientTokenManager) Close() error {
 }
 
 func (ctm *ClientTokenManager) readTokensFile() error {
-	clientTokens, err := ioutil.ReadFile(tokensFile)
+	clientTokens, err := ioutil.ReadFile(fsroot.RobotPath(tokensFile))
 	if err != nil {
 		return err
 	}
@@ -105,12 +107,15 @@ func (ctm *ClientTokenManager) readTokensFile() error {
 }
 
 func (ctm *ClientTokenManager) writeTokensFile(data []byte) error {
-	return ioutil.WriteFile(tokensFile, data, 0600)
+	return ioutil.WriteFile(fsroot.RobotPath(tokensFile), data, 0600)
 }
 
 func (ctm *ClientTokenManager) CheckToken(clientToken string) (string, error) {
 	ctm.checkValid <- struct{}{}
 	<-ctm.notifyValid
+	if token.PerRuntimeToken != "" && clientToken == token.PerRuntimeToken {
+		return "Per-Runtime Token", nil
+	}
 	if len(ctm.ClientTokens) == 0 {
 		return "", grpc.Errorf(codes.Unauthenticated, "no valid tokens")
 	}
@@ -149,7 +154,7 @@ func (ctm *ClientTokenManager) DecodeTokenJdoc(jdoc []byte) error {
 // UpdateTokens polls the server for new tokens, and will update as necessary
 func (ctm *ClientTokenManager) UpdateTokens() error {
 	if ctm.forceClearFile {
-		err := os.Remove(tokensFile)
+		err := os.Remove(fsroot.RobotPath(tokensFile))
 		if err == nil {
 			ctm.forceClearFile = false
 		}

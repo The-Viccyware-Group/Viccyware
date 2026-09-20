@@ -144,7 +144,7 @@ bool EyeContact::DetermineMakingEyeContact()
 bool EyeContact::SecondaryContraints()
 {
   // Verify that the head in the required cone. We don't need to worry
-  // about wrap around here. The okao library ranges for these values
+  // about wrap around here. The ranges for these values
   // are from [-180, 179] degrees.
   const bool headRotationInCone = ((std::abs(_face.GetHeadPitch().ToFloat()) < kPitchAngleThreshold_rad) &&
                                    (std::abs(_face.GetHeadYaw().ToFloat()) < kYawAngleThreshold_rad));

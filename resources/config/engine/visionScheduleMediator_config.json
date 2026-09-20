@@ -79,14 +79,6 @@
       "relativeCost" : 16
     },
     {
-      "mode"         : "Pets",
-      "low"          : 4,
-      "med"          : 2,
-      "high"         : 1,
-      "standard"     : 1,
-      "relativeCost" : 16
-    },
-    {
       "mode"         : "Motion",
       "low"          : 4,
       "med"          : 2,

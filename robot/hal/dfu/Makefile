@@ -1,5 +1,5 @@
 
-VICOS_BUILD_TOOL_VER:=5.2.1-r06
+VICOS_BUILD_TOOL_VER:=1.1.0-r04
 
 
 VICOS_ARM_TOOLS_ROOT:=~/.anki/vicos-sdk/dist/$(VICOS_BUILD_TOOL_VER)
@@ -30,10 +30,7 @@ OBJ = ../spine/spine_hal.o ../spine/spine_crc.o dfu.o
 
 APP = dfu
 
-all: $(VICOS_ARM_TOOLS_BIN) $(APP)
-
-$(VICOS_ARM_TOOLS_BIN):
-	../../../tools/build/tools/ankibuild/vicos.py --install $(VICOS_BUILD_TOOL_VER)
+all: $(APP)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	mkdir -p $(OBJDIR)

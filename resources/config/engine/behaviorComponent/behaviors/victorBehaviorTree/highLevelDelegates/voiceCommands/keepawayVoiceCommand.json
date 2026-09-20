@@ -6,17 +6,14 @@
     "conditionType": "FeatureGate",
     "feature": "Keepaway"
   },
-  
+
   "respondToUserIntents" : [
-    {
-      "type": "play_specific",
-      "entity_behavior": "keep_away"
-    }
+    { "type" : "play_keepaway" }
   ],
 
   "behaviors": [
     "DriveOffChargerCube",
-    "Keepaway"
+    "FindCubeAndPlayKeepaway"
   ],
 
   "postBehaviorSuggestion": "Socialize"

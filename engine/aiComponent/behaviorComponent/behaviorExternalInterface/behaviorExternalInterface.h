@@ -60,7 +60,6 @@ class MapComponent;
 class MicComponent;
 class MoodManager;
 class MovementComponent;
-class PetWorld;
 class PhotographyManager;
 class PowerStateManager;
 class ProxSensorComponent;
@@ -154,7 +153,6 @@ public:
             MicComponent*                  micComponent,
             MoodManager*                   moodManager,
             MovementComponent*             movementComponent,
-            PetWorld*                      petWorld,
             PhotographyManager*            photographyManager,
             PowerStateManager*             powerStateManager,
             ProxSensorComponent*           proxSensor,
@@ -181,7 +179,6 @@ public:
   AIComponent&             GetAIComponent()               const { return GetComponentWrapper(BEIComponentID::AIComponent).GetComponent<AIComponent>();}
   const FaceWorld&         GetFaceWorld()                 const { return GetComponentWrapper(BEIComponentID::FaceWorld).GetComponent<FaceWorld>();}
   FaceWorld&               GetFaceWorldMutable()                { return GetComponentWrapper(BEIComponentID::FaceWorld).GetComponent<FaceWorld>();}
-  const PetWorld&          GetPetWorld()                  const { return GetComponentWrapper(BEIComponentID::PetWorld).GetComponent<PetWorld>();}
   const BlockWorld&        GetBlockWorld()                const { return GetComponentWrapper(BEIComponentID::BlockWorld).GetComponent<BlockWorld>();}
   BlockWorld&              GetBlockWorld()                      { return GetComponentWrapper(BEIComponentID::BlockWorld).GetComponent<BlockWorld>();}
   const BehaviorContainer& GetBehaviorContainer()         const { return GetComponentWrapper(BEIComponentID::BehaviorContainer).GetComponent<BehaviorContainer>();}
@@ -313,7 +310,6 @@ private:
                        MicComponent*                  micComponent,
                        MoodManager*                   moodManager,
                        MovementComponent*             movementComponent,
-                       PetWorld*                      petWorld,
                        PhotographyManager*            photographyManager,
                        PowerStateManager*             powerStateManager,
                        ProxSensorComponent*           proxSensor,

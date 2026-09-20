@@ -30,7 +30,7 @@ namespace Vision {
   {
     if(ANKI_DEVELOPER_CODE)
     {
-      // Documentation (in trackedFace.h and in Okao expression manual) says this should be a histogram
+      // Documentation (in trackedFace.h) says this should be a histogram
       // summing to 100. Verify that's true (in debug builds).
       s32 sum=0;
       for(auto const& value : _expression)

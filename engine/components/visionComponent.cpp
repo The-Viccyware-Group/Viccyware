@@ -29,7 +29,6 @@
 #include "engine/navMap/mapComponent.h"
 #include "engine/externalInterface/gatewayInterface.h"
 #include "engine/faceWorld.h"
-#include "engine/petWorld.h"
 #include "engine/robot.h"
 #include "engine/robotDataLoader.h"
 #include "engine/robotStateHistory.h"
@@ -933,10 +932,6 @@ namespace Vector {
         //  and should be done before sending RobotProcessedImage below!)
         tryAndReport(&VisionComponent::UpdateFaces,                {VisionMode::Faces});
 
-        // NOTE: UpdatePets will also update PetWorld (which broadcasts pet face observations
-        //  and should be done before sending RobotProcessedImage below!)
-        tryAndReport(&VisionComponent::UpdatePets,                 {VisionMode::Pets});
-
         tryAndReport(&VisionComponent::UpdateMotionCentroid,       {VisionMode::Motion});
         tryAndReport(&VisionComponent::UpdateOverheadEdges,        {VisionMode::OverheadEdges});
         tryAndReport(&VisionComponent::UpdateComputedCalibration,  {VisionMode::Calibration});
@@ -1148,12 +1143,6 @@ namespace Vector {
 
     return lastResult;
   } // UpdateFaces()
-
-  Result VisionComponent::UpdatePets(const VisionProcessingResult& procResult)
-  {
-    Result lastResult = _robot->GetPetWorld().Update(procResult.pets);
-    return lastResult;
-  }
 
   Result VisionComponent::UpdateMotionCentroid(const VisionProcessingResult& procResult)
   {
@@ -1960,7 +1949,7 @@ namespace Vector {
   inline static std::string GetFullFaceAlbumPath(const CozmoContext* context, const std::string& pathIn)
   {
     const std::string fullPath = context->GetDataPlatform()->pathToResource(Util::Data::Scope::Persistent,
-                                                                            Util::FileUtils::FullFilePath({"faceAlbums", pathIn}));
+                                                                            Util::FileUtils::FullFilePath({"faceAlbums_v2", pathIn}));
     return fullPath;
   }
 
@@ -2650,6 +2639,24 @@ namespace Vector {
   {
     if (msg.result == RobotConnectionResult::Success)
     {
+#ifdef STANDALONE_SIM
+      // fake calib
+      {
+        const f32 focalLength = IsCozmoBody() ? 280.f : 320.f;
+        auto calib = std::make_shared<Vision::CameraCalibration>(
+            DEFAULT_CAMERA_RESOLUTION_HEIGHT, DEFAULT_CAMERA_RESOLUTION_WIDTH,
+            focalLength, focalLength,
+            DEFAULT_CAMERA_RESOLUTION_WIDTH * 0.5f, DEFAULT_CAMERA_RESOLUTION_HEIGHT * 0.5f,
+            0.f);                  // skew
+        SetCameraCalibration(calib);
+        CameraFOVInfo fovMsg(calib->ComputeHorizontalFOV().ToFloat(),
+                             calib->ComputeVerticalFOV().ToFloat());
+        if (_robot->SendMessage(RobotInterface::EngineToRobot(std::move(fovMsg))) != RESULT_OK) {
+          LOG_WARNING("VisionComponent.SimCameraCalib.SendCameraFOVFailed", "");
+        }
+        Enable(true);
+      }
+#else
       NVStorageComponent::NVStorageReadCallback readCamCalibCallback = [this](u8* data, size_t size, NVStorage::NVResult res)
       {
         if (res == NVStorage::NVResult::NV_OKAY) {
@@ -2710,6 +2717,7 @@ namespace Vector {
       };
 
       _robot->GetNVStorageComponent().Read(NVStorage::NVEntryTag::NVEntry_CameraCalib, readCamCalibCallback);
+#endif // STANDALONE_SIM
 
     }
   }

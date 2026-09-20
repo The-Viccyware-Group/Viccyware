@@ -72,9 +72,6 @@ private:
     ICozmoBehaviorPtr singing120Behavior;
     std::vector<ICozmoBehaviorPtr> toSuppressWhenSinging;
 
-    ICozmoBehaviorPtr petDetectionBehavior;
-    std::vector<ICozmoBehaviorPtr> toSuppressWhileDetectingPets;
-
     AreBehaviorsActivatedHelper behaviorsThatShouldntReactToUnexpectedMovement;
     ICozmoBehaviorPtr reactToUnexpectedMovementBehavior;
 
