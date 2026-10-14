@@ -3,7 +3,7 @@
 SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || echo $0))
 SCRIPT_NAME=`basename ${0}`
 TOPLEVEL=$(cd "$SCRIPT_PATH" && pwd)
-OS_LATEST=$(curl http://ota.pvic.xyz/vic/latestVersion 2> /dev/null)
+OS_LATEST="Viccyware"
 NOBUILD=0
 COZMO=0
 
@@ -31,18 +31,18 @@ done
 
 set -e
 
-if [[ $? != "0" || $OS_LATEST == *"404 page"* || $OS_LATEST == "" ]]; then
-	echo "failed to get current WireOS version from server: $OS_LATEST"
-	echo "either curl isn't installed or we can't access the server"
-	if [[ -n $(ls $TOPLEVEL/.sim/dvcbs/*/apq8009-robot-sysfs.img) ]]; then
-		# terrible
-		OS_LATEST=$(ls "$TOPLEVEL/.sim/dvcbs" | \grep 3)
-		echo "i see $OS_LATEST is already there, using that"
-	else
-		echo "if you're cozmoing, run this script with internet once so required files can be downloaded"
-		exit 1
-	fi
-fi
+#if [[ $? != "0" || $OS_LATEST == *"404 page"* || $OS_LATEST == "" ]]; then
+#	echo "failed to get current WireOS version from server: $OS_LATEST"
+#	echo "either curl isn't installed or we can't access the server"
+#	if [[ -n $(ls $TOPLEVEL/.sim/dvcbs/*/apq8009-robot-sysfs.img) ]]; then
+#		# terrible
+#		OS_LATEST=$(ls "$TOPLEVEL/.sim/dvcbs" | \grep 3)
+#		echo "i see $OS_LATEST is already there, using that"
+#	else
+#		echo "if you're cozmoing, run this script with internet once so required files can be downloaded"
+#		exit 1
+#	fi
+#fi
 
 if [[ ! "$(uname -a)" == *"Linux"* ]]; then
 	echo "this only works on Linux"
@@ -103,7 +103,7 @@ cd dvcbs
 if [[ ! -d "$OS_LATEST" ]]; then
 	mkdir "$OS_LATEST"
 	cd "$OS_LATEST"
-	wget "http://ota.pvic.xyz/vic/latest/dev.ota"
+	wget "http://anki2.ca:81/otas/ota-internal-2/Viccyware/Viccyware-0.7.0.4d.ota"
 	cd ..
 fi
 OSPATH="$(pwd)/${OS_LATEST}/edits"
